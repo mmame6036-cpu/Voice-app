@@ -211,7 +211,7 @@ class _RetroRoomScreenState extends State<RetroRoomScreen> with SingleTickerProv
         children: [
           const SizedBox(height: 30),
 
-          // ያማረው የ Retro Studio ማይክ ከነብርሃን ሞገዱ
+          // ዋናው የሆስት Retro Studio ማይክ
           Center(
             child: Column(
               children: [
@@ -254,7 +254,6 @@ class _RetroRoomScreenState extends State<RetroRoomScreen> with SingleTickerProv
                       child: Stack(
                         alignment: Alignment.center,
                         children: [
-                          // የብርማ ክላሲክ ስቱዲዮ ማይክ ምስል
                           Container(
                             width: 44,
                             height: 60,
@@ -303,15 +302,13 @@ class _RetroRoomScreenState extends State<RetroRoomScreen> with SingleTickerProv
 
           const SizedBox(height: 40),
 
-          // የተሳታፊ ወንበሮች
+          // የተሳታፊ ወንበሮች (የተስተካከለው ክፍል)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: List.generate(4, (index) => _buildSeat(index + 1)),
-              ),
-            ],
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: List.generate(4, (index) => _buildSeat(index + 1)),
+            ),
           ),
 
           const Spacer(),
