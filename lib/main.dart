@@ -34,7 +34,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
   final List<Widget> _pages = [
     const RoomScreen(),    // 1. የድምፅ ክፍል ገጽ
-    const AgencyScreen(),  // 2. ፕሮፋይል እና ኤጀንሲ ገጽ
+    const AgencyCenterPage(),  // 2. ፕሮፋይል እና ኤጀንሲ ገጽ
   ];
 
   @override
