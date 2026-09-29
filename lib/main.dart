@@ -1,217 +1,231 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 
+// የነበሩትን ፋይሎች ለማገናኘት (ካስፈለገ):
+// import 'room_screen.dart';
+// import 'agency_screen.dart';
+
 void main() {
-  runApp(const SafeVoiceLiveApp());
+  runApp(const FullVoiceApp());
 }
 
-class SafeVoiceLiveApp extends StatelessWidget {
-  const SafeVoiceLiveApp({Key? key}) : super(key: key);
+class FullVoiceApp extends StatelessWidget {
+  const FullVoiceApp({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Voice Live App',
+      title: 'Voice Live & Agency Hub',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData.dark(),
-      home: const MainDashboardScreen(),
+      theme: ThemeData(
+        brightness: Brightness.dark,
+        scaffoldBackgroundColor: const Color(0xFF0D0B18),
+        primaryColor: const Color(0xFF7B2CBF),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Color(0xFF161228),
+          elevation: 0,
+        ),
+      ),
+      home: const MainHomeScreen(),
     );
   }
 }
 
-class AppState {
+// ==========================================
+// 1. የዳታ እና የኢኮኖሚ ማዕከል (Global State)
+// ==========================================
+class AppData {
   static int userCoins = 50000;
   static int hostPoints = 120000;
-  static List<Map<String, dynamic>> requests = [];
+  static List<Map<String, dynamic>> cashoutRequests = [];
+  static List<Map<String, dynamic>> agencyHosts = [
+    {'name': 'Sara Voice', 'id': '10021', 'points': 45000, 'status': 'Active'},
+    {'name': 'Abebe Live', 'id': '10045', 'points': 75000, 'status': 'Active'},
+    {'name': 'Mahi Music', 'id': '10089', 'points': 20000, 'status': 'Pending'},
+  ];
 }
 
-class MainDashboardScreen extends StatefulWidget {
-  const MainDashboardScreen({Key? key}) : super(key: key);
+// ==========================================
+// 2. ዋናው ማውጫና ዳሽቦርድ (Home Dashboard)
+// ==========================================
+class MainHomeScreen extends StatefulWidget {
+  const MainHomeScreen({Key? key}) : super(key: key);
 
   @override
-  State<MainDashboardScreen> createState() => _MainDashboardScreenState();
+  State<MainHomeScreen> createState() => _MainHomeScreenState();
 }
 
-class _MainDashboardScreenState extends State<MainDashboardScreen> {
+class _MainHomeScreenState extends State<MainHomeScreen> {
+  int _currentIndex = 0;
+
   void _refresh() => setState(() {});
+
+  @override
+  Widget build(BuildContext context) {
+    final List<Widget> pages = [
+      DashboardView(onUpdated: _refresh),
+      VoiceRoomView(onUpdated: _refresh),
+      const AgencyManagementView(),
+      ProfileWalletView(onUpdated: _refresh),
+    ];
+
+    return Scaffold(
+      body: pages[_currentIndex],
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _currentIndex,
+        onTap: (index) => setState(() => _currentIndex = index),
+        backgroundColor: const Color(0xFF140F26),
+        selectedItemColor: const Color(0xFF9D4EDD),
+        unselectedItemColor: Colors.white38,
+        type: BottomNavigationBarType.fixed,
+        items: const [
+          BottomNavigationBarItem(icon: Icon(Icons.explore), label: 'ዳሽቦርድ'),
+          BottomNavigationBarItem(icon: Icon(Icons.mic), label: 'ሩም'),
+          BottomNavigationBarItem(icon: Icon(Icons.groups), label: 'ኤጀንሲ'),
+          BottomNavigationBarItem(icon: Icon(Icons.account_balance_wallet), label: 'ዋሌት'),
+        ],
+      ),
+    );
+  }
+}
+
+// ==========================================
+// 3. የዳሽቦርድ ገጽ (Dashboard View)
+// ==========================================
+class DashboardView extends StatelessWidget {
+  final VoidCallback onUpdated;
+  const DashboardView({Key? key, required this.onUpdated}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Live Hub'),
+        title: const Text('Live Voice Hub', style: TextStyle(fontWeight: FontWeight.bold)),
         actions: [
           IconButton(
             icon: const Icon(Icons.admin_panel_settings, color: Colors.amber),
+            tooltip: 'Admin Panel',
             onPressed: () => Navigator.push(
               context,
-              MaterialPageRoute(builder: (_) => AdminApprovalScreen(onUpdated: _refresh)),
+              MaterialPageRoute(builder: (_) => AdminPanelScreen(onUpdated: onUpdated)),
             ),
-          )
+          ),
         ],
       ),
-      body: ListView(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
-        children: [
-          Card(
-            color: Colors.deepPurple.shade900,
-            child: Padding(
-              padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+
+children: [
+            // የኮይንና ፖይንት ካርድ
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF5A189A), Color(0xFF240046)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(color: Colors.purple.withOpacity(0.3), blurRadius: 12, offset: const Offset(0, 6)),
+                ],
+              ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
-                  Text('Coins: ${AppState.userCoins} 🪙', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  Text('Points: ${AppState.hostPoints} 💎', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  Column(
+                    children: [
+                      const Text('የእርስዎ ሳንቲም', style: TextStyle(color: Colors.white70, fontSize: 13)),
+                      const SizedBox(height: 6),
+                      Text('${AppData.userCoins} 🪙', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.amberAccent)),
+                    ],
+                  ),
+                  Container(width: 1, height: 45, color: Colors.white24),
+                  Column(
+                    children: [
+                      const Text('የሆስት ፖይንት', style: TextStyle(color: Colors.white70, fontSize: 13)),
+                      const SizedBox(height: 6),
+                      Text('${AppData.hostPoints} 💎', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.cyanAccent)),
+                    ],
+                  ),
                 ],
               ),
             ),
-          ),
-          const SizedBox(height: 20),
-          ListTile(
-            tileColor: Colors.white10,
-            leading: const Icon(Icons.mic, color: Colors.purpleAccent),
-            title: const Text('የድምፅ ክፍል (Voice Room)'),
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => VoiceRoomScreen(onUpdated: _refresh)),
-            ),
-          ),
-          const SizedBox(height: 10),
-          ListTile(
-            tileColor: Colors.white10,
-            leading: const Icon(Icons.videogame_asset, color: Colors.indigoAccent),
-            title: const Text('ሚኒ ጌም (Mini Game)'),
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => PyramidGameScreen(onUpdated: _refresh)),
-            ),
-          ),
-          const SizedBox(height: 10),
-          ListTile(
-            tileColor: Colors.white10,
-            leading: const Icon(Icons.payments, color: Colors.greenAccent),
-            title: const Text('ገንዘብ ማውጫ (Host Cashout)'),
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => HostCashoutScreen(onUpdated: _refresh)),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
+            const SizedBox(height: 24),
 
-class VoiceRoomScreen extends StatelessWidget {
-  final VoidCallback onUpdated;
-  const VoiceRoomScreen({Key? key, required this.onUpdated}) : super(key: key);
+            const Text('ተወዳጅ ክፍሎችና ጨዋታዎች', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+            const SizedBox(height: 14),
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Voice Room')),
-      body: Center(
-        child: ElevatedButton.icon(
-          icon: const Icon(Icons.card_giftcard),
-          label: const Text('ስጦታ ላክ (1,000 Coins)'),
-          onPressed: () {
-            if (AppState.userCoins >= 1000) {
-
-AppState.userCoins -= 1000;
-              AppState.hostPoints += 1000;
-              onUpdated();
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('ስጦታው ተልኳል! ሆስቱ 1000 ፖይንት አገኘ።')),
-              );
-            }
-          },
+            // አሰሳዎች
+            _buildActionCard(
+              context,
+              title: 'የቀጥታ ድምፅ ክፍል (Live Room)',
+              desc: 'ይግቡ፣ ማይክ ይያዙ፣ ስጦታዎችን ይላኩ',
+              icon: Icons.record_voice_over,
+              gradient: [const Color(0xFF7209B7), const Color(0xFF3F37C9)],
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => VoiceRoomView(onUpdated: onUpdated)),
+              ),
+            ),
+            const SizedBox(height: 12),
+            _buildActionCard(
+              context,
+              title: 'ፒራሚድ ማይኒንግ (Safe Mini Game)',
+              desc: 'ዕድልዎን ይፈትሹ (ከነ RTP እና የማሸነፊያ ገደብ)',
+              icon: Icons.casino,
+              gradient: [const Color(0xFFF72585), const Color(0xFF7209B7)],
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => PyramidMiniGame(onUpdated: onUpdated)),
+              ),
+            ),
+            const SizedBox(height: 12),
+            _buildActionCard(
+              context,
+              title: 'የኤጀንሲ አስተዳዳሪ (Agency Manager)',
+              desc: 'የሆስቶችን ገቢ እና እንቅስቃሴ ይቆጣጠሩ',
+              icon: Icons.shield,
+              gradient: [const Color(0xFF1E3C72), const Color(0xFF2A5298)],
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const AgencyManagementView()),
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
-}
 
-class PyramidGameScreen extends StatefulWidget {
-  final VoidCallback onUpdated;
-  const PyramidGameScreen({Key? key, required this.onUpdated}) : super(key: key);
-
-  @override
-  State<PyramidGameScreen> createState() => _PyramidGameScreenState();
-}
-
-class _PyramidGameScreenState extends State<PyramidGameScreen> {
-  final Random _rnd = Random();
-
-  void _play() {
-    if (AppState.userCoins < 500) return;
-    setState(() {
-      AppState.userCoins -= 500;
-      bool won = _rnd.nextBool();
-      if (won) {
-        AppState.userCoins += 900;
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('🎉 አሸነፉ! 900 ሳንቲም አገኙ።')));
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('💥 ተበልቷል!')));
-      }
-    });
-    widget.onUpdated();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Mini Game')),
-      body: Center(
-        child: ElevatedButton(
-          onPressed: _play,
-          child: const Text('በ 500 ሳንቲም ተጫወት'),
-        ),
-      ),
-    );
-  }
-}
-
-class HostCashoutScreen extends StatefulWidget {
-  final VoidCallback onUpdated;
-  const HostCashoutScreen({Key? key, required this.onUpdated}) : super(key: key);
-
-  @override
-  State<HostCashoutScreen> createState() => _HostCashoutScreenState();
-}
-
-class _HostCashoutScreenState extends State<HostCashoutScreen> {
-  final _controller = TextEditingController();
-
-  void _submit() {
-    int pts = int.tryParse(_controller.text) ?? 0;
-    if (pts >= 100000 && pts <= AppState.hostPoints) {
-      AppState.requests.add({
-        'points': pts,
-        'amount': (pts / 100000) * 1667,
-      });
-      Navigator.pop(context);
-      widget.onUpdated();
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Cashout')),
-      body: Padding(
+  Widget _buildActionCard(BuildContext context, {required String title, required String desc, required IconData icon, required List<Color> gradient, required VoidCallback onTap}) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
         padding: const EdgeInsets.all(16),
-        child: Column(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(colors: gradient),
+
+borderRadius: BorderRadius.circular(16),
+        ),
+        child: Row(
           children: [
-            TextField(
-              controller: _controller,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'የፖይንት መጠን (ምሳሌ፦ 100000)'),
+            CircleAvatar(backgroundColor: Colors.white24, radius: 26, child: Icon(icon, color: Colors.white, size: 28)),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white)),
+                  const SizedBox(height: 4),
+                  Text(desc, style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                ],
+              ),
             ),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: _submit,
-              child: const Text('ጥያቄውን ላክ'),
-            )
+            const Icon(Icons.arrow_forward_ios, color: Colors.white54, size: 16),
           ],
         ),
       ),
@@ -219,27 +233,349 @@ class _HostCashoutScreenState extends State<HostCashoutScreen> {
   }
 }
 
-class AdminApprovalScreen extends StatelessWidget {
+// ==========================================
+// 4. የተሟላው የድምፅ ክፍል (Voice Room View)
+// ==========================================
+class VoiceRoomView extends StatefulWidget {
   final VoidCallback onUpdated;
-  const AdminApprovalScreen({Key? key, required this.onUpdated}) : super(key: key);
+  const VoiceRoomView({Key? key, required this.onUpdated}) : super(key: key);
+
+  @override
+  State<VoiceRoomView> createState() => _VoiceRoomViewState();
+}
+
+class _VoiceRoomViewState extends State<VoiceRoomView> {
+  bool isMuted = false;
+
+  void _sendGift(int cost, String giftName) {
+    if (AppData.userCoins < cost) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('በቂ ሳንቲም የለዎትም! እባክዎ ኮይን ይግዙ።')),
+      );
+      return;
+    }
+    setState(() {
+      AppData.userCoins -= cost;
+      AppData.hostPoints += cost;
+    });
+    widget.onUpdated();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('$giftName በ $cost ሳንቲም ተላከ! ሆስቱ $cost ፖይንት አገኘ።'), backgroundColor: Colors.purple),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Admin Panel')),
-      body: AppState.requests.isEmpty
-          ? const Center(child: Text('ምንም ጥያቄ የለም።'))
-          : ListView.builder(
-              itemCount: AppState.requests.length,
+      appBar: AppBar(
+        title: const Text('ክፍል፦ የፍቅር ማዕበል (#1042)'),
+        backgroundColor: const Color(0xFF161228),
+      ),
+      body: Column(
+        children: [
+          // የክፍሉ ወንበሮች (8 Seats)
+          Expanded(
+            child: GridView.builder(
+              padding: const EdgeInsets.all(20),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 4,
+                mainAxisSpacing: 18,
+                crossAxisSpacing: 18,
+                childAspectRatio: 0.8,
+              ),
+              itemCount: 8,
               itemBuilder: (context, i) {
-                final req = AppState.requests[i];
+                bool isHost = (i == 0);
+                return Column(
+                  children: [
+                    Stack(
+                      alignment: Alignment.bottomRight,
+                      children: [
+                        CircleAvatar(
+                          radius: 28,
+                          backgroundColor: isHost ? Colors.purpleAccent : const Color(0xFF221A3D),
+                          child: Icon(isHost ? Icons.person : Icons.mic_none, color: Colors.white70),
+                        ),
+                        CircleAvatar(
+                          radius: 9,
+                          backgroundColor: isHost ? Colors.green : Colors.red,
+                          child: Icon(isHost ? Icons.volume_up : Icons.mic_off, size: 10, color: Colors.white),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      isHost ? 'ዋና ሆስት' : 'ወንበር ${i + 1}',
+                      style: const TextStyle(fontSize: 11, color: Colors.white70),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+
+          // የስጦታ እና የቁጥጥር ፓነል
+          Container(
+
+padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            color: const Color(0xFF161228),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                IconButton(
+                  icon: Icon(isMuted ? Icons.mic_off : Icons.mic, color: isMuted ? Colors.red : Colors.greenAccent),
+                  onPressed: () => setState(() => isMuted = !isMuted),
+                ),
+                ElevatedButton.icon(
+                  onPressed: () => _sendGift(1000, '🌹 ጽጌረዳ'),
+                  icon: const Icon(Icons.favorite, color: Colors.pinkAccent, size: 18),
+                  label: const Text('ጽጌረዳ (1k)'),
+                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2A1F4C)),
+                ),
+                ElevatedButton.icon(
+                  onPressed: () => _sendGift(10000, '🏎️ ስፖርት መኪና'),
+                  icon: const Icon(Icons.speed, color: Colors.amberAccent, size: 18),
+                  label: const Text('መኪና (10k)'),
+                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2A1F4C)),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ==========================================
+// 5. ደህንነቱ የተጠበቀ ሚኒ ጌም (Pyramid Safe Game)
+// ==========================================
+class PyramidMiniGame extends StatefulWidget {
+  final VoidCallback onUpdated;
+  const PyramidMiniGame({Key? key, required this.onUpdated}) : super(key: key);
+
+  @override
+  State<PyramidMiniGame> createState() => _PyramidMiniGameState();
+}
+
+class _PyramidMiniGameState extends State<PyramidMiniGame> {
+  final int bet = 500;
+  int step = 0;
+  bool active = false;
+  double mult = 1.0;
+  final Random _rnd = Random();
+
+  void _start() {
+    if (AppData.userCoins < bet) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('በቂ ሳንቲም የለዎትም!')));
+      return;
+    }
+    setState(() {
+      AppData.userCoins -= bet;
+      active = true;
+      step = 0;
+      mult = 1.0;
+    });
+    widget.onUpdated();
+  }
+
+  void _choose() {
+    if (!active) return;
+    int chance = 75 - (step * 20); // House Edge
+    if (_rnd.nextInt(100) < chance && step < 3) {
+      setState(() {
+        step++;
+        mult += 0.8;
+      });
+      if (step == 3) _takeWin();
+    } else {
+      setState(() => active = false);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('💥 ቦምብ ፈነዳ! ተበልተዋል።'), backgroundColor: Colors.red));
+    }
+  }
+
+  void _takeWin() {
+    if (!active) return;
+    int won = (bet * mult).round();
+    if (won > 2500) won = 2500; // Max Win Cap
+
+    setState(() {
+      AppData.userCoins += won;
+      active = false;
+    });
+    widget.onUpdated();
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('🎉 $won ሳንቲም አሸነፉ!'), backgroundColor: Colors.green));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('ፒራሚድ ማይኒንግ')),
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(active ? 'ደረጃ፦ $step | ማባዣ፦ x${mult.toStringAsFixed(1)}' : 'ለመጫወት ይጫኑ', style: const TextStyle(fontSize: 20, color: Colors.amberAccent, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 30),
+            if (active)
+              ElevatedButton(
+                onPressed: _choose,
+                style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 20), backgroundColor: Colors.purple),
+                child: const Text('ቀጣዩን ደረጃ ምረጥ ⛏️', style: TextStyle(fontSize: 16)),
+              ),
+            const SizedBox(height: 30),
+            active
+
+? ElevatedButton(onPressed: _takeWin, style: ElevatedButton.styleFrom(backgroundColor: Colors.amber.shade900), child: Text('ያሸነፉትን ውሰዱ (${(bet * mult).round()} Coins)'))
+                : ElevatedButton(onPressed: _start, style: ElevatedButton.styleFrom(backgroundColor: Colors.green), child: Text('በ $bet ሳንቲም ጀምር')),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ==========================================
+// 6. የኤጀንሲ ገጽ (Agency Management View)
+// ==========================================
+class AgencyManagementView extends StatelessWidget {
+  const AgencyManagementView({Key? key}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('የኤጀንሲ አስተዳዳሪ (Agency)')),
+      body: ListView.builder(
+        padding: const EdgeInsets.all(16),
+        itemCount: AppData.agencyHosts.length,
+        itemBuilder: (context, i) {
+          final host = AppData.agencyHosts[i];
+          return Card(
+            color: const Color(0xFF1B1638),
+            margin: const EdgeInsets.only(bottom: 12),
+            child: ListTile(
+              leading: const CircleAvatar(backgroundColor: Colors.deepPurple, child: Icon(Icons.person, color: Colors.white)),
+              title: Text(host['name'], style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+              subtitle: Text('ID: ${host['id']} | የተሰበሰበ ፖይንት: ${host['points']} 💎', style: const TextStyle(color: Colors.white70)),
+              trailing: Chip(
+                label: Text(host['status'], style: const TextStyle(fontSize: 11)),
+                backgroundColor: host['status'] == 'Active' ? Colors.green.shade900 : Colors.orange.shade900,
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+// ==========================================
+// 7. የዋሌት እና ገንዘብ ማውጫ (Wallet & Cashout)
+// ==========================================
+class ProfileWalletView extends StatefulWidget {
+  final VoidCallback onUpdated;
+  const ProfileWalletView({Key? key, required this.onUpdated}) : super(key: key);
+
+  @override
+  State<ProfileWalletView> createState() => _ProfileWalletViewState();
+}
+
+class _ProfileWalletViewState extends State<ProfileWalletView> {
+  final _ptsCtrl = TextEditingController();
+  final _accCtrl = TextEditingController();
+
+  void _submitCashout() {
+    int pts = int.tryParse(_ptsCtrl.text) ?? 0;
+    if (pts < 100000 || pts > AppData.hostPoints) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('ትክክለኛ የፖይንት መጠን ያስገቡ (ቢያንስ 100,000)!')));
+      return;
+    }
+    AppData.cashoutRequests.add({
+      'points': pts,
+      'amount': (pts / 100000) * 1667,
+      'acc': _accCtrl.text.trim(),
+    });
+    widget.onUpdated();
+    Navigator.pop(context);
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('ጥያቄዎ ደርሷል!')));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('የኪስ ቦርሳ (Wallet)')),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(color: const Color(0xFF1E1742), borderRadius: BorderRadius.circular(16)),
+            child: Column(
+              children: [
+                Text('ያለዎት ፖይንት፦ ${AppData.hostPoints} 💎', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.cyanAccent)),
+                const SizedBox(height: 8),
+                const Text('የምንዛሬ ተመን፦ 100,000 Pts = 1,667 ብር', style: TextStyle(color: Colors.greenAccent)),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.purple, padding: const EdgeInsets.all(14)),
+
+onPressed: () {
+              showModalBottomSheet(
+                context: context,
+                isScrollControlled: true,
+                backgroundColor: const Color(0xFF140F26),
+                builder: (_) => Padding(
+                  padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom, left: 16, right: 16, top: 20),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TextField(controller: _ptsCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'የሚያወጡት ፖይንት')),
+                      const SizedBox(height: 12),
+                      TextField(controller: _accCtrl, decoration: const InputDecoration(labelText: 'የቴሌብር ወይም የባንክ ቁጥር')),
+                      const SizedBox(height: 20),
+                      ElevatedButton(onPressed: _submitCashout, child: const Text('ገንዘብ አውጣ')),
+                      const SizedBox(height: 20),
+                    ],
+                  ),
+                ),
+              );
+            },
+            child: const Text('ፖይንት ወደ ብር ቀይር (Cashout)'),
+          )
+        ],
+      ),
+    );
+  }
+}
+
+// ==========================================
+// 8. የአስተዳዳሪ ማጽደቂያ ገጽ (Admin Panel)
+// ==========================================
+class AdminPanelScreen extends StatelessWidget {
+  final VoidCallback onUpdated;
+  const AdminPanelScreen({Key? key, required this.onUpdated}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('የአስተዳዳሪ ማጽደቂያ (Admin)'), backgroundColor: Colors.amber.shade900),
+      body: AppData.cashoutRequests.isEmpty
+          ? const Center(child: Text('ምንም የክፍያ ጥያቄ የለም።'))
+          : ListView.builder(
+              itemCount: AppData.cashoutRequests.length,
+              itemBuilder: (context, i) {
+                final r = AppData.cashoutRequests[i];
                 return ListTile(
-                  title: Text('${req['amount']} ETB'),
-                  subtitle: Text('${req['points']} Points'),
+                  title: Text('${r['amount']} ETB - ${r['acc']}'),
+                  subtitle: Text('${r['points']} Points'),
                   trailing: ElevatedButton(
                     onPressed: () {
-                      AppState.hostPoints -= (req['points'] as int);
-                      AppState.requests.removeAt(i);
+                      AppData.hostPoints -= (r['points'] as int);
+                      AppData.cashoutRequests.removeAt(i);
                       onUpdated();
                       Navigator.pop(context);
                     },
