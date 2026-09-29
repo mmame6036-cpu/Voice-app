@@ -1,1039 +1,653 @@
-import 'dart:async';
+KEDER:
 import 'dart:math';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'agency_screen.dart';
 
 void main() {
-  runApp(const VoiceApp());
+  runApp(const SafeVoiceLiveApp());
 }
 
-class VoiceApp extends StatefulWidget {
-  const VoiceApp({super.key});
-
-  @override
-  State<VoiceApp> createState() => _VoiceAppState();
-}
-
-class _VoiceAppState extends State<VoiceApp> {
-  bool _isLoggedIn = true;
-
-  void _login() => setState(() => _isLoggedIn = true);
-  void _logout() => setState(() => _isLoggedIn = false);
+class SafeVoiceLiveApp extends StatelessWidget {
+  const SafeVoiceLiveApp({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      title: 'Voice Live & Economy Hub',
       debugShowCheckedModeBanner: false,
-      title: 'Voice App',
-      theme: ThemeData.light().copyWith(
-        scaffoldBackgroundColor: const Color(0xFFF4F7F9),
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Colors.white,
-          elevation: 0.5,
-          iconTheme: IconThemeData(color: Colors.black87),
-          titleTextStyle: TextStyle(
-            color: Colors.black87,
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-          ),
+      theme: ThemeData(
+        primarySwatch: Colors.deepPurple,
+        scaffoldBackgroundColor: const Color(0xFF0F0C20),
+        textTheme: const TextTheme(
+          bodyMedium: TextStyle(color: Colors.white),
         ),
       ),
-      home: _isLoggedIn
-          ? MainNavigationScreen(onLogout: _logout)
-          : LoginScreen(onLogin: _login),
+      home: const MainDashboardScreen(),
     );
   }
 }
 
-// ==================== 1. LOG IN SCREEN ====================
-class LoginScreen extends StatelessWidget {
-  final VoidCallback onLogin;
-  const LoginScreen({super.key, required this.onLogin});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF0F0F11),
-      body: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 28),
-        child: Center(
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  width: 86,
-                  height: 86,
-                  decoration: const BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: RadialGradient(
-                      colors: [Color(0xFF26C6DA), Color(0xFF00838F)],
-                    ),
-                  ),
-                  child: const Icon(Icons.mic, size: 48, color: Colors.white),
-                ),
-                const SizedBox(height: 20),
-                const Text('እንኳን ደህና መጡ', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white)),
-                const SizedBox(height: 6),
-                const Text('ወደ ድምጽ ክፍሎች ለመግባት ስልክዎን ያስገቡ', style: TextStyle(color: Colors.white54)),
-                const SizedBox(height: 36),
-                TextField(
-                  style: const TextStyle(color: Colors.white),
-                  keyboardType: TextInputType.phone,
-                  decoration: InputDecoration(
-                    prefixIcon: const Icon(Icons.phone, color: Color(0xFF26C6DA)),
-                    hintText: 'ስልክ ቁጥር (09... / 07...)',
-                    hintStyle: const TextStyle(color: Colors.white38),
-                    filled: true,
-                    fillColor: const Color(0xFF1E1A29),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                SizedBox(
-                  width: double.infinity,
-                  height: 50,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF00ACC1),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                    ),
-                    onPressed: onLogin,
-                    child: const Text('Log In (ግባ)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
+// ==========================================
+// 1. ሞዴሎች እና የጋራ ዳታ (State Models)
+// ==========================================
+class AppState {
+  static int userCoins = 50000; // ተጠቃሚው የሚገዛው/ያለው ኮይን
+  static int hostPoints = 120000; // ሆስቱ ከስጦታ የሚሰበስበው ፖይንት
+  static List<WithdrawalRequest> requests = [];
 }
 
-// ==================== 2. MAIN NAVIGATION SCREEN ====================
-class MainNavigationScreen extends StatefulWidget {
-  final VoidCallback onLogout;
-  const MainNavigationScreen({super.key, required this.onLogout});
+class WithdrawalRequest {
+  final String id;
+  final String hostName;
+  final int points;
+  final double amountETB;
+  final String paymentMethod;
+  final String accountNumber;
+  String status; // 'Pending' ወይም 'Approved'
 
-  @override
-  State<MainNavigationScreen> createState() => _MainNavigationScreenState();
-}
-
-class _MainNavigationScreenState extends State<MainNavigationScreen> {
-  int _currentIndex = 3;
-
-  int userCoins = 50000;
-  double userPoints = 23902.29;
-  String currentUserName = 'KEDIR ,,,,';
-
-  void addCoins(int amount) => setState(() => userCoins += amount);
-  void deductCoins(int amount) => setState(() => userCoins -= amount);
-  void addPoints(double amount) => setState(() => userPoints += amount);
-
-  @override
-  Widget build(BuildContext context) {
-    final List<Widget> pages = [
-      RetroRoomScreen(
-        userName: currentUserName,
-        coins: userCoins,
-        points: userPoints,
-        onMinePoints: (mined) => addPoints(mined),
-        onSendGift: (cost, pointsGained) {
-          deductCoins(cost);
-          addPoints(pointsGained);
-        },
-      ),
-      const Scaffold(body: Center(child: Text('Moment Screen', style: TextStyle(fontSize: 18)))),
-      const MessageScreen(),
-      MeProfileScreen(
-        coins: userCoins,
-        points: userPoints,
-        userName: currentUserName,
-        onAddCoins: addCoins,
-        onDeductCoins: deductCoins,
-        onAddPoints: addPoints,
-        onLogout: widget.onLogout,
-      ),
-    ];
-
-    return Scaffold(
-      body: pages[_currentIndex],
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.06),
-              blurRadius: 10,
-              offset: const Offset(0, -3),
-            ),
-          ],
-        ),
-        child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _buildNavItem(0, Icons.home_rounded, 'Room'),
-                _buildNavItem(1, Icons.public, 'Moment'),
-                _buildNavItem(2, Icons.notifications_none_rounded, 'Message'),
-                _buildMeNavItem(3),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildNavItem(int index, IconData icon, String label) {
-    final bool isSelected = _currentIndex == index;
-    return InkWell(
-      onTap: () => setState(() => _currentIndex = index),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, color: isSelected ? const Color(0xFF00E5FF) : Colors.grey.shade400, size: 28),
-          const SizedBox(height: 3),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-              color: isSelected ? Colors.black87 : Colors.grey.shade500,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMeNavItem(int index) {
-    final bool isSelected = _currentIndex == index;
-    return InkWell(
-      onTap: () => setState(() => _currentIndex = index),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-            decoration: BoxDecoration(
-              gradient: isSelected
-                  ? const LinearGradient(colors: [Color(0xFF00E5FF), Color(0xFF00B0FF)])
-                  : null,
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Icon(
-              Icons.person,
-              color: isSelected ? Colors.white : Colors.grey.shade400,
-
-size: 22,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            'Me',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-              color: isSelected ? const Color(0xFF00B0FF) : Colors.grey.shade500,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ==================== 3. ME PROFILE SCREEN ====================
-class MeProfileScreen extends StatefulWidget {
-  final int coins;
-  final double points;
-  final String userName;
-  final Function(int) onAddCoins;
-  final Function(int) onDeductCoins;
-  final Function(double) onAddPoints;
-  final VoidCallback onLogout;
-
-  const MeProfileScreen({
-    super.key,
-    required this.coins,
+  WithdrawalRequest({
+    required this.id,
+    required this.hostName,
     required this.points,
-    required this.userName,
-    required this.onAddCoins,
-    required this.onDeductCoins,
-    required this.onAddPoints,
-    required this.onLogout,
+    required this.amountETB,
+    required this.paymentMethod,
+    required this.accountNumber,
+    this.status = 'Pending',
   });
-
-  @override
-  State<MeProfileScreen> createState() => _MeProfileScreenState();
 }
 
-class _MeProfileScreenState extends State<MeProfileScreen> {
-  String userId = '1753925';
+// ==========================================
+// 2. ዋናው ዳሽቦርድ (Main Navigation Dashboard)
+// ==========================================
+class MainDashboardScreen extends StatefulWidget {
+  const MainDashboardScreen({Key? key}) : super(key: key);
 
-  void _openPage(Widget page) {
-    Navigator.push(context, MaterialPageRoute(builder: (context) => page));
-  }
+  @override
+  State<MainDashboardScreen> createState() => _MainDashboardScreenState();
+}
+
+class _MainDashboardScreenState extends State<MainDashboardScreen> {
+  void _refresh() => setState(() {});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFE8F7F8),
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            const SizedBox(height: 50),
-
-            // Header Profile
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Row(
-                children: [
-                  Container(
-                    width: 76,
-                    height: 76,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.amber, width: 3),
-                      gradient: const RadialGradient(colors: [Color(0xFFFFE082), Color(0xFFFFB300)]),
-                    ),
-                    child: const Center(child: Icon(Icons.person, size: 50, color: Colors.white)),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(widget.userName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                        const SizedBox(height: 5),
-                        Wrap(
-                          spacing: 4,
-                          runSpacing: 4,
-                          children: [
-                            _buildBadgePill('♂ 17', const Color(0xFF26C6DA)),
-                            _buildBadgePill('▲ 18', const Color(0xFF66BB6A)),
-                            _buildBadgePill('✪ 14', const Color(0xFF5C6BC0)),
-                            _buildBadgePill('AGENCY', const Color(0xFF0288D1)),
-                          ],
-                        ),
-                        const SizedBox(height: 6),
-                        Row(
-                          children: [
-                            Text('ID: $userId', style: const TextStyle(fontSize: 13, color: Colors.black54)),
-                            const SizedBox(width: 6),
-                            InkWell(
-                              onTap: () {
-                                Clipboard.setData(ClipboardData(text: userId));
-                                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('ID ተገልብጧል!')));
-                              },
-                              child: const Icon(Icons.copy, size: 14, color: Colors.black45),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 20),
-
-// VIP Club Banner
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(colors: [Color(0xFF3E2723), Color(0xFF1B0000)]),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.workspace_premium, color: Color(0xFFFFD54F), size: 30),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: const [
-                          Text('VIP Club', style: TextStyle(color: Color(0xFFFFD54F), fontWeight: FontWeight.bold, fontSize: 15)),
-                          SizedBox(height: 2),
-                          Text('Upgrade to VIP and get free coins daily', style: TextStyle(color: Colors.white70, fontSize: 11)),
-                        ],
-                      ),
-                    ),
-                    ElevatedButton(
-                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFFCC80)),
-                      onPressed: () {
-                        widget.onAddCoins(10000);
-                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('10,000 ነፃ VIP ኮይን ተመርቷል!')));
-                      },
-                      child: const Text('Get VIP', style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold, fontSize: 12)),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 14),
-
-            // Coins & Points Bar
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4)),
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: InkWell(
-                        onTap: () => _openPage(RechargeScreen(onRechargeSuccess: widget.onAddCoins)),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('Coins', style: TextStyle(color: Colors.black54, fontSize: 13)),
-                            const SizedBox(height: 6),
-                            Row(
-                              children: [
-                                const Icon(Icons.monetization_on, color: Colors.amber, size: 22),
-                                const SizedBox(width: 6),
-                                Text('${widget.coins}', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.black87)),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    Container(height: 38, width: 1, color: Colors.black12),
-                    const SizedBox(width: 20),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-
-const Text('Points', style: TextStyle(color: Colors.black54, fontSize: 13)),
-                          const SizedBox(height: 6),
-                          Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(3),
-                                decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0xFF00E5FF)),
-                                child: const Text('H', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white)),
-                              ),
-                              const SizedBox(width: 6),
-                              Text(widget.points.toStringAsFixed(1), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF00B0FF))),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 16),
-
-            // ማምረቻ እና አስተዳደር
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
-                child: Column(
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-                      children: [
-                        _buildGridItem(Icons.account_balance_wallet, 'Recharge', Colors.amber, () {
-                          _openPage(RechargeScreen(onRechargeSuccess: widget.onAddCoins));
-                        }),
-                        _buildGridItem(Icons.change_history, 'Pyramid Mine', Colors.orange, () {
-                          _openPage(PyramidMiningGame(
-                            coins: widget.coins,
-                            onDeduct: widget.onDeductCoins,
-                            onWin: widget.onAddCoins,
-                          ));
-                        }),
-                        _buildGridItem(Icons.business_center, 'Agency', const Color(0xFF00B0FF), () {
-                          _openPage(const AgencyCenterPage());
-                        }),
-                        _buildGridItem(Icons.settings, 'Setting', Colors.grey, widget.onLogout),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 30),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBadgePill(String text, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-      decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(10)),
-      child: Text(text, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white)),
-    );
-  }
-
-  Widget _buildGridItem(IconData icon, String label, Color iconColor, VoidCallback onTap) {
-    return InkWell(
-      onTap: onTap,
-      child: SizedBox(
-        width: 76,
-        child: Column(
-          children: [
-            Container(
-              width: 46,
-              height: 46,
-              decoration: BoxDecoration(color: iconColor.withOpacity(0.12), shape: BoxShape.circle),
-              child: Icon(icon, color: iconColor, size: 26),
-            ),
-            const SizedBox(height: 6),
-            Text(label, textAlign: TextAlign.center, style: const TextStyle(fontSize: 11, color: Colors.black87, fontWeight: FontWeight.bold)),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ==================== 4. RETRO ROOM SCREEN (ወንበር ላይ የመቀመጥ እና የመውረድ ስርዓት) ====================
-class RetroRoomScreen extends StatefulWidget {
-  final String userName;
-  final int coins;
-  final double points;
-  final Function(double) onMinePoints;
-  final Function(int cost, double pointsEarned) onSendGift;
-
-const RetroRoomScreen({
-    super.key,
-    required this.userName,
-    required this.coins,
-    required this.points,
-    required this.onMinePoints,
-    required this.onSendGift,
-  });
-
-  @override
-  State<RetroRoomScreen> createState() => _RetroRoomScreenState();
-}
-
-class _RetroRoomScreenState extends State<RetroRoomScreen> with SingleTickerProviderStateMixin {
-  bool isMuted = false;
-  late AnimationController _pulseController;
-  Timer? _liveMiningTimer;
-  double sessionMinedPoints = 0.0;
-
-  // 8 ወንበሮች ሁኔታ (null ማለት ባዶ ነው፤ ስም ካለበት ሰው ተቀምጦበታል)
-  List<String?> seatOccupants = List.generate(8, (index) => null);
-  int? mySeatedIndex; // እኔ የተቀመጥኩበት ወንበር ቁጥር
-
-  @override
-  void initState() {
-    super.initState();
-    _pulseController = AnimationController(vsync: this, duration: const Duration(milliseconds: 1200))..repeat(reverse: true);
-
-    // በቀጥታ ስርጭት ውስጥ በቆየ ቁጥር በየ 3 ሰከንዱ 5 ፖይንት ይመረታል
-    _liveMiningTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
-      if (!isMuted && mySeatedIndex != null) {
-        setState(() {
-          sessionMinedPoints += 5.0;
-        });
-        widget.onMinePoints(5.0);
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _pulseController.dispose();
-    _liveMiningTimer?.cancel();
-    super.dispose();
-  }
-
-  // ወንበር ላይ የመቀመጥ ወይም የመውረድ ዲያሎግ
-  void _handleSeatTap(int index) {
-    if (mySeatedIndex == index) {
-      // እኔ የተቀመጥኩበት ወንበር ከሆነ => የመውረጃ አማራጭ
-      showDialog(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          backgroundColor: const Color(0xFF1E1A29),
-          title: Text('ወንበር ${index + 1}', style: const TextStyle(color: Colors.white)),
-          content: const Text('ከዚህ ወንበር መውረድ ይፈልጋሉ?', style: TextStyle(color: Colors.white70)),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('ሰርዝ')),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
-              onPressed: () {
-                setState(() {
-                  seatOccupants[index] = null;
-                  mySeatedIndex = null;
-                });
-                Navigator.pop(ctx);
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('ከወንበር ${index + 1} ወርደዋል!')));
-              },
-              child: const Text('ከወንበር ውረድ (Leave)', style: TextStyle(color: Colors.white)),
-            ),
-          ],
-        ),
-      );
-    } else if (seatOccupants[index] == null) {
-      // ወንበሩ ባዶ ከሆነ => የመቀመጫ አማራጭ
-      showDialog(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          backgroundColor: const Color(0xFF1E1A29),
-          title: Text('ወንበር ${index + 1}', style: const TextStyle(color: Colors.white)),
-          content: Text('በወንበር ${index + 1} ላይ ተቀምጠው ማይክ መክፈት ይፈልጋሉ?', style: const TextStyle(color: Colors.white70)),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('ተመለስ')),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00ACC1)),
-              onPressed: () {
-                setState(() {
-                  // በፊት ሌላ ወንበር ላይ ከነበረ ነፃ ያድርገው
-                  if (mySeatedIndex != null) {
-                    seatOccupants[mySeatedIndex!] = null;
-                  }
-                  seatOccupants[index] = widget.userName;
-                  mySeatedIndex = index;
-                });
-                Navigator.pop(ctx);
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('በወንበር ${index + 1} ላይ ተቀምጠዋል! 🎉')));
-              },
-              child: const Text('ተቀመጥ (Take Seat)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-            ),
-          ],
-        ),
-      );
-    } else {
-      // ሌላ ሰው የተቀመጠበት ከሆነ
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('ወንበር ${index + 1} በ ${seatOccupants[index]} ተይዟል!')),
-      );
-    }
-  }
-
-void _openGiftSheet() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: const Color(0xFF1E1A29),
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (ctx) {
-        return Container(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text('ስጦታ በመላክ ፖይንት አምርት', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-                  Text('ኮይን: ${widget.coins}', style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold)),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  _buildGift(ctx, 'ጽጌረዳ', 200, Icons.local_florist, Colors.pink),
-                  _buildGift(ctx, 'አልማዝ', 1000, Icons.diamond, Colors.cyanAccent),
-                  _buildGift(ctx, 'ሮኬት', 5000, Icons.rocket_launch, Colors.deepOrange),
-                  _buildGift(ctx, 'መኪና', 20000, Icons.directions_car, Colors.amber),
-                ],
-              ),
-              const SizedBox(height: 20),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildGift(BuildContext ctx, String name, int cost, IconData icon, Color color) {
-    return InkWell(
-      onTap: () {
-        if (widget.coins >= cost) {
-          Navigator.pop(ctx);
-          double pointsGained = cost * 0.8;
-          widget.onSendGift(cost, pointsGained);
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('$name ተልኳል! ለሆስቱ $pointsGained Points ተመርቷል!')),
-          );
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('በቂ ኮይን የለም! መጀመሪያ ያምርቱ ወይም ይሙሉ')),
-          );
-        }
-      },
-      child: Column(
-        children: [
-          CircleAvatar(radius: 26, backgroundColor: color.withOpacity(0.2), child: Icon(icon, color: color, size: 28)),
-          const SizedBox(height: 6),
-          Text(name, style: const TextStyle(color: Colors.white, fontSize: 11)),
-          Text('$cost C', style: const TextStyle(color: Colors.amber, fontSize: 10, fontWeight: FontWeight.bold)),
-        ],
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF0F0F11),
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
+        title: const Text('Live Hub & Economy'),
+        backgroundColor: const Color(0xFF1E1742),
         elevation: 0,
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('VIP Live Room', style: TextStyle(color: Colors.white, fontSize: 16)),
-            Text('የተመረተ ፖይንት: ${widget.points.toStringAsFixed(1)} (+$sessionMinedPoints)', style: const TextStyle(color: Color(0xFF00E5FF), fontSize: 11)),
-          ],
-        ),
-      ),
-      body: Column(
-        children: [
-          const SizedBox(height: 20),
-
-          // ዋናው Retro Studio የማይክ ሆስት
-          Center(
-            child: AnimatedBuilder(
-              animation: _pulseController,
-              builder: (context, child) {
-                return Container(
-                  padding: EdgeInsets.all(isMuted ? 4 : 4 + (_pulseController.value * 8)),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    boxShadow: isMuted ? [] : [BoxShadow(color: const Color(0xFF00E5FF).withOpacity(0.6 * _pulseController.value), blurRadius: 20, spreadRadius: 6)],
-                  ),
-                  child: child,
-                );
-
-},
-              child: Container(
-                width: 90,
-                height: 90,
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: RadialGradient(colors: [Color(0xFF26C6DA), Color(0xFF00838F)]),
-                ),
-                child: Center(
-                  child: Icon(isMuted ? Icons.mic_off : Icons.mic, size: 45, color: isMuted ? Colors.redAccent : Colors.white),
-                ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.admin_panel_settings, color: Colors.amber),
+            tooltip: 'Admin Panel',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => AdminApprovalScreen(onUpdated: _refresh),
               ),
             ),
-          ),
-          const SizedBox(height: 8),
-          const Text('Host Active (KEDIR)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
-
-          const SizedBox(height: 25),
-
-          // 8 ወንበሮች (2 ረድፍ ባለ 4 መቀመጫ)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Column(
-              children: [
-                // ረድፍ 1 (ወንበር 1 - 4)
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: List.generate(4, (index) => _buildSeatItem(index)),
-                ),
-                const SizedBox(height: 18),
-                // ረድፍ 2 (ወንበር 5 - 8)
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: List.generate(4, (index) => _buildSeatItem(index + 4)),
-                ),
-              ],
-            ),
-          ),
-
-          const Spacer(),
-
-          // የታችኛው መቆጣጠሪያ
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-            color: const Color(0xFF1E1A29),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                IconButton(
-                  onPressed: () => setState(() => isMuted = !isMuted),
-                  icon: CircleAvatar(
-                    backgroundColor: isMuted ? Colors.redAccent : const Color(0xFF26C6DA),
-                    child: Icon(isMuted ? Icons.mic_off : Icons.mic, color: Colors.white),
-                  ),
-                ),
-                ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.pinkAccent),
-                  onPressed: _openGiftSheet,
-                  icon: const Icon(Icons.card_giftcard, color: Colors.white),
-                  label: const Text('ስጦታ (Gift)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                ),
-              ],
-            ),
-          ),
+          )
         ],
       ),
-    );
-  }
-
-  Widget _buildSeatItem(int index) {
-    final String? occupant = seatOccupants[index];
-    final bool isOccupied = occupant != null;
-    final bool isMe = mySeatedIndex == index;
-
-    return InkWell(
-      onTap: () => _handleSeatTap(index),
-      child: Column(
-        children: [
-          Container(
-            width: 58,
-            height: 58,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: isOccupied ? const Color(0xFF00ACC1) : const Color(0xFF1E1A29),
-              border: Border.all(
-                color: isMe ? Colors.amberAccent : (isOccupied ? const Color(0xFF80DEEA) : Colors.white12),
-                width: isMe ? 2.5 : 1.5,
-              ),
-              boxShadow: isMe
-                  ? [BoxShadow(color: Colors.amber.withOpacity(0.5), blurRadius: 10, spreadRadius: 2)]
-                  : [],
-            ),
-            child: Center(
-              child: isOccupied
-                  ? const Icon(Icons.person, color: Colors.white, size: 34)
-                  : const Icon(Icons.add, color: Colors.white38, size: 24),
-            ),
-          ),
-          const SizedBox(height: 6),
-          SizedBox(
-            width: 65,
-            child: Text(
-
-isOccupied ? (isMe ? 'እኔ' : occupant) : '${index + 1}',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: isMe ? Colors.amberAccent : (isOccupied ? Colors.white : Colors.white38),
-                fontSize: 11,
-                fontWeight: isOccupied ? FontWeight.bold : FontWeight.normal,
-              ),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ==================== 5. PYRAMID MINING GAME ====================
-class PyramidMiningGame extends StatefulWidget {
-  final int coins;
-  final Function(int) onDeduct;
-  final Function(int) onWin;
-  const PyramidMiningGame({super.key, required this.coins, required this.onDeduct, required this.onWin});
-
-  @override
-  State<PyramidMiningGame> createState() => _PyramidMiningGameState();
-}
-
-class _PyramidMiningGameState extends State<PyramidMiningGame> {
-  int currentFloor = 0;
-  int accumulatedWin = 0;
-
-  void startOrClimb(int boxIndex) {
-    if (currentFloor == 0) {
-      if (widget.coins < 500) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('ለማምረት 500 ኮይን ያስፈልጋል!')));
-        return;
-      }
-      widget.onDeduct(500);
-      currentFloor = 1;
-      accumulatedWin = 1000;
-      setState(() {});
-      return;
-    }
-
-    final bool safe = Random().nextDouble() < 0.75;
-    if (safe) {
-      setState(() {
-        currentFloor++;
-        accumulatedWin = (accumulatedWin * 2.5).toInt();
-        if (currentFloor >= 3) {
-          widget.onWin(accumulatedWin);
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('ጫፍ ደርሰዋል! $accumulatedWin ኮይን ተመርቷል! 🎉')),
-          );
-          currentFloor = 0;
-          accumulatedWin = 0;
-        }
-      });
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('ቦምብ ፈነዳ! ማምረቻው ተቋረጠ።')));
-      setState(() {
-        currentFloor = 0;
-        accumulatedWin = 0;
-      });
-    }
-  }
-
-  void cashOut() {
-    if (accumulatedWin > 0) {
-      widget.onWin(accumulatedWin);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$accumulatedWin ኮይን ተመርቶ ወደ ዋሌት ገብቷል!')));
-      setState(() {
-        currentFloor = 0;
-        accumulatedWin = 0;
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF1E1326),
-      appBar: AppBar(title: const Text('Pyramid Coin Rig', style: TextStyle(color: Colors.white)), backgroundColor: Colors.transparent, iconTheme: const IconThemeData(color: Colors.white)),
-      body: Column(
-        children: [
-          const SizedBox(height: 20),
-          Text('ቀሪ ኮይን: ${widget.coins}', style: const TextStyle(color: Colors.amber, fontSize: 18, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 10),
-          Text(currentFloor == 0 ? 'በ 500 ኮይን ጀምር' : 'የተመረተ ኮይን: $accumulatedWin', style: const TextStyle(color: Color(0xFF00E5FF), fontSize: 18, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 40),
-          _buildPyramidRow(1, 3),
-          const SizedBox(height: 16),
-          _buildPyramidRow(2, 2),
-          const SizedBox(height: 16),
-          _buildPyramidRow(3, 1),
-          const Spacer(),
-          if (currentFloor > 0)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.green, minimumSize: const Size(double.infinity, 50)),
-                onPressed: cashOut,
-                child: Text('የተመረተውን ሰብስብ ($accumulatedWin Coins)', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-              ),
-            ),
-          if (currentFloor == 0)
-
-Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.amber, minimumSize: const Size(double.infinity, 50)),
-                onPressed: () => startOrClimb(0),
-                child: const Text('ማምረት ጀምር (Start Mining)', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 16)),
-              ),
-            ),
-          const SizedBox(height: 30),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPyramidRow(int boxCount, int floor) {
-    final bool isActive = currentFloor == floor - 1;
-    final bool isPassed = currentFloor >= floor;
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: List.generate(boxCount, (idx) {
-        return InkWell(
-          onTap: isActive ? () => startOrClimb(idx) : null,
-          child: Container(
-            margin: const EdgeInsets.symmetric(horizontal: 6),
-            width: 70,
-            height: 60,
-            decoration: BoxDecoration(
-              gradient: isPassed
-                  ? const LinearGradient(colors: [Colors.green, Colors.teal])
-                  : (isActive ? const LinearGradient(colors: [Colors.amber, Colors.orange]) : const LinearGradient(colors: [Color(0xFF372948), Color(0xFF251B37)])),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: isActive ? Colors.yellowAccent : Colors.white12, width: 2),
-            ),
-            child: Center(
-              child: Icon(isPassed ? Icons.check_circle : (isActive ? Icons.touch_app : Icons.lock), color: Colors.white, size: 28),
-            ),
-          ),
-        );
-      }),
-    );
-  }
-}
-
-// ==================== 6. RECHARGE SCREEN ====================
-class RechargeScreen extends StatelessWidget {
-  final Function(int) onRechargeSuccess;
-  const RechargeScreen({super.key, required this.onRechargeSuccess});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Recharge (ኮይን መሙያ)')),
-      body: Padding(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            _buildBox(context, '70,000 Coins', '100 ETB (Telebirr)', 70000),
-            _buildBox(context, '210,000 Coins', '300 ETB (Telebirr)', 210000),
-            _buildBox(context, '350,000 Coins', '500 ETB (Telebirr)', 350000),
+            // የዋሌት ማሳያ ካርድ
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF5B247A), Color(0xFF1B1B62)],
+                ),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  Column(
+                    children: [
+                      const Text('የእርስዎ ሳንቲም (Coins)', style: TextStyle(color: Colors.white70)),
+                      const SizedBox(height: 6),
+                      Text(
+                        '${AppState.userCoins} 🪙',
+                        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.amberAccent),
+                      ),
+                    ],
+                  ),
+                  Container(height: 40, width: 1, color: Colors.white24),
+                  Column(
+                    children: [
+                      const Text('የሆስት ፖይንት (Points)', style: TextStyle(color: Colors.white70)),
+                      const SizedBox(height: 6),
+
+Text(
+                        '${AppState.hostPoints} 💎',
+                        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.cyanAccent),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            // አሰሳዎች (Menu Cards)
+            _buildNavCard(
+              icon: Icons.mic,
+              title: 'ድምፅ ክፍል (Voice Room)',
+              subtitle: 'ይግቡ፣ ስጦታዎችን ይላኩ እና ፖይንት ያመንጩ',
+              color: Colors.deepPurpleAccent,
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => VoiceRoomScreen(onUpdated: _refresh)),
+              ),
+            ),
+            _buildNavCard(
+              icon: Icons.videogame_asset,
+              title: 'ፒራሚድ ማይኒንግ (Safe Mini-Game)',
+              subtitle: 'ከደህንነት ገደብ (RTP & Max Win) ጋር የተሰራ',
+              color: Colors.indigoAccent,
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => PyramidGameScreen(onUpdated: _refresh)),
+              ),
+            ),
+            _buildNavCard(
+              icon: Icons.shopping_bag,
+              title: 'ኮይን ግዢ (Manual Store)',
+              subtitle: 'በቴሌብር ወይም በባንክ ኮይን የሚሞላበት',
+              color: Colors.teal,
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => CoinPurchaseScreen(onUpdated: _refresh)),
+              ),
+            ),
+            _buildNavCard(
+              icon: Icons.payments,
+              title: 'ፖይንት ወደ ብር ማውጫ (Host Cashout)',
+              subtitle: '100,000 Pts = 1,667 ብር ተመን',
+              color: Colors.orangeAccent,
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => HostCashoutScreen(onUpdated: _refresh)),
+              ),
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildBox(BuildContext context, String coins, String price, int amt) {
-    return Container(
+  Widget _buildNavCard({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return Card(
+      color: const Color(0xFF1B1638),
       margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: ListTile(
+        leading: CircleAvatar(backgroundColor: color.withOpacity(0.2), child: Icon(icon, color: color)),
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+        subtitle: Text(subtitle, style: const TextStyle(color: Colors.white54, fontSize: 12)),
+        trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.white30),
+        onTap: onTap,
+      ),
+    );
+  }
+}
+
+// ==========================================
+// 3. የድምፅ ክፍል እና ስጦታ (Voice Room)
+// ==========================================
+class VoiceRoomScreen extends StatelessWidget {
+  final VoidCallback onUpdated;
+  const VoiceRoomScreen({Key? key, required this.onUpdated}) : super(key: key);
+
+  void _sendGift(BuildContext context, int giftCost, String giftName) {
+    if (AppState.userCoins < giftCost) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('በቂ ኮይን የለዎትም! እባክዎ ኮይን ይግዙ።')),
+      );
+      return;
+    }
+    AppState.userCoins -= giftCost;
+    AppState.hostPoints += giftCost; // ኮይኑ ወደ ሆስት ፖይንት ይዞራል
+    onUpdated();
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('$giftName በ $giftCost ሳንቲም ተላከ! ሆስቱ $giftCost ፖይንት አገኘ።')),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('የድምፅ ክፍል (Room #101)'), backgroundColor: const Color(0xFF1E1742)),
+
+body: Column(
         children: [
-          Text(coins, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00B0FF)),
-            onPressed: () {
-              onRechargeSuccess(amt);
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$coins በተሳካ ሁኔታ ተሞልቷል!')));
-            },
-            child: Text(price, style: const TextStyle(color: Colors.white)),
+          Expanded(
+            child: GridView.builder(
+              padding: const EdgeInsets.all(24),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 3,
+                mainAxisSpacing: 20,
+                crossAxisSpacing: 20,
+              ),
+              itemCount: 6,
+              itemBuilder: (context, i) {
+                return Column(
+                  children: [
+                    CircleAvatar(
+                      radius: 30,
+                      backgroundColor: i == 0 ? Colors.purple : Colors.white12,
+                      child: Icon(i == 0 ? Icons.mic : Icons.mic_off, color: Colors.white),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(i == 0 ? 'ዋና ሆስት' : 'ወንበር ${i + 1}', style: const TextStyle(fontSize: 12)),
+                  ],
+                );
+              },
+            ),
           ),
+          Container(
+            padding: const EdgeInsets.all(16),
+            color: const Color(0xFF1E1742),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                ElevatedButton.icon(
+                  onPressed: () => _sendGift(context, 1000, '🌹 ጽጌረዳ'),
+                  icon: const Icon(Icons.favorite, color: Colors.pinkAccent),
+                  label: const Text('ጽጌረዳ (1k)'),
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.white10),
+                ),
+                ElevatedButton.icon(
+                  onPressed: () => _sendGift(context, 10000, '🚗 ስፖርት መኪና'),
+                  icon: const Icon(Icons.directions_car, color: Colors.amberAccent),
+                  label: const Text('መኪና (10k)'),
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.white10),
+                ),
+              ],
+            ),
+          )
         ],
       ),
     );
   }
 }
 
-// ==================== 7. MESSAGE SCREEN ====================
-class MessageScreen extends StatelessWidget {
-  const MessageScreen({super.key});
+// ==========================================
+// 4. የፒራሚድ ማይኒንግ ጨዋታ (Safe Game Engine)
+// ==========================================
+class PyramidGameScreen extends StatefulWidget {
+  final VoidCallback onUpdated;
+  const PyramidGameScreen({Key? key, required this.onUpdated}) : super(key: key);
+
+  @override
+  State<PyramidGameScreen> createState() => _PyramidGameScreenState();
+}
+
+class _PyramidGameScreenState extends State<PyramidGameScreen> {
+  final int betAmount = 500;
+  int currentLevel = 0;
+  bool isPlaying = false;
+  double multiplier = 1.0;
+  final Random _random = Random();
+
+  void _startGame() {
+    if (AppState.userCoins < betAmount) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('ለመጫወት ቢያንስ 500 ሳንቲም ያስፈልጋል!')),
+      );
+      return;
+    }
+    setState(() {
+      AppState.userCoins -= betAmount;
+      isPlaying = true;
+      currentLevel = 0;
+      multiplier = 1.0;
+    });
+    widget.onUpdated();
+  }
+
+  void _pickStep(int choice) {
+    if (!isPlaying) return;
+
+    // የደህንነት ቀመር: ደረጃው ከፍ ባለ ቁጥር የመሸነፍ እድሉ ይጨምራል (House Edge)
+    // ደረጃ 1: 80% የማሸነፍ እድል, ደረጃ 2: 60%, ደረጃ 3: 40%
+    int safeTarget = 80 - (currentLevel * 20);
+    bool isSafe = _random.nextInt(100) < safeTarget;
+
+    if (isSafe && currentLevel < 3) {
+      setState(() {
+        currentLevel++;
+        multiplier += 0.8; // ማባዣው ይጨምራል
+      });
+      if (currentLevel == 3) {
+        _cashoutGame(); // ከፍተኛውን ደረጃ ሲያጠናቅቅ በራስ-ሰር ይወስዳል
+      }
+    } else {
+      // ተሸንፏል (ቦምብ ፈንድቷል)
+      setState(() {
+        isPlaying = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('💥 ቦምብ ፈነዳ! ያስያዙት ሳንቲም ተበልቷል።'), backgroundColor: Colors.red),
+      );
+    }
+  }
+
+  void _cashoutGame() {
+    if (!isPlaying) return;
+    int wonCoins = (betAmount * multiplier).round();
+
+    // Max Win Cap: በአንድ ዙር ከ 2,500 ሳንቲም በላይ ማሸነፍ እንዳይቻል መገደብ
+    if (wonCoins > 2500) wonCoins = 2500;
+
+    setState(() {
+      AppState.userCoins += wonCoins;
+      isPlaying = false;
+    });
+    widget.onUpdated();
+
+ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('🎉 እንኳን ደስ አለዎት! $wonCoins ሳንቲም አሸነፉ።'), backgroundColor: Colors.green),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Messages')),
-      body: const Center(child: Text('System and Notification Messages')),
+      appBar: AppBar(title: const Text('ፒራሚድ ማይኒንግ (Safe Engine)'), backgroundColor: const Color(0xFF1E1742)),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                isPlaying ? 'ደረጃ፦ $currentLevel | ማባዣ፦ x${multiplier.toStringAsFixed(1)}' : 'ጨዋታ ለመጀመር አስይዝ',
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.amberAccent),
+              ),
+              const SizedBox(height: 30),
+              if (isPlaying)
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: List.generate(3, (index) {
+                    return ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        shape: const CircleBorder(),
+                        padding: const EdgeInsets.all(24),
+                        backgroundColor: Colors.deepPurple,
+                      ),
+                      onPressed: () => _pickStep(index),
+                      child: const Text('?', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                    );
+                  }),
+                ),
+              const SizedBox(height: 40),
+              if (!isPlaying)
+                ElevatedButton(
+                  onPressed: _startGame,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green,
+                    padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 14),
+                  ),
+                  child: Text('በ $betAmount ሳንቲም ጀምር'),
+                )
+              else
+                ElevatedButton(
+                  onPressed: _cashoutGame,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.amber.shade800,
+                    padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 14),
+                  ),
+                  child: Text('ያሸነፉትን ውሰዱ (${(betAmount * multiplier).round()} Coins)'),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ==========================================
+// 5. ኮይን መግዣ (Coin Purchase Store)
+// ==========================================
+class CoinPurchaseScreen extends StatelessWidget {
+  final VoidCallback onUpdated;
+  const CoinPurchaseScreen({Key? key, required this.onUpdated}) : super(key: key);
+
+  void _manualBuy(BuildContext context, int coins, int priceETB) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1742),
+        title: const Text('ኮይን መግዣ መመሪያ', style: TextStyle(color: Colors.white)),
+        content: Text(
+          '$coins ሳንቲም ለመግዛት $priceETB ብር ወደሚከተለው የቴሌብር ቁጥር ያስገቡ፦\n\n'
+          '📱 ቴሌብር፦ 09xxxxxxxx\n'
+          '👤 ስም፦ የድርጅቱ ስም\n\n'
+          'ብር እንደላኩ ደረሰኙን ለዋናው አስተዳዳሪ ሲልኩ ወዲያውኑ ኮይኑ ይሞላልዎታል።',
+          style: const TextStyle(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('እሺ')),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('ኮይን መግዣ ሱቅ'), backgroundColor: const Color(0xFF1E1742)),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          _buildPackage(context, 50000, 1000),
+          _buildPackage(context, 100000, 2000),
+          _buildPackage(context, 300000, 5800),
+        ],
+      ),
+    );
+  }
+
+Widget _buildPackage(BuildContext context, int coins, int etb) {
+    return Card(
+      color: const Color(0xFF1B1638),
+      margin: const EdgeInsets.only(bottom: 12),
+      child: ListTile(
+        leading: const Icon(Icons.monetization_on, color: Colors.amber, size: 36),
+        title: Text('$coins Coins', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+        subtitle: Text('ዋጋ፦ $etb የኢትዮጵያ ብር', style: const TextStyle(color: Colors.greenAccent)),
+        trailing: ElevatedButton(
+          onPressed: () => _manualBuy(context, coins, etb),
+          style: ElevatedButton.styleFrom(backgroundColor: Colors.deepPurple),
+          child: const Text('ግዛ'),
+        ),
+      ),
+    );
+  }
+}
+
+// ==========================================
+// 6. የሆስት ገንዘብ ማውጫ (Host Cashout Screen)
+// ==========================================
+class HostCashoutScreen extends StatefulWidget {
+  final VoidCallback onUpdated;
+  const HostCashoutScreen({Key? key, required this.onUpdated}) : super(key: key);
+
+  @override
+  State<HostCashoutScreen> createState() => _HostCashoutScreenState();
+}
+
+class _HostCashoutScreenState extends State<HostCashoutScreen> {
+  final _pointsCtrl = TextEditingController();
+  final _accCtrl = TextEditingController();
+  final _nameCtrl = TextEditingController();
+  String _method = 'Telebirr';
+  double _etbAmount = 0.0;
+
+  void _calculate(String val) {
+    int pts = int.tryParse(val) ?? 0;
+    setState(() {
+      _etbAmount = (pts / 100000) * 1667;
+    });
+  }
+
+  void _submit() {
+    int pts = int.tryParse(_pointsCtrl.text) ?? 0;
+    if (pts < 100000) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('ዝቅተኛው የማውጫ መጠን 100,000 ፖይንት ነው!')),
+      );
+      return;
+    }
+    if (pts > AppState.hostPoints) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('በቂ ፖይንት የለዎትም!')),
+      );
+      return;
+    }
+
+    AppState.requests.add(WithdrawalRequest(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      hostName: _nameCtrl.text.trim(),
+      points: pts,
+      amountETB: _etbAmount,
+      paymentMethod: _method,
+      accountNumber: _accCtrl.text.trim(),
+    ));
+
+    Navigator.pop(context);
+    widget.onUpdated();
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('የማውጣት ጥያቄው ለአስተዳዳሪው ደርሷል!')),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('ገንዘብ ማውጫ (Withdraw)'), backgroundColor: const Color(0xFF1E1742)),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            TextField(
+              controller: _pointsCtrl,
+              keyboardType: TextInputType.number,
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(
+                labelText: 'የሚያወጡት ፖይንት መጠን (ምሳሌ: 100000)',
+                labelStyle: TextStyle(color: Colors.white70),
+                border: OutlineInputBorder(),
+              ),
+              onChanged: _calculate,
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'የሚደርስዎት፦ ${_etbAmount.toStringAsFixed(2)} ETB',
+              style: const TextStyle(color: Colors.greenAccent, fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _nameCtrl,
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(
+                labelText: 'ሙሉ ስም',
+                labelStyle: TextStyle(color: Colors.white70),
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+TextField(
+              controller: _accCtrl,
+              keyboardType: TextInputType.phone,
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(
+                labelText: 'የቴሌብር ስልክ ቁጥር ወይም የባንክ ሂሳብ',
+                labelStyle: TextStyle(color: Colors.white70),
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton(
+              onPressed: _submit,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.deepPurple,
+                minimumSize: const dynamic.fromMilliseconds(50),
+                padding: const EdgeInsets.symmetric(horizontal: 50, vertical: 15),
+              ),
+              child: const Text('ጥያቄውን ላክ'),
+            )
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ==========================================
+// 7. የአስተዳዳሪ ማጽደቂያ ገጽ (Admin Panel)
+// ==========================================
+class AdminApprovalScreen extends StatefulWidget {
+  final VoidCallback onUpdated;
+  const AdminApprovalScreen({Key? key, required this.onUpdated}) : super(key: key);
+
+  @override
+  State<AdminApprovalScreen> createState() => _AdminApprovalScreenState();
+}
+
+class _AdminApprovalScreenState extends State<AdminApprovalScreen> {
+  void _approve(WithdrawalRequest req) {
+    setState(() {
+      req.status = 'Approved';
+      AppState.hostPoints -= req.points; // ፖይንቱ በቋሚነት ይቀነሳል
+    });
+    widget.onUpdated();
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('ክፍያው ጸድቋል! ፖይንቱ ተቀንሷል።')),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final pending = AppState.requests.where((r) => r.status == 'Pending').toList();
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('የአስተዳዳሪ ማጽደቂያ (Admin)'), backgroundColor: Colors.amber.shade900),
+      body: pending.isEmpty
+          ? const Center(child: Text('ምንም አዲስ የክፍያ ጥያቄ የለም።', style: TextStyle(color: Colors.white54)))
+          : ListView.builder(
+              itemCount: pending.length,
+              itemBuilder: (context, index) {
+                final req = pending[index];
+                return Card(
+                  color: const Color(0xFF1B1638),
+                  margin: const EdgeInsets.all(12),
+                  child: ListTile(
+                    title: Text('${req.hostName} - ${req.amountETB.toStringAsFixed(2)} ETB',
+                        style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                    subtitle: Text('ፖይንት: ${req.points}\nመረጃ: ${req.paymentMethod} (${req.accountNumber})',
+                        style: const TextStyle(color: Colors.white70)),
+                    trailing: ElevatedButton(
+                      onPressed: () => _approve(req),
+                      style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                      child: const Text('አጽድቅ'),
+                    ),
+                  ),
+                );
+              },
+            ),
     );
   }
 }
