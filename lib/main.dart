@@ -1,9 +1,7 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
-
-// የነበሩትን ፋይሎች ለማገናኘት (ካስፈለገ):
-// import 'room_screen.dart';
-// import 'agency_screen.dart';
+import 'package:agora_rtc_engine/agora_rtc_engine.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 void main() {
   runApp(const FullVoiceApp());
@@ -32,9 +30,12 @@ class FullVoiceApp extends StatelessWidget {
 }
 
 // ==========================================
-// 1. የዳታ እና የኢኮኖሚ ማዕከል (Global State)
+// 1. የዳታ ማዕከል (Global State)
 // ==========================================
 class AppData {
+  static const String agoraAppId = "fd2d8b50393b495dab38eb5cf267b393";
+  static const String channelName = "room_1042";
+
   static int userCoins = 50000;
   static int hostPoints = 120000;
   static List<Map<String, dynamic>> cashoutRequests = [];
@@ -46,7 +47,7 @@ class AppData {
 }
 
 // ==========================================
-// 2. ዋናው ማውጫና ዳሽቦርድ (Home Dashboard)
+// 2. ዋናው ማውጫ (Home Navigation)
 // ==========================================
 class MainHomeScreen extends StatefulWidget {
   const MainHomeScreen({Key? key}) : super(key: key);
@@ -112,13 +113,12 @@ class DashboardView extends StatelessWidget {
           ),
         ],
       ),
-      body: SingleChildScrollView(
+
+body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-
-children: [
-            // የኮይንና ፖይንት ካርድ
+          children: [
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
@@ -154,15 +154,12 @@ children: [
               ),
             ),
             const SizedBox(height: 24),
-
             const Text('ተወዳጅ ክፍሎችና ጨዋታዎች', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
             const SizedBox(height: 14),
-
-            // አሰሳዎች
             _buildActionCard(
               context,
               title: 'የቀጥታ ድምፅ ክፍል (Live Room)',
-              desc: 'ይግቡ፣ ማይክ ይያዙ፣ ስጦታዎችን ይላኩ',
+              desc: 'ይግቡ፣ ማይክ ይያዙ፣ በቀጥታ ይናገሩ',
               icon: Icons.record_voice_over,
               gradient: [const Color(0xFF7209B7), const Color(0xFF3F37C9)],
               onTap: () => Navigator.push(
@@ -206,11 +203,8 @@ children: [
       borderRadius: BorderRadius.circular(16),
       child: Container(
         padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(colors: gradient),
 
-borderRadius: BorderRadius.circular(16),
-        ),
+decoration: BoxDecoration(gradient: LinearGradient(colors: gradient), borderRadius: BorderRadius.circular(16)),
         child: Row(
           children: [
             CircleAvatar(backgroundColor: Colors.white24, radius: 26, child: Icon(icon, color: Colors.white, size: 28)),
@@ -234,7 +228,7 @@ borderRadius: BorderRadius.circular(16),
 }
 
 // ==========================================
-// 4. የተሟላው የድምፅ ክፍል (Voice Room View)
+// 4. እውነተኛው የአጎራ ድምፅ ክፍል (Agora Voice Room)
 // ==========================================
 class VoiceRoomView extends StatefulWidget {
   final VoidCallback onUpdated;
@@ -245,13 +239,69 @@ class VoiceRoomView extends StatefulWidget {
 }
 
 class _VoiceRoomViewState extends State<VoiceRoomView> {
-  bool isMuted = false;
+  RtcEngine? _engine;
+  bool _isJoined = false;
+  bool _isMuted = false;
+  final Set<int> _remoteUids = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _initAgora();
+  }
+
+  Future<void> _initAgora() async {
+    await [Permission.microphone].request();
+
+    _engine = createAgoraRtcEngine();
+    await _engine!.initialize(const RtcEngineContext(
+      appId: AppData.agoraAppId,
+      channelProfile: ChannelProfileType.channelProfileLiveBroadcasting,
+    ));
+
+    _engine!.registerEventHandler(
+      RtcEngineEventHandler(
+        onJoinChannelSuccess: (RtcConnection connection, int elapsed) {
+          setState(() => _isJoined = true);
+        },
+        onUserJoined: (RtcConnection connection, int remoteUid, int elapsed) {
+          setState(() => _remoteUids.add(remoteUid));
+        },
+        onUserOffline: (RtcConnection connection, int remoteUid, UserOfflineReasonType reason) {
+          setState(() => _remoteUids.remove(remoteUid));
+        },
+      ),
+    );
+
+    await _engine!.setClientRole(role: ClientRoleType.clientRoleBroadcaster);
+    await _engine!.enableAudio();
+    await _engine!.joinChannel(
+      token: '',
+      channelId: AppData.channelName,
+      uid: 0,
+      options: const ChannelMediaOptions(
+        clientRoleType: ClientRoleType.clientRoleBroadcaster,
+      ),
+    );
+  }
+
+  void _toggleMute() {
+    setState(() {
+      _isMuted = !_isMuted;
+    });
+    _engine?.muteLocalAudioStream(_isMuted);
+  }
+
+  @override
+  void dispose() {
+    _engine?.leaveChannel();
+    _engine?.release();
+    super.dispose();
+  }
 
   void _sendGift(int cost, String giftName) {
     if (AppData.userCoins < cost) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('በቂ ሳንቲም የለዎትም! እባክዎ ኮይን ይግዙ።')),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('በቂ ሳንቲም የለዎትም!')));
       return;
     }
     setState(() {
@@ -260,7 +310,7 @@ class _VoiceRoomViewState extends State<VoiceRoomView> {
     });
     widget.onUpdated();
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$giftName በ $cost ሳንቲም ተላከ! ሆስቱ $cost ፖይንት አገኘ።'), backgroundColor: Colors.purple),
+      SnackBar(content: Text('$giftName ተላከ! ሆስቱ $cost ፖይንት አገኘ።'), backgroundColor: Colors.purple),
     );
   }
 
@@ -268,24 +318,23 @@ class _VoiceRoomViewState extends State<VoiceRoomView> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('ክፍል፦ የፍቅር ማዕበል (#1042)'),
-        backgroundColor: const Color(0xFF161228),
+        title: Text(_isJoined ? 'ክፍል፦ #1042 (ቀጥታ ተገናኝቷል 🟢)' : 'ድምፅ በማገናኘት ላይ... ⏳'),
       ),
       body: Column(
         children: [
-          // የክፍሉ ወንበሮች (8 Seats)
           Expanded(
             child: GridView.builder(
               padding: const EdgeInsets.all(20),
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 4,
-                mainAxisSpacing: 18,
+
+mainAxisSpacing: 18,
                 crossAxisSpacing: 18,
                 childAspectRatio: 0.8,
               ),
               itemCount: 8,
               itemBuilder: (context, i) {
-                bool isHost = (i == 0);
+                bool isMe = (i == 0);
                 return Column(
                   children: [
                     Stack(
@@ -293,19 +342,19 @@ class _VoiceRoomViewState extends State<VoiceRoomView> {
                       children: [
                         CircleAvatar(
                           radius: 28,
-                          backgroundColor: isHost ? Colors.purpleAccent : const Color(0xFF221A3D),
-                          child: Icon(isHost ? Icons.person : Icons.mic_none, color: Colors.white70),
+                          backgroundColor: isMe ? Colors.purpleAccent : const Color(0xFF221A3D),
+                          child: Icon(isMe ? Icons.person : Icons.mic_none, color: Colors.white70),
                         ),
                         CircleAvatar(
                           radius: 9,
-                          backgroundColor: isHost ? Colors.green : Colors.red,
-                          child: Icon(isHost ? Icons.volume_up : Icons.mic_off, size: 10, color: Colors.white),
+                          backgroundColor: (isMe && !_isMuted) ? Colors.green : Colors.red,
+                          child: Icon((isMe && !_isMuted) ? Icons.volume_up : Icons.mic_off, size: 10, color: Colors.white),
                         ),
                       ],
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      isHost ? 'ዋና ሆስት' : 'ወንበር ${i + 1}',
+                      isMe ? 'እርስዎ (ሆስት)' : 'ተጠቃሚ ${i + 1}',
                       style: const TextStyle(fontSize: 11, color: Colors.white70),
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -314,18 +363,15 @@ class _VoiceRoomViewState extends State<VoiceRoomView> {
               },
             ),
           ),
-
-          // የስጦታ እና የቁጥጥር ፓነል
           Container(
-
-padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             color: const Color(0xFF161228),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
                 IconButton(
-                  icon: Icon(isMuted ? Icons.mic_off : Icons.mic, color: isMuted ? Colors.red : Colors.greenAccent),
-                  onPressed: () => setState(() => isMuted = !isMuted),
+                  icon: Icon(_isMuted ? Icons.mic_off : Icons.mic, color: _isMuted ? Colors.red : Colors.greenAccent),
+                  onPressed: _toggleMute,
                 ),
                 ElevatedButton.icon(
                   onPressed: () => _sendGift(1000, '🌹 ጽጌረዳ'),
@@ -334,7 +380,7 @@ padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2A1F4C)),
                 ),
                 ElevatedButton.icon(
-                  onPressed: () => _sendGift(10000, '🏎️ ስፖርት መኪና'),
+                  onPressed: () => _sendGift(10000, '🏎️ መኪና'),
                   icon: const Icon(Icons.speed, color: Colors.amberAccent, size: 18),
                   label: const Text('መኪና (10k)'),
                   style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2A1F4C)),
@@ -349,7 +395,7 @@ padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
 }
 
 // ==========================================
-// 5. ደህንነቱ የተጠበቀ ሚኒ ጌም (Pyramid Safe Game)
+// 5. ሚኒ ጌም (Pyramid Safe Game)
 // ==========================================
 class PyramidMiniGame extends StatefulWidget {
   final VoidCallback onUpdated;
@@ -382,7 +428,7 @@ class _PyramidMiniGameState extends State<PyramidMiniGame> {
 
   void _choose() {
     if (!active) return;
-    int chance = 75 - (step * 20); // House Edge
+    int chance = 75 - (step * 20);
     if (_rnd.nextInt(100) < chance && step < 3) {
       setState(() {
         step++;
@@ -395,10 +441,10 @@ class _PyramidMiniGameState extends State<PyramidMiniGame> {
     }
   }
 
-  void _takeWin() {
+void _takeWin() {
     if (!active) return;
     int won = (bet * mult).round();
-    if (won > 2500) won = 2500; // Max Win Cap
+    if (won > 2500) won = 2500;
 
     setState(() {
       AppData.userCoins += won;
@@ -426,8 +472,7 @@ class _PyramidMiniGameState extends State<PyramidMiniGame> {
               ),
             const SizedBox(height: 30),
             active
-
-? ElevatedButton(onPressed: _takeWin, style: ElevatedButton.styleFrom(backgroundColor: Colors.amber.shade900), child: Text('ያሸነፉትን ውሰዱ (${(bet * mult).round()} Coins)'))
+                ? ElevatedButton(onPressed: _takeWin, style: ElevatedButton.styleFrom(backgroundColor: Colors.amber.shade900), child: Text('ያሸነፉትን ውሰዱ (${(bet * mult).round()} Coins)'))
                 : ElevatedButton(onPressed: _start, style: ElevatedButton.styleFrom(backgroundColor: Colors.green), child: Text('በ $bet ሳንቲም ጀምር')),
           ],
         ),
@@ -437,7 +482,7 @@ class _PyramidMiniGameState extends State<PyramidMiniGame> {
 }
 
 // ==========================================
-// 6. የኤጀንሲ ገጽ (Agency Management View)
+// 6. ኤጀንሲ (Agency Management View)
 // ==========================================
 class AgencyManagementView extends StatelessWidget {
   const AgencyManagementView({Key? key}) : super(key: key);
@@ -471,7 +516,7 @@ class AgencyManagementView extends StatelessWidget {
 }
 
 // ==========================================
-// 7. የዋሌት እና ገንዘብ ማውጫ (Wallet & Cashout)
+// 7. ዋሌትና ካሽአውት (Wallet & Cashout)
 // ==========================================
 class ProfileWalletView extends StatefulWidget {
   final VoidCallback onUpdated;
@@ -488,7 +533,7 @@ class _ProfileWalletViewState extends State<ProfileWalletView> {
   void _submitCashout() {
     int pts = int.tryParse(_ptsCtrl.text) ?? 0;
     if (pts < 100000 || pts > AppData.hostPoints) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('ትክክለኛ የፖይንት መጠን ያስገቡ (ቢያንስ 100,000)!')));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('ትክክለኛ መጠን ያስገቡ (ቢያንስ 100,000)!')));
       return;
     }
     AppData.cashoutRequests.add({
@@ -501,7 +546,7 @@ class _ProfileWalletViewState extends State<ProfileWalletView> {
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('ጥያቄዎ ደርሷል!')));
   }
 
-  @override
+@override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('የኪስ ቦርሳ (Wallet)')),
@@ -522,8 +567,7 @@ class _ProfileWalletViewState extends State<ProfileWalletView> {
           const SizedBox(height: 24),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.purple, padding: const EdgeInsets.all(14)),
-
-onPressed: () {
+            onPressed: () {
               showModalBottomSheet(
                 context: context,
                 isScrollControlled: true,
@@ -553,7 +597,7 @@ onPressed: () {
 }
 
 // ==========================================
-// 8. የአስተዳዳሪ ማጽደቂያ ገጽ (Admin Panel)
+// 8. አስተዳዳሪ (Admin Panel)
 // ==========================================
 class AdminPanelScreen extends StatelessWidget {
   final VoidCallback onUpdated;
