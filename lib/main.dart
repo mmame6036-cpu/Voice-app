@@ -27,7 +27,7 @@ class HalaSuperApp extends StatelessWidget {
 }
 
 // ==========================================
-// Central App Data & State Management
+// Central App State & Database
 // ==========================================
 class AppData {
   static const String agoraAppId = "fd2d8b50393b495dab38eb5cf267b393";
@@ -36,7 +36,7 @@ class AppData {
   static int followedCount = 3118;
   static int followingCount = 519;
   static int friendsCount = 104;
-  static int coins = 0;
+  static int coins = 1500;
   static double points = 23903.91;
   static String selectedCountry = "All";
 
@@ -48,7 +48,7 @@ class AppData {
   static List<Map<String, dynamic>> rooms = [
     {
       'id': 'room_1042',
-      'title': '🇪🇹 ኢትዮጵያ ቮይስ ፓርቲ እና ஃப்ரீ ኮይን',
+      'title': '🇪🇹 ኢትዮጵያ ቮይስ ፓርቲ እና ஃப்ሪ ኮይን',
       'host': 'ከድር ኡመር',
       'category': 'FRIENDS',
       'type': 'Public',
@@ -63,15 +63,6 @@ class AppData {
       'type': 'Public',
       'users': '2.34k',
       'country': 'Philippines 🇵🇭',
-    },
-    {
-      'id': 'room_1044',
-      'title': '🔒 የግል ቪአይፒ የሙዚቃ ማዕከል',
-      'host': 'ናቴ ፋምስ',
-      'category': 'MUSIC',
-      'type': 'Private',
-      'users': '1.12k',
-      'country': 'Kenya 🇰🇪',
     },
   ];
 
@@ -98,7 +89,7 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   void initState() {
     super.initState();
-    Future.delayed(const Duration(milliseconds: 1400), () {
+    Future.delayed(const Duration(milliseconds: 1200), () {
       if (mounted) {
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(builder: (_) => const MainNavigationHub()),
@@ -138,14 +129,14 @@ class _SplashScreenState extends State<SplashScreen> {
 class MainNavigationHub extends StatefulWidget {
   const MainNavigationHub({Key? key}) : super(key: key);
 
-@override
+  @override
   State<MainNavigationHub> createState() => _MainNavigationHubState();
 }
 
 class _MainNavigationHubState extends State<MainNavigationHub> {
   int _tabIndex = 0;
 
-  @override
+@override
   Widget build(BuildContext context) {
     final List<Widget> pages = [
       const PartyHomeScreen(),
@@ -197,21 +188,9 @@ class _PartyHomeScreenState extends State<PartyHomeScreen> {
         elevation: 0,
         title: Row(
           children: const [
-            Text('Follow', style: TextStyle(fontSize: 16, color: Colors.white54, fontWeight: FontWeight.bold)),
-            SizedBox(width: 14),
             Text('Party', style: TextStyle(fontSize: 22, color: Colors.white, fontWeight: FontWeight.bold)),
           ],
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.search, color: Colors.white),
-            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const GenericDetailScreen(title: 'Search Screen'))),
-          ),
-          IconButton(
-            icon: const Icon(Icons.card_giftcard, color: Colors.amber),
-            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const GenericDetailScreen(title: 'Events Center'))),
-          ),
-        ],
       ),
       body: ListView(
         padding: const EdgeInsets.all(14),
@@ -238,46 +217,31 @@ class _PartyHomeScreenState extends State<PartyHomeScreen> {
                     },
                   ),
                 );
-
-},
+              },
             ),
           ),
           const SizedBox(height: 14),
-          Container(
-            height: 110,
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(colors: [Color(0xFFE91E63), Color(0xFF9C27B0)]),
-              borderRadius: BorderRadius.circular(16),
+          ...filteredRooms.map((r) => Card(
+            color: const Color(0xFF161A28),
+            margin: const EdgeInsets.only(bottom: 10),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            child: ListTile(
+              leading: const CircleAvatar(
+                backgroundColor: Color(0xFF1E2433),
+                child: Icon(Icons.graphic_eq, color: Color(0xFF00E676)),
+              ),
+              title: Text(r['title'], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+              subtitle: Text('Host: ${r['host']} • ${r['country']}', style: const TextStyle(fontSize: 11, color: Colors.white54)),
+              trailing: Text(r['users'], style: const TextStyle(color: Color(0xFF00E676), fontWeight: FontWeight.bold)),
+
+onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => VoiceRoomScreen(roomId: r['id'], title: r['title'])),
+                );
+              },
             ),
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: const [
-                      Text('New Host No-target warning', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white)),
-                      SizedBox(height: 4),
-                      Text('አዲስ አስተናጋጅ ያለ ላምፕ ማስታወቂያ', style: TextStyle(fontSize: 11, color: Colors.white70)),
-                    ],
-                  ),
-                ),
-                const Icon(Icons.redeem, size: 45, color: Colors.amberAccent),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-          const Text('Active Voice Rooms', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-          const SizedBox(height: 10),
-          filteredRooms.isEmpty
-              ? const Padding(
-                  padding: EdgeInsets.all(30),
-                  child: Center(child: Text('No rooms found for this country.', style: TextStyle(color: Colors.white54))),
-                )
-              : Column(
-                  children: filteredRooms.map((r) => _buildRoomCard(context, r)).toList(),
-                ),
+          )),
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
@@ -287,36 +251,7 @@ class _PartyHomeScreenState extends State<PartyHomeScreen> {
         onPressed: () {
           Navigator.push(
             context,
-            MaterialPageRoute(
-              builder: (_) => const VoiceRoomScreen(roomId: 'room_1042', title: 'Live Voice Party', isPublic: true),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildRoomCard(BuildContext context, Map<String, dynamic> r) {
-    return Card(
-      color: const Color(0xFF161A28),
-      margin: const EdgeInsets.only(bottom: 10),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      child: ListTile(
-        contentPadding: const EdgeInsets.all(10),
-        leading: CircleAvatar(
-          radius: 24,
-          backgroundColor: const Color(0xFF00E676).withOpacity(0.2),
-          child: const Icon(Icons.graphic_eq, color: Color(0xFF00E676)),
-        ),
-        title: Text(r['title'], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-        subtitle: Text('Host: ${r['host']} • ${r['country']}', style: const TextStyle(fontSize: 11, color: Colors.white54)),
-        trailing: Text(r['users'], style: const TextStyle(color: Color(0xFF00E676), fontWeight: FontWeight.bold, fontSize: 12)),
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => VoiceRoomScreen(roomId: r['id'], title: r['title'], isPublic: r['type'] == 'Public'),
-            ),
+            MaterialPageRoute(builder: (_) => const VoiceRoomScreen(roomId: 'room_1042', title: 'Live Voice Party')),
           );
         },
       ),
@@ -325,13 +260,12 @@ class _PartyHomeScreenState extends State<PartyHomeScreen> {
 }
 
 // ==========================================
-// 4. Voice Room System
+// 4. Voice Room Screen
 // ==========================================
 class VoiceRoomScreen extends StatefulWidget {
   final String roomId;
   final String title;
-  final bool isPublic;
-  const VoiceRoomScreen({Key? key, required this.roomId, required this.title, required this.isPublic}) : super(key: key);
+  const VoiceRoomScreen({Key? key, required this.roomId, required this.title}) : super(key: key);
 
   @override
   State<VoiceRoomScreen> createState() => _VoiceRoomScreenState();
@@ -348,7 +282,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> {
     _initAgora();
   }
 
-Future<void> _initAgora() async {
+  Future<void> _initAgora() async {
     await [Permission.microphone].request();
     _engine = createAgoraRtcEngine();
     await _engine!.initialize(const RtcEngineContext(
@@ -376,42 +310,6 @@ Future<void> _initAgora() async {
     );
   }
 
-  void _openGiftsModal() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: const Color(0xFF161A28),
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (_) {
-        return Container(
-          padding: const EdgeInsets.all(16),
-          height: 280,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Send Gift to Host', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-              const SizedBox(height: 12),
-              Expanded(
-                child: ListView(
-                  children: AppData.gifts.map((g) {
-                    return ListTile(
-                      leading: const Text('🎁', style: TextStyle(fontSize: 24)),
-                      title: Text(g['name'], style: const TextStyle(fontWeight: FontWeight.bold)),
-                      trailing: Text('${g['price']} Coins', style: const TextStyle(color: Colors.amber)),
-                      onTap: () {
-                        Navigator.pop(context);
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Sent ${g['name']} successfully!')));
-                      },
-                    );
-                  }).toList(),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
   @override
   void dispose() {
     _engine?.leaveChannel();
@@ -422,36 +320,31 @@ Future<void> _initAgora() async {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(widget.title, style: const TextStyle(fontSize: 14)), backgroundColor: Colors.transparent),
+      appBar: AppBar(title: Text(widget.title)),
       body: Column(
         children: [
           const SizedBox(height: 10),
-          Text(_isJoined ? '🟢 Agora Voice Active' : 'Connecting...', style: const TextStyle(color: Colors.white54, fontSize: 12)),
-          const SizedBox(height: 15),
+          Text(_isJoined ? '🟢 Agora Voice Online' : 'Connecting...', style: const TextStyle(color: Colors.white54)),
           Expanded(
             child: GridView.count(
               crossAxisCount: 4,
               padding: const EdgeInsets.all(16),
-              mainAxisSpacing: 16,
-              crossAxisSpacing: 16,
               children: List.generate(8, (index) {
-                bool isHost = index == 0;
                 return Column(
                   children: [
                     CircleAvatar(
-                      radius: 28,
-                      backgroundColor: isHost ? Colors.amber : const Color(0xFF1E2433),
-                      child: Text(isHost ? '👑' : '${index + 1}', style: const TextStyle(fontSize: 18)),
+                      radius: 26,
+                      backgroundColor: index == 0 ? Colors.amber : const Color(0xFF1E2433),
+                      child: Text(index == 0 ? '👑' : '${index + 1}'),
                     ),
                     const SizedBox(height: 4),
-                    Text(isHost ? 'Host' : 'Seat ${index + 1}', style: const TextStyle(fontSize: 10, color: Colors.white70)),
+                    Text(index == 0 ? 'Host' : 'Seat ${index + 1}', style: const TextStyle(fontSize: 10)),
                   ],
                 );
               }),
             ),
           ),
-
-Container(
+          Container(
             padding: const EdgeInsets.all(16),
             color: const Color(0xFF131722),
             child: Row(
@@ -459,17 +352,14 @@ Container(
               children: [
                 IconButton(
                   icon: Icon(_isMicMuted ? Icons.mic_off : Icons.mic, color: _isMicMuted ? Colors.red : const Color(0xFF00E676)),
-                  onPressed: () {
+
+onPressed: () {
                     setState(() => _isMicMuted = !_isMicMuted);
                     _engine?.muteLocalAudioStream(_isMicMuted);
                   },
                 ),
                 IconButton(
                   icon: const Icon(Icons.card_giftcard, color: Colors.amber),
-                  onPressed: _openGiftsModal,
-                ),
-                IconButton(
-                  icon: const Icon(Icons.chat, color: Colors.cyan),
                   onPressed: () {},
                 ),
               ],
@@ -490,21 +380,8 @@ class DiscoverScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Discover & Community'), backgroundColor: Colors.transparent),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Card(
-            color: const Color(0xFF161A28),
-            child: ListTile(
-              leading: const CircleAvatar(backgroundColor: Colors.pink, child: Text('ከ')),
-              title: const Text('ከድር ኡመር (Kedir Umer)'),
-              subtitle: const Text('Welcome to Hala Voice Global! Explore rooms and features.'),
-              trailing: const Icon(Icons.favorite, color: Colors.red),
-            ),
-          ),
-        ],
-      ),
+      appBar: AppBar(title: const Text('Discover')),
+      body: const Center(child: Text('Moments and Posts')),
     );
   }
 }
@@ -515,44 +392,67 @@ class MessageHubScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Message'), backgroundColor: Colors.transparent),
-      body: ListView(
-        padding: const EdgeInsets.all(12),
-        children: [
-          _msgTile(Icons.mark_email_unread, 'System Message', 'Withdrawal received', '08-25 14:21:11', Colors.cyan),
-          _msgTile(Icons.notifications_active, 'Official Notification', 'Hala 1st Anniversary event alert', 'New', Colors.amber),
-          _msgTile(Icons.receipt_long, 'Order Messages', 'Coin purchase & transaction records', 'Update', Colors.deepOrange),
-          _msgTile(Icons.headset_mic, 'Customer Service', '24/7 Support & help desk assistance', 'Online', Colors.green),
-        ],
-      ),
-    );
-  }
-
-  Widget _msgTile(IconData icon, String title, String subtitle, String time, Color color) {
-    return Card(
-      color: const Color(0xFF161A28),
-      margin: const EdgeInsets.only(bottom: 10),
-      child: ListTile(
-        leading: CircleAvatar(backgroundColor: color.withOpacity(0.2), child: Icon(icon, color: color)),
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-        subtitle: Text(subtitle, style: const TextStyle(fontSize: 12, color: Colors.white54)),
-        trailing: Text(time, style: const TextStyle(fontSize: 10, color: Colors.white38)),
-      ),
+      appBar: AppBar(title: const Text('Message')),
+      body: const Center(child: Text('System and User Messages')),
     );
   }
 }
 
 // ==========================================
-// 6. Me Profile Screen & All Menus
+// 6. Me Profile Screen with Coin Minting & Recharge
 // ==========================================
-class MeProfileScreen extends StatelessWidget {
+class MeProfileScreen extends StatefulWidget {
   const MeProfileScreen({Key? key}) : super(key: key);
 
-  void _navigateTo(BuildContext context, Widget screen) {
-    Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
+  @override
+  State<MeProfileScreen> createState() => _MeProfileScreenState();
+}
+
+class _MeProfileScreenState extends State<MeProfileScreen> {
+  // Admin Coin Minting Engine Dialog
+  void _openAdminCoinEngine() {
+    final TextEditingController amountController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF161A28),
+        title: const Text('🪙 Admin Coin Generation Engine', style: TextStyle(fontSize: 16)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('አስተዳዳሪ ሆይ! አዲስ ኮይን አምርተህ ወደ ሲስተሙ ለማስገባት መጠኑን ጻፍ፦', style: TextStyle(fontSize: 12, color: Colors.white70)),
+            const SizedBox(height: 12),
+            TextField(
+              controller: amountController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                hintText: 'የኮይን መጠን (ለምሳሌ 100000)',
+                filled: true,
+                fillColor: Color(0xFF0F121C),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00E676), foregroundColor: Colors.black),
+            onPressed: () {
+              int? val = int.tryParse(amountController.text);
+              if (val != null && val > 0) {
+                setState(() => AppData.coins += val);
+                Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$val ኮይኖች በተሳካ ሁኔታ ተመርተዋል!')));
+              }
+            },
+            child: const Text('አምርት (Generate)'),
+          ),
+        ],
+      ),
+    );
   }
 
-@override
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: ListView(
@@ -560,86 +460,47 @@ class MeProfileScreen extends StatelessWidget {
         children: [
           Row(
             children: [
-              const CircleAvatar(
-                radius: 35,
-                backgroundColor: Colors.amber,
-                child: Text('👑', style: TextStyle(fontSize: 32)),
-              ),
+              const CircleAvatar(radius: 35, backgroundColor: Colors.amber, child: Text('👑', style: TextStyle(fontSize: 32))),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(AppData.userName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 4),
+
+const SizedBox(height: 4),
                     Text('ID:${AppData.userId}', style: const TextStyle(color: Colors.white54, fontSize: 12)),
                   ],
                 ),
               ),
-              IconButton(
-                icon: const Icon(Icons.arrow_forward_ios, size: 16),
-                onPressed: () => _navigateTo(context, const GenericDetailScreen(title: 'Edit Profile')),
-              ),
             ],
           ),
           const SizedBox(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _statItem('${AppData.followedCount}', 'Followed'),
-              _statItem('${AppData.followingCount}', 'Following'),
-              _statItem('${AppData.friendsCount}', 'Friends'),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(colors: [Color(0xFF3E2723), Color(0xFF8D6E63)]),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
-                    Text('VIP Club', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.amberAccent)),
-                    SizedBox(height: 2),
-                    Text('Upgrade to VIP and get free coins daily', style: TextStyle(fontSize: 11, color: Colors.white70)),
-                  ],
-                ),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.amber, foregroundColor: Colors.black),
-                  onPressed: () => _navigateTo(context, const GenericDetailScreen(title: 'VIP Club Center')),
-                  child: const Text('Get VIP', style: TextStyle(fontWeight: FontWeight.bold)),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
+          // Coin & Minting Box
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(color: const Color(0xFF161A28), borderRadius: BorderRadius.circular(14)),
             child: Row(
               children: [
                 Expanded(
-                  child: Column(
-                    children: [
-                      const Text('Coins', style: TextStyle(color: Colors.white54, fontSize: 12)),
-                      const SizedBox(height: 4),
-                      Text('${AppData.coins}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.amberAccent)),
-                    ],
+                  child: InkWell(
+                    onTap: _openAdminCoinEngine,
+                    child: Column(
+                      children: [
+                        const Text('Coins (ኮይን ለማመንጨት ንካ)', style: TextStyle(color: Color(0xFF00E676), fontSize: 11, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 4),
+                        Text('${AppData.coins}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.amberAccent)),
+                      ],
+                    ),
                   ),
                 ),
                 Container(height: 30, width: 1, color: Colors.white12),
                 Expanded(
                   child: Column(
                     children: [
-                      const Text('Points', style: TextStyle(color: Colors.white54, fontSize: 12)),
+                      const Text('Points', style: TextStyle(color: Colors.white54, fontSize: 11)),
                       const SizedBox(height: 4),
-
-Text('${AppData.points}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF00E676))),
+                      Text('${AppData.points}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF00E676))),
                     ],
                   ),
                 ),
@@ -647,6 +508,7 @@ Text('${AppData.points}', style: const TextStyle(fontSize: 18, fontWeight: FontW
             ),
           ),
           const SizedBox(height: 20),
+          // Main Grids
           GridView.count(
             crossAxisCount: 4,
             shrinkWrap: true,
@@ -654,66 +516,26 @@ Text('${AppData.points}', style: const TextStyle(fontSize: 18, fontWeight: FontW
             mainAxisSpacing: 12,
             crossAxisSpacing: 12,
             children: [
-              _gridMenu(context, Icons.account_balance_wallet, 'Recharge', Colors.amber, const GenericDetailScreen(title: 'Recharge Center')),
-              _gridMenu(context, Icons.store, 'Store', Colors.purpleAccent, const GenericDetailScreen(title: 'Item Store')),
-              _gridMenu(context, Icons.card_giftcard, 'Invitation', Colors.pinkAccent, const GenericDetailScreen(title: 'Invitation Center')),
-              _gridMenu(context, Icons.backpack, 'Backpack', Colors.cyan, const GenericDetailScreen(title: 'User Backpack')),
-              _gridMenu(context, Icons.waves, 'Lucky Island', Colors.green, const GenericDetailScreen(title: 'Lucky Island Mini-Game')),
-              _gridMenu(context, Icons.star, 'Level', Colors.purple, const GenericDetailScreen(title: 'User Level & Perks')),
-              _gridMenu(context, Icons.task, 'Task', Colors.orange, const GenericDetailScreen(title: 'Daily Tasks Center')),
-              _gridMenu(context, Icons.shield, 'Badge', Colors.amberAccent, const GenericDetailScreen(title: 'Badges & Achievements')),
+              _gridMenu(context, Icons.account_balance_wallet, 'Recharge', Colors.amber, const RechargeScreen()),
+              _gridMenu(context, Icons.store, 'Store', Colors.purpleAccent, const GenericScreen(title: 'Store')),
+              _gridMenu(context, Icons.business_center, 'Agency', Colors.teal, const GenericScreen(title: 'Agency')),
+              _gridMenu(context, Icons.precision_manufacturing, 'Coin Engine', Colors.greenAccent, null, onTap: _openAdminCoinEngine),
             ],
-          ),
-          const SizedBox(height: 20),
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(color: const Color(0xFF161A28), borderRadius: BorderRadius.circular(14)),
-            child: GridView.count(
-              crossAxisCount: 4,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              mainAxisSpacing: 12,
-              crossAxisSpacing: 12,
-              children: [
-                _gridMenu(context, Icons.mic_external_on, 'Host Center', Colors.lightBlue, const GenericDetailScreen(title: 'Host Center & Roster')),
-                _gridMenu(context, Icons.business_center, 'Agency', Colors.teal, const GenericDetailScreen(title: 'Agency Management')),
-                _gridMenu(context, Icons.monetization_on, 'Coin Seller', Colors.amber, const GenericDetailScreen(title: 'Coin Seller Portal')),
-                _gridMenu(context, Icons.support_agent, 'Support', Colors.indigoAccent, const GenericDetailScreen(title: 'Customer Support Desk')),
-                _gridMenu(context, Icons.info_outline, 'About', Colors.greenAccent, const GenericDetailScreen(title: 'About Hala Global')),
-                _gridMenu(context, Icons.settings, 'Setting', Colors.blueGrey, const GenericDetailScreen(title: 'App Settings & Security')),
-                _gridMenu(context, Icons.settings_input_antenna, 'Network Line', Colors.redAccent, const GenericDetailScreen(title: 'Network Line Diagnostic')),
-              ],
-            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _statItem(String val, String label) {
-    return Column(
-      children: [
-        Text(val, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 2),
-        Text(label, style: const TextStyle(color: Colors.white54, fontSize: 11)),
-      ],
-    );
-  }
-
-  Widget _gridMenu(BuildContext context, IconData icon, String label, Color color, Widget targetScreen) {
+  Widget _gridMenu(BuildContext context, IconData icon, String label, Color color, Widget? target, {VoidCallback? onTap}) {
     return InkWell(
-      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => targetScreen)),
+      onTap: onTap ?? () => Navigator.push(context, MaterialPageRoute(builder: (_) => target!)),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-
-CircleAvatar(
-            radius: 22,
-            backgroundColor: color.withOpacity(0.2),
-            child: Icon(icon, color: color, size: 22),
-          ),
+          CircleAvatar(radius: 22, backgroundColor: color.withOpacity(0.2), child: Icon(icon, color: color, size: 22)),
           const SizedBox(height: 6),
-          Text(label, style: const TextStyle(fontSize: 11, color: Colors.white70), textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis),
+          Text(label, style: const TextStyle(fontSize: 11, color: Colors.white70)),
         ],
       ),
     );
@@ -721,28 +543,168 @@ CircleAvatar(
 }
 
 // ==========================================
-// 7. Generic Screen for Menu Navigation
+// 7. Recharge Screen (ID, Country, 20% Off, Epeay/USDT, Packages)
 // ==========================================
-class GenericDetailScreen extends StatelessWidget {
+class RechargeScreen extends StatefulWidget {
+  const RechargeScreen({Key? key}) : super(key: key);
+
+  @override
+  State<RechargeScreen> createState() => _RechargeScreenState();
+}
+
+class _RechargeScreenState extends State<RechargeScreen> {
+  final TextEditingController _idController = TextEditingController(text: AppData.userId);
+  String _selectedCountry = 'All country';
+  String _selectedPayment = 'USDT';
+  int _selectedPackage = 0;
+
+  final List<Map<String, dynamic>> _packages = [
+    {'coins': 70000, 'price': 5},
+    {'coins': 210000, 'price': 30},
+    {'coins': 350000, 'price': 50},
+  ];
+
+@override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Recharge Center')),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          // 20% Off Official Agency Banner
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(colors: [Color(0xFF00E676), Color(0xFF00B0FF)]),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Text(
+              '% official Agency Recharge 20% off',
+              style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 14),
+              textAlign: TextAlign.center,
+            ),
+          ),
+          const SizedBox(height: 16),
+          // User ID Input
+          const Text('ID', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white70)),
+          const SizedBox(height: 6),
+          TextField(
+            controller: _idController,
+            decoration: InputDecoration(
+              hintText: 'Enter ID',
+              filled: true,
+              fillColor: const Color(0xFF161A28),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+            ),
+          ),
+          const SizedBox(height: 16),
+          // Country / Region
+          const Text('Country / Region', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white70)),
+          const SizedBox(height: 6),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(color: const Color(0xFF161A28), borderRadius: BorderRadius.circular(10)),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: _selectedCountry,
+                dropdownColor: const Color(0xFF161A28),
+                items: ['All country', 'Ethiopia 🇪🇹', 'Philippines 🇵🇭', 'Kenya 🇰🇪'].map((val) => DropdownMenuItem(value: val, child: Text(val))).toList(),
+                onChanged: (val) => setState(() => _selectedCountry = val!),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          // Payment Options (Epeay / USDT)
+          const Text('Recharge Gateway', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white70)),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              _payOption('Epeay'),
+              const SizedBox(width: 12),
+              _payOption('USDT'),
+            ],
+          ),
+          const SizedBox(height: 16),
+          // Packages (70000 Coins / 5$, 210000 Coins / 30$, 350000 Coins / 50$)
+          const Text('Coin Packages', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white70)),
+          const SizedBox(height: 8),
+          Column(
+            children: List.generate(_packages.length, (i) {
+              var p = _packages[i];
+              bool isSel = _selectedPackage == i;
+              return Container(
+                margin: const EdgeInsets.only(bottom: 10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF161A28),
+                  border: Border.all(color: isSel ? const Color(0xFF00E676) : Colors.transparent, width: 1.5),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: ListTile(
+                  leading: const Icon(Icons.monetization_on, color: Colors.amber),
+                  title: Text('${p['coins']} Coins', style: const TextStyle(fontWeight: FontWeight.bold)),
+                  trailing: Text('\$${p['price']}', style: const TextStyle(color: Color(0xFF00E676), fontWeight: FontWeight.bold, fontSize: 16)),
+
+onTap: () => setState(() => _selectedPackage = i),
+                ),
+              );
+            }),
+          ),
+          const SizedBox(height: 16),
+          // Confirm Button
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF00E676),
+              foregroundColor: Colors.black,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            onPressed: () {
+              int added = _packages[_selectedPackage]['coins'];
+              setState(() => AppData.coins += added);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('ID ${_idController.text} ላይ $added Coins በተሳካ ሁኔታ ተሞልቷል!')),
+              );
+              Navigator.pop(context);
+            },
+            child: const Text('Confirm', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _payOption(String name) {
+    bool isSel = _selectedPayment == name;
+    return Expanded(
+      child: InkWell(
+        onTap: () => setState(() => _selectedPayment = name),
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: isSel ? const Color(0xFF00E676).withOpacity(0.2) : const Color(0xFF161A28),
+            border: Border.all(color: isSel ? const Color(0xFF00E676) : Colors.white12),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          alignment: Alignment.center,
+          child: Text(name, style: TextStyle(fontWeight: FontWeight.bold, color: isSel ? const Color(0xFF00E676) : Colors.white)),
+        ),
+      ),
+    );
+  }
+}
+
+// ==========================================
+// 8. Generic Screen
+// ==========================================
+class GenericScreen extends StatelessWidget {
   final String title;
-  const GenericDetailScreen({Key? key, required this.title}) : super(key: key);
+  const GenericScreen({Key? key, required this.title}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: Text(title)),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.check_circle, size: 60, color: Color(0xFF00E676)),
-            const SizedBox(height: 16),
-            Text('$title Loaded Successfully', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
-            const SizedBox(height: 8),
-            const Text('All functions and components are fully active.', style: TextStyle(color: Colors.white54, fontSize: 12)),
-          ],
-        ),
-      ),
+      body: Center(child: Text('$title Screen')),
     );
   }
 }
