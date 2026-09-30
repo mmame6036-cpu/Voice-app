@@ -35,6 +35,7 @@ class FullVoiceApp extends StatelessWidget {
 class AppData {
   static const String agoraAppId = "fd2d8b50393b495dab38eb5cf267b393";
   static const String channelName = "room_1042";
+  static const String agoraToken = "007eJxTYNBXOc7wZlN/y5052+JTrm76vvWHkNrEeSmyD98wWZnnz2NQYEhLMUqxSDI1MLY0TjKxNE1JTDK2SE0yTU4zMjNPAgrO6NmT1RDIyND/SI2BEQpBfE6Govz83HhDAxMjBgYASXMhyw==";
 
   static int userCoins = 50000;
   static int hostPoints = 120000;
@@ -107,14 +108,14 @@ class DashboardView extends StatelessWidget {
             icon: const Icon(Icons.admin_panel_settings, color: Colors.amber),
             tooltip: 'Admin Panel',
             onPressed: () => Navigator.push(
-              context,
+
+context,
               MaterialPageRoute(builder: (_) => AdminPanelScreen(onUpdated: onUpdated)),
             ),
           ),
         ],
       ),
-
-body: SingleChildScrollView(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -198,13 +199,13 @@ body: SingleChildScrollView(
   }
 
   Widget _buildActionCard(BuildContext context, {required String title, required String desc, required IconData icon, required List<Color> gradient, required VoidCallback onTap}) {
-    return InkWell(
+
+return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(16),
       child: Container(
         padding: const EdgeInsets.all(16),
-
-decoration: BoxDecoration(gradient: LinearGradient(colors: gradient), borderRadius: BorderRadius.circular(16)),
+        decoration: BoxDecoration(gradient: LinearGradient(colors: gradient), borderRadius: BorderRadius.circular(16)),
         child: Row(
           children: [
             CircleAvatar(backgroundColor: Colors.white24, radius: 26, child: Icon(icon, color: Colors.white, size: 28)),
@@ -276,7 +277,7 @@ class _VoiceRoomViewState extends State<VoiceRoomView> {
     await _engine!.setClientRole(role: ClientRoleType.clientRoleBroadcaster);
     await _engine!.enableAudio();
     await _engine!.joinChannel(
-      token: '',
+      token: AppData.agoraToken,
       channelId: AppData.channelName,
       uid: 0,
       options: const ChannelMediaOptions(
@@ -324,11 +325,11 @@ class _VoiceRoomViewState extends State<VoiceRoomView> {
         children: [
           Expanded(
             child: GridView.builder(
-              padding: const EdgeInsets.all(20),
+
+padding: const EdgeInsets.all(20),
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 4,
-
-mainAxisSpacing: 18,
+                mainAxisSpacing: 18,
                 crossAxisSpacing: 18,
                 childAspectRatio: 0.8,
               ),
@@ -429,7 +430,8 @@ class _PyramidMiniGameState extends State<PyramidMiniGame> {
   void _choose() {
     if (!active) return;
     int chance = 75 - (step * 20);
-    if (_rnd.nextInt(100) < chance && step < 3) {
+
+if (_rnd.nextInt(100) < chance && step < 3) {
       setState(() {
         step++;
         mult += 0.8;
@@ -441,7 +443,7 @@ class _PyramidMiniGameState extends State<PyramidMiniGame> {
     }
   }
 
-void _takeWin() {
+  void _takeWin() {
     if (!active) return;
     int won = (bet * mult).round();
     if (won > 2500) won = 2500;
@@ -530,7 +532,7 @@ class _ProfileWalletViewState extends State<ProfileWalletView> {
   final _ptsCtrl = TextEditingController();
   final _accCtrl = TextEditingController();
 
-  void _submitCashout() {
+void _submitCashout() {
     int pts = int.tryParse(_ptsCtrl.text) ?? 0;
     if (pts < 100000 || pts > AppData.hostPoints) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('ትክክለኛ መጠን ያስገቡ (ቢያንስ 100,000)!')));
@@ -546,7 +548,7 @@ class _ProfileWalletViewState extends State<ProfileWalletView> {
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('ጥያቄዎ ደርሷል!')));
   }
 
-@override
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('የኪስ ቦርሳ (Wallet)')),
