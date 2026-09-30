@@ -4,11 +4,11 @@ import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 void main() {
-  runApp(const HalaStyleVoiceApp());
+  runApp(const HalaFullVoiceApp());
 }
 
-class HalaStyleVoiceApp extends StatelessWidget {
-  const HalaStyleVoiceApp({Key? key}) : super(key: key);
+class HalaFullVoiceApp extends StatelessWidget {
+  const HalaFullVoiceApp({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -26,51 +26,68 @@ class HalaStyleVoiceApp extends StatelessWidget {
   }
 }
 
-// ----------------------------------------------------
-// 1. መረጃዎች እና ግሎባል ዳታ (AppData)
-// ----------------------------------------------------
+// ==========================================
+// 1. AppData
+// ==========================================
 class AppData {
   static const String agoraAppId = "fd2d8b50393b495dab38eb5cf267b393";
-  static const String agoraToken = "007eJxTYNBXOc7wZlN/y5052+JTrm76vvWHkNrEeSmyD98wWZnnz2NQYEhLMUqxSDI1MLY0TjKxNE1JTDK2SE0yTU4zMjNPAgrO6NmT1RDIyND/SI2BEQpBfE6Govz83HhDAxMjBgYASXMhyw==";
   static const String currentChannel = "room_1042";
 
-  static int userCoins = 50000;
-  static int userDiamonds = 120000;
+  // User State
+  static int userCoins = 85000;
+  static int userDiamonds = 145000;
+  static String currentUserName = "KEDIR (Host)";
+  static String currentUserId = "1042001";
 
+  // Agency Data
+  static String agencyName = "Golden Star Agency";
+  static String agencyCode = "AG-8821";
+  static double totalCommission = 420.50;
+  static List<Map<String, dynamic>> agencyHosts = [
+    {'name': 'Sara Live', 'id': '1042002', 'hours': '34.5 hrs', 'target': '85%', 'earnings': '125,000 💎'},
+    {'name': 'Alex Voice', 'id': '1042003', 'hours': '28.0 hrs', 'target': '60%', 'earnings': '78,000 💎'},
+    {'name': 'Elena Star', 'id': '1042004', 'hours': '41.2 hrs', 'target': '100%', 'earnings': '210,000 💎'},
+  ];
+
+  // Rooms
   static List<Map<String, dynamic>> rooms = [
     {
       'id': 'room_1042',
-      'title': '🇪🇹 አዲስ Coin አገኘን እንዳያመልጣችሁ',
+      'title': '🎉 Welcome Party & Free Coins',
       'category': 'FRIENDS',
       'host': 'KEDIR',
-      'tag': 'HOT',
       'usersCount': '4.58K',
-      'bgGradient': [Color(0xFF1E3C72), Color(0xFF2A5298)],
     },
     {
       'id': 'room_1043',
-      'title': '🐟 Fish እና ንብ አሸናፊዎች ሩም',
-      'category': 'EMOTION',
+      'title': '🐟 Fish & Game Champions Room',
+      'category': 'GAME',
       'host': 'Sara Live',
-      'tag': 'GAME',
       'usersCount': '3.21K',
-      'bgGradient': [Color(0xFF5A189A), Color(0xFF3C096C)],
     },
     {
       'id': 'room_1044',
-      'title': '🎵 የሙዚቃ እና የጨዋታ ምሽት',
+      'title': '🎵 Night Music & Chatting',
       'category': 'MUSIC',
-      'host': 'Abebe Host',
-      'tag': 'LIVE',
+      'host': 'Alex Voice',
       'usersCount': '2.23K',
-      'bgGradient': [Color(0xFF7209B7), Color(0xFF4361EE)],
     },
+  ];
+
+  // Gifts
+  static final List<Map<String, dynamic>> availableGifts = [
+    {'name': 'Rose 🌹', 'price': 50, 'diamonds': 50},
+    {'name': 'Coffee ☕', 'price': 200, 'diamonds': 200},
+    {'name': 'Heart 💖', 'price': 500, 'diamonds': 500},
+    {'name': 'Sports Car 🏎️️', 'price': 2500, 'diamonds': 2500},
+    {'name': 'Royal Crown 👑', 'price': 10000, 'diamonds': 10000},
+    {'name': 'Space Rocket 🚀', 'price': 25000, 'diamonds': 25000},
   ];
 }
 
-// ----------------------------------------------------
-// 2. የስፕላሽ ስክሪን (Splash Screen)
-// ----------------------------------------------------
+// ==========================================
+// 2. Splash Screen
+// ==========================================
 class SplashScreen extends StatefulWidget {
   const SplashScreen({Key? key}) : super(key: key);
 
@@ -82,47 +99,39 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   void initState() {
     super.initState();
-    Future.delayed(const Duration(seconds: 2), () {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const MainNavigationHub()),
-      );
+    Future.delayed(const Duration(milliseconds: 1400), () {
+      if (mounted) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const MainNavigationHub()),
+        );
+      }
     });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFE8F5E9),
+      backgroundColor: const Color(0xFF0D0B18),
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
               padding: const EdgeInsets.all(22),
-              decoration: BoxDecoration(
-                color: const Color(0xFF00E676),
-                borderRadius: BorderRadius.circular(30),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.green.withOpacity(0.3),
-                    blurRadius: 20,
-                    offset: const Offset(0, 8),
-                  )
-                ],
+              decoration: const BoxDecoration(
+                color: Color(0xFF00E676),
+                shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.record_voice_over, size: 70, color: Colors.white),
-            ),
+              child: const Icon(Icons.record_voice_over, size: 60, color: Colors.black),
+
+),
             const SizedBox(height: 20),
             const Text(
               'Hala Voice',
-              style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Color(0xFF00C853)),
+              style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white),
             ),
             const SizedBox(height: 8),
-            const Text(
-              'Show Me Happy the World',
-              style: TextStyle(fontSize: 14, color: Colors.black54, fontWeight: FontWeight.w600),
-            ),
+            const Text('Show Me Happy the World', style: TextStyle(color: Colors.white54, fontSize: 13)),
           ],
         ),
       ),
@@ -130,9 +139,9 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 }
 
-// ----------------------------------------------------
-// 3. ዋናው ማውጫ (Main Navigation Hub)
-// ----------------------------------------------------
+// ==========================================
+// 3. Main Navigation Hub
+// ==========================================
 class MainNavigationHub extends StatefulWidget {
   const MainNavigationHub({Key? key}) : super(key: key);
 
@@ -147,8 +156,7 @@ class _MainNavigationHubState extends State<MainNavigationHub> {
   Widget build(BuildContext context) {
     final List<Widget> pages = [
       const HalaPartyHomeScreen(),
-      const Center(child: Text('Moment / ፖስቶች ገጽ', style: TextStyle(color: Colors.white))),
-      const Center(child: Text('መልዕክቶች (Messages)', style: TextStyle(color: Colors.white))),
+      const AgencyManagementScreen(),
       ProfileWalletScreen(onRefresh: () => setState(() {})),
     ];
 
@@ -160,21 +168,19 @@ class _MainNavigationHubState extends State<MainNavigationHub> {
         backgroundColor: const Color(0xFF131124),
         selectedItemColor: const Color(0xFF00E676),
         unselectedItemColor: Colors.white38,
-        type: BottomNavigationBarType.fixed,
         items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.grid_view_rounded), label: 'Room'),
-          BottomNavigationBarItem(icon: Icon(Icons.public), label: 'Moment'),
-          BottomNavigationBarItem(icon: Icon(Icons.chat_bubble_outline), label: 'Message'),
-          BottomNavigationBarItem(icon: Icon(Icons.person_outline), label: 'Me'),
+          BottomNavigationBarItem(icon: Icon(Icons.grid_view_rounded), label: 'Party'),
+          BottomNavigationBarItem(icon: Icon(Icons.business_center_rounded), label: 'Agency'),
+          BottomNavigationBarItem(icon: Icon(Icons.account_balance_wallet_rounded), label: 'Me'),
         ],
       ),
     );
   }
 }
 
-// ----------------------------------------------------
-// 4. የHala ፓርቲ ገጽ (Hala Party Screen)
-// ----------------------------------------------------
+// ==========================================
+// 4. Party Home Screen
+// ==========================================
 class HalaPartyHomeScreen extends StatelessWidget {
   const HalaPartyHomeScreen({Key? key}) : super(key: key);
 
@@ -186,105 +192,73 @@ class HalaPartyHomeScreen extends StatelessWidget {
         elevation: 0,
         title: Row(
           children: const [
-            Text('Follow', style: TextStyle(fontSize: 18, color: Colors.white54, fontWeight: FontWeight.bold)),
-            SizedBox(width: 16),
+            Text('Follow', style: TextStyle(fontSize: 16, color: Colors.white54, fontWeight: FontWeight.bold)),
+            SizedBox(width: 14),
             Text('Party', style: TextStyle(fontSize: 22, color: Colors.white, fontWeight: FontWeight.bold)),
           ],
         ),
         actions: [
-          IconButton(icon: const Icon(Icons.search, color: Colors.white), onPressed: () {}),
-          IconButton(icon: const Icon(Icons.emoji_events_outlined, color: Colors.amber), onPressed: () {}),
+          Container(
+            margin: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(color: const Color(0xFF1E1742), borderRadius: BorderRadius.circular(16)),
+            child: Row(
+              children: [
+                const Icon(Icons.monetization_on, color: Colors.amber, size: 16),
+                const SizedBox(width: 4),
+                Text('${AppData.userCoins}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+              ],
+            ),
+          )
         ],
       ),
-      body: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // የአገራት ባንዲራዎች
-            SizedBox(
-              height: 40,
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-                children: [
-                  _countryChip('🌍 All', true),
-                  _countryChip('🇪🇹 Ethiopia', false),
-                  _countryChip('🇸🇦 Saudi', false),
-                  _countryChip('🇵🇭 Philippines', false),
-                  _countryChip('🇳🇬 Nigeria', false),
-                ],
-              ),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          // Banner
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(colors: [Color(0xFF6200EA), Color(0xFF00B0FF)]),
+              borderRadius: BorderRadius.circular(16),
             ),
-            const SizedBox(height: 14),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: const [
+                      Text('URGENT SECURITY & EVENTS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white70)),
 
-            // ባነሮች (Banner Cards)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Container(
-                height: 110,
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFFE91E63), Color(0xFF673AB7)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
+SizedBox(height: 4),
+                      Text('Room Ranking & Live Rewards!', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+                    ],
                   ),
-                  borderRadius: BorderRadius.circular(16),
-
-),
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: const [
-                          Text('URGENT EVENT ALERT', style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold)),
-                          SizedBox(height: 4),
-                          Text('Room Ranking & Rewards!', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
-                        ],
-                      ),
-                    ),
-                    const Icon(Icons.card_giftcard, size: 48, color: Colors.amberAccent),
-                  ],
                 ),
-              ),
+                const Icon(Icons.military_tech, size: 42, color: Colors.amberAccent),
+              ],
             ),
+          ),
+          const SizedBox(height: 20),
 
-            const SizedBox(height: 20),
+          const Text('Active Voice Rooms', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 12),
 
-            // የክፍሎች ዝርዝር (Voice Rooms List)
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16),
-              child: Text('ንቁ የድምፅ ክፍሎች (Active Rooms)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
-            ),
-            const SizedBox(height: 12),
-
-            ListView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              itemCount: AppData.rooms.length,
-              itemBuilder: (context, index) {
-                final r = AppData.rooms[index];
-                return _buildHalaRoomCard(context, r);
-              },
-            ),
-            const SizedBox(height: 70),
-          ],
-        ),
+          ...AppData.rooms.map((r) => _buildRoomTile(context, r)).toList(),
+        ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         backgroundColor: const Color(0xFF00E676),
-        icon: const Icon(Icons.add, color: Colors.black),
-        label: const Text('ክፍል ፍጠር', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+        icon: const Icon(Icons.mic, color: Colors.black),
+        label: const Text('Create Room', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
         onPressed: () {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => LiveHalaVoiceRoom(
+              builder: (_) => LiveHalaFullVoiceRoom(
                 roomId: AppData.currentChannel,
-                title: 'የእኔ የቀጥታ ድምፅ ክፍል',
+                title: 'My Live Party',
+                hostName: AppData.currentUserName,
               ),
             ),
           );
@@ -293,113 +267,82 @@ class HalaPartyHomeScreen extends StatelessWidget {
     );
   }
 
-  static Widget _countryChip(String text, bool active) {
-    return Container(
-      margin: const EdgeInsets.only(right: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-      decoration: BoxDecoration(
-        color: active ? const Color(0xFF00E676) : const Color(0xFF1E1A38),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(
-        text,
-        style: TextStyle(color: active ? Colors.black : Colors.white70, fontWeight: FontWeight.bold, fontSize: 13),
-      ),
-    );
-  }
-
-  Widget _buildHalaRoomCard(BuildContext context, Map<String, dynamic> r) {
-    return InkWell(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => LiveHalaVoiceRoom(
-              roomId: r['id'],
-              title: r['title'],
-            ),
-          ),
-        );
-      },
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: const Color(0xFF181432),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.white10),
+  Widget _buildRoomTile(BuildContext context, Map<String, dynamic> r) {
+    return Card(
+      color: const Color(0xFF181432),
+      margin: const EdgeInsets.only(bottom: 12),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: ListTile(
+        contentPadding: const EdgeInsets.all(12),
+        leading: CircleAvatar(
+          radius: 26,
+          backgroundColor: const Color(0xFF00E676).withOpacity(0.2),
+          child: const Icon(Icons.graphic_eq, color: Color(0xFF00E676)),
         ),
-        child: Row(
-          children: [
-            CircleAvatar(
-              radius: 28,
-              backgroundColor: (r['bgGradient'] as List<Color>)[0],
-              child: const Icon(Icons.graphic_eq, color: Colors.white, size: 28),
-
-),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(r['title'], style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15), maxLines: 1, overflow: TextOverflow.ellipsis),
-                  const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(color: const Color(0xFF2C2454), borderRadius: BorderRadius.circular(6)),
-                        child: Text(r['category'], style: const TextStyle(color: Color(0xFF00E676), fontSize: 10, fontWeight: FontWeight.bold)),
-                      ),
-                      const SizedBox(width: 8),
-                      Text('Host: ${r['host']}', style: const TextStyle(color: Colors.white54, fontSize: 12)),
-                    ],
-                  ),
-                ],
+        title: Text(r['title'], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+        subtitle: Text('Host: ${r['host']} • ${r['category']}', style: const TextStyle(color: Colors.white54, fontSize: 12)),
+        trailing: ElevatedButton(
+          style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00E676)),
+          child: const Text('Join', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => LiveHalaFullVoiceRoom(
+                  roomId: r['id'],
+                  title: r['title'],
+                  hostName: r['host'],
+                ),
               ),
-            ),
-            Row(
-              children: [
-                const Icon(Icons.bar_chart, color: Color(0xFF00E676), size: 18),
-                const SizedBox(width: 4),
-                Text(r['usersCount'], style: const TextStyle(color: Colors.white70, fontSize: 12)),
-              ],
-            )
-          ],
+            );
+          },
         ),
       ),
     );
   }
 }
 
-// ----------------------------------------------------
-// 5. የቀጥታ 8 ወንበር የድምፅ ክፍል (Hala Live Room)
-// ----------------------------------------------------
-class LiveHalaVoiceRoom extends StatefulWidget {
+// ==========================================
+// 5. Live Voice Room (8 Seats + Chat + Gifts)
+// ==========================================
+class LiveHalaFullVoiceRoom extends StatefulWidget {
   final String roomId;
   final String title;
+  final String hostName;
 
-  const LiveHalaVoiceRoom({Key? key, required this.roomId, required this.title}) : super(key: key);
+  const LiveHalaFullVoiceRoom({
+    Key? key,
+    required this.roomId,
+    required this.title,
+    required this.hostName,
+  }) : super(key: key);
 
   @override
-  State<LiveHalaVoiceRoom> createState() => _LiveHalaVoiceRoomState();
+  State<LiveHalaFullVoiceRoom> createState() => _LiveHalaFullVoiceRoomState();
 }
 
-class _LiveHalaVoiceRoomState extends State<LiveHalaVoiceRoom> {
+class _LiveHalaFullVoiceRoomState extends State<LiveHalaFullVoiceRoom> {
   RtcEngine? _engine;
   bool _isJoined = false;
   bool _isMicOn = true;
-  final Set<int> _remoteUsers = {};
+
+  List<String?> _seats = List.filled(8, null);
+  int? _myCurrentSeat;
+
+  final List<Map<String, String>> _chatMessages = [];
+  final TextEditingController _msgController = TextEditingController();
+  final ScrollController _chatScroll = ScrollController();
 
   @override
   void initState() {
     super.initState();
-    _startAgoraVoice();
+    _initAgora();
+    _chatMessages.add({'user': 'System', 'msg': 'Welcome to ${widget.title}!'});
+    _chatMessages.add({'user': 'System', 'msg': 'Send gifts or tap a seat to speak.'});
   }
 
-  Future<void> _startAgoraVoice() async {
+Future<void> _initAgora() async {
     await [Permission.microphone].request();
-
     _engine = createAgoraRtcEngine();
     await _engine!.initialize(const RtcEngineContext(
       appId: AppData.agoraAppId,
@@ -411,21 +354,18 @@ class _LiveHalaVoiceRoomState extends State<LiveHalaVoiceRoom> {
         onJoinChannelSuccess: (RtcConnection connection, int elapsed) {
           setState(() => _isJoined = true);
         },
-        onUserJoined: (RtcConnection connection, int remoteUid, int elapsed) {
-          setState(() => _remoteUsers.add(remoteUid));
-        },
-        onUserOffline: (RtcConnection connection, int remoteUid, UserOfflineReasonType reason) {
-          setState(() => _remoteUsers.remove(remoteUid));
-        },
       ),
     );
 
     await _engine!.setClientRole(role: ClientRoleType.clientRoleBroadcaster);
     await _engine!.enableAudio();
+
+    final int myUid = Random().nextInt(900000) + 100000;
+
     await _engine!.joinChannel(
-      token: AppData.agoraToken,
+      token: '', // App ID Only
       channelId: widget.roomId,
-      uid: 0,
+      uid: myUid,
       options: const ChannelMediaOptions(
         clientRoleType: ClientRoleType.clientRoleBroadcaster,
         autoSubscribeAudio: true,
@@ -439,114 +379,328 @@ class _LiveHalaVoiceRoomState extends State<LiveHalaVoiceRoom> {
     _engine?.muteLocalAudioStream(!_isMicOn);
   }
 
+  void _handleSeatTap(int index) {
+    setState(() {
+      if (_seats[index] == 'LOCKED') {
+        _seats[index] = null;
+        _addChatMessage('System', 'Seat #${index + 1} unlocked');
+      } else if (_seats[index] == null) {
+        if (_myCurrentSeat != null) {
+          _seats[_myCurrentSeat!] = null;
+        }
+        _seats[index] = AppData.currentUserName;
+        _myCurrentSeat = index;
+        _addChatMessage('System', '${AppData.currentUserName} joined Seat #${index + 1}');
+      } else if (_seats[index] == AppData.currentUserName) {
+        _seats[index] = null;
+        _myCurrentSeat = null;
+        _addChatMessage('System', '${AppData.currentUserName} left the seat');
+      } else {
+        _seats[index] = 'LOCKED';
+        _addChatMessage('System', 'Seat #${index + 1} locked');
+      }
+    });
+  }
+
+  void _addChatMessage(String sender, String text) {
+    setState(() {
+      _chatMessages.add({'user': sender, 'msg': text});
+    });
+    Future.delayed(const Duration(milliseconds: 100), () {
+      if (_chatScroll.hasClients) {
+        _chatScroll.jumpTo(_chatScroll.position.maxScrollExtent);
+      }
+    });
+  }
+
+  void _sendMessage() {
+    if (_msgController.text.trim().isEmpty) return;
+    _addChatMessage(AppData.currentUserName, _msgController.text.trim());
+    _msgController.clear();
+  }
+
+  void _openGiftSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF161228),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) {
+        return Container(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('🎁 Send Gift', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  Text('Balance: ${AppData.userCoins} 🪙', style: const TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold)),
+                ],
+              ),
+              const SizedBox(height: 14),
+              GridView.builder(
+                shrinkWrap: true,
+                itemCount: AppData.availableGifts.length,
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 3,
+                  mainAxisSpacing: 10,
+                  crossAxisSpacing: 10,
+                  childAspectRatio: 1.1,
+                ),
+                itemBuilder: (c, idx) {
+                  final gift = AppData.availableGifts[idx];
+                  return InkWell(
+                    onTap: () {
+
+Navigator.pop(ctx);
+                      _sendGift(gift);
+                    },
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF221B40),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.white10),
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(gift['name'].toString().split(' ')[1], style: const TextStyle(fontSize: 26)),
+                          const SizedBox(height: 4),
+                          Text('${gift['price']} 🪙', style: const TextStyle(color: Colors.amberAccent, fontSize: 11, fontWeight: FontWeight.bold)),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _sendGift(Map<String, dynamic> gift) {
+    if (AppData.userCoins < (gift['price'] as int)) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('❌ Not enough coins! Please top up.')));
+      return;
+    }
+
+    setState(() {
+      AppData.userCoins -= (gift['price'] as int);
+      AppData.userDiamonds += (gift['diamonds'] as int);
+      _addChatMessage('🎁 Gift', '${AppData.currentUserName} sent ${gift['name']} to Host!');
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: const Color(0xFF00E676),
+        content: Text('🎉 ${gift['name']} sent successfully!', style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+      ),
+    );
+  }
+
   @override
   void dispose() {
     _engine?.leaveChannel();
     _engine?.release();
+    _msgController.dispose();
+    _chatScroll.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0F0B24),
+      backgroundColor: const Color(0xFF0D0B18),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
-
-elevation: 0,
-        title: Text(widget.title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+        elevation: 0,
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(widget.title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+            Text('Room ID: ${widget.roomId}', style: const TextStyle(fontSize: 10, color: Colors.white54)),
+          ],
+        ),
         actions: [
           Container(
             margin: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
               color: _isJoined ? Colors.green.withOpacity(0.2) : Colors.amber.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(10),
             ),
             child: Text(
-              _isJoined ? '🟢 LIVE' : '⏳ በመገናኘት ላይ...',
-              style: TextStyle(color: _isJoined ? Colors.greenAccent : Colors.amberAccent, fontSize: 11, fontWeight: FontWeight.bold),
+              _isJoined ? '🟢 LIVE' : '⏳ Connecting...',
+              style: TextStyle(color: _isJoined ? Colors.greenAccent : Colors.amberAccent, fontSize: 10, fontWeight: FontWeight.bold),
             ),
-          )
+          ),
         ],
       ),
       body: Column(
         children: [
-          // የሆስት ዋና ቦታ
+          // Host Area
           Container(
-            padding: const EdgeInsets.symmetric(vertical: 16),
+            padding: const EdgeInsets.symmetric(vertical: 8),
             child: Column(
               children: [
-                CircleAvatar(
-                  radius: 36,
-                  backgroundColor: const Color(0xFF00E676),
-                  child: const CircleAvatar(
-                    radius: 33,
-                    backgroundColor: Color(0xFF2A2050),
-                    child: Icon(Icons.person, size: 38, color: Colors.white),
-                  ),
+                Stack(
+                  alignment: Alignment.bottomRight,
+                  children: [
+                    CircleAvatar(
+                      radius: 32,
+                      backgroundColor: const Color(0xFF00E676),
+                      child: CircleAvatar(
+                        radius: 29,
+                        backgroundColor: const Color(0xFF261D4C),
+                        child: const Icon(Icons.person, size: 34, color: Colors.white),
+
+),
+                    ),
+                    const CircleAvatar(
+                      radius: 10,
+                      backgroundColor: Colors.amber,
+                      child: Icon(Icons.star, size: 12, color: Colors.black),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 8),
-                const Text('ዋና አስተናጋጅ (Host)', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 13)),
+                const SizedBox(height: 4),
+                Text(widget.hostName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
               ],
             ),
           ),
 
-          // 8 የማይክ ወንበሮች (8 Seat Grid)
-          Expanded(
+          // 8 Seat Grid
+          SizedBox(
+            height: 180,
             child: GridView.builder(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              physics: const NeverScrollableScrollPhysics(),
               itemCount: 8,
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 4,
-                crossAxisSpacing: 14,
-                mainAxisSpacing: 14,
-                childAspectRatio: 0.8,
+                mainAxisSpacing: 10,
+                crossAxisSpacing: 10,
+                childAspectRatio: 0.9,
               ),
-              itemBuilder: (context, i) {
-                return Column(
-                  children: [
-                    Stack(
-                      alignment: Alignment.bottomRight,
-                      children: [
-                        CircleAvatar(
-                          radius: 26,
-                          backgroundColor: const Color(0xFF211A45),
-                          child: Icon(Icons.chair_alt, color: Colors.white.withOpacity(0.3), size: 24),
+              itemBuilder: (context, idx) {
+                final seatStatus = _seats[idx];
+                final isLocked = seatStatus == 'LOCKED';
+                final isOccupied = seatStatus != null && !isLocked;
+
+                return InkWell(
+                  onTap: () => _handleSeatTap(idx),
+                  child: Column(
+                    children: [
+                      CircleAvatar(
+                        radius: 24,
+                        backgroundColor: isOccupied
+                            ? const Color(0xFF00E676)
+                            : isLocked
+                                ? Colors.red.withOpacity(0.3)
+                                : const Color(0xFF1E1742),
+                        child: Icon(
+                          isOccupied
+                              ? Icons.mic
+                              : isLocked
+                                  ? Icons.lock
+                                  : Icons.add,
+                          color: isOccupied ? Colors.black : Colors.white60,
+                          size: 20,
                         ),
-                        CircleAvatar(
-                          radius: 8,
-                          backgroundColor: Colors.black54,
-                          child: Icon(Icons.lock_open, size: 10, color: Colors.white70),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        isOccupied ? seatStatus! : (isLocked ? 'Locked' : '${idx + 1}'),
+                        style: TextStyle(
+                          color: isOccupied ? const Color(0xFF00E676) : Colors.white54,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    Text('${i + 1}', style: const TextStyle(color: Colors.white54, fontSize: 11)),
-                  ],
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
                 );
               },
             ),
           ),
 
-          // የታችኛው መቆጣጠሪያ እና የስጦታ ሳጥን
+          // Chat Messages
+          Expanded(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              child: ListView.builder(
+                controller: _chatScroll,
+                itemCount: _chatMessages.length,
+                itemBuilder: (ctx, i) {
+                  final msg = _chatMessages[i];
+                  final isSystem = msg['user'] == 'System' || msg['user'] == '🎁 Gift';
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 6),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: isSystem ? Colors.purple.withOpacity(0.2) : Colors.white.withOpacity(0.05),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: RichText(
+                      text: TextSpan(
+                        children: [
+                          TextSpan(
+
+text: '${msg['user']}: ',
+                            style: TextStyle(
+                              color: isSystem ? Colors.amberAccent : const Color(0xFF00E676),
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                          ),
+                          TextSpan(
+                            text: msg['msg'],
+                            style: const TextStyle(color: Colors.white, fontSize: 12),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+
+          // Bottom Bar
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            color: const Color(0xFF161228),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            color: const Color(0xFF140F2A),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
                 IconButton(
                   icon: Icon(_isMicOn ? Icons.mic : Icons.mic_off, color: _isMicOn ? const Color(0xFF00E676) : Colors.red),
                   onPressed: _toggleMic,
                 ),
-                ElevatedButton.icon(
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('🎁 ጽጌረዳ ተላከ!')));
-                  },
-                  icon: const Icon(Icons.card_giftcard, color: Colors.amberAccent, size: 18),
-                  label: const Text('ስጦታ ላክ'),
-                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF332766)),
+                Expanded(
+                  child: TextField(
+                    controller: _msgController,
+                    decoration: InputDecoration(
+                      hintText: 'Type a message...',
+                      hintStyle: const TextStyle(color: Colors.white38, fontSize: 12),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      filled: true,
+                      fillColor: const Color(0xFF221B40),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide.none),
+                    ),
+                    onSubmitted: (_) => _sendMessage(),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.send, color: Color(0xFF00E676), size: 20),
+                  onPressed: _sendMessage,
+                ),
+                IconButton(
+                  icon: const Icon(Icons.card_giftcard, color: Colors.amberAccent, size: 26),
+                  onPressed: _openGiftSheet,
                 ),
               ],
             ),
@@ -557,41 +711,196 @@ elevation: 0,
   }
 }
 
-// ----------------------------------------------------
-// 6. የዋሌት እና ፕሮፋይል ገጽ (Me Screen)
-// ----------------------------------------------------
-class ProfileWalletScreen extends StatelessWidget {
-  final VoidCallback onRefresh;
-  const ProfileWalletScreen({Key? key, required this.onRefresh}) : super(key: key);
+// ==========================================
+// 6. Agency Management Screen
+// ==========================================
+class AgencyManagementScreen extends StatefulWidget {
+  const AgencyManagementScreen({Key? key}) : super(key: key);
+
+  @override
+  State<AgencyManagementScreen> createState() => _AgencyManagementScreenState();
+}
+
+class _AgencyManagementScreenState extends State<AgencyManagementScreen> {
+  final TextEditingController _hostIdCtrl = TextEditingController();
+  final TextEditingController _hostNameCtrl = TextEditingController();
+
+  void _addNewHost() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1C163A),
+        title: const Text('Add New Host'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(controller: _hostNameCtrl, decoration: const InputDecoration(labelText: 'Host Name')),
+            TextField(controller: _hostIdCtrl, decoration: const InputDecoration(labelText: 'Host ID')),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00E676)),
+            onPressed: () {
+              if (_hostNameCtrl.text.isNotEmpty && _hostIdCtrl.text.isNotEmpty) {
+                setState(() {
+                  AppData.agencyHosts.add({
+                    'name': _hostNameCtrl.text,
+
+'id': _hostIdCtrl.text,
+                    'hours': '0.0 hrs',
+                    'target': '0%',
+                    'earnings': '0 💎',
+                  });
+                });
+                _hostNameCtrl.clear();
+                _hostIdCtrl.clear();
+                Navigator.pop(ctx);
+              }
+            },
+            child: const Text('Register', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('የእኔ መለያ (Profile & Wallet)'), backgroundColor: Colors.transparent, elevation: 0),
+      appBar: AppBar(
+        title: const Text('Agency Dashboard'),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(colors: [Color(0xFF311B92), Color(0xFF6200EA)]),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(AppData.agencyName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(color: Colors.amber, borderRadius: BorderRadius.circular(8)),
+                      child: Text(AppData.agencyCode, style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 11)),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Total Commission', style: TextStyle(color: Colors.white70, fontSize: 12)),
+                        Text('\$${AppData.totalCommission}', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF00E676))),
+                      ],
+                    ),
+                    const Spacer(),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00E676)),
+                      onPressed: () {
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Withdrawal request submitted!')));
+                      },
+                      child: const Text('Withdraw', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 11)),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('Agency Hosts (${AppData.agencyHosts.length})', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              IconButton(icon: const Icon(Icons.person_add, color: Color(0xFF00E676)), onPressed: _addNewHost),
+            ],
+          ),
+          const SizedBox(height: 10),
+
+          ...AppData.agencyHosts.map((h) {
+            return Card(
+              color: const Color(0xFF1A1438),
+              margin: const EdgeInsets.only(bottom: 10),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              child: ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: const Color(0xFF2C225A),
+
+child: Text(h['name'][0], style: const TextStyle(color: Color(0xFF00E676), fontWeight: FontWeight.bold)),
+                ),
+                title: Text(h['name'], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                subtitle: Text('ID: ${h['id']} • Time: ${h['hours']} • Target: ${h['target']}', style: const TextStyle(fontSize: 11, color: Colors.white60)),
+                trailing: Text(h['earnings'], style: const TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold, fontSize: 12)),
+              ),
+            );
+          }).toList(),
+        ],
+      ),
+    );
+  }
+}
+
+// ==========================================
+// 7. Profile & Wallet Screen (Me)
+// ==========================================
+class ProfileWalletScreen extends StatelessWidget {
+  final VoidCallback onRefresh;
+  const ProfileWalletScreen({Key? key, required this.onRefresh}) : super(key: key);
+
+  void _buyCoins(BuildContext context, int coins, int priceBirr) {
+    AppData.userCoins += coins;
+    onRefresh();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: const Color(0xFF00E676),
+        content: Text('🎉 $coins coins successfully added!', style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Profile & Wallet'), backgroundColor: Colors.transparent, elevation: 0),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
           Center(
             child: Column(
-              children: const [
-                CircleAvatar(radius: 40, backgroundColor: Color(0xFF00E676), child: Icon(Icons.person, size: 45, color: Colors.black)),
-                SizedBox(height: 10),
-                Text('KEDIR UMER', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
-                Text('ID: 1042001', style: TextStyle(color: Colors.white54, fontSize: 12)),
+              children: [
+                const CircleAvatar(radius: 36, backgroundColor: Color(0xFF00E676), child: Icon(Icons.person, size: 40, color: Colors.black)),
+                const SizedBox(height: 8),
+                Text(AppData.currentUserName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                Text('ID: ${AppData.currentUserId}', style: const TextStyle(color: Colors.white54, fontSize: 12)),
               ],
             ),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
+
           Row(
             children: [
               Expanded(
                 child: Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(color: const Color(0xFF1E1742), borderRadius: BorderRadius.circular(16)),
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(color: const Color(0xFF1E1742), borderRadius: BorderRadius.circular(14)),
                   child: Column(
                     children: [
-                      const Text('Coins', style: TextStyle(color: Colors.white70)),
-                      const SizedBox(height: 6),
+                      const Text('My Coins', style: TextStyle(color: Colors.white70, fontSize: 12)),
+                      const SizedBox(height: 4),
                       Text('${AppData.userCoins} 🪙', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.amberAccent)),
                     ],
                   ),
@@ -600,12 +909,12 @@ class ProfileWalletScreen extends StatelessWidget {
               const SizedBox(width: 12),
               Expanded(
                 child: Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(color: const Color(0xFF1E1742), borderRadius: BorderRadius.circular(16)),
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(color: const Color(0xFF1E1742), borderRadius: BorderRadius.circular(14)),
                   child: Column(
                     children: [
-                      const Text('Diamonds', style: TextStyle(color: Colors.white70)),
-                      const SizedBox(height: 6),
+                      const Text('Diamonds', style: TextStyle(color: Colors.white70, fontSize: 12)),
+                      const SizedBox(height: 4),
                       Text('${AppData.userDiamonds} 💎', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.cyanAccent)),
                     ],
                   ),
@@ -613,7 +922,32 @@ class ProfileWalletScreen extends StatelessWidget {
               ),
             ],
           ),
+          const SizedBox(height: 24),
+
+          const Text('Top-Up Coin Packages', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 10),
+
+          _buildCoinPackage(context, '10,000 Coins', 10000, 100),
+          _buildCoinPackage(context, '50,000 Coins (Popular)', 50000, 450),
+          _buildCoinPackage(context, '150,000 Coins (VIP)', 150000, 1200),
         ],
+      ),
+    );
+  }
+
+Widget _buildCoinPackage(BuildContext context, String title, int coins, int birr) {
+    return Card(
+      color: const Color(0xFF181432),
+      margin: const EdgeInsets.only(bottom: 8),
+      child: ListTile(
+        leading: const Icon(Icons.monetization_on, color: Colors.amberAccent),
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+        subtitle: Text('\$$birr (Payment Gateway)', style: const TextStyle(fontSize: 11, color: Colors.white54)),
+        trailing: ElevatedButton(
+          style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00E676)),
+          child: const Text('Buy', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+          onPressed: () => _buyCoins(context, coins, birr),
+        ),
       ),
     );
   }
