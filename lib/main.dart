@@ -40,13 +40,11 @@ class AppData {
   static double points = 23903.91;
   static String selectedCountry = "All";
 
-  // Countries Filter List
   static const List<String> countries = [
     'All', 'Ethiopia 🇪🇹', 'Philippines 🇵🇭', 'Angola 🇦🇴', 
     'Benin 🇧🇯', 'United Kingdom 🇬🇧', 'Ghana 🇬🇭', 'Kenya 🇰🇪', 'Malawi 🇲🇼', 'Rwanda 🇷🇼', 'Burma 🇲🇲'
   ];
 
-  // Active Voice Rooms
   static List<Map<String, dynamic>> rooms = [
     {
       'id': 'room_1042',
@@ -77,7 +75,6 @@ class AppData {
     },
   ];
 
-  // Gifts List
   static List<Map<String, dynamic>> gifts = [
     {'name': 'ሮዝ 🌹', 'price': 50},
     {'name': 'ቡና ☕', 'price': 200},
@@ -178,7 +175,7 @@ class _MainNavigationHubState extends State<MainNavigationHub> {
 }
 
 // ==========================================
-// 3. Party Home Screen (Country Filters & Rooms)
+// 3. Party Home Screen
 // ==========================================
 class PartyHomeScreen extends StatefulWidget {
   const PartyHomeScreen({Key? key}) : super(key: key);
@@ -219,7 +216,6 @@ class _PartyHomeScreenState extends State<PartyHomeScreen> {
       body: ListView(
         padding: const EdgeInsets.all(14),
         children: [
-          // Country Filters Horizontal List
           SizedBox(
             height: 40,
             child: ListView.builder(
@@ -230,7 +226,6 @@ class _PartyHomeScreenState extends State<PartyHomeScreen> {
                 bool isSelected = AppData.selectedCountry == country;
                 return Padding(
                   padding: const EdgeInsets.only(right: 8),
-                  choiceChip: null,
                   child: ChoiceChip(
                     label: Text(country, style: TextStyle(fontSize: 12, color: isSelected ? Colors.black : Colors.white)),
                     selected: isSelected,
@@ -239,16 +234,15 @@ class _PartyHomeScreenState extends State<PartyHomeScreen> {
                     onSelected: (bool selected) {
                       setState(() {
                         AppData.selectedCountry = country;
-
-});
+                      });
                     },
                   ),
                 );
-              },
+
+},
             ),
           ),
           const SizedBox(height: 14),
-          // Banner
           Container(
             height: 110,
             decoration: BoxDecoration(
@@ -331,7 +325,7 @@ class _PartyHomeScreenState extends State<PartyHomeScreen> {
 }
 
 // ==========================================
-// 4. Voice Room System (Agora SDK & 8 Seats)
+// 4. Voice Room System
 // ==========================================
 class VoiceRoomScreen extends StatefulWidget {
   final String roomId;
@@ -354,7 +348,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> {
     _initAgora();
   }
 
-  Future<void> _initAgora() async {
+Future<void> _initAgora() async {
     await [Permission.microphone].request();
     _engine = createAgoraRtcEngine();
     await _engine!.initialize(const RtcEngineContext(
@@ -450,14 +444,14 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> {
                       child: Text(isHost ? '👑' : '${index + 1}', style: const TextStyle(fontSize: 18)),
                     ),
                     const SizedBox(height: 4),
-
-Text(isHost ? 'Host' : 'Seat ${index + 1}', style: const TextStyle(fontSize: 10, color: Colors.white70)),
+                    Text(isHost ? 'Host' : 'Seat ${index + 1}', style: const TextStyle(fontSize: 10, color: Colors.white70)),
                   ],
                 );
               }),
             ),
           ),
-          Container(
+
+Container(
             padding: const EdgeInsets.all(16),
             color: const Color(0xFF131722),
             child: Row(
@@ -653,7 +647,6 @@ Text('${AppData.points}', style: const TextStyle(fontSize: 18, fontWeight: FontW
             ),
           ),
           const SizedBox(height: 20),
-          // First Grid Menus
           GridView.count(
             crossAxisCount: 4,
             shrinkWrap: true,
@@ -672,7 +665,6 @@ Text('${AppData.points}', style: const TextStyle(fontSize: 18, fontWeight: FontW
             ],
           ),
           const SizedBox(height: 20),
-          // Second Grid Menus (Agency, Support, Setting, etc.)
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(color: const Color(0xFF161A28), borderRadius: BorderRadius.circular(14)),
@@ -711,11 +703,11 @@ Text('${AppData.points}', style: const TextStyle(fontSize: 18, fontWeight: FontW
   Widget _gridMenu(BuildContext context, IconData icon, String label, Color color, Widget targetScreen) {
     return InkWell(
       onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => targetScreen)),
-
-child: Column(
+      child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          CircleAvatar(
+
+CircleAvatar(
             radius: 22,
             backgroundColor: color.withOpacity(0.2),
             child: Icon(icon, color: color, size: 22),
