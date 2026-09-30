@@ -27,7 +27,7 @@ class HalaSuperApp extends StatelessWidget {
 }
 
 // ==========================================
-// Central State & Database
+// Central App State & Database
 // ==========================================
 class AppData {
   static const String agoraAppId = "fd2d8b50393b495dab38eb5cf267b393";
@@ -66,10 +66,16 @@ class AppData {
     },
   ];
 
-  static List<String> backpackItems = ['VIP Avatar Frame', 'Gold Entrance Car'];
-  static List<Map<String, dynamic>> agencyHosts = [
-    {'name': 'አበበ ደስታ', 'id': '984120', 'hours': '24 hrs', 'points': 4500},
-    {'name': 'ማርታ ካሳ', 'id': '541290', 'hours': '38 hrs', 'points': 8900},
+  // Dynamic Chat Messages Store
+  static List<Map<String, String>> supportMessages = [
+    {'sender': 'Support', 'text': 'ሰላም ከድር! ምን ልንርዳዎት እንችላለን?'},
+  ];
+  static List<Map<String, String>> systemMessages = [
+    {'title': 'የይለፍ ቃል ማረጋገጫ', 'time': '10:45 AM', 'desc': 'አካውንትዎ በተሳካ ሁኔታ ተገናኝቷል።'},
+    {'title': 'የኮይን ማመንጨት ተጠናቋል', 'time': 'ትናንት', 'desc': 'የአስተዳዳሪ ኮይኖች ወደ ዋናው ዋሌት ገብተዋል።'},
+  ];
+  static List<Map<String, String>> orderMessages = [
+    {'title': 'Coin Purchase #8921', 'time': '09:12 AM', 'desc': '70,000 Coins via USDT - ተጠናቋል'},
   ];
 }
 
@@ -134,7 +140,7 @@ class MainNavigationHub extends StatefulWidget {
 class _MainNavigationHubState extends State<MainNavigationHub> {
   int _tabIndex = 0;
 
-@override
+  @override
   Widget build(BuildContext context) {
     final List<Widget> pages = [
       const PartyHomeScreen(),
@@ -223,12 +229,12 @@ class _PartyHomeScreenState extends State<PartyHomeScreen> {
                 child: Icon(Icons.graphic_eq, color: Color(0xFF00E676)),
               ),
               title: Text(r['title'], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-              subtitle: Text('Host: ${r['host']} • ${r['country']}', style: const TextStyle(fontSize: 11, color: Colors.white54)),
+
+subtitle: Text('Host: ${r['host']} • ${r['country']}', style: const TextStyle(fontSize: 11, color: Colors.white54)),
               trailing: Text(r['users'], style: const TextStyle(color: Color(0xFF00E676), fontWeight: FontWeight.bold)),
               onTap: () {
                 Navigator.push(
-
-context,
+                  context,
                   MaterialPageRoute(builder: (_) => VoiceRoomScreen(roomId: r['id'], title: r['title'])),
                 );
               },
@@ -252,7 +258,7 @@ context,
 }
 
 // ==========================================
-// 4. Interactive Voice Room (8 Interactive Seats with Audio Animation)
+// 4. Interactive Voice Room (8 Interactive Seats)
 // ==========================================
 class VoiceRoomScreen extends StatefulWidget {
   final String roomId;
@@ -267,9 +273,8 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
   RtcEngine? _engine;
   bool _isJoined = false;
   bool _isMicMuted = false;
-  int? _myCurrentSeat; // የያዝኩት ወንበር ቁጥር
+  int? _myCurrentSeat;
 
-  // Seats State (null means empty)
   late List<String?> _seats;
   late AnimationController _animController;
 
@@ -277,7 +282,6 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
   void initState() {
     super.initState();
     _seats = List.filled(8, null);
-    // በነባሪነት አንተ የመጀመሪያውን (የሆስት) ወንበር ትይዛለህ
     _seats[0] = AppData.userName;
     _myCurrentSeat = 0;
 
@@ -320,20 +324,16 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
   void _onSeatTapped(int index) {
     setState(() {
       if (_seats[index] == AppData.userName) {
-        // ከወንበር መውረድ
         _seats[index] = null;
         _myCurrentSeat = null;
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('ከወንበር ወርደዋል')));
       } else if (_seats[index] == null) {
-        // አዲስ ወንበር ላይ መቀመጥ
         if (_myCurrentSeat != null) {
-          _seats[_myCurrentSeat!] = null; // የበፊቱን ልቀቅ
+          _seats[_myCurrentSeat!] = null;
         }
         _seats[index] = AppData.userName;
         _myCurrentSeat = index;
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('ወንበር ${index + 1} ላይ ተቀምጠዋል!')));
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('ወንበር ${index + 1} በ ${_seats[index]} ተይዟል')));
       }
     });
   }
@@ -410,8 +410,6 @@ body: Column(
                           color: occupant != null ? Colors.amber : Colors.white54,
                           fontWeight: occupant != null ? FontWeight.bold : FontWeight.normal,
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
                       ),
                     ],
                   ),
@@ -419,7 +417,6 @@ body: Column(
               },
             ),
           ),
-          // Bottom Controls
           Container(
             padding: const EdgeInsets.all(16),
             color: const Color(0xFF131722),
@@ -434,8 +431,7 @@ body: Column(
                   },
                 ),
                 IconButton(
-
-icon: const Icon(Icons.card_giftcard, color: Colors.amber),
+                  icon: const Icon(Icons.card_giftcard, color: Colors.amber),
                   onPressed: () {
                     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Gift sent successfully!')));
                   },
@@ -450,7 +446,7 @@ icon: const Icon(Icons.card_giftcard, color: Colors.amber),
 }
 
 // ==========================================
-// 5. Discover & Message Screens
+// 5. Discover Screen
 // ==========================================
 class DiscoverScreen extends StatelessWidget {
   const DiscoverScreen({Key? key}) : super(key: key);
@@ -464,20 +460,221 @@ class DiscoverScreen extends StatelessWidget {
   }
 }
 
+// ==========================================
+// 6. Interactive Message Hub (System, Orders, Live Chat)
+// ==========================================
 class MessageHubScreen extends StatelessWidget {
   const MessageHubScreen({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Message')),
-      body: const Center(child: Text('System and User Messages')),
+      appBar: AppBar(title: const Text('Message Center'), elevation: 0),
+      body: ListView(
+        padding: const EdgeInsets.all(12),
+        children: [
+          _menuTile(
+            context,
+            Icons.notifications_active,
+            'System Message',
+            'የስርዓት እና የአካውንት ደህንነት ማሳወቂያዎች',
+            Colors.cyan,
+            const SystemMessageDetailScreen(),
+          ),
+          const SizedBox(height: 10),
+          _menuTile(
+            context,
+            Icons.receipt_long,
+            'Order Messages',
+            'የኮይን ግዢ እና የትራንዛክሽን ዝርዝሮች',
+            Colors.amber,
+            const OrderMessageDetailScreen(),
+          ),
+          const SizedBox(height: 10),
+          _menuTile(
+            context,
+            Icons.headset_mic,
+            'Customer Service (24/7 Chat)',
+            'የደንበኞች አገልግሎት የቀጥታ የጽሑፍ ውይይት',
+            const Color(0xFF00E676),
+            const LiveChatSupportScreen(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _menuTile(BuildContext context, IconData icon, String title, String subtitle, Color color, Widget screen) {
+    return Card(
+      color: const Color(0xFF161A28),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: ListTile(
+        leading: CircleAvatar(
+          backgroundColor: color.withOpacity(0.2),
+          child: Icon(icon, color: color),
+        ),
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+        subtitle: Text(subtitle, style: const TextStyle(fontSize: 12, color: Colors.white54)),
+        trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.white38),
+        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => screen)),
+      ),
+    );
+  }
+}
+
+// System Message Detail
+class SystemMessageDetailScreen extends StatelessWidget {
+  const SystemMessageDetailScreen({Key? key}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('System Messages')),
+      body: ListView.builder(
+        padding: const EdgeInsets.all(14),
+        itemCount: AppData.systemMessages.length,
+        itemBuilder: (ctx, i) {
+          var item = AppData.systemMessages[i];
+          return Card(
+            color: const Color(0xFF161A28),
+            child: ListTile(
+              leading: const Icon(Icons.verified, color: Colors.cyan),
+              title: Text(item['title']!, style: const TextStyle(fontWeight: FontWeight.bold)),
+              subtitle: Text(item['desc']!),
+              trailing: Text(item['time']!, style: const TextStyle(fontSize: 10, color: Colors.white38)),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+// Order Message Detail
+class OrderMessageDetailScreen extends StatelessWidget {
+  const OrderMessageDetailScreen({Key? key}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Order Records')),
+      body: ListView.builder(
+
+padding: const EdgeInsets.all(14),
+        itemCount: AppData.orderMessages.length,
+        itemBuilder: (ctx, i) {
+          var item = AppData.orderMessages[i];
+          return Card(
+            color: const Color(0xFF161A28),
+            child: ListTile(
+              leading: const Icon(Icons.monetization_on, color: Colors.amber),
+              title: Text(item['title']!, style: const TextStyle(fontWeight: FontWeight.bold)),
+              subtitle: Text(item['desc']!),
+              trailing: Text(item['time']!, style: const TextStyle(fontSize: 10, color: Colors.white38)),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+// Interactive Customer Support Live Chat
+class LiveChatSupportScreen extends StatefulWidget {
+  const LiveChatSupportScreen({Key? key}) : super(key: key);
+
+  @override
+  State<LiveChatSupportScreen> createState() => _LiveChatSupportScreenState();
+}
+
+class _LiveChatSupportScreenState extends State<LiveChatSupportScreen> {
+  final TextEditingController _textController = TextEditingController();
+
+  void _sendMessage() {
+    if (_textController.text.trim().isNotEmpty) {
+      setState(() {
+        AppData.supportMessages.add({
+          'sender': 'Me',
+          'text': _textController.text.trim(),
+        });
+      });
+      String sentText = _textController.text;
+      _textController.clear();
+
+      // Automatic Support Reply
+      Future.delayed(const Duration(seconds: 1), () {
+        if (mounted) {
+          setState(() {
+            AppData.supportMessages.add({
+              'sender': 'Support',
+              'text': 'መልዕክትዎ ደርሶናል! የቴክኒክ ቡድናችን ጉዳዩን እየተመለከተው ነው።',
+            });
+          });
+        }
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('24/7 Customer Support Desk')),
+      body: Column(
+        children: [
+          Expanded(
+            child: ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: AppData.supportMessages.length,
+              itemBuilder: (ctx, i) {
+                var msg = AppData.supportMessages[i];
+                bool isMe = msg['sender'] == 'Me';
+                return Align(
+                  alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+                  child: Container(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: isMe ? const Color(0xFF00E676) : const Color(0xFF161A28),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      msg['text']!,
+                      style: TextStyle(color: isMe ? Colors.black : Colors.white, fontWeight: isMe ? FontWeight.bold : FontWeight.normal),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.all(10),
+            color: const Color(0xFF131722),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _textController,
+                    decoration: const InputDecoration(
+                      hintText: 'መልዕክትዎን እዚህ ይፃፉ...',
+                      border: InputBorder.none,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.send, color: Color(0xFF00E676)),
+                  onPressed: _sendMessage,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
 
 // ==========================================
-// 6. Me Profile Screen with Coin Seller & Agency
+// 7. Me Profile Screen with Coin Seller & Engine
 // ==========================================
 class MeProfileScreen extends StatefulWidget {
   const MeProfileScreen({Key? key}) : super(key: key);
@@ -545,8 +742,7 @@ class _MeProfileScreenState extends State<MeProfileScreen> {
                   children: [
                     Text(AppData.userName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 4),
-
-Text('ID:${AppData.userId}', style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                    Text('ID:${AppData.userId}', style: const TextStyle(color: Colors.white54, fontSize: 12)),
                   ],
                 ),
               ),
@@ -578,7 +774,8 @@ Text('ID:${AppData.userId}', style: const TextStyle(color: Colors.white54, fontS
                       ],
                     ),
                   ),
-                ),
+
+),
                 Container(height: 30, width: 1, color: Colors.white12),
                 Expanded(
                   child: Column(
@@ -593,7 +790,6 @@ Text('ID:${AppData.userId}', style: const TextStyle(color: Colors.white54, fontS
             ),
           ),
           const SizedBox(height: 20),
-          // User Grid Functions
           GridView.count(
             crossAxisCount: 4,
             shrinkWrap: true,
@@ -612,7 +808,6 @@ Text('ID:${AppData.userId}', style: const TextStyle(color: Colors.white54, fontS
             ],
           ),
           const SizedBox(height: 16),
-          // Agency & Settings Management Grid (Coin Seller ተካትቷል)
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(color: const Color(0xFF161A28), borderRadius: BorderRadius.circular(14)),
@@ -624,11 +819,10 @@ Text('ID:${AppData.userId}', style: const TextStyle(color: Colors.white54, fontS
               crossAxisSpacing: 12,
               children: [
                 _gridMenu(context, Icons.mic_external_on, 'Host Center', Colors.lightBlue, const GenericScreen(title: 'Host Center')),
-
-_gridMenu(context, Icons.business_center, 'Agency', Colors.teal, const AgencyScreen()),
+                _gridMenu(context, Icons.business_center, 'Agency', Colors.teal, const AgencyScreen()),
                 _gridMenu(context, Icons.monetization_on, 'Coin Seller', Colors.amber, const CoinSellerScreen()),
                 _gridMenu(context, Icons.precision_manufacturing, 'Coin Engine', Colors.greenAccent, null, onTap: _openAdminCoinEngine),
-                _gridMenu(context, Icons.support_agent, 'Support', Colors.indigoAccent, const GenericScreen(title: 'Support')),
+                _gridMenu(context, Icons.support_agent, 'Support', Colors.indigoAccent, const LiveChatSupportScreen()),
                 _gridMenu(context, Icons.info_outline, 'About', Colors.greenAccent, const GenericScreen(title: 'About')),
                 _gridMenu(context, Icons.settings, 'Setting', Colors.blueGrey, const GenericScreen(title: 'Setting')),
                 _gridMenu(context, Icons.network_check, 'Network', Colors.redAccent, const GenericScreen(title: 'Network')),
@@ -653,7 +847,8 @@ _gridMenu(context, Icons.business_center, 'Agency', Colors.teal, const AgencyScr
   Widget _gridMenu(BuildContext context, IconData icon, String label, Color color, Widget? target, {VoidCallback? onTap}) {
     return InkWell(
       onTap: onTap ?? () => Navigator.push(context, MaterialPageRoute(builder: (_) => target!)),
-      child: Column(
+
+child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           CircleAvatar(radius: 22, backgroundColor: color.withOpacity(0.2), child: Icon(icon, color: color, size: 22)),
@@ -666,7 +861,7 @@ _gridMenu(context, Icons.business_center, 'Agency', Colors.teal, const AgencyScr
 }
 
 // ==========================================
-// 7. Coin Seller Screen (ኮይን ሻጭ ማዕከል)
+// 8. Coin Seller Screen
 // ==========================================
 class CoinSellerScreen extends StatefulWidget {
   const CoinSellerScreen({Key? key}) : super(key: key);
@@ -714,8 +909,7 @@ class _CoinSellerScreenState extends State<CoinSellerScreen> {
                 const SizedBox(height: 4),
                 Text('${AppData.coins} Coins', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.amberAccent)),
               ],
-
-),
+            ),
           ),
           const SizedBox(height: 20),
           const Text('የገዢው መለያ ቁጥር (Buyer User ID)'),
@@ -749,61 +943,15 @@ class _CoinSellerScreenState extends State<CoinSellerScreen> {
 }
 
 // ==========================================
-// 8. Fully Functional Agency Screen
+// 9. Fully Functional Agency Screen
 // ==========================================
-class AgencyScreen extends StatefulWidget {
+class AgencyScreen extends StatelessWidget {
   const AgencyScreen({Key? key}) : super(key: key);
 
   @override
-  State<AgencyScreen> createState() => _AgencyScreenState();
-}
-
-class _AgencyScreenState extends State<AgencyScreen> {
-  void _addNewHostDialog() {
-    final TextEditingController nameController = TextEditingController();
-    final TextEditingController idController = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF161A28),
-        title: const Text('አዲስ ሆስት መዝግብ'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(controller: nameController, decoration: const InputDecoration(hintText: 'የሆስት ስም')),
-            const SizedBox(height: 10),
-            TextField(controller: idController, decoration: const InputDecoration(hintText: 'የሆስት ID ቁጥር')),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00E676), foregroundColor: Colors.black),
-            onPressed: () {
-              if (nameController.text.isNotEmpty && idController.text.isNotEmpty) {
-                setState(() {
-                  AppData.agencyHosts.add({
-                    'name': nameController.text,
-                    'id': idController.text,
-                    'hours': '0 hrs',
-                    'points': 0,
-                  });
-                });
-                Navigator.pop(ctx);
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('ሆስት በተሳካ ሁኔታ ተመዝግቧል!')));
-              }
-            },
-            child: const Text('መዝግብ'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  @override
   Widget build(BuildContext context) {
-    return Scaffold(
+
+return Scaffold(
       appBar: AppBar(title: const Text('Agency Management')),
       body: ListView(
         padding: const EdgeInsets.all(14),
@@ -813,30 +961,6 @@ class _AgencyScreenState extends State<AgencyScreen> {
             decoration: BoxDecoration(color: const Color(0xFF161A28), borderRadius: BorderRadius.circular(12)),
             child: const Text('የኤጀንሲ ኮሚሽን ተመን: 20% Discount & Commission', style: TextStyle(color: Color(0xFF00E676), fontWeight: FontWeight.bold)),
           ),
-          const SizedBox(height: 16),
-
-Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text('የተመዘገቡ ሆስቶች', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-              ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00E676), foregroundColor: Colors.black),
-                icon: const Icon(Icons.add, size: 16),
-                label: const Text('አዲስ ሆስት'),
-                onPressed: _addNewHostDialog,
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          ...AppData.agencyHosts.map((h) => Card(
-            color: const Color(0xFF161A28),
-            child: ListTile(
-              leading: const Icon(Icons.person, color: Colors.teal),
-              title: Text(h['name']),
-              subtitle: Text('ID: ${h['id']} • ስርጭት: ${h['hours']}'),
-              trailing: Text('${h['points']} Pts', style: const TextStyle(color: Colors.amber)),
-            ),
-          )),
         ],
       ),
     );
@@ -844,7 +968,7 @@ Row(
 }
 
 // ==========================================
-// 9. Recharge Screen
+// 10. Recharge Screen
 // ==========================================
 class RechargeScreen extends StatefulWidget {
   const RechargeScreen({Key? key}) : super(key: key);
@@ -908,8 +1032,7 @@ class _RechargeScreenState extends State<RechargeScreen> {
                 dropdownColor: const Color(0xFF161A28),
                 items: ['All country', 'Ethiopia 🇪🇹', 'Philippines 🇵🇭', 'Kenya 🇰🇪'].map((val) => DropdownMenuItem(value: val, child: Text(val))).toList(),
                 onChanged: (val) => setState(() => _selectedCountry = val!),
-
-),
+              ),
             ),
           ),
           const SizedBox(height: 16),
@@ -923,7 +1046,8 @@ class _RechargeScreenState extends State<RechargeScreen> {
             ],
           ),
           const SizedBox(height: 16),
-          const Text('Coin Packages', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white70)),
+
+const Text('Coin Packages', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white70)),
           const SizedBox(height: 8),
           Column(
             children: List.generate(_packages.length, (i) {
@@ -989,7 +1113,7 @@ class _RechargeScreenState extends State<RechargeScreen> {
 }
 
 // ==========================================
-// 10. Generic Screen
+// 11. Generic Screen
 // ==========================================
 class GenericScreen extends StatelessWidget {
   final String title;
