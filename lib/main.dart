@@ -4,223 +4,367 @@ import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 void main() {
-  runApp(const FullVoiceApp());
+  runApp(const HalaStyleVoiceApp());
 }
 
-class FullVoiceApp extends StatelessWidget {
-  const FullVoiceApp({Key? key}) : super(key: key);
+class HalaStyleVoiceApp extends StatelessWidget {
+  const HalaStyleVoiceApp({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Voice Live & Agency Hub',
+      title: 'Hala Voice',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         brightness: Brightness.dark,
         scaffoldBackgroundColor: const Color(0xFF0D0B18),
-        primaryColor: const Color(0xFF7B2CBF),
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Color(0xFF161228),
-          elevation: 0,
-        ),
+        primaryColor: const Color(0xFF00E676),
+        fontFamily: 'sans-serif',
       ),
-      home: const MainHomeScreen(),
+      home: const SplashScreen(),
     );
   }
 }
 
-// ==========================================
-// 1. የዳታ ማዕከል (Global State)
-// ==========================================
+// ----------------------------------------------------
+// 1. መረጃዎች እና ግሎባል ዳታ (AppData)
+// ----------------------------------------------------
 class AppData {
   static const String agoraAppId = "fd2d8b50393b495dab38eb5cf267b393";
-  static const String channelName = "room_1042";
   static const String agoraToken = "007eJxTYNBXOc7wZlN/y5052+JTrm76vvWHkNrEeSmyD98wWZnnz2NQYEhLMUqxSDI1MLY0TjKxNE1JTDK2SE0yTU4zMjNPAgrO6NmT1RDIyND/SI2BEQpBfE6Govz83HhDAxMjBgYASXMhyw==";
+  static const String currentChannel = "room_1042";
 
   static int userCoins = 50000;
-  static int hostPoints = 120000;
-  static List<Map<String, dynamic>> cashoutRequests = [];
-  static List<Map<String, dynamic>> agencyHosts = [
-    {'name': 'Sara Voice', 'id': '10021', 'points': 45000, 'status': 'Active'},
-    {'name': 'Abebe Live', 'id': '10045', 'points': 75000, 'status': 'Active'},
-    {'name': 'Mahi Music', 'id': '10089', 'points': 20000, 'status': 'Pending'},
+  static int userDiamonds = 120000;
+
+  static List<Map<String, dynamic>> rooms = [
+    {
+      'id': 'room_1042',
+      'title': '🇪🇹 አዲስ Coin አገኘን እንዳያመልጣችሁ',
+      'category': 'FRIENDS',
+      'host': 'KEDIR',
+      'tag': 'HOT',
+      'usersCount': '4.58K',
+      'bgGradient': [Color(0xFF1E3C72), Color(0xFF2A5298)],
+    },
+    {
+      'id': 'room_1043',
+      'title': '🐟 Fish እና ንብ አሸናፊዎች ሩም',
+      'category': 'EMOTION',
+      'host': 'Sara Live',
+      'tag': 'GAME',
+      'usersCount': '3.21K',
+      'bgGradient': [Color(0xFF5A189A), Color(0xFF3C096C)],
+    },
+    {
+      'id': 'room_1044',
+      'title': '🎵 የሙዚቃ እና የጨዋታ ምሽት',
+      'category': 'MUSIC',
+      'host': 'Abebe Host',
+      'tag': 'LIVE',
+      'usersCount': '2.23K',
+      'bgGradient': [Color(0xFF7209B7), Color(0xFF4361EE)],
+    },
   ];
 }
 
-// ==========================================
-// 2. ዋናው ማውጫ (Home Navigation)
-// ==========================================
-class MainHomeScreen extends StatefulWidget {
-  const MainHomeScreen({Key? key}) : super(key: key);
+// ----------------------------------------------------
+// 2. የስፕላሽ ስክሪን (Splash Screen)
+// ----------------------------------------------------
+class SplashScreen extends StatefulWidget {
+  const SplashScreen({Key? key}) : super(key: key);
 
   @override
-  State<MainHomeScreen> createState() => _MainHomeScreenState();
+  State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _MainHomeScreenState extends State<MainHomeScreen> {
-  int _currentIndex = 0;
+class _SplashScreenState extends State<SplashScreen> {
+  @override
+  void initState() {
+    super.initState();
+    Future.delayed(const Duration(seconds: 2), () {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const MainNavigationHub()),
+      );
+    });
+  }
 
-  void _refresh() => setState(() {});
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFE8F5E9),
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(22),
+              decoration: BoxDecoration(
+                color: const Color(0xFF00E676),
+                borderRadius: BorderRadius.circular(30),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.green.withOpacity(0.3),
+                    blurRadius: 20,
+                    offset: const Offset(0, 8),
+                  )
+                ],
+              ),
+              child: const Icon(Icons.record_voice_over, size: 70, color: Colors.white),
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              'Hala Voice',
+              style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Color(0xFF00C853)),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Show Me Happy the World',
+              style: TextStyle(fontSize: 14, color: Colors.black54, fontWeight: FontWeight.w600),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ----------------------------------------------------
+// 3. ዋናው ማውጫ (Main Navigation Hub)
+// ----------------------------------------------------
+class MainNavigationHub extends StatefulWidget {
+  const MainNavigationHub({Key? key}) : super(key: key);
+
+  @override
+  State<MainNavigationHub> createState() => _MainNavigationHubState();
+}
+
+class _MainNavigationHubState extends State<MainNavigationHub> {
+  int _tabIndex = 0;
 
   @override
   Widget build(BuildContext context) {
     final List<Widget> pages = [
-      DashboardView(onUpdated: _refresh),
-      VoiceRoomView(onUpdated: _refresh),
-      const AgencyManagementView(),
-      ProfileWalletView(onUpdated: _refresh),
+      const HalaPartyHomeScreen(),
+      const Center(child: Text('Moment / ፖስቶች ገጽ', style: TextStyle(color: Colors.white))),
+      const Center(child: Text('መልዕክቶች (Messages)', style: TextStyle(color: Colors.white))),
+      ProfileWalletScreen(onRefresh: () => setState(() {})),
     ];
 
     return Scaffold(
-      body: pages[_currentIndex],
+      body: pages[_tabIndex],
       bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _currentIndex,
-        onTap: (index) => setState(() => _currentIndex = index),
-        backgroundColor: const Color(0xFF140F26),
-        selectedItemColor: const Color(0xFF9D4EDD),
+        currentIndex: _tabIndex,
+        onTap: (i) => setState(() => _tabIndex = i),
+        backgroundColor: const Color(0xFF131124),
+        selectedItemColor: const Color(0xFF00E676),
         unselectedItemColor: Colors.white38,
         type: BottomNavigationBarType.fixed,
         items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.explore), label: 'ዳሽቦርድ'),
-          BottomNavigationBarItem(icon: Icon(Icons.mic), label: 'ሩም'),
-          BottomNavigationBarItem(icon: Icon(Icons.groups), label: 'ኤጀንሲ'),
-          BottomNavigationBarItem(icon: Icon(Icons.account_balance_wallet), label: 'ዋሌት'),
+          BottomNavigationBarItem(icon: Icon(Icons.grid_view_rounded), label: 'Room'),
+          BottomNavigationBarItem(icon: Icon(Icons.public), label: 'Moment'),
+          BottomNavigationBarItem(icon: Icon(Icons.chat_bubble_outline), label: 'Message'),
+          BottomNavigationBarItem(icon: Icon(Icons.person_outline), label: 'Me'),
         ],
       ),
     );
   }
 }
 
-// ==========================================
-// 3. የዳሽቦርድ ገጽ (Dashboard View)
-// ==========================================
-class DashboardView extends StatelessWidget {
-  final VoidCallback onUpdated;
-  const DashboardView({Key? key, required this.onUpdated}) : super(key: key);
+// ----------------------------------------------------
+// 4. የHala ፓርቲ ገጽ (Hala Party Screen)
+// ----------------------------------------------------
+class HalaPartyHomeScreen extends StatelessWidget {
+  const HalaPartyHomeScreen({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Live Voice Hub', style: TextStyle(fontWeight: FontWeight.bold)),
+        backgroundColor: const Color(0xFF0D0B18),
+        elevation: 0,
+        title: Row(
+          children: const [
+            Text('Follow', style: TextStyle(fontSize: 18, color: Colors.white54, fontWeight: FontWeight.bold)),
+            SizedBox(width: 16),
+            Text('Party', style: TextStyle(fontSize: 22, color: Colors.white, fontWeight: FontWeight.bold)),
+          ],
+        ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.admin_panel_settings, color: Colors.amber),
-            tooltip: 'Admin Panel',
-            onPressed: () => Navigator.push(
-
-context,
-              MaterialPageRoute(builder: (_) => AdminPanelScreen(onUpdated: onUpdated)),
-            ),
-          ),
+          IconButton(icon: const Icon(Icons.search, color: Colors.white), onPressed: () {}),
+          IconButton(icon: const Icon(Icons.emoji_events_outlined, color: Colors.amber), onPressed: () {}),
         ],
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF5A189A), Color(0xFF240046)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: [
-                  BoxShadow(color: Colors.purple.withOpacity(0.3), blurRadius: 12, offset: const Offset(0, 6)),
-                ],
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
+            // የአገራት ባንዲራዎች
+            SizedBox(
+              height: 40,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 14),
                 children: [
-                  Column(
-                    children: [
-                      const Text('የእርስዎ ሳንቲም', style: TextStyle(color: Colors.white70, fontSize: 13)),
-                      const SizedBox(height: 6),
-                      Text('${AppData.userCoins} 🪙', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.amberAccent)),
-                    ],
-                  ),
-                  Container(width: 1, height: 45, color: Colors.white24),
-                  Column(
-                    children: [
-                      const Text('የሆስት ፖይንት', style: TextStyle(color: Colors.white70, fontSize: 13)),
-                      const SizedBox(height: 6),
-                      Text('${AppData.hostPoints} 💎', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.cyanAccent)),
-                    ],
-                  ),
+                  _countryChip('🌍 All', true),
+                  _countryChip('🇪🇹 Ethiopia', false),
+                  _countryChip('🇸🇦 Saudi', false),
+                  _countryChip('🇵🇭 Philippines', false),
+                  _countryChip('🇳🇬 Nigeria', false),
                 ],
               ),
             ),
-            const SizedBox(height: 24),
-            const Text('ተወዳጅ ክፍሎችና ጨዋታዎች', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
             const SizedBox(height: 14),
-            _buildActionCard(
-              context,
-              title: 'የቀጥታ ድምፅ ክፍል (Live Room)',
-              desc: 'ይግቡ፣ ማይክ ይያዙ፣ በቀጥታ ይናገሩ',
-              icon: Icons.record_voice_over,
-              gradient: [const Color(0xFF7209B7), const Color(0xFF3F37C9)],
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => VoiceRoomView(onUpdated: onUpdated)),
+
+            // ባነሮች (Banner Cards)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Container(
+                height: 110,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFFE91E63), Color(0xFF673AB7)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+
+),
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: const [
+                          Text('URGENT EVENT ALERT', style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold)),
+                          SizedBox(height: 4),
+                          Text('Room Ranking & Rewards!', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
+                        ],
+                      ),
+                    ),
+                    const Icon(Icons.card_giftcard, size: 48, color: Colors.amberAccent),
+                  ],
+                ),
               ),
+            ),
+
+            const SizedBox(height: 20),
+
+            // የክፍሎች ዝርዝር (Voice Rooms List)
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16),
+              child: Text('ንቁ የድምፅ ክፍሎች (Active Rooms)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
             ),
             const SizedBox(height: 12),
-            _buildActionCard(
-              context,
-              title: 'ፒራሚድ ማይኒንግ (Safe Mini Game)',
-              desc: 'ዕድልዎን ይፈትሹ (ከነ RTP እና የማሸነፊያ ገደብ)',
-              icon: Icons.casino,
-              gradient: [const Color(0xFFF72585), const Color(0xFF7209B7)],
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => PyramidMiniGame(onUpdated: onUpdated)),
-              ),
+
+            ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              itemCount: AppData.rooms.length,
+              itemBuilder: (context, index) {
+                final r = AppData.rooms[index];
+                return _buildHalaRoomCard(context, r);
+              },
             ),
-            const SizedBox(height: 12),
-            _buildActionCard(
-              context,
-              title: 'የኤጀንሲ አስተዳዳሪ (Agency Manager)',
-              desc: 'የሆስቶችን ገቢ እና እንቅስቃሴ ይቆጣጠሩ',
-              icon: Icons.shield,
-              gradient: [const Color(0xFF1E3C72), const Color(0xFF2A5298)],
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const AgencyManagementView()),
-              ),
-            ),
+            const SizedBox(height: 70),
           ],
         ),
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        backgroundColor: const Color(0xFF00E676),
+        icon: const Icon(Icons.add, color: Colors.black),
+        label: const Text('ክፍል ፍጠር', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => LiveHalaVoiceRoom(
+                roomId: AppData.currentChannel,
+                title: 'የእኔ የቀጥታ ድምፅ ክፍል',
+              ),
+            ),
+          );
+        },
       ),
     );
   }
 
-  Widget _buildActionCard(BuildContext context, {required String title, required String desc, required IconData icon, required List<Color> gradient, required VoidCallback onTap}) {
+  static Widget _countryChip(String text, bool active) {
+    return Container(
+      margin: const EdgeInsets.only(right: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        color: active ? const Color(0xFF00E676) : const Color(0xFF1E1A38),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(color: active ? Colors.black : Colors.white70, fontWeight: FontWeight.bold, fontSize: 13),
+      ),
+    );
+  }
 
-return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
+  Widget _buildHalaRoomCard(BuildContext context, Map<String, dynamic> r) {
+    return InkWell(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => LiveHalaVoiceRoom(
+              roomId: r['id'],
+              title: r['title'],
+            ),
+          ),
+        );
+      },
       child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(gradient: LinearGradient(colors: gradient), borderRadius: BorderRadius.circular(16)),
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: const Color(0xFF181432),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.white10),
+        ),
         child: Row(
           children: [
-            CircleAvatar(backgroundColor: Colors.white24, radius: 26, child: Icon(icon, color: Colors.white, size: 28)),
-            const SizedBox(width: 16),
+            CircleAvatar(
+              radius: 28,
+              backgroundColor: (r['bgGradient'] as List<Color>)[0],
+              child: const Icon(Icons.graphic_eq, color: Colors.white, size: 28),
+
+),
+            const SizedBox(width: 14),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white)),
-                  const SizedBox(height: 4),
-                  Text(desc, style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                  Text(r['title'], style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(color: const Color(0xFF2C2454), borderRadius: BorderRadius.circular(6)),
+                        child: Text(r['category'], style: const TextStyle(color: Color(0xFF00E676), fontSize: 10, fontWeight: FontWeight.bold)),
+                      ),
+                      const SizedBox(width: 8),
+                      Text('Host: ${r['host']}', style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                    ],
+                  ),
                 ],
               ),
             ),
-            const Icon(Icons.arrow_forward_ios, color: Colors.white54, size: 16),
+            Row(
+              children: [
+                const Icon(Icons.bar_chart, color: Color(0xFF00E676), size: 18),
+                const SizedBox(width: 4),
+                Text(r['usersCount'], style: const TextStyle(color: Colors.white70, fontSize: 12)),
+              ],
+            )
           ],
         ),
       ),
@@ -228,30 +372,32 @@ return InkWell(
   }
 }
 
-// ==========================================
-// 4. እውነተኛው የአጎራ ድምፅ ክፍል (Agora Voice Room)
-// ==========================================
-class VoiceRoomView extends StatefulWidget {
-  final VoidCallback onUpdated;
-  const VoiceRoomView({Key? key, required this.onUpdated}) : super(key: key);
+// ----------------------------------------------------
+// 5. የቀጥታ 8 ወንበር የድምፅ ክፍል (Hala Live Room)
+// ----------------------------------------------------
+class LiveHalaVoiceRoom extends StatefulWidget {
+  final String roomId;
+  final String title;
+
+  const LiveHalaVoiceRoom({Key? key, required this.roomId, required this.title}) : super(key: key);
 
   @override
-  State<VoiceRoomView> createState() => _VoiceRoomViewState();
+  State<LiveHalaVoiceRoom> createState() => _LiveHalaVoiceRoomState();
 }
 
-class _VoiceRoomViewState extends State<VoiceRoomView> {
+class _LiveHalaVoiceRoomState extends State<LiveHalaVoiceRoom> {
   RtcEngine? _engine;
   bool _isJoined = false;
-  bool _isMuted = false;
-  final Set<int> _remoteUids = {};
+  bool _isMicOn = true;
+  final Set<int> _remoteUsers = {};
 
   @override
   void initState() {
     super.initState();
-    _initAgora();
+    _startAgoraVoice();
   }
 
-  Future<void> _initAgora() async {
+  Future<void> _startAgoraVoice() async {
     await [Permission.microphone].request();
 
     _engine = createAgoraRtcEngine();
@@ -266,10 +412,10 @@ class _VoiceRoomViewState extends State<VoiceRoomView> {
           setState(() => _isJoined = true);
         },
         onUserJoined: (RtcConnection connection, int remoteUid, int elapsed) {
-          setState(() => _remoteUids.add(remoteUid));
+          setState(() => _remoteUsers.add(remoteUid));
         },
         onUserOffline: (RtcConnection connection, int remoteUid, UserOfflineReasonType reason) {
-          setState(() => _remoteUids.remove(remoteUid));
+          setState(() => _remoteUsers.remove(remoteUid));
         },
       ),
     );
@@ -278,19 +424,19 @@ class _VoiceRoomViewState extends State<VoiceRoomView> {
     await _engine!.enableAudio();
     await _engine!.joinChannel(
       token: AppData.agoraToken,
-      channelId: AppData.channelName,
+      channelId: widget.roomId,
       uid: 0,
       options: const ChannelMediaOptions(
         clientRoleType: ClientRoleType.clientRoleBroadcaster,
+        autoSubscribeAudio: true,
+        publishMicrophoneTrack: true,
       ),
     );
   }
 
-  void _toggleMute() {
-    setState(() {
-      _isMuted = !_isMuted;
-    });
-    _engine?.muteLocalAudioStream(_isMuted);
+  void _toggleMic() {
+    setState(() => _isMicOn = !_isMicOn);
+    _engine?.muteLocalAudioStream(!_isMicOn);
   }
 
   @override
@@ -300,70 +446,90 @@ class _VoiceRoomViewState extends State<VoiceRoomView> {
     super.dispose();
   }
 
-  void _sendGift(int cost, String giftName) {
-    if (AppData.userCoins < cost) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('በቂ ሳንቲም የለዎትም!')));
-      return;
-    }
-    setState(() {
-      AppData.userCoins -= cost;
-      AppData.hostPoints += cost;
-    });
-    widget.onUpdated();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$giftName ተላከ! ሆስቱ $cost ፖይንት አገኘ።'), backgroundColor: Colors.purple),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFF0F0B24),
       appBar: AppBar(
-        title: Text(_isJoined ? 'ክፍል፦ #1042 (ቀጥታ ተገናኝቷል 🟢)' : 'ድምፅ በማገናኘት ላይ... ⏳'),
+        backgroundColor: Colors.transparent,
+
+elevation: 0,
+        title: Text(widget.title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+        actions: [
+          Container(
+            margin: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: _isJoined ? Colors.green.withOpacity(0.2) : Colors.amber.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              _isJoined ? '🟢 LIVE' : '⏳ በመገናኘት ላይ...',
+              style: TextStyle(color: _isJoined ? Colors.greenAccent : Colors.amberAccent, fontSize: 11, fontWeight: FontWeight.bold),
+            ),
+          )
+        ],
       ),
       body: Column(
         children: [
+          // የሆስት ዋና ቦታ
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: Column(
+              children: [
+                CircleAvatar(
+                  radius: 36,
+                  backgroundColor: const Color(0xFF00E676),
+                  child: const CircleAvatar(
+                    radius: 33,
+                    backgroundColor: Color(0xFF2A2050),
+                    child: Icon(Icons.person, size: 38, color: Colors.white),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text('ዋና አስተናጋጅ (Host)', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 13)),
+              ],
+            ),
+          ),
+
+          // 8 የማይክ ወንበሮች (8 Seat Grid)
           Expanded(
             child: GridView.builder(
-
-padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.all(16),
+              itemCount: 8,
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 4,
-                mainAxisSpacing: 18,
-                crossAxisSpacing: 18,
+                crossAxisSpacing: 14,
+                mainAxisSpacing: 14,
                 childAspectRatio: 0.8,
               ),
-              itemCount: 8,
               itemBuilder: (context, i) {
-                bool isMe = (i == 0);
                 return Column(
                   children: [
                     Stack(
                       alignment: Alignment.bottomRight,
                       children: [
                         CircleAvatar(
-                          radius: 28,
-                          backgroundColor: isMe ? Colors.purpleAccent : const Color(0xFF221A3D),
-                          child: Icon(isMe ? Icons.person : Icons.mic_none, color: Colors.white70),
+                          radius: 26,
+                          backgroundColor: const Color(0xFF211A45),
+                          child: Icon(Icons.chair_alt, color: Colors.white.withOpacity(0.3), size: 24),
                         ),
                         CircleAvatar(
-                          radius: 9,
-                          backgroundColor: (isMe && !_isMuted) ? Colors.green : Colors.red,
-                          child: Icon((isMe && !_isMuted) ? Icons.volume_up : Icons.mic_off, size: 10, color: Colors.white),
+                          radius: 8,
+                          backgroundColor: Colors.black54,
+                          child: Icon(Icons.lock_open, size: 10, color: Colors.white70),
                         ),
                       ],
                     ),
                     const SizedBox(height: 6),
-                    Text(
-                      isMe ? 'እርስዎ (ሆስት)' : 'ተጠቃሚ ${i + 1}',
-                      style: const TextStyle(fontSize: 11, color: Colors.white70),
-                      overflow: TextOverflow.ellipsis,
-                    ),
+                    Text('${i + 1}', style: const TextStyle(color: Colors.white54, fontSize: 11)),
                   ],
                 );
               },
             ),
           ),
+
+          // የታችኛው መቆጣጠሪያ እና የስጦታ ሳጥን
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             color: const Color(0xFF161228),
@@ -371,20 +537,16 @@ padding: const EdgeInsets.all(20),
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
                 IconButton(
-                  icon: Icon(_isMuted ? Icons.mic_off : Icons.mic, color: _isMuted ? Colors.red : Colors.greenAccent),
-                  onPressed: _toggleMute,
+                  icon: Icon(_isMicOn ? Icons.mic : Icons.mic_off, color: _isMicOn ? const Color(0xFF00E676) : Colors.red),
+                  onPressed: _toggleMic,
                 ),
                 ElevatedButton.icon(
-                  onPressed: () => _sendGift(1000, '🌹 ጽጌረዳ'),
-                  icon: const Icon(Icons.favorite, color: Colors.pinkAccent, size: 18),
-                  label: const Text('ጽጌረዳ (1k)'),
-                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2A1F4C)),
-                ),
-                ElevatedButton.icon(
-                  onPressed: () => _sendGift(10000, '🏎️ መኪና'),
-                  icon: const Icon(Icons.speed, color: Colors.amberAccent, size: 18),
-                  label: const Text('መኪና (10k)'),
-                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2A1F4C)),
+                  onPressed: () {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('🎁 ጽጌረዳ ተላከ!')));
+                  },
+                  icon: const Icon(Icons.card_giftcard, color: Colors.amberAccent, size: 18),
+                  label: const Text('ስጦታ ላክ'),
+                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF332766)),
                 ),
               ],
             ),
@@ -395,241 +557,64 @@ padding: const EdgeInsets.all(20),
   }
 }
 
-// ==========================================
-// 5. ሚኒ ጌም (Pyramid Safe Game)
-// ==========================================
-class PyramidMiniGame extends StatefulWidget {
-  final VoidCallback onUpdated;
-  const PyramidMiniGame({Key? key, required this.onUpdated}) : super(key: key);
-
-  @override
-  State<PyramidMiniGame> createState() => _PyramidMiniGameState();
-}
-
-class _PyramidMiniGameState extends State<PyramidMiniGame> {
-  final int bet = 500;
-  int step = 0;
-  bool active = false;
-  double mult = 1.0;
-  final Random _rnd = Random();
-
-  void _start() {
-    if (AppData.userCoins < bet) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('በቂ ሳንቲም የለዎትም!')));
-      return;
-    }
-    setState(() {
-      AppData.userCoins -= bet;
-      active = true;
-      step = 0;
-      mult = 1.0;
-    });
-    widget.onUpdated();
-  }
-
-  void _choose() {
-    if (!active) return;
-    int chance = 75 - (step * 20);
-
-if (_rnd.nextInt(100) < chance && step < 3) {
-      setState(() {
-        step++;
-        mult += 0.8;
-      });
-      if (step == 3) _takeWin();
-    } else {
-      setState(() => active = false);
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('💥 ቦምብ ፈነዳ! ተበልተዋል።'), backgroundColor: Colors.red));
-    }
-  }
-
-  void _takeWin() {
-    if (!active) return;
-    int won = (bet * mult).round();
-    if (won > 2500) won = 2500;
-
-    setState(() {
-      AppData.userCoins += won;
-      active = false;
-    });
-    widget.onUpdated();
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('🎉 $won ሳንቲም አሸነፉ!'), backgroundColor: Colors.green));
-  }
+// ----------------------------------------------------
+// 6. የዋሌት እና ፕሮፋይል ገጽ (Me Screen)
+// ----------------------------------------------------
+class ProfileWalletScreen extends StatelessWidget {
+  final VoidCallback onRefresh;
+  const ProfileWalletScreen({Key? key, required this.onRefresh}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('ፒራሚድ ማይኒንግ')),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(active ? 'ደረጃ፦ $step | ማባዣ፦ x${mult.toStringAsFixed(1)}' : 'ለመጫወት ይጫኑ', style: const TextStyle(fontSize: 20, color: Colors.amberAccent, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 30),
-            if (active)
-              ElevatedButton(
-                onPressed: _choose,
-                style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 20), backgroundColor: Colors.purple),
-                child: const Text('ቀጣዩን ደረጃ ምረጥ ⛏️', style: TextStyle(fontSize: 16)),
-              ),
-            const SizedBox(height: 30),
-            active
-                ? ElevatedButton(onPressed: _takeWin, style: ElevatedButton.styleFrom(backgroundColor: Colors.amber.shade900), child: Text('ያሸነፉትን ውሰዱ (${(bet * mult).round()} Coins)'))
-                : ElevatedButton(onPressed: _start, style: ElevatedButton.styleFrom(backgroundColor: Colors.green), child: Text('በ $bet ሳንቲም ጀምር')),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ==========================================
-// 6. ኤጀንሲ (Agency Management View)
-// ==========================================
-class AgencyManagementView extends StatelessWidget {
-  const AgencyManagementView({Key? key}) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('የኤጀንሲ አስተዳዳሪ (Agency)')),
-      body: ListView.builder(
-        padding: const EdgeInsets.all(16),
-        itemCount: AppData.agencyHosts.length,
-        itemBuilder: (context, i) {
-          final host = AppData.agencyHosts[i];
-          return Card(
-            color: const Color(0xFF1B1638),
-            margin: const EdgeInsets.only(bottom: 12),
-            child: ListTile(
-              leading: const CircleAvatar(backgroundColor: Colors.deepPurple, child: Icon(Icons.person, color: Colors.white)),
-              title: Text(host['name'], style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
-              subtitle: Text('ID: ${host['id']} | የተሰበሰበ ፖይንት: ${host['points']} 💎', style: const TextStyle(color: Colors.white70)),
-              trailing: Chip(
-                label: Text(host['status'], style: const TextStyle(fontSize: 11)),
-                backgroundColor: host['status'] == 'Active' ? Colors.green.shade900 : Colors.orange.shade900,
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-}
-
-// ==========================================
-// 7. ዋሌትና ካሽአውት (Wallet & Cashout)
-// ==========================================
-class ProfileWalletView extends StatefulWidget {
-  final VoidCallback onUpdated;
-  const ProfileWalletView({Key? key, required this.onUpdated}) : super(key: key);
-
-  @override
-  State<ProfileWalletView> createState() => _ProfileWalletViewState();
-}
-
-class _ProfileWalletViewState extends State<ProfileWalletView> {
-  final _ptsCtrl = TextEditingController();
-  final _accCtrl = TextEditingController();
-
-void _submitCashout() {
-    int pts = int.tryParse(_ptsCtrl.text) ?? 0;
-    if (pts < 100000 || pts > AppData.hostPoints) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('ትክክለኛ መጠን ያስገቡ (ቢያንስ 100,000)!')));
-      return;
-    }
-    AppData.cashoutRequests.add({
-      'points': pts,
-      'amount': (pts / 100000) * 1667,
-      'acc': _accCtrl.text.trim(),
-    });
-    widget.onUpdated();
-    Navigator.pop(context);
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('ጥያቄዎ ደርሷል!')));
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('የኪስ ቦርሳ (Wallet)')),
+      appBar: AppBar(title: const Text('የእኔ መለያ (Profile & Wallet)'), backgroundColor: Colors.transparent, elevation: 0),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(color: const Color(0xFF1E1742), borderRadius: BorderRadius.circular(16)),
+          Center(
             child: Column(
-              children: [
-                Text('ያለዎት ፖይንት፦ ${AppData.hostPoints} 💎', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.cyanAccent)),
-                const SizedBox(height: 8),
-                const Text('የምንዛሬ ተመን፦ 100,000 Pts = 1,667 ብር', style: TextStyle(color: Colors.greenAccent)),
+              children: const [
+                CircleAvatar(radius: 40, backgroundColor: Color(0xFF00E676), child: Icon(Icons.person, size: 45, color: Colors.black)),
+                SizedBox(height: 10),
+                Text('KEDIR UMER', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
+                Text('ID: 1042001', style: TextStyle(color: Colors.white54, fontSize: 12)),
               ],
             ),
           ),
           const SizedBox(height: 24),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.purple, padding: const EdgeInsets.all(14)),
-            onPressed: () {
-              showModalBottomSheet(
-                context: context,
-                isScrollControlled: true,
-                backgroundColor: const Color(0xFF140F26),
-                builder: (_) => Padding(
-                  padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom, left: 16, right: 16, top: 20),
+          Row(
+            children: [
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(color: const Color(0xFF1E1742), borderRadius: BorderRadius.circular(16)),
                   child: Column(
-                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      TextField(controller: _ptsCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'የሚያወጡት ፖይንት')),
-                      const SizedBox(height: 12),
-                      TextField(controller: _accCtrl, decoration: const InputDecoration(labelText: 'የቴሌብር ወይም የባንክ ቁጥር')),
-                      const SizedBox(height: 20),
-                      ElevatedButton(onPressed: _submitCashout, child: const Text('ገንዘብ አውጣ')),
-                      const SizedBox(height: 20),
+                      const Text('Coins', style: TextStyle(color: Colors.white70)),
+                      const SizedBox(height: 6),
+                      Text('${AppData.userCoins} 🪙', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.amberAccent)),
                     ],
                   ),
                 ),
-              );
-            },
-            child: const Text('ፖይንት ወደ ብር ቀይር (Cashout)'),
-          )
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(color: const Color(0xFF1E1742), borderRadius: BorderRadius.circular(16)),
+                  child: Column(
+                    children: [
+                      const Text('Diamonds', style: TextStyle(color: Colors.white70)),
+                      const SizedBox(height: 6),
+                      Text('${AppData.userDiamonds} 💎', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.cyanAccent)),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
         ],
       ),
-    );
-  }
-}
-
-// ==========================================
-// 8. አስተዳዳሪ (Admin Panel)
-// ==========================================
-class AdminPanelScreen extends StatelessWidget {
-  final VoidCallback onUpdated;
-  const AdminPanelScreen({Key? key, required this.onUpdated}) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('የአስተዳዳሪ ማጽደቂያ (Admin)'), backgroundColor: Colors.amber.shade900),
-      body: AppData.cashoutRequests.isEmpty
-          ? const Center(child: Text('ምንም የክፍያ ጥያቄ የለም።'))
-          : ListView.builder(
-              itemCount: AppData.cashoutRequests.length,
-              itemBuilder: (context, i) {
-                final r = AppData.cashoutRequests[i];
-                return ListTile(
-                  title: Text('${r['amount']} ETB - ${r['acc']}'),
-                  subtitle: Text('${r['points']} Points'),
-                  trailing: ElevatedButton(
-                    onPressed: () {
-                      AppData.hostPoints -= (r['points'] as int);
-                      AppData.cashoutRequests.removeAt(i);
-                      onUpdated();
-                      Navigator.pop(context);
-                    },
-                    child: const Text('አጽድቅ'),
-                  ),
-                );
-              },
-            ),
     );
   }
 }
