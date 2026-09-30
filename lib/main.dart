@@ -181,7 +181,6 @@ class PartyHomeScreen extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.all(14),
         children: [
-          // Banner
           Container(
             height: 110,
             decoration: BoxDecoration(
@@ -207,8 +206,6 @@ class PartyHomeScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
-
-          // Ranking & Events Center
           Row(
             children: [
               Expanded(
@@ -229,9 +226,9 @@ class PartyHomeScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 12),
+              Expanded(
 
-Expanded(
-                child: Container(
+child: Container(
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(colors: [Color(0xFFE91E63), Color(0xFFFF5252)]),
@@ -250,10 +247,8 @@ Expanded(
             ],
           ),
           const SizedBox(height: 16),
-
           const Text('Active Rooms', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
           const SizedBox(height: 10),
-
           ...AppData.activeRooms.map((r) => _buildRoomCard(context, r)).toList(),
         ],
       ),
@@ -265,7 +260,7 @@ Expanded(
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => LiveVoiceRoomScreen(roomId: r['id'] ?? 'room_1042', title: 'Live Voice Party'),
+              builder: (_) => const LiveVoiceRoomScreen(roomId: 'room_1042', title: 'Live Voice Party'),
             ),
           );
         },
@@ -323,8 +318,9 @@ class MessageScreen extends StatelessWidget {
     );
   }
 
-Widget _msgTile(BuildContext context, IconData icon, String title, String subtitle, String time, Color color) {
-    return Card(
+  Widget _msgTile(BuildContext context, IconData icon, String title, String subtitle, String time, Color color) {
+
+return Card(
       color: const Color(0xFF161A28),
       margin: const EdgeInsets.only(bottom: 10),
       child: ListTile(
@@ -341,7 +337,7 @@ Widget _msgTile(BuildContext context, IconData icon, String title, String subtit
 }
 
 // ==========================================
-// 3. Me Profile Screen (All features clickable)
+// 3. Me Profile Screen
 // ==========================================
 class MeProfileScreen extends StatelessWidget {
   final VoidCallback onUpdate;
@@ -365,7 +361,6 @@ class MeProfileScreen extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 40, 16, 20),
         children: [
-          // Profile Header
           Row(
             children: [
               const CircleAvatar(
@@ -388,8 +383,6 @@ class MeProfileScreen extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 16),
-
-          // Follow Stats
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
@@ -399,8 +392,6 @@ class MeProfileScreen extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 16),
-
-          // VIP Club Banner
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
@@ -416,20 +407,18 @@ class MeProfileScreen extends StatelessWidget {
                     Text('VIP Club', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.amberAccent)),
                     SizedBox(height: 2),
                     Text('Upgrade to VIP and get free coins daily', style: TextStyle(fontSize: 11, color: Colors.white70)),
-
-],
+                  ],
                 ),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(backgroundColor: Colors.amber, foregroundColor: Colors.black),
                   onPressed: () => _openPage(context, 'VIP Club'),
-                  child: const Text('Get VIP', style: TextStyle(fontWeight: FontWeight.bold)),
+
+child: const Text('Get VIP', style: TextStyle(fontWeight: FontWeight.bold)),
                 ),
               ],
             ),
           ),
           const SizedBox(height: 16),
-
-          // Coins & Points Container
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(color: const Color(0xFF161A28), borderRadius: BorderRadius.circular(14)),
@@ -458,8 +447,6 @@ class MeProfileScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 20),
-
-          // Grid Menu Items (Recharge, Store, etc.)
           GridView.count(
             crossAxisCount: 4,
             shrinkWrap: true,
@@ -478,8 +465,6 @@ class MeProfileScreen extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 20),
-
-          // Second Section Grid (Host Center, Agency, etc.)
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(color: const Color(0xFF161A28), borderRadius: BorderRadius.circular(14)),
@@ -505,7 +490,7 @@ class MeProfileScreen extends StatelessWidget {
     );
   }
 
-Widget _statItem(String val, String label) {
+  Widget _statItem(String val, String label) {
     return Column(
       children: [
         Text(val, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
@@ -515,7 +500,7 @@ Widget _statItem(String val, String label) {
     );
   }
 
-  Widget _gridMenu(BuildContext context, IconData icon, String label, Color color) {
+Widget _gridMenu(BuildContext context, IconData icon, String label, Color color) {
     return InkWell(
       onTap: () => _openPage(context, label),
       child: Column(
@@ -549,7 +534,6 @@ class LiveVoiceRoomScreen extends StatefulWidget {
 class _LiveVoiceRoomScreenState extends State<LiveVoiceRoomScreen> {
   RtcEngine? _engine;
   bool _isJoined = false;
-  bool _isMicOn = true;
 
   @override
   void initState() {
