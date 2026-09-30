@@ -27,7 +27,7 @@ class HalaSuperApp extends StatelessWidget {
 }
 
 // ==========================================
-// Central App State & Database
+// Central State & Database
 // ==========================================
 class AppData {
   static const String agoraAppId = "fd2d8b50393b495dab38eb5cf267b393";
@@ -252,7 +252,7 @@ context,
 }
 
 // ==========================================
-// 4. Voice Room Screen
+// 4. Interactive Voice Room (8 Interactive Seats with Audio Animation)
 // ==========================================
 class VoiceRoomScreen extends StatefulWidget {
   final String roomId;
@@ -263,14 +263,29 @@ class VoiceRoomScreen extends StatefulWidget {
   State<VoiceRoomScreen> createState() => _VoiceRoomScreenState();
 }
 
-class _VoiceRoomScreenState extends State<VoiceRoomScreen> {
+class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProviderStateMixin {
   RtcEngine? _engine;
   bool _isJoined = false;
   bool _isMicMuted = false;
+  int? _myCurrentSeat; // የያዝኩት ወንበር ቁጥር
+
+  // Seats State (null means empty)
+  late List<String?> _seats;
+  late AnimationController _animController;
 
   @override
   void initState() {
     super.initState();
+    _seats = List.filled(8, null);
+    // በነባሪነት አንተ የመጀመሪያውን (የሆስት) ወንበር ትይዛለህ
+    _seats[0] = AppData.userName;
+    _myCurrentSeat = 0;
+
+    _animController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    )..repeat(reverse: true);
+
     _initAgora();
   }
 
@@ -302,8 +317,30 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> {
     );
   }
 
+  void _onSeatTapped(int index) {
+    setState(() {
+      if (_seats[index] == AppData.userName) {
+        // ከወንበር መውረድ
+        _seats[index] = null;
+        _myCurrentSeat = null;
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('ከወንበር ወርደዋል')));
+      } else if (_seats[index] == null) {
+        // አዲስ ወንበር ላይ መቀመጥ
+        if (_myCurrentSeat != null) {
+          _seats[_myCurrentSeat!] = null; // የበፊቱን ልቀቅ
+        }
+        _seats[index] = AppData.userName;
+        _myCurrentSeat = index;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('ወንበር ${index + 1} ላይ ተቀምጠዋል!')));
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('ወንበር ${index + 1} በ ${_seats[index]} ተይዟል')));
+      }
+    });
+  }
+
   @override
   void dispose() {
+    _animController.dispose();
     _engine?.leaveChannel();
     _engine?.release();
     super.dispose();
@@ -313,29 +350,76 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: Text(widget.title)),
-      body: Column(
+
+body: Column(
         children: [
           const SizedBox(height: 10),
           Text(_isJoined ? '🟢 Agora Voice Online' : 'Connecting...', style: const TextStyle(color: Colors.white54)),
+          const SizedBox(height: 10),
           Expanded(
-            child: GridView.count(
-              crossAxisCount: 4,
+            child: GridView.builder(
               padding: const EdgeInsets.all(16),
-              children: List.generate(8, (index) {
-                return Column(
-                  children: [
-                    CircleAvatar(
-                      radius: 26,
-                      backgroundColor: index == 0 ? Colors.amber : const Color(0xFF1E2433),
-                      child: Text(index == 0 ? '👑' : '${index + 1}'),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(index == 0 ? 'Host' : 'Seat ${index + 1}', style: const TextStyle(fontSize: 10)),
-                  ],
+              itemCount: 8,
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 4,
+                mainAxisSpacing: 16,
+                crossAxisSpacing: 16,
+                childAspectRatio: 0.8,
+              ),
+              itemBuilder: (context, index) {
+                String? occupant = _seats[index];
+                bool isMe = occupant == AppData.userName;
+                bool isSpeaking = isMe && !_isMicMuted;
+
+                return GestureDetector(
+                  onTap: () => _onSeatTapped(index),
+                  child: Column(
+                    children: [
+                      AnimatedBuilder(
+                        animation: _animController,
+                        builder: (context, child) {
+                          double scale = isSpeaking ? (1.0 + (_animController.value * 0.15)) : 1.0;
+                          return Transform.scale(
+                            scale: scale,
+                            child: Container(
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: isSpeaking
+                                      ? const Color(0xFF00E676)
+                                      : (occupant != null ? Colors.amber : Colors.transparent),
+                                  width: isSpeaking ? 3 : 1.5,
+                                ),
+                              ),
+                              child: CircleAvatar(
+                                radius: 28,
+                                backgroundColor: occupant != null ? const Color(0xFF1E2433) : const Color(0xFF141824),
+                                child: occupant != null
+                                    ? (isMe ? const Text('👑', style: TextStyle(fontSize: 22)) : const Icon(Icons.person, color: Colors.white70))
+                                    : const Icon(Icons.event_seat, color: Colors.white24),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        occupant ?? 'Seat ${index + 1}',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: occupant != null ? Colors.amber : Colors.white54,
+                          fontWeight: occupant != null ? FontWeight.bold : FontWeight.normal,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
                 );
-              }),
+              },
             ),
           ),
+          // Bottom Controls
           Container(
             padding: const EdgeInsets.all(16),
             color: const Color(0xFF131722),
@@ -344,14 +428,14 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> {
               children: [
                 IconButton(
                   icon: Icon(_isMicMuted ? Icons.mic_off : Icons.mic, color: _isMicMuted ? Colors.red : const Color(0xFF00E676)),
-
-onPressed: () {
+                  onPressed: () {
                     setState(() => _isMicMuted = !_isMicMuted);
                     _engine?.muteLocalAudioStream(_isMicMuted);
                   },
                 ),
                 IconButton(
-                  icon: const Icon(Icons.card_giftcard, color: Colors.amber),
+
+icon: const Icon(Icons.card_giftcard, color: Colors.amber),
                   onPressed: () {
                     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Gift sent successfully!')));
                   },
@@ -375,19 +459,7 @@ class DiscoverScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Discover')),
-      body: ListView(
-        padding: const EdgeInsets.all(14),
-        children: const [
-          Card(
-            color: Color(0xFF161A28),
-            child: ListTile(
-              leading: CircleAvatar(child: Text('H')),
-              title: Text('Welcome to Hala Voice Global'),
-              subtitle: Text('Discover friends and rooms from around the world!'),
-            ),
-          ),
-        ],
-      ),
+      body: const Center(child: Text('Moments and Posts')),
     );
   }
 }
@@ -399,24 +471,13 @@ class MessageHubScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Message')),
-      body: ListView(
-        padding: const EdgeInsets.all(12),
-        children: [
-          ListTile(
-            tileColor: const Color(0xFF161A28),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            leading: const Icon(Icons.campaign, color: Colors.amber),
-            title: const Text('System Notification'),
-            subtitle: const Text('Welcome to Hala Official Agency Portal'),
-          ),
-        ],
-      ),
+      body: const Center(child: Text('System and User Messages')),
     );
   }
 }
 
 // ==========================================
-// 6. Me Profile Screen with All Real Modules
+// 6. Me Profile Screen with Coin Seller & Agency
 // ==========================================
 class MeProfileScreen extends StatefulWidget {
   const MeProfileScreen({Key? key}) : super(key: key);
@@ -457,8 +518,7 @@ class _MeProfileScreenState extends State<MeProfileScreen> {
               int? val = int.tryParse(amountController.text);
               if (val != null && val > 0) {
                 setState(() => AppData.coins += val);
-
-Navigator.pop(ctx);
+                Navigator.pop(ctx);
                 ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$val ኮይኖች በተሳካ ሁኔታ ተመርተዋል!')));
               }
             },
@@ -485,7 +545,8 @@ Navigator.pop(ctx);
                   children: [
                     Text(AppData.userName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 4),
-                    Text('ID:${AppData.userId}', style: const TextStyle(color: Colors.white54, fontSize: 12)),
+
+Text('ID:${AppData.userId}', style: const TextStyle(color: Colors.white54, fontSize: 12)),
                   ],
                 ),
               ),
@@ -541,18 +602,17 @@ Navigator.pop(ctx);
             crossAxisSpacing: 12,
             children: [
               _gridMenu(context, Icons.account_balance_wallet, 'Recharge', Colors.amber, const RechargeScreen()),
-              _gridMenu(context, Icons.store, 'Store', Colors.purpleAccent, const StoreScreen()),
-              _gridMenu(context, Icons.card_giftcard, 'Invitation', Colors.pinkAccent, const InvitationScreen()),
-              _gridMenu(context, Icons.backpack, 'Backpack', Colors.cyan, const BackpackScreen()),
-              _gridMenu(context, Icons.waves, 'Lucky Island', Colors.green, const LuckyIslandScreen()),
-              _gridMenu(context, Icons.star, 'Level', Colors.purple, const LevelScreen()),
-
-_gridMenu(context, Icons.task, 'Task', Colors.orange, const TaskScreen()),
-              _gridMenu(context, Icons.shield, 'Badge', Colors.amberAccent, const BadgeScreen()),
+              _gridMenu(context, Icons.store, 'Store', Colors.purpleAccent, const GenericScreen(title: 'Store')),
+              _gridMenu(context, Icons.card_giftcard, 'Invitation', Colors.pinkAccent, const GenericScreen(title: 'Invitation')),
+              _gridMenu(context, Icons.backpack, 'Backpack', Colors.cyan, const GenericScreen(title: 'Backpack')),
+              _gridMenu(context, Icons.waves, 'Lucky Island', Colors.green, const GenericScreen(title: 'Lucky Island')),
+              _gridMenu(context, Icons.star, 'Level', Colors.purple, const GenericScreen(title: 'Level')),
+              _gridMenu(context, Icons.task, 'Task', Colors.orange, const GenericScreen(title: 'Task')),
+              _gridMenu(context, Icons.shield, 'Badge', Colors.amberAccent, const GenericScreen(title: 'Badge')),
             ],
           ),
           const SizedBox(height: 16),
-          // Agency & Settings Management Grid
+          // Agency & Settings Management Grid (Coin Seller ተካትቷል)
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(color: const Color(0xFF161A28), borderRadius: BorderRadius.circular(14)),
@@ -563,13 +623,15 @@ _gridMenu(context, Icons.task, 'Task', Colors.orange, const TaskScreen()),
               mainAxisSpacing: 12,
               crossAxisSpacing: 12,
               children: [
-                _gridMenu(context, Icons.mic_external_on, 'Host Center', Colors.lightBlue, const HostCenterScreen()),
-                _gridMenu(context, Icons.business_center, 'Agency', Colors.teal, const AgencyScreen()),
+                _gridMenu(context, Icons.mic_external_on, 'Host Center', Colors.lightBlue, const GenericScreen(title: 'Host Center')),
+
+_gridMenu(context, Icons.business_center, 'Agency', Colors.teal, const AgencyScreen()),
+                _gridMenu(context, Icons.monetization_on, 'Coin Seller', Colors.amber, const CoinSellerScreen()),
                 _gridMenu(context, Icons.precision_manufacturing, 'Coin Engine', Colors.greenAccent, null, onTap: _openAdminCoinEngine),
-                _gridMenu(context, Icons.support_agent, 'Support', Colors.indigoAccent, const SupportScreen()),
-                _gridMenu(context, Icons.info_outline, 'About', Colors.greenAccent, const AboutScreen()),
-                _gridMenu(context, Icons.settings, 'Setting', Colors.blueGrey, const SettingScreen()),
-                _gridMenu(context, Icons.network_check, 'Network', Colors.redAccent, const NetworkLineScreen()),
+                _gridMenu(context, Icons.support_agent, 'Support', Colors.indigoAccent, const GenericScreen(title: 'Support')),
+                _gridMenu(context, Icons.info_outline, 'About', Colors.greenAccent, const GenericScreen(title: 'About')),
+                _gridMenu(context, Icons.settings, 'Setting', Colors.blueGrey, const GenericScreen(title: 'Setting')),
+                _gridMenu(context, Icons.network_check, 'Network', Colors.redAccent, const GenericScreen(title: 'Network')),
               ],
             ),
           ),
@@ -604,272 +666,41 @@ _gridMenu(context, Icons.task, 'Task', Colors.orange, const TaskScreen()),
 }
 
 // ==========================================
-// 7. Store Screen (Avatar Frames & Cars)
+// 7. Coin Seller Screen (ኮይን ሻጭ ማዕከል)
 // ==========================================
-class StoreScreen extends StatelessWidget {
-  const StoreScreen({Key? key}) : super(key: key);
+class CoinSellerScreen extends StatefulWidget {
+  const CoinSellerScreen({Key? key}) : super(key: key);
 
   @override
-  Widget build(BuildContext context) {
-    final List<Map<String, dynamic>> items = [
-      {'name': 'Dragon Frame 🐉', 'type': 'Frame', 'price': 5000},
-      {'name': 'Super Ferrari 🏎️', 'type': 'Vehicle', 'price': 15000},
-      {'name': 'Royal Crown Ring 👑', 'type': 'Entrance', 'price': 8000},
-    ];
-
-    return Scaffold(
-      appBar: AppBar(title: const Text('Item Store')),
-      body: ListView.builder(
-        padding: const EdgeInsets.all(14),
-        itemCount: items.length,
-        itemBuilder: (context, i) {
-          var item = items[i];
-          return Card(
-            color: const Color(0xFF161A28),
-            child: ListTile(
-              leading: const Icon(Icons.shopping_bag, color: Colors.purpleAccent),
-              title: Text(item['name'], style: const TextStyle(fontWeight: FontWeight.bold)),
-              subtitle: Text('${item['type']} • ${item['price']} Coins'),
-              trailing: ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00E676), foregroundColor: Colors.black),
-
-onPressed: () {
-                  if (AppData.coins >= item['price']) {
-                    AppData.coins -= (item['price'] as int);
-                    AppData.backpackItems.add(item['name']);
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${item['name']} ተገዝቷል!')));
-                  } else {
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('በቂ ኮይን የለዎትም!')));
-                  }
-                },
-                child: const Text('Buy'),
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
+  State<CoinSellerScreen> createState() => _CoinSellerScreenState();
 }
 
-// ==========================================
-// 8. Invitation Screen
-// ==========================================
-class InvitationScreen extends StatelessWidget {
-  const InvitationScreen({Key? key}) : super(key: key);
+class _CoinSellerScreenState extends State<CoinSellerScreen> {
+  final TextEditingController _buyerIdController = TextEditingController();
+  final TextEditingController _amountController = TextEditingController();
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Invitation Center')),
-      body: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          children: [
-            const Icon(Icons.share, size: 70, color: Colors.pinkAccent),
-            const SizedBox(height: 16),
-            const Text('ጓደኞችህን ጋብዝ እና በነፃ ኮይን አሸንፍ!', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 10),
-            const Text('አዳዲስ ተጠቃሚዎችን ሲጋብዙ 20,000 ኮይን ሽልማት ያገኛሉ።', textAlign: TextAlign.center, style: TextStyle(color: Colors.white54)),
-            const SizedBox(height: 24),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(color: const Color(0xFF161A28), borderRadius: BorderRadius.circular(12)),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('የግብዣ ኮድህ: ${AppData.userId}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                  IconButton(
-                    icon: const Icon(Icons.copy, color: Color(0xFF00E676)),
-                    onPressed: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('የግብዣ ኮድ ተቀድቷል!'))),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ==========================================
-// 9. Backpack Screen
-// ==========================================
-class BackpackScreen extends StatelessWidget {
-  const BackpackScreen({Key? key}) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('User Backpack')),
-      body: AppData.backpackItems.isEmpty
-          ? const Center(child: Text('ቦርሳህ ባዶ ነው! ከ Store ዕቃ ግዛ።', style: TextStyle(color: Colors.white54)))
-          : ListView.builder(
-              padding: const EdgeInsets.all(14),
-              itemCount: AppData.backpackItems.length,
-              itemBuilder: (ctx, i) {
-                return Card(
-                  color: const Color(0xFF161A28),
-                  child: ListTile(
-                    leading: const Icon(Icons.check_circle, color: Color(0xFF00E676)),
-                    title: Text(AppData.backpackItems[i]),
-                    trailing: const Text('Active', style: TextStyle(color: Color(0xFF00E676))),
-                  ),
-                );
-              },
-            ),
-    );
-  }
-}
-
-// ==========================================
-// 10. Lucky Island Mini-Game
-// ==========================================
-class LuckyIslandScreen extends StatefulWidget {
-  const LuckyIslandScreen({Key? key}) : super(key: key);
-
-  @override
-  State<LuckyIslandScreen> createState() => _LuckyIslandScreenState();
-}
-
-class _LuckyIslandScreenState extends State<LuckyIslandScreen> {
-  int _lastWon = 0;
-
-void _spinWheel() {
-    if (AppData.coins < 100) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('ለመጫወት 100 ኮይን ያስፈልጋል!')));
-      return;
+  void _transferCoins() {
+    int? amount = int.tryParse(_amountController.text);
+    if (amount != null && amount > 0) {
+      if (AppData.coins >= amount) {
+        setState(() {
+          AppData.coins -= amount;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$amount ኮይን ወደ ID ${_buyerIdController.text} በተሳካ ሁኔታ ተላልፏል!')),
+        );
+        _buyerIdController.clear();
+        _amountController.clear();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('በቂ የኮይን ክምችት የለዎትም!')));
+      }
     }
-    setState(() {
-      AppData.coins -= 100;
-      List<int> rewards = [0, 50, 150, 300, 1000];
-      _lastWon = rewards[Random().nextInt(rewards.length)];
-      AppData.coins += _lastWon;
-    });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Lucky Island Wheel')),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.casino, size: 80, color: Colors.greenAccent),
-            const SizedBox(height: 20),
-            Text('ቀሪ ኮይን: ${AppData.coins}', style: const TextStyle(fontSize: 18, color: Colors.amberAccent)),
-            const SizedBox(height: 10),
-            Text('ያሸነፉት: $_lastWon Coins', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF00E676))),
-            const SizedBox(height: 30),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00E676), foregroundColor: Colors.black, padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 14)),
-              onPressed: _spinWheel,
-              child: const Text('Spin (100 Coins)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ==========================================
-// 11. Level & Task Screen
-// ==========================================
-class LevelScreen extends StatelessWidget {
-  const LevelScreen({Key? key}) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Level & VIP Status')),
-      body: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: const [
-            Text('የአሁን ደረጃ: Lv. 24 Elite', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.amber)),
-            SizedBox(height: 10),
-            LinearProgressIndicator(value: 0.75, backgroundColor: Colors.white12, color: Color(0xFF00E676)),
-            SizedBox(height: 20),
-            Text('ወደ Lv. 25 ለማደግ 2,500 EXP ያስፈልግዎታል!', style: TextStyle(color: Colors.white70)),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class TaskScreen extends StatelessWidget {
-  const TaskScreen({Key? key}) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Daily Tasks')),
-      body: ListView(
-        padding: const EdgeInsets.all(14),
-        children: const [
-          Card(
-            color: Color(0xFF161A28),
-            child: ListTile(
-              leading: Icon(Icons.mic, color: Color(0xFF00E676)),
-              title: Text('በድምፅ ክፍል 30 ደቂቃ ቆይ'),
-              subtitle: Text('ሽልማት: 500 Coins'),
-              trailing: Text('ተጠናቋል', style: TextStyle(color: Color(0xFF00E676))),
-            ),
-          ),
-          Card(
-            color: Color(0xFF161A28),
-            child: ListTile(
-              leading: Icon(Icons.card_giftcard, color: Colors.amber),
-              title: Text('1 ስጦታ ላክ'),
-              subtitle: Text('ሽልማት: 1,000 Coins'),
-              trailing: Text('ያልተጠናቀቀ', style: TextStyle(color: Colors.white54)),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ==========================================
-// 12. Badge Screen
-// ==========================================
-class BadgeScreen extends StatelessWidget {
-  const BadgeScreen({Key? key}) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-
-appBar: AppBar(title: const Text('Badges & Achievements')),
-      body: GridView.count(
-        crossAxisCount: 3,
-        padding: const EdgeInsets.all(16),
-        children: const [
-          Column(children: [Icon(Icons.shield, size: 50, color: Colors.amber), Text('VIP Master')]),
-          Column(children: [Icon(Icons.military_tech, size: 50, color: Colors.cyan), Text('Top Gifter')]),
-          Column(children: [Icon(Icons.stars, size: 50, color: Colors.purple), Text('Room King')]),
-        ],
-      ),
-    );
-  }
-}
-
-// ==========================================
-// 13. Host Center Screen
-// ==========================================
-class HostCenterScreen extends StatelessWidget {
-  const HostCenterScreen({Key? key}) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Host Center & Performance')),
+      appBar: AppBar(title: const Text('Coin Seller Portal (ኦፊሴላዊ መሸጫ)')),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -878,14 +709,38 @@ class HostCenterScreen extends StatelessWidget {
             decoration: BoxDecoration(color: const Color(0xFF161A28), borderRadius: BorderRadius.circular(12)),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: const [
-                Text('የወሩ የቀጥታ ስርጭት ሰዓት: 42 ሰዓት', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                SizedBox(height: 6),
-                Text('የተሰበሰበ ነጥብ (Target Points): 23,903.91', style: TextStyle(color: Color(0xFF00E676))),
-                SizedBox(height: 6),
-                Text('የታርጌት ሁኔታ: Completed (ብቁ)', style: TextStyle(color: Colors.amber)),
+              children: [
+                const Text('የሻጭ ቀሪ ኮይን ክምችት', style: TextStyle(color: Colors.white54, fontSize: 12)),
+                const SizedBox(height: 4),
+                Text('${AppData.coins} Coins', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.amberAccent)),
               ],
+
+),
+          ),
+          const SizedBox(height: 20),
+          const Text('የገዢው መለያ ቁጥር (Buyer User ID)'),
+          const SizedBox(height: 6),
+          TextField(
+            controller: _buyerIdController,
+            decoration: const InputDecoration(hintText: 'Enter Buyer ID', filled: true, fillColor: Color(0xFF161A28)),
+          ),
+          const SizedBox(height: 16),
+          const Text('የሚተላለፈው የኮይን መጠን (Coin Amount)'),
+          const SizedBox(height: 6),
+          TextField(
+            controller: _amountController,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(hintText: 'Coins to transfer', filled: true, fillColor: Color(0xFF161A28)),
+          ),
+          const SizedBox(height: 20),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF00E676),
+              foregroundColor: Colors.black,
+              padding: const EdgeInsets.symmetric(vertical: 14),
             ),
+            onPressed: _transferCoins,
+            child: const Text('ኮይን አስተላልፍ (Transfer Coins)', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -894,10 +749,57 @@ class HostCenterScreen extends StatelessWidget {
 }
 
 // ==========================================
-// 14. Agency Management Screen
+// 8. Fully Functional Agency Screen
 // ==========================================
-class AgencyScreen extends StatelessWidget {
+class AgencyScreen extends StatefulWidget {
   const AgencyScreen({Key? key}) : super(key: key);
+
+  @override
+  State<AgencyScreen> createState() => _AgencyScreenState();
+}
+
+class _AgencyScreenState extends State<AgencyScreen> {
+  void _addNewHostDialog() {
+    final TextEditingController nameController = TextEditingController();
+    final TextEditingController idController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF161A28),
+        title: const Text('አዲስ ሆስት መዝግብ'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(controller: nameController, decoration: const InputDecoration(hintText: 'የሆስት ስም')),
+            const SizedBox(height: 10),
+            TextField(controller: idController, decoration: const InputDecoration(hintText: 'የሆስት ID ቁጥር')),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00E676), foregroundColor: Colors.black),
+            onPressed: () {
+              if (nameController.text.isNotEmpty && idController.text.isNotEmpty) {
+                setState(() {
+                  AppData.agencyHosts.add({
+                    'name': nameController.text,
+                    'id': idController.text,
+                    'hours': '0 hrs',
+                    'points': 0,
+                  });
+                });
+                Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('ሆስት በተሳካ ሁኔታ ተመዝግቧል!')));
+              }
+            },
+            child: const Text('መዝግብ'),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -912,7 +814,19 @@ class AgencyScreen extends StatelessWidget {
             child: const Text('የኤጀንሲ ኮሚሽን ተመን: 20% Discount & Commission', style: TextStyle(color: Color(0xFF00E676), fontWeight: FontWeight.bold)),
           ),
           const SizedBox(height: 16),
-          const Text('የተመዘገቡ ሆስቶች (Active Hosts)', style: TextStyle(fontWeight: FontWeight.bold)),
+
+Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('የተመዘገቡ ሆስቶች', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00E676), foregroundColor: Colors.black),
+                icon: const Icon(Icons.add, size: 16),
+                label: const Text('አዲስ ሆስት'),
+                onPressed: _addNewHostDialog,
+              ),
+            ],
+          ),
           const SizedBox(height: 10),
           ...AppData.agencyHosts.map((h) => Card(
             color: const Color(0xFF161A28),
@@ -930,121 +844,7 @@ class AgencyScreen extends StatelessWidget {
 }
 
 // ==========================================
-// 15. Support Screen
-// ==========================================
-class SupportScreen extends StatelessWidget {
-  const SupportScreen({Key? key}) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Customer Support Desk')),
-      body: ListView(
-        padding: const EdgeInsets.all(14),
-        children: const [
-          ListTile(
-            tileColor: Color(0xFF161A28),
-            leading: Icon(Icons.headset_mic, color: Colors.indigoAccent),
-            title: Text('24/7 የክፍያ እና የአካውንት ድጋፍ'),
-            subtitle: Text('ከቴክኒክ ቡድኑ ጋር በቀጥታ ይነጋገሩ'),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ==========================================
-// 16. About Screen
-// ==========================================
-class AboutScreen extends StatelessWidget {
-  const AboutScreen({Key? key}) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('About Hala Global')),
-      body: const Center(
-        child: Text('Hala Voice Global App\nVersion: 1.0.1+2\nAll Rights Reserved 2026', textAlign: TextAlign.center),
-      ),
-    );
-  }
-}
-
-// ==========================================
-// 17. Settings Screen
-// ==========================================
-class SettingScreen extends StatelessWidget {
-  const SettingScreen({Key? key}) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Settings & Security')),
-      body: ListView(
-        padding: const EdgeInsets.all(14),
-        children: [
-          const ListTile(
-            tileColor: Color(0xFF161A28),
-            leading: Icon(Icons.lock, color: Colors.amber),
-            title: Text('የይለፍ ቃል ቀይር (Change Password)'),
-          ),
-          const SizedBox(height: 10),
-          const ListTile(
-            tileColor: Color(0xFF161A28),
-            leading: Icon(Icons.security, color: Color(0xFF00E676)),
-            title: Text('የአካውንት ደህንነት (Two-Factor Auth)'),
-          ),
-          const SizedBox(height: 20),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () => Navigator.pop(context),
-            child: const Text('ውጣ (Log Out)'),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ==========================================
-// 18. Network Line Diagnostic
-// ==========================================
-class NetworkLineScreen extends StatelessWidget {
-  const NetworkLineScreen({Key? key}) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Network Diagnostic')),
-      body: ListView(
-        padding: const EdgeInsets.all(14),
-        children: const [
-          Card(
-            color: Color(0xFF161A28),
-            child: ListTile(
-              leading: Icon(Icons.network_wifi, color: Color(0xFF00E676)),
-              title: Text('መስመር 1: Africa Server (Ethiopia)'),
-              subtitle: Text('Ping: 42ms (እጅግ በጣም ፈጣን)'),
-              trailing: Icon(Icons.check_circle, color: Color(0xFF00E676)),
-            ),
-          ),
-          Card(
-            color: Color(0xFF161A28),
-            child: ListTile(
-              leading: Icon(Icons.network_wifi, color: Colors.amber),
-              title: Text('መስመር 2: Global Edge (Europe)'),
-              subtitle: Text('Ping: 120ms (መካከለኛ)'),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ==========================================
-// 19. Recharge Screen (ID, Country, 20% Off, Epeay/USDT, Packages)
+// 9. Recharge Screen
 // ==========================================
 class RechargeScreen extends StatefulWidget {
   const RechargeScreen({Key? key}) : super(key: key);
@@ -1071,8 +871,7 @@ class _RechargeScreenState extends State<RechargeScreen> {
       appBar: AppBar(title: const Text('Recharge Center')),
       body: ListView(
         padding: const EdgeInsets.all(16),
-
-children: [
+        children: [
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
@@ -1109,7 +908,8 @@ children: [
                 dropdownColor: const Color(0xFF161A28),
                 items: ['All country', 'Ethiopia 🇪🇹', 'Philippines 🇵🇭', 'Kenya 🇰🇪'].map((val) => DropdownMenuItem(value: val, child: Text(val))).toList(),
                 onChanged: (val) => setState(() => _selectedCountry = val!),
-              ),
+
+),
             ),
           ),
           const SizedBox(height: 16),
@@ -1151,8 +951,7 @@ children: [
               backgroundColor: const Color(0xFF00E676),
               foregroundColor: Colors.black,
               padding: const EdgeInsets.symmetric(vertical: 14),
-
-shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
             onPressed: () {
               int added = _packages[_selectedPackage]['coins'];
@@ -1185,6 +984,22 @@ shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           child: Text(name, style: TextStyle(fontWeight: FontWeight.bold, color: isSel ? const Color(0xFF00E676) : Colors.white)),
         ),
       ),
+    );
+  }
+}
+
+// ==========================================
+// 10. Generic Screen
+// ==========================================
+class GenericScreen extends StatelessWidget {
+  final String title;
+  const GenericScreen({Key? key, required this.title}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text(title)),
+      body: Center(child: Text('$title Screen')),
     );
   }
 }
