@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:permission_handler/permission_handler.dart';
-
+import 'store_screen.dart';
 void main() {
   runApp(const HalaSuperApp());
 }
@@ -218,6 +218,32 @@ class _PartyHomeScreenState extends State<PartyHomeScreen> {
               },
             ),
           ),
+          const SizedBox(height: 12),
+ElevatedButton.icon(
+  onPressed: () {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => StoreScreen(
+          userCoins: 1500, // የያዝከው ሳንቲም
+          onCoinsUpdated: (newCoins) {
+            // ሳንቲም ሲቀነስ የሚዘምንበት
+          },
+        ),
+      ),
+    );
+  },
+  icon: const Icon(Icons.storefront, color: Colors.white),
+  label: const Text(
+    'Open Store 🛍️',
+    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+  ),
+  style: ElevatedButton.styleFrom(
+    backgroundColor: const Color(0xFF00C9A7),
+    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+  ),
+),
           const SizedBox(height: 14),
           ...filteredRooms.map((r) => Card(
             color: const Color(0xFF161A28),
