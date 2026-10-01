@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
@@ -34,7 +33,9 @@ class HalaSuperApp extends StatelessWidget {
 class AppData {
   static const String agoraAppId = "fd2d8b50393b495dab38eb5cf267b393";
   static String userName = "KEDIR ,,,,";
-  static String userId = "1000"; // ID starts from 1000
+  static String userId = "1000"; // Owner / Super Admin ID
+  static const String ownerSecretPin = "1000"; // Secret Owner PIN Code
+  
   static int followedCount = 3118;
   static int followingCount = 519;
   static int friendsCount = 104;
@@ -66,6 +67,12 @@ class AppData {
       'users': '2.34k',
       'country': 'Philippines 🇵🇭',
     },
+  ];
+
+  static List<Map<String, dynamic>> systemUsers = [
+    {'id': '1000', 'name': 'KEDIR ,,,, (Owner)', 'coins': 1500, 'isBanned': false},
+    {'id': '1001', 'name': 'Abebe Host', 'coins': 5000, 'isBanned': false},
+    {'id': '1002', 'name': 'Sara VIP', 'coins': 20000, 'isBanned': false},
   ];
 }
 
@@ -132,7 +139,7 @@ class MainNavigationHub extends StatefulWidget {
 class _MainNavigationHubState extends State<MainNavigationHub> {
   int _tabIndex = 0;
 
-@override
+  @override
   Widget build(BuildContext context) {
     final List<Widget> pages = [
       const PartyHomeScreen(),
@@ -221,12 +228,12 @@ class _PartyHomeScreenState extends State<PartyHomeScreen> {
                 child: Icon(Icons.graphic_eq, color: Color(0xFF00E676)),
               ),
               title: Text(r['title'], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-              subtitle: Text('Host: ${r['host']} • ${r['country']}', style: const TextStyle(fontSize: 11, color: Colors.white54)),
+
+subtitle: Text('Host: ${r['host']} • ${r['country']}', style: const TextStyle(fontSize: 11, color: Colors.white54)),
               trailing: Text(r['users'], style: const TextStyle(color: Color(0xFF00E676), fontWeight: FontWeight.bold)),
               onTap: () {
                 Navigator.push(
-
-context,
+                  context,
                   MaterialPageRoute(builder: (_) => VoiceRoomScreen(roomId: r['id'], title: r['title'])),
                 );
               },
@@ -250,7 +257,7 @@ context,
 }
 
 // ==========================================
-// 4. Voice Room Screen (8 Interactive Seats)
+// 4. Voice Room Screen (8 Seats)
 // ==========================================
 class VoiceRoomScreen extends StatefulWidget {
   final String roomId;
@@ -342,15 +349,15 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: Text(widget.title)),
-      body: Column(
+
+body: Column(
         children: [
           const SizedBox(height: 10),
           Text(_isJoined ? '🟢 Agora Voice Online' : 'Connecting...', style: const TextStyle(color: Colors.white54)),
           const SizedBox(height: 10),
           Expanded(
             child: GridView.builder(
-
-padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(16),
               itemCount: 8,
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 4,
@@ -438,12 +445,12 @@ padding: const EdgeInsets.all(16),
 }
 
 // ==========================================
-// 5. Discover & Message Hub Screens
+// 5. Discover & Message Screens
 // ==========================================
 class DiscoverScreen extends StatelessWidget {
   const DiscoverScreen({Key? key}) : super(key: key);
 
-@override
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Discover')),
@@ -488,7 +495,7 @@ class MessageHubScreen extends StatelessWidget {
 }
 
 // ==========================================
-// 6. Me Profile Screen
+// 6. Me Profile Screen with Secret 5-Tap Gesture & Admin PIN
 // ==========================================
 class MeProfileScreen extends StatefulWidget {
   const MeProfileScreen({Key? key}) : super(key: key);
@@ -498,42 +505,80 @@ class MeProfileScreen extends StatefulWidget {
 }
 
 class _MeProfileScreenState extends State<MeProfileScreen> {
-  void _openAdminCoinEngine() {
-    final TextEditingController amountController = TextEditingController();
+  int _secretTapCount = 0;
+  Timer? _tapResetTimer;
+
+  // Secret 5-Tap handler
+  void _handleSecretAvatarTap() {
+    // Only works if the active ID is 1000
+    if (AppData.userId != "1000") return;
+
+    _tapResetTimer?.cancel();
+    _secretTapCount++;
+
+    if (_secretTapCount >= 5) {
+      _secretTapCount = 0;
+      _showSecretPinDialog();
+    } else {
+      _tapResetTimer = Timer(const Duration(seconds: 2), () {
+        _secretTapCount = 0;
+      });
+    }
+  }
+
+  // Secret PIN Dialog
+  void _showSecretPinDialog() {
+    final TextEditingController pinController = TextEditingController();
     showDialog(
       context: context,
+      barrierDismissible: false,
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF161A28),
-        title: const Text('🪙 Admin Coin Generation Engine', style: TextStyle(fontSize: 16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: const [
+            Icon(Icons.security, color: Color(0xFF00E676)),
+            SizedBox(width: 10),
+            Text('Owner Verification', style: TextStyle(fontSize: 16)),
+          ],
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Enter coin amount to mint into the system:', style: TextStyle(fontSize: 12, color: Colors.white70)),
+            const Text('Enter your secret Master PIN to unlock the Owner Dashboard:', style: TextStyle(fontSize: 12, color: Colors.white70)),
             const SizedBox(height: 12),
             TextField(
-              controller: amountController,
-              keyboardType: TextInputType.number,
+              controller: pinController,
+
+keyboardType: TextInputType.number,
+              obscureText: true,
+              maxLength: 6,
               decoration: const InputDecoration(
-                hintText: 'Amount (e.g. 100000)',
+                hintText: 'Secret PIN',
                 filled: true,
                 fillColor: Color(0xFF0F121C),
+                counterText: '',
               ),
             ),
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel', style: TextStyle(color: Colors.white54))),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00E676), foregroundColor: Colors.black),
             onPressed: () {
-              int? val = int.tryParse(amountController.text);
-              if (val != null && val > 0) {
-                setState(() => AppData.coins += val);
+              if (pinController.text.trim() == AppData.ownerSecretPin) {
                 Navigator.pop(ctx);
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Successfully minted $val Coins!')));
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const SuperOwnerAdminDashboard()),
+                );
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Invalid PIN Code! Access Denied.')));
               }
             },
-            child: const Text('Generate'),
+            child: const Text('Unlock', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -542,14 +587,19 @@ class _MeProfileScreenState extends State<MeProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    bool isOwner = AppData.userId == "1000";
 
-body: ListView(
+    return Scaffold(
+      body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 40, 16, 20),
         children: [
           Row(
             children: [
-              const CircleAvatar(radius: 35, backgroundColor: Colors.amber, child: Text('👑', style: TextStyle(fontSize: 32))),
+              // Secret 5-Tap Gesture on Avatar
+              GestureDetector(
+                onTap: _handleSecretAvatarTap,
+                child: const CircleAvatar(radius: 35, backgroundColor: Colors.amber, child: Text('👑', style: TextStyle(fontSize: 32))),
+              ),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(
@@ -579,15 +629,12 @@ body: ListView(
             child: Row(
               children: [
                 Expanded(
-                  child: InkWell(
-                    onTap: _openAdminCoinEngine,
-                    child: Column(
-                      children: [
-                        const Text('Coins (Tap to Mint)', style: TextStyle(color: Color(0xFF00E676), fontSize: 11, fontWeight: FontWeight.bold)),
-                        const SizedBox(height: 4),
-                        Text('${AppData.coins}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.amberAccent)),
-                      ],
-                    ),
+                  child: Column(
+                    children: [
+                      const Text('Coins', style: TextStyle(color: Colors.white54, fontSize: 11)),
+                      const SizedBox(height: 4),
+                      Text('${AppData.coins}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.amberAccent)),
+                    ],
                   ),
                 ),
                 Container(height: 30, width: 1, color: Colors.white12),
@@ -597,13 +644,15 @@ body: ListView(
                       const Text('Points', style: TextStyle(color: Colors.white54, fontSize: 11)),
                       const SizedBox(height: 4),
                       Text('${AppData.points}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF00E676))),
-                    ],
+
+],
                   ),
                 ),
               ],
             ),
           ),
           const SizedBox(height: 20),
+          // User Grid Functions
           GridView.count(
             crossAxisCount: 4,
             shrinkWrap: true,
@@ -619,10 +668,10 @@ body: ListView(
               _gridMenu(context, Icons.star, 'Level', Colors.purple, const GenericDetailScreen(title: 'Level')),
               _gridMenu(context, Icons.task, 'Task', Colors.orange, const GenericDetailScreen(title: 'Task')),
               _gridMenu(context, Icons.shield, 'Badge', Colors.amberAccent, const GenericDetailScreen(title: 'Badge')),
-
-],
+            ],
           ),
           const SizedBox(height: 16),
+          // Agency & Settings Management Grid
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(color: const Color(0xFF161A28), borderRadius: BorderRadius.circular(14)),
@@ -636,9 +685,11 @@ body: ListView(
                 _gridMenu(context, Icons.mic_external_on, 'Host Center', Colors.lightBlue, const GenericDetailScreen(title: 'Host Center')),
                 _gridMenu(context, Icons.business_center, 'Agency', Colors.teal, const GenericDetailScreen(title: 'Agency')),
                 _gridMenu(context, Icons.monetization_on, 'Coin Seller', Colors.amber, const GenericDetailScreen(title: 'Coin Seller')),
-                _gridMenu(context, Icons.precision_manufacturing, 'Coin Engine', Colors.greenAccent, null, onTap: _openAdminCoinEngine),
                 _gridMenu(context, Icons.info_outline, 'About Us', Colors.greenAccent, const GenericDetailScreen(title: 'About Us')),
                 _gridMenu(context, Icons.settings, 'Setting', Colors.blueGrey, const GenericDetailScreen(title: 'Setting')),
+                // Only visible to Owner ID 1000
+                if (isOwner)
+                  _gridMenu(context, Icons.admin_panel_settings, 'Owner Panel', Colors.redAccent, null, onTap: _showSecretPinDialog),
               ],
             ),
           ),
@@ -673,7 +724,173 @@ body: ListView(
 }
 
 // ==========================================
-// 7. Recharge Screen (Step 1)
+// 7. Hidden Master Owner / Admin Dashboard
+// ==========================================
+class SuperOwnerAdminDashboard extends StatefulWidget {
+  const SuperOwnerAdminDashboard({Key? key}) : super(key: key);
+
+@override
+  State<SuperOwnerAdminDashboard> createState() => _SuperOwnerAdminDashboardState();
+}
+
+class _SuperOwnerAdminDashboardState extends State<SuperOwnerAdminDashboard> {
+  final TextEditingController _mintAmountController = TextEditingController();
+  final TextEditingController _targetUserIdController = TextEditingController();
+  final TextEditingController _userCoinAmountController = TextEditingController();
+
+  void _mintCoins() {
+    int? amount = int.tryParse(_mintAmountController.text);
+    if (amount != null && amount > 0) {
+      setState(() {
+        AppData.coins += amount;
+      });
+      _mintAmountController.clear();
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Successfully minted $amount Coins into Owner Reserve!')));
+    }
+  }
+
+  void _giveCoinsToUser() {
+    String targetId = _targetUserIdController.text.trim();
+    int? amount = int.tryParse(_userCoinAmountController.text);
+
+    if (targetId.isNotEmpty && amount != null && amount > 0) {
+      var user = AppData.systemUsers.firstWhere(
+        (u) => u['id'] == targetId,
+        orElse: () => {},
+      );
+
+      if (user.isNotEmpty) {
+        setState(() {
+          user['coins'] = (user['coins'] as int) + amount;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Sent $amount Coins to User $targetId!')));
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Target User ID not found.')));
+      }
+      _targetUserIdController.clear();
+      _userCoinAmountController.clear();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Super Owner Admin Portal', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+        backgroundColor: const Color(0xFF161A28),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          // Owner Balance Card
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(colors: [Color(0xFFB71C1C), Color(0xFF880E4F)]),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('👑 Master System Reserve', style: TextStyle(color: Colors.white70, fontSize: 12)),
+                const SizedBox(height: 4),
+                Text('${AppData.coins} Coins', style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Colors.amberAccent)),
+                const SizedBox(height: 6),
+                Text('Admin / Owner ID: ${AppData.userId}', style: const TextStyle(color: Colors.white70, fontSize: 12)),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+          // 1. Direct Coin Mint Engine
+          const Text('1. Coin Minting Engine (Generate New Coins)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(color: const Color(0xFF161A28), borderRadius: BorderRadius.circular(12)),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _mintAmountController,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      hintText: 'Enter amount to mint',
+                      border: InputBorder.none,
+                    ),
+                  ),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00E676), foregroundColor: Colors.black),
+
+onPressed: _mintCoins,
+                  child: const Text('Mint Coins', style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          // 2. Direct Credit/Debit to Any User
+          const Text('2. Credit Coins to User Account', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(color: const Color(0xFF161A28), borderRadius: BorderRadius.circular(12)),
+            child: Column(
+              children: [
+                TextField(
+                  controller: _targetUserIdController,
+                  decoration: const InputDecoration(hintText: 'Target User ID (e.g. 1001)', border: UnderlineInputBorder()),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _userCoinAmountController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(hintText: 'Coin Amount', border: InputBorder.none),
+                ),
+                const SizedBox(height: 10),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.amber,
+                    foregroundColor: Colors.black,
+                    minimumSize: const Size(double.infinity, 44),
+                  ),
+                  onPressed: _giveCoinsToUser,
+                  child: const Text('Transfer to User', style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          // 3. User & Host Moderator
+          const Text('3. System Users & Hosts Registry', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+          const SizedBox(height: 8),
+          ...AppData.systemUsers.map((u) => Card(
+            color: const Color(0xFF161A28),
+            child: ListTile(
+              leading: Icon(Icons.person, color: u['id'] == '1000' ? Colors.amber : Colors.teal),
+              title: Text(u['name']),
+              subtitle: Text('ID: ${u['id']} • Balance: ${u['coins']} Coins'),
+              trailing: u['id'] == '1000'
+                  ? const Text('Owner', style: TextStyle(color: Colors.amber, fontWeight: FontWeight.bold))
+                  : IconButton(
+                      icon: Icon(u['isBanned'] ? Icons.block : Icons.check_circle, color: u['isBanned'] ? Colors.red : Colors.green),
+                      onPressed: () {
+                        setState(() {
+                          u['isBanned'] = !u['isBanned'];
+                        });
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Updated status for User ${u['id']}')));
+                      },
+                    ),
+            ),
+          )),
+        ],
+      ),
+    );
+  }
+}
+
+// ==========================================
+// 8. Recharge Screen (Step 1)
 // ==========================================
 class RechargeScreen extends StatefulWidget {
   const RechargeScreen({Key? key}) : super(key: key);
@@ -696,7 +913,8 @@ class _RechargeScreenState extends State<RechargeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+
+return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
       appBar: AppBar(
         title: const Text('Recharge', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
@@ -711,8 +929,7 @@ class _RechargeScreenState extends State<RechargeScreen> {
           const SizedBox(height: 8),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14),
-
-decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.black12)),
+            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.black12)),
             child: Row(
               children: [
                 Expanded(child: TextField(controller: _idController, style: const TextStyle(color: Colors.black), decoration: const InputDecoration(border: InputBorder.none))),
@@ -769,7 +986,8 @@ decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circul
               var p = _packages[i];
               bool isSel = _selectedPackage == i;
               return GestureDetector(
-                onTap: () => setState(() => _selectedPackage = i),
+
+onTap: () => setState(() => _selectedPackage = i),
                 child: Container(
                   width: (MediaQuery.of(context).size.width - 56) / 3,
                   padding: const EdgeInsets.symmetric(vertical: 20),
@@ -782,8 +1000,7 @@ decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circul
                     children: [
                       const Icon(Icons.monetization_on, color: Colors.amber, size: 28),
                       const SizedBox(height: 8),
-
-Text('${p['coins']}', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black87, fontSize: 12)),
+                      Text('${p['coins']}', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black87, fontSize: 12)),
                       const SizedBox(height: 4),
                       Text('\$${(p['price'] as double).toInt()}', style: const TextStyle(color: Colors.deepOrange, fontWeight: FontWeight.bold)),
                     ],
@@ -841,7 +1058,7 @@ Text('${p['coins']}', style: const TextStyle(fontWeight: FontWeight.bold, color:
 }
 
 // ==========================================
-// 8. USDT Payment Selection Screen (Matching 1000013508.jpg)
+// 9. USDT Payment Select Screen
 // ==========================================
 class UsdtPaymentSelectScreen extends StatefulWidget {
   final int coins;
@@ -857,7 +1074,7 @@ class _UsdtPaymentSelectScreenState extends State<UsdtPaymentSelectScreen> {
 
   @override
   Widget build(BuildContext context) {
-    double payAmount = widget.usdAmount + 0.02; // Matches exact 10.02 USDT reference
+    double payAmount = widget.usdAmount + 0.02;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
@@ -866,7 +1083,8 @@ class _UsdtPaymentSelectScreenState extends State<UsdtPaymentSelectScreen> {
         backgroundColor: Colors.white,
         elevation: 0.5,
         leading: IconButton(icon: const Icon(Icons.arrow_back_ios, color: Colors.black), onPressed: () => Navigator.pop(context)),
-        actions: const [
+
+actions: const [
           Center(child: Padding(padding: EdgeInsets.only(right: 16), child: Text('English ∨', style: TextStyle(color: Colors.black54, fontSize: 14)))),
         ],
       ),
@@ -880,8 +1098,7 @@ class _UsdtPaymentSelectScreenState extends State<UsdtPaymentSelectScreen> {
                 const Center(child: Text('Order Amount', style: TextStyle(color: Colors.black54, fontSize: 13))),
                 const SizedBox(height: 6),
                 Center(
-
-child: Text(
+                  child: Text(
                     '${widget.usdAmount.toStringAsFixed(2)} USD',
                     style: const TextStyle(color: Colors.black, fontSize: 28, fontWeight: FontWeight.bold),
                   ),
@@ -942,7 +1159,8 @@ child: Text(
                           );
                         },
                       ),
-                    ),
+
+),
                   ],
                 ),
                 const SizedBox(height: 12),
@@ -962,7 +1180,7 @@ child: Text(
     );
   }
 
-Widget _networkTile(String net) {
+  Widget _networkTile(String net) {
     bool isSel = _selectedNetwork == net;
     return GestureDetector(
       onTap: () => setState(() => _selectedNetwork = net),
@@ -992,7 +1210,7 @@ Widget _networkTile(String net) {
 }
 
 // ==========================================
-// 9. USDT QR & Countdown Screen (Matching 1000013488.jpg)
+// 10. USDT QR Countdown Screen
 // ==========================================
 class UsdtQrCountdownScreen extends StatefulWidget {
   final int coins;
@@ -1013,7 +1231,7 @@ class UsdtQrCountdownScreen extends StatefulWidget {
 
 class _UsdtQrCountdownScreenState extends State<UsdtQrCountdownScreen> {
   late Timer _timer;
-  int _secondsLeft = 7112; // 01:58:32
+  int _secondsLeft = 7112;
   final String _depositAddress = "TKD9APJ2F3eVX3bZ8HDWz63ZaPiH5Lfeah";
   final String _orderNumber = "2026100115143194617539259268";
 
@@ -1056,20 +1274,19 @@ class _UsdtQrCountdownScreenState extends State<UsdtQrCountdownScreen> {
         backgroundColor: Colors.white,
         elevation: 0.5,
         leading: IconButton(icon: const Icon(Icons.arrow_back_ios, color: Colors.black), onPressed: () => Navigator.pop(context)),
-        actions: const [
+
+actions: const [
           Center(child: Padding(padding: EdgeInsets.only(right: 16), child: Text('English ∨', style: TextStyle(color: Colors.black54, fontSize: 14)))),
         ],
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // QR Box
           Center(
             child: Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 8)]),
-
-child: Stack(
+              child: Stack(
                 alignment: Alignment.center,
                 children: [
                   Container(
@@ -1110,7 +1327,6 @@ child: Stack(
             ),
           ),
           const SizedBox(height: 20),
-          // Details Card
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.black12)),
@@ -1134,7 +1350,8 @@ child: Stack(
                       child: Text(
                         _depositAddress,
                         style: const TextStyle(color: Colors.black, fontSize: 12, fontWeight: FontWeight.bold),
-                        overflow: TextOverflow.ellipsis,
+
+overflow: TextOverflow.ellipsis,
                       ),
                     ),
                     IconButton(
@@ -1147,8 +1364,7 @@ child: Stack(
             ),
           ),
           const SizedBox(height: 14),
-
-Row(
+          Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Text('Merchant Order Number', style: TextStyle(color: Colors.black54, fontSize: 12)),
@@ -1167,13 +1383,7 @@ Row(
               Text('${widget.usdAmount.toStringAsFixed(2)} USD', style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.bold, fontSize: 13)),
             ],
           ),
-          const SizedBox(height: 20),
-          const Text('Warm Reminder', style: TextStyle(color: Colors.black54, fontSize: 12, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 4),
-          const Text('1. Please complete the payment within the validity period of the order.', style: TextStyle(color: Colors.black45, fontSize: 11)),
-          const Text('2. When making the payment, please pay attention to the network and amount matching.', style: TextStyle(color: Colors.black45, fontSize: 11)),
           const SizedBox(height: 24),
-          // Confirm Paid Button
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF00E676),
@@ -1206,15 +1416,6 @@ Row(
             },
             child: const Text('I Have Completed Payment', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
           ),
-          const SizedBox(height: 20),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: const [
-              Icon(Icons.shield, color: Colors.black38, size: 16),
-              SizedBox(width: 4),
-              Text('PCI DSS COMPLIANT', style: TextStyle(color: Colors.black38, fontSize: 10, fontWeight: FontWeight.bold)),
-            ],
-          ),
         ],
       ),
     );
@@ -1222,7 +1423,7 @@ Row(
 }
 
 // ==========================================
-// 10. Generic Detail Screen
+// 11. Generic Detail Screen
 // ==========================================
 class GenericDetailScreen extends StatelessWidget {
   final String title;
