@@ -88,7 +88,7 @@ class _CoinSellerScreenState extends State<CoinSellerScreen> with SingleTickerPr
       return;
     }
 
-    final int transferAmount = parsedCoins;
+    int transferAmount = parsedCoins;
 
     if (transferAmount > _sellerBalance) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -116,7 +116,7 @@ class _CoinSellerScreenState extends State<CoinSellerScreen> with SingleTickerPr
             onPressed: () {
               Navigator.pop(context);
               setState(() {
-                _sellerBalance -= transferAmount;
+                _sellerBalance = _sellerBalance - transferAmount;
               });
               widget.onCoinsUpdated(_sellerBalance);
               _coinAmountController.clear();
