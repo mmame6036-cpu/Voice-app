@@ -1,12 +1,10 @@
 import 'dart:async';
-import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:agora_rtc_engine/agora_rtc_engine.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'store_screen.dart';
 import 'invite_screen.dart';
-import 'room_screen.dart'"
+import 'room_screen.dart';
+
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const NileVoiceApp());
@@ -139,10 +137,10 @@ class _NileRoomsPageState extends State<NileRoomsPage> {
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white70),
           ),
           const SizedBox(height: 12),
-
-...rooms.map((r) => Container(
+          ...rooms.map((r) => Container(
                 margin: const EdgeInsets.only(bottom: 12),
-                decoration: BoxDecoration(
+
+decoration: BoxDecoration(
                   color: const Color(0xFF161B26),
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(color: Colors.white12),
@@ -173,6 +171,8 @@ class _NileRoomsPageState extends State<NileRoomsPage> {
                           builder: (context) => VoiceRoomScreen(
                             channelName: r['id'],
                             roomTitle: r['title'],
+                            isOwner: AppData.isSuperAdmin,
+                            userCoins: AppData.userCoins,
                           ),
                         ),
                       );
@@ -362,10 +362,8 @@ const SizedBox(width: 6),
                   ),
                   const Divider(color: Colors.white10, height: 28),
 
-                  // Recharge እና Store ጎን ለጎን
                   Row(
                     children: [
-                      // 1. Recharge Button
                       Expanded(
                         child: ElevatedButton.icon(
                           onPressed: () {
@@ -383,7 +381,6 @@ const SizedBox(width: 6),
                         ),
                       ),
                       const SizedBox(width: 12),
-                      // 2. Store Button
                       Expanded(
                         child: ElevatedButton.icon(
                           onPressed: () {
@@ -403,11 +400,10 @@ const SizedBox(width: 6),
                             );
                           },
                           icon: const Icon(Icons.storefront, color: Colors.white, size: 18),
-                          label: const Text('Store 🛍️', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                          label: const Text('Store 🛍️️', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF00C9A7),
-
-padding: const EdgeInsets.symmetric(vertical: 12),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                           ),
                         ),
@@ -420,7 +416,7 @@ padding: const EdgeInsets.symmetric(vertical: 12),
 
             const SizedBox(height: 14),
 
-            // 🎁 Invite Friends & Earn Banner (አዲሱ የግብዣ ባነር)
+// 🎁 Invite Friends & Earn Banner
             GestureDetector(
               onTap: () {
                 Navigator.push(
@@ -481,7 +477,7 @@ padding: const EdgeInsets.symmetric(vertical: 12),
 
             const SizedBox(height: 20),
 
-            // 👑 Admin Portal Button (ለባለቤቱ ብቻ)
+            // 👑 Admin Portal Button
             if (AppData.isSuperAdmin)
               GestureDetector(
                 onTap: () {
@@ -503,8 +499,7 @@ padding: const EdgeInsets.symmetric(vertical: 12),
                     children: [
                       Icon(Icons.admin_panel_settings, color: Colors.white, size: 22),
                       SizedBox(width: 8),
-
-Text(
+                      Text(
                         'Master Admin Portal 👑',
                         style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
                       ),
@@ -514,184 +509,6 @@ Text(
               ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-// ==========================================
-// 🎙️ VOICE ROOM SCREEN (አጎራ ማይክ እና ድምፅ)
-// ==========================================
-class VoiceRoomScreen extends StatefulWidget {
-  final String channelName;
-  final String roomTitle;
-
-  const VoiceRoomScreen({Key? key, required this.channelName, required this.roomTitle}) : super(key: key);
-
-  @override
-  State<VoiceRoomScreen> createState() => _VoiceRoomScreenState();
-}
-
-class _VoiceRoomScreenState extends State<VoiceRoomScreen> {
-  late RtcEngine _engine;
-  bool _isJoined = false;
-  bool _isMuted = false;
-  final List<int> _remoteUsers = [];
-  final String _appId = "aab8b8f3e2444379a1f28b4d82b3d888";
-
-  @override
-  void initState() {
-    super.initState();
-    _initAgora();
-  }
-
-  Future<void> _initAgora() async {
-    await [Permission.microphone].request();
-
-    _engine = createAgoraRtcEngine();
-    await _engine.initialize(RtcEngineContext(appId: _appId));
-
-    _engine.registerEventHandler(
-      RtcEngineEventHandler(
-        onJoinChannelSuccess: (RtcConnection connection, int elapsed) {
-          setState(() {
-            _isJoined = true;
-          });
-        },
-        onUserJoined: (RtcConnection connection, int remoteUid, int elapsed) {
-          setState(() {
-            _remoteUsers.add(remoteUid);
-          });
-        },
-        onUserOffline: (RtcConnection connection, int remoteUid, UserOfflineReasonType reason) {
-          setState(() {
-            _remoteUsers.remove(remoteUid);
-          });
-        },
-      ),
-    );
-
-    await _engine.setChannelProfile(ChannelProfileType.channelProfileLiveBroadcasting);
-    await _engine.setClientRole(role: ClientRoleType.clientRoleBroadcaster);
-    await _engine.enableAudio();
-
-    await _engine.joinChannel(
-      token: '',
-      channelId: widget.channelName,
-      uid: Random().nextInt(900000) + 100000,
-      options: const ChannelMediaOptions(
-        publishMicrophoneTrack: true,
-        autoSubscribeAudio: true,
-        clientRoleType: ClientRoleType.clientRoleBroadcaster,
-      ),
-    );
-  }
-
-  void _toggleMute() {
-    setState(() {
-      _isMuted = !_isMuted;
-    });
-    _engine.muteLocalAudioStream(_isMuted);
-  }
-
-  @override
-  void dispose() {
-    _engine.leaveChannel();
-    _engine.release();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF0D111A),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF161B26),
-        title: Text(widget.roomTitle, style: const TextStyle(fontSize: 16)),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.pop(context),
-        ),
-      ),
-      body: Column(
-        children: [
-          const SizedBox(height: 20),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(
-              color: _isJoined ? Colors.green.withOpacity(0.2) : Colors.orange.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Text(
-              _isJoined ? '● Live in Nile Voice Room' : 'Connecting...',
-              style: TextStyle(
-                color: _isJoined ? Colors.greenAccent : Colors.orangeAccent,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-          const SizedBox(height: 24),
-          Expanded(
-            child: GridView.builder(
-
-padding: const EdgeInsets.all(20),
-              itemCount: 8,
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 4,
-                crossAxisSpacing: 14,
-                mainAxisSpacing: 20,
-              ),
-              itemBuilder: (context, index) {
-                bool isMe = index == 0;
-                bool hasRemote = index == 1 && _remoteUsers.isNotEmpty;
-
-                return Column(
-                  children: [
-                    CircleAvatar(
-                      radius: 30,
-                      backgroundColor: (isMe || hasRemote) ? const Color(0xFF00C9A7) : const Color(0xFF1E2433),
-                      child: Icon(
-                        (isMe || hasRemote) ? Icons.mic : Icons.lock_open,
-                        color: (isMe || hasRemote) ? Colors.black : Colors.white30,
-                        size: 26,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      isMe ? 'You' : (hasRemote ? 'Speaker' : 'Seat ${index + 1}'),
-                      style: const TextStyle(fontSize: 11, color: Colors.white70),
-                    ),
-                  ],
-                );
-              },
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: const BoxDecoration(
-              color: Color(0xFF161B26),
-              borderRadius: BorderRadius.only(topLeft: Radius.circular(24), topRight: Radius.circular(24)),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                IconButton(
-                  onPressed: _toggleMute,
-                  iconSize: 32,
-                  icon: Icon(
-                    _isMuted ? Icons.mic_off : Icons.mic,
-                    color: _isMuted ? Colors.red : const Color(0xFF00C9A7),
-                  ),
-                ),
-                IconButton(
-                  onPressed: () => Navigator.pop(context),
-                  iconSize: 32,
-                  icon: const Icon(Icons.call_end, color: Colors.redAccent),
-                ),
-              ],
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -748,7 +565,7 @@ class _SuperOwnerAdminPortalState extends State<SuperOwnerAdminPortal> {
     );
   }
 
-@override
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF0D111A),
@@ -799,7 +616,8 @@ class _SuperOwnerAdminPortalState extends State<SuperOwnerAdminPortal> {
                         controller: _mintController,
                         keyboardType: TextInputType.number,
                         style: const TextStyle(color: Colors.white),
-                        decoration: InputDecoration(
+
+decoration: InputDecoration(
                           hintText: 'Enter amount to mint',
                           filled: true,
                           fillColor: const Color(0xFF1E2433),
@@ -826,8 +644,7 @@ class _SuperOwnerAdminPortalState extends State<SuperOwnerAdminPortal> {
                     filled: true,
                     fillColor: const Color(0xFF1E2433),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-
-),
+                  ),
                 ),
                 const SizedBox(height: 10),
                 TextField(
