@@ -81,6 +81,7 @@ class _CoinSellerScreenState extends State<CoinSellerScreen> with SingleTickerPr
     String id = _targetIdController.text.trim();
     int? parsedCoins = int.tryParse(_coinAmountController.text.trim());
 
+    // እዚህ ጋር || በትክክል ተስተካክሏል
     if (id.isEmpty  parsedCoins == null  parsedCoins <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('እባክዎ ትክክለኛ መለያ (ID) እና የኮይን መጠን ያስገቡ')),
@@ -88,7 +89,8 @@ class _CoinSellerScreenState extends State<CoinSellerScreen> with SingleTickerPr
       return;
     }
 
-    int transferAmount = parsedCoins;
+    // እዚህ ጋር parsedCoins! በሚል ከ null የጸዳ ተደርጓል
+    int transferAmount = parsedCoins!;
 
     if (transferAmount > _sellerBalance) {
       ScaffoldMessenger.of(context).showSnackBar(
