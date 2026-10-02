@@ -6,6 +6,7 @@ import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'store_screen.dart';
 import 'invite_screen.dart';
+
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const NileVoiceApp());
@@ -138,9 +139,9 @@ class _NileRoomsPageState extends State<NileRoomsPage> {
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white70),
           ),
           const SizedBox(height: 12),
-          ...rooms.map((r) => Container(
 
-margin: const EdgeInsets.only(bottom: 12),
+...rooms.map((r) => Container(
+                margin: const EdgeInsets.only(bottom: 12),
                 decoration: BoxDecoration(
                   color: const Color(0xFF161B26),
                   borderRadius: BorderRadius.circular(16),
@@ -187,7 +188,7 @@ margin: const EdgeInsets.only(bottom: 12),
 }
 
 // ==========================================
-// 👤 2. "ME" PROFILE PAGE (Store እና Recharge አጠገብ ለአጠገብ)
+// 👤 2. "ME" PROFILE PAGE (Store, Recharge & Invite)
 // ==========================================
 class NileProfileMePage extends StatefulWidget {
   final VoidCallback onCoinsUpdated;
@@ -238,9 +239,9 @@ class _NileProfileMePageState extends State<NileProfileMePage> {
             tooltip: 'Switch Account Role',
             onSelected: _switchUserRole,
             itemBuilder: (context) => [
-              const PopupMenuItem(value: true, child: Text('Login as Owner (KEDIR)')),
 
-const PopupMenuItem(value: false, child: Text('Login as Guest User')),
+const PopupMenuItem(value: true, child: Text('Login as Owner (KEDIR)')),
+              const PopupMenuItem(value: false, child: Text('Login as Guest User')),
             ],
           ),
         ],
@@ -330,9 +331,9 @@ const PopupMenuItem(value: false, child: Text('Login as Guest User')),
                           Row(
                             children: [
                               const Icon(Icons.monetization_on, color: Colors.amber, size: 20),
-                              const SizedBox(width: 6),
 
-Text(
+const SizedBox(width: 6),
+                              Text(
                                 '${AppData.userCoins}',
                                 style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
                               ),
@@ -361,7 +362,7 @@ Text(
                   ),
                   const Divider(color: Colors.white10, height: 28),
 
-                  // 🔥 ከ Recharge ጎን Store በትክክል እዚህ ተቀምጧል 🔥
+                  // Recharge እና Store ጎን ለጎን
                   Row(
                     children: [
                       // 1. Recharge Button
@@ -382,7 +383,7 @@ Text(
                         ),
                       ),
                       const SizedBox(width: 12),
-                      // 2. Store Button (ልክ ከ Recharge ጎን)
+                      // 2. Store Button
                       Expanded(
                         child: ElevatedButton.icon(
                           onPressed: () {
@@ -405,15 +406,76 @@ Text(
                           label: const Text('Store 🛍️', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF00C9A7),
-                            padding: const EdgeInsets.symmetric(vertical: 12),
 
-shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                           ),
                         ),
                       ),
                     ],
                   ),
                 ],
+              ),
+            ),
+
+            const SizedBox(height: 14),
+
+            // 🎁 Invite Friends & Earn Banner (አዲሱ የግብዣ ባነር)
+            GestureDetector(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => InviteScreen(
+                      userId: AppData.currentUserId,
+                      userName: AppData.currentUserName,
+                      onRewardClaimed: (bonus) {
+                        setState(() {
+                          AppData.userCoins += bonus;
+                        });
+                        widget.onCoinsUpdated();
+                      },
+                    ),
+                  ),
+                );
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF00897B), Color(0xFF004D40)],
+                  ),
+                  borderRadius: BorderRadius.circular(14),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF00897B).withOpacity(0.3),
+                      blurRadius: 8,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.card_giftcard, color: Colors.amber, size: 24),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Invite Friends & Earn Coins 🎁',
+                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                          ),
+                          Text(
+                            'ለእያንዳንዱ ግብዣ 500 Coins ቦነስ ያግኙ',
+                            style: TextStyle(color: Colors.white70, fontSize: 11),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Icon(Icons.arrow_forward_ios, color: Colors.white54, size: 14),
+                  ],
+                ),
               ),
             ),
 
@@ -441,7 +503,8 @@ shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     children: [
                       Icon(Icons.admin_panel_settings, color: Colors.white, size: 22),
                       SizedBox(width: 8),
-                      Text(
+
+Text(
                         'Master Admin Portal 👑',
                         style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
                       ),
@@ -538,7 +601,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> {
     super.dispose();
   }
 
-@override
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF0D111A),
@@ -570,7 +633,8 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> {
           const SizedBox(height: 24),
           Expanded(
             child: GridView.builder(
-              padding: const EdgeInsets.all(20),
+
+padding: const EdgeInsets.all(20),
               itemCount: 8,
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 4,
@@ -684,7 +748,7 @@ class _SuperOwnerAdminPortalState extends State<SuperOwnerAdminPortal> {
     );
   }
 
-  @override
+@override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF0D111A),
@@ -735,8 +799,7 @@ class _SuperOwnerAdminPortalState extends State<SuperOwnerAdminPortal> {
                         controller: _mintController,
                         keyboardType: TextInputType.number,
                         style: const TextStyle(color: Colors.white),
-
-decoration: InputDecoration(
+                        decoration: InputDecoration(
                           hintText: 'Enter amount to mint',
                           filled: true,
                           fillColor: const Color(0xFF1E2433),
@@ -763,7 +826,8 @@ decoration: InputDecoration(
                     filled: true,
                     fillColor: const Color(0xFF1E2433),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-                  ),
+
+),
                 ),
                 const SizedBox(height: 10),
                 TextField(
