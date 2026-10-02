@@ -530,33 +530,42 @@ decoration: BoxDecoration(
 
             const SizedBox(height: 20),
 
-            // 👑 Admin Portal Button
-            if (AppData.isSuperAdmin)
-              GestureDetector(
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => const SuperOwnerAdminPortal()),
-                  );
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFFE50914), Color(0xFF8B0000)],
-                    ),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.admin_panel_settings, color: Colors.white, size: 22),
-                      SizedBox(width: 8),
-                      Text(
-                        'Master Admin Portal 👑',
-                        style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
-                      ),
-                    ],
+                      if (AppData.isSuperAdmin) ...[
+                        GestureDetector(
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const SuperOwnerAdminPortal(),
+                              ),
+                            );
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                colors: [Color(0xFFE50914), Color(0xFFB80000)],
+                              ),
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: const Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.admin_panel_settings, color: Colors.white, size: 22),
+                                SizedBox(width: 8),
+                                Text(
+                                  'Master Admin Portal 👑',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
                   ),
                 ),
               ),
