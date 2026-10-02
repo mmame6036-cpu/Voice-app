@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'store_screen.dart';
-import 'room_screen.dart';
 import 'coin_seller_screen.dart';
 import 'agency_screen.dart';
 
@@ -133,15 +132,9 @@ class RoomsHomeScreen extends StatelessWidget {
         elevation: 0,
         title: const Text('Nile Voice 🎙️', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
         actions: [
-          IconButton(
+          IconButton(icon: const Icon(Icons.search), onPressed: () {}),
 
-icon: const Icon(Icons.search),
-            onPressed: () {},
-          ),
-          IconButton(
-            icon: const Icon(Icons.notifications_none),
-            onPressed: () {},
-          ),
+IconButton(icon: const Icon(Icons.notifications_none), onPressed: () {}),
         ],
       ),
       body: ListView.builder(
@@ -159,9 +152,10 @@ icon: const Icon(Icons.search),
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => RoomScreen(
+                    builder: (context) => ActiveVoiceRoomScreen(
                       roomId: r['id'],
                       roomTitle: r['title'],
+                      hostName: r['host'],
                       onCoinsUpdated: onCoinsUpdated,
                     ),
                   ),
@@ -226,9 +220,10 @@ icon: const Icon(Icons.search),
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (context) => RoomScreen(
+              builder: (context) => ActiveVoiceRoomScreen(
                 roomId: '999',
                 roomTitle: '${AppData.currentUserName}\'s Room',
+                hostName: AppData.currentUserName,
                 onCoinsUpdated: onCoinsUpdated,
               ),
             ),
@@ -241,7 +236,77 @@ icon: const Icon(Icons.search),
 }
 
 // ============================================================================
-// 2. MESSAGES SCREEN
+// 2. ACTIVE VOICE ROOM SCREEN
+// ============================================================================
+class ActiveVoiceRoomScreen extends StatelessWidget {
+  final String roomId;
+  final String roomTitle;
+  final String hostName;
+  final VoidCallback onCoinsUpdated;
+
+  const ActiveVoiceRoomScreen({
+    Key? key,
+    required this.roomId,
+    required this.roomTitle,
+    required this.hostName,
+    required this.onCoinsUpdated,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF0D111A),
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        title: Text(roomTitle, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        leading: IconButton(
+          icon: const Icon(Icons.keyboard_arrow_down, size: 30),
+          onPressed: () => Navigator.pop(context),
+        ),
+      ),
+      body: Column(
+        children: [
+          const SizedBox(height: 20),
+          Center(
+            child: Column(
+              children: [
+                CircleAvatar(
+                  radius: 40,
+                  backgroundColor: const Color(0xFF00C9A7),
+                  child: const Icon(Icons.mic, size: 40, color: Colors.black),
+                ),
+                const SizedBox(height: 10),
+                Text(hostName, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+                const Text('Active Speaker', style: TextStyle(fontSize: 12, color: Color(0xFF00C9A7))),
+              ],
+            ),
+          ),
+          const Spacer(),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: const BoxDecoration(
+              color: Color(0xFF161B26),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                IconButton(icon: const Icon(Icons.mic_off, color: Colors.white70), onPressed: () {}),
+                IconButton(icon: const Icon(Icons.card_giftcard, color: Colors.amber), onPressed: () {}),
+                IconButton(icon: const Icon(Icons.chat_bubble_outline, color: Colors.white70), onPressed: () {}),
+                IconButton(icon: const Icon(Icons.share, color: Colors.white70), onPressed: () {}),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ============================================================================
+// 3. MESSAGES SCREEN
 // ============================================================================
 class MessagesScreen extends StatelessWidget {
   const MessagesScreen({Key? key}) : super(key: key);
@@ -269,7 +334,7 @@ class MessagesScreen extends StatelessWidget {
 }
 
 // ============================================================================
-// 3. PROFILE SCREEN (ME)
+// 4. PROFILE SCREEN (ME)
 // ============================================================================
 class ProfileScreen extends StatefulWidget {
   final VoidCallback onCoinsUpdated;
@@ -338,8 +403,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         children: [
                           const Text('Coins', style: TextStyle(color: Colors.white54, fontSize: 12)),
                           const SizedBox(height: 4),
-
-Row(
+                          Row(
                             children: [
                               const Icon(Icons.monetization_on, color: Colors.amber, size: 18),
                               const SizedBox(width: 4),
@@ -369,8 +433,9 @@ Row(
 
             const SizedBox(height: 16),
 
-            // 1. Coin Seller & Store Row
-            Row(
+            // Coin Seller & Store Buttons
+
+Row(
               children: [
                 Expanded(
                   child: ElevatedButton.icon(
@@ -430,9 +495,9 @@ Row(
               ],
             ),
 
-const SizedBox(height: 14),
+            const SizedBox(height: 14),
 
-            // 2. Agency Center Card
+            // Agency Center Dashboard Button
             Container(
               decoration: BoxDecoration(
                 color: const Color(0xFF161B26),
@@ -452,7 +517,8 @@ const SizedBox(height: 14),
                 subtitle: const Text('Host & Commission Dashboard', style: TextStyle(color: Colors.white54, fontSize: 12)),
                 trailing: const Icon(Icons.arrow_forward_ios, color: Colors.white38, size: 14),
                 onTap: () {
-                  Navigator.push(
+
+Navigator.push(
                     context,
                     MaterialPageRoute(
                       builder: (context) => const AgencyScreen(
@@ -467,7 +533,7 @@ const SizedBox(height: 14),
 
             const SizedBox(height: 14),
 
-            // 3. Super Admin Portal
+            // Super Admin Portal
             if (AppData.isSuperAdmin)
               Container(
                 decoration: BoxDecoration(
@@ -498,7 +564,7 @@ const SizedBox(height: 14),
 }
 
 // ============================================================================
-// 4. SUPER OWNER ADMIN PORTAL
+// 5. SUPER OWNER ADMIN PORTAL
 // ============================================================================
 class SuperOwnerAdminPortal extends StatelessWidget {
   const SuperOwnerAdminPortal({Key? key}) : super(key: key);
@@ -525,8 +591,7 @@ class SuperOwnerAdminPortal extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('👑 Nile Voice Master Authority', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 16)),
-
-SizedBox(height: 6),
+                SizedBox(height: 6),
                 Text('Owner ID: 1000 (Full Root Access Granted)', style: TextStyle(color: Colors.white70, fontSize: 13)),
               ],
             ),
@@ -546,7 +611,8 @@ SizedBox(height: 6),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             leading: const Icon(Icons.monetization_on, color: Colors.amber),
             title: const Text('System Coin Minting & Audit', style: TextStyle(color: Colors.white)),
-            trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.white38),
+
+trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.white38),
             onTap: () {},
           ),
           const SizedBox(height: 10),
