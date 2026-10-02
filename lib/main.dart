@@ -357,107 +357,111 @@ Text(
                             ],
                           ),
                         ],
-                      ),
-                    ],
-                  ),
-                  const Divider(color: Colors.white10, height: 28),
+                  KEDER:
+const Divider(color: Colors.white10, height: 28),
 
-                  Row(
-                    children: [
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => CoinSellerScreen(
-                                  initialCoins: AppData.userCoins,
-                                  onCoinsUpdated: (newCoins) {
-                                    setState(() {
-                                      AppData.userCoins = newCoins;
-                                    });
-                                    widget.onCoinsUpdated();
-                                  },
+                    // 1. Coin Seller እና Store ቁልፎች
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => CoinSellerScreen(
+                                    initialCoins: AppData.userCoins,
+                                    onCoinsUpdated: (newCoins) {
+                                      setState(() {
+                                        AppData.userCoins = newCoins;
+                                      });
+                                      widget.onCoinsUpdated();
+                                    },
+                                  ),
                                 ),
-                              ),
-                            );
-                          },
-                          icon: const Icon(Icons.account_balance_wallet, color: Colors.black, size: 18),
-                          label: const Text('Coin Seller 🪙', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.amber,
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => StoreScreen(
-                                  userCoins: AppData.userCoins,
-                                  onCoinsUpdated: (newCoins) {
-                                    setState(() {
-                                      AppData.userCoins = newCoins;
-                                    });
-                                    widget.onCoinsUpdated();
-                                  },
-                                ),
-                              ),
-                            );
-                          },
-                          icon: const Icon(Icons.storefront, color: Colors.white, size: 18),
-                          label: const Text('Store 🛍️', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF00C9A7),
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          ),
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 14),
-                      Container(
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF161B26),
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: Colors.white10),
-                        ),
-                        child: ListTile(
-                          leading: Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF00E1B0).withOpacity(0.15),
-                              shape: BoxShape.circle,
+                              );
+                            },
+                            icon: const Icon(Icons.account_balance_wallet, color: Colors.black, size: 18),
+                            label: const Text('Coin Seller 🪙', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.amber,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                             ),
-                            child: const Icon(Icons.business_center, color: Color(0xFF00E1B0)),
                           ),
-                          title: const Text(
-                            'Agency Center',
-                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
-                          ),
-                          subtitle: const Text(
-                            'Host & Commission Dashboard',
-                            style: TextStyle(color: Colors.white54, fontSize: 12),
-                          ),
-                          trailing: const Icon(Icons.arrow_forward_ios, color: Colors.white38, size: 14),
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => const AgencyScreen(
-                                  agencyName: "Nile Agency Leader",
-                                  agencyId: "1000",
-                                ),
-                              ),
-                            );
-                          },
                         ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => StoreScreen(
+                                    userCoins: AppData.userCoins,
+                                    onCoinsUpdated: (newCoins) {
+                                      setState(() {
+                                        AppData.userCoins = newCoins;
+                                      });
+                                      widget.onCoinsUpdated();
+                                    },
+                                  ),
+                                ),
+                              );
+                            },
+                            icon: const Icon(Icons.storefront, color: Colors.white, size: 18),
+                            label: const Text('Store 🛍️', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF00C9A7),
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 14),
+
+                    // 2. Agency Center መግቢያ ካርድ
+                    Container(
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF161B26),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: Colors.white10),
                       ),
+                      child: ListTile(
+                        leading: Container(
+                          padding: const EdgeInsets.all(8),
+
+decoration: BoxDecoration(
+                            color: const Color(0xFF00E1B0).withOpacity(0.15),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.business_center, color: Color(0xFF00E1B0)),
+                        ),
+                        title: const Text(
+                          'Agency Center',
+                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+                        ),
+                        subtitle: const Text(
+                          'Host & Commission Dashboard',
+                          style: TextStyle(color: Colors.white54, fontSize: 12),
+                        ),
+                        trailing: const Icon(Icons.arrow_forward_ios, color: Colors.white38, size: 14),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const AgencyScreen(
+                                agencyName: "Nile Agency Leader",
+                                agencyId: "1000",
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
                   ),
                 ],
               ),
