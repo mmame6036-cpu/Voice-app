@@ -2,10 +2,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'store_screen.dart';
-import 'invite_screen.dart';
 import 'room_screen.dart';
 import 'coin_seller_screen.dart';
 import 'agency_screen.dart';
+
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const NileVoiceApp());
@@ -27,55 +27,61 @@ class NileVoiceApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Nile Voice Global',
+      title: 'Nile Voice',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         brightness: Brightness.dark,
-        scaffoldBackgroundColor: const Color(0xFF0D111A),
         primaryColor: const Color(0xFF00C9A7),
-        fontFamily: 'sans-serif',
+        scaffoldBackgroundColor: const Color(0xFF0B0E14),
+        fontFamily: 'Roboto',
       ),
-      home: const NileMainScreen(),
+      home: const MainNavigationScreen(),
     );
   }
 }
 
-class NileMainScreen extends StatefulWidget {
-  const NileMainScreen({Key? key}) : super(key: key);
+class MainNavigationScreen extends StatefulWidget {
+  const MainNavigationScreen({Key? key}) : super(key: key);
 
   @override
-  State<NileMainScreen> createState() => _NileMainScreenState();
+  State<MainNavigationScreen> createState() => _MainNavigationScreenState();
 }
 
-class _NileMainScreenState extends State<NileMainScreen> {
+class _MainNavigationScreenState extends State<MainNavigationScreen> {
   int _currentIndex = 0;
+
+  void _updateState() {
+    setState(() {});
+  }
 
   @override
   Widget build(BuildContext context) {
     final List<Widget> pages = [
-      const NileRoomsPage(),
-      NileProfileMePage(onCoinsUpdated: () => setState(() {})),
+      RoomsHomeScreen(onCoinsUpdated: _updateState),
+      const MessagesScreen(),
+      ProfileScreen(onCoinsUpdated: _updateState),
     ];
 
     return Scaffold(
       body: pages[_currentIndex],
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
+        onTap: (index) => setState(() => _currentIndex = index),
         backgroundColor: const Color(0xFF161B26),
         selectedItemColor: const Color(0xFF00C9A7),
         unselectedItemColor: Colors.white54,
-        onTap: (index) {
-          setState(() {
-            _currentIndex = index;
-          });
-        },
+        type: BottomNavigationBarType.fixed,
         items: const [
           BottomNavigationBarItem(
-            icon: Icon(Icons.waves),
+            icon: Icon(Icons.mic),
             label: 'Rooms',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.person),
+            icon: Icon(Icons.chat_bubble_outline),
+            label: 'Messages',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.person_outline),
             label: 'Me',
           ),
         ],
@@ -84,223 +90,278 @@ class _NileMainScreenState extends State<NileMainScreen> {
   }
 }
 
-// ==========================================
-// 🌊 1. ROOMS PAGE (የክፍሎች ገጽ)
-// ==========================================
-class NileRoomsPage extends StatefulWidget {
-  const NileRoomsPage({Key? key}) : super(key: key);
+// ============================================================================
+// 1. ROOMS HOME SCREEN
+// ============================================================================
+class RoomsHomeScreen extends StatelessWidget {
+  final VoidCallback onCoinsUpdated;
+
+  const RoomsHomeScreen({Key? key, required this.onCoinsUpdated}) : super(key: key);
 
   @override
-  State<NileRoomsPage> createState() => _NileRoomsPageState();
+  Widget build(BuildContext context) {
+    final List<Map<String, dynamic>> rooms = [
+      {
+        'id': '101',
+        'title': '🇪🇹 Ethio Nile Coffee Club',
+        'host': 'Mimi',
+        'users': 48,
+        'tag': 'Chat & Music',
+        'color': const Color(0xFF1E2638),
+      },
+      {
+        'id': '102',
+        'title': '🎤 Golden Voices Lounge',
+        'host': 'Yared',
+        'users': 32,
+        'tag': 'Live Singing',
+        'color': const Color(0xFF261E38),
+      },
+      {
+        'id': '103',
+        'title': '🎉 Night Party & Games',
+        'host': 'Sara',
+        'users': 85,
+        'tag': 'Gaming',
+        'color': const Color(0xFF1E382E),
+      },
+    ];
+
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF161B26),
+        elevation: 0,
+        title: const Text('Nile Voice 🎙️', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
+        actions: [
+          IconButton(
+
+icon: const Icon(Icons.search),
+            onPressed: () {},
+          ),
+          IconButton(
+            icon: const Icon(Icons.notifications_none),
+            onPressed: () {},
+          ),
+        ],
+      ),
+      body: ListView.builder(
+        padding: const EdgeInsets.all(16),
+        itemCount: rooms.length,
+        itemBuilder: (context, index) {
+          final r = rooms[index];
+          return Card(
+            color: r['color'],
+            margin: const EdgeInsets.only(bottom: 14),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(16),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => RoomScreen(
+                      roomId: r['id'],
+                      roomTitle: r['title'],
+                      onCoinsUpdated: onCoinsUpdated,
+                    ),
+                  ),
+                );
+              },
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 26,
+                      backgroundColor: const Color(0xFF00C9A7),
+                      child: Text(
+                        r['host'][0],
+                        style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black, fontSize: 18),
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            r['title'],
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white),
+                          ),
+                          const SizedBox(height: 6),
+                          Row(
+                            children: [
+                              Text('Host: ${r['host']}', style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                              const SizedBox(width: 12),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Colors.black38,
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Text(r['tag'], style: const TextStyle(color: Color(0xFF00C9A7), fontSize: 10)),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    Row(
+                      children: [
+                        const Icon(Icons.volume_up, color: Color(0xFF00C9A7), size: 16),
+                        const SizedBox(width: 4),
+                        Text('${r['users']}', style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: const Color(0xFF00C9A7),
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => RoomScreen(
+                roomId: '999',
+                roomTitle: '${AppData.currentUserName}\'s Room',
+                onCoinsUpdated: onCoinsUpdated,
+              ),
+            ),
+          );
+        },
+        child: const Icon(Icons.add, color: Colors.black, size: 30),
+      ),
+    );
+  }
 }
 
-class _NileRoomsPageState extends State<NileRoomsPage> {
-  final List<Map<String, dynamic>> rooms = [
-    {
-      'id': 'nile_room_1',
-      'title': '🌊 Nile VIP Grand Lounge',
-      'host': 'KEDIR',
-      'country': 'Ethiopia',
-      'users': '24',
-    },
-    {
-      'id': 'nile_room_2',
-      'title': '🎵 Nile Melody & Chat',
-      'host': 'Amir',
-      'country': 'Global',
-      'users': '15',
-    },
-  ];
+// ============================================================================
+// 2. MESSAGES SCREEN
+// ============================================================================
+class MessagesScreen extends StatelessWidget {
+  const MessagesScreen({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0D111A),
       appBar: AppBar(
         backgroundColor: const Color(0xFF161B26),
         elevation: 0,
-        title: const Row(
+        title: const Text('Messages', style: TextStyle(fontWeight: FontWeight.bold)),
+      ),
+      body: const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.waves, color: Color(0xFF00C9A7)),
-            SizedBox(width: 8),
-            Text(
-              'Nile Voice',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-            ),
+            Icon(Icons.forum_outlined, size: 64, color: Colors.white24),
+            SizedBox(height: 12),
+            Text('No new messages', style: TextStyle(color: Colors.white54, fontSize: 15)),
           ],
         ),
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          const Text(
-            'Explore Live Rooms',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white70),
-          ),
-          const SizedBox(height: 12),
-          ...rooms.map((r) => Container(
-                margin: const EdgeInsets.only(bottom: 12),
-
-decoration: BoxDecoration(
-                  color: const Color(0xFF161B26),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.white12),
-                ),
-                child: ListTile(
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  leading: const CircleAvatar(
-                    backgroundColor: Color(0xFF222938),
-                    child: Icon(Icons.mic, color: Color(0xFF00C9A7)),
-                  ),
-                  title: Text(
-                    r['title'],
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.white),
-                  ),
-                  subtitle: Text(
-                    'Host: ${r['host']} • ${r['country']}',
-                    style: const TextStyle(fontSize: 12, color: Colors.white54),
-                  ),
-                  trailing: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF00C9A7),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    ),
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => VoiceRoomScreen(
-                            channelName: r['id'],
-                            roomTitle: r['title'],
-                            isOwner: AppData.isSuperAdmin,
-                          ),
-                        ),
-                      );
-                    },
-                    child: const Text('Join', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
-                  ),
-                ),
-              )),
-        ],
-      ),
     );
   }
 }
 
-// ==========================================
-// 👤 2. "ME" PROFILE PAGE (Store, Recharge & Invite)
-// ==========================================
-class NileProfileMePage extends StatefulWidget {
+// ============================================================================
+// 3. PROFILE SCREEN (ME)
+// ============================================================================
+class ProfileScreen extends StatefulWidget {
   final VoidCallback onCoinsUpdated;
-  const NileProfileMePage({Key? key, required this.onCoinsUpdated}) : super(key: key);
+
+  const ProfileScreen({Key? key, required this.onCoinsUpdated}) : super(key: key);
 
   @override
-  State<NileProfileMePage> createState() => _NileProfileMePageState();
+  State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
-class _NileProfileMePageState extends State<NileProfileMePage> {
-  void _switchUserRole(bool asOwner) {
-    setState(() {
-      if (asOwner) {
-        AppData.currentUserId = "1000";
-        AppData.currentUserName = "KEDIR (Super Owner)";
-        AppData.userCoins = 50000;
-        AppData.isSuperAdmin = true;
-        AppData.biometricVerified = true;
-      } else {
-        AppData.currentUserId = "1001";
-        AppData.currentUserName = "Guest User";
-        AppData.userCoins = 100;
-        AppData.isSuperAdmin = false;
-        AppData.biometricVerified = false;
-      }
-    });
-    widget.onCoinsUpdated();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Switched to: ${AppData.currentUserName}'),
-        backgroundColor: asOwner ? Colors.green : Colors.blueGrey,
-        duration: const Duration(seconds: 2),
-      ),
-    );
-  }
-
+class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0D111A),
+      backgroundColor: const Color(0xFF0B0E14),
       appBar: AppBar(
         backgroundColor: const Color(0xFF161B26),
         elevation: 0,
-        title: const Text('My Profile', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        title: const Text('Profile', style: TextStyle(fontWeight: FontWeight.bold)),
         actions: [
-          PopupMenuButton<bool>(
-            icon: const Icon(Icons.switch_account, color: Colors.white70),
-            tooltip: 'Switch Account Role',
-            onSelected: _switchUserRole,
-            itemBuilder: (context) => [
-              const PopupMenuItem(value: true, child: Text('Login as Owner (KEDIR)')),
-
-const PopupMenuItem(value: false, child: Text('Login as Guest User')),
-            ],
-          ),
+          IconButton(icon: const Icon(Icons.settings), onPressed: () {}),
         ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            // Profile Card
+            // User Header
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: const Color(0xFF161B26),
                 borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.white10),
               ),
-              child: Row(
+              child: Column(
                 children: [
-                  CircleAvatar(
-                    radius: 32,
-                    backgroundColor: const Color(0xFF00C9A7),
-                    child: Text(
-                      AppData.currentUserName[0],
-                      style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Colors.black),
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          AppData.currentUserName,
-                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'ID: ${AppData.currentUserId}',
-                          style: const TextStyle(fontSize: 13, color: Colors.white54),
-                        ),
-                        const SizedBox(height: 4),
-                        Row(
+                  Row(
+                    children: [
+                      const CircleAvatar(
+                        radius: 32,
+                        backgroundColor: Color(0xFF00C9A7),
+                        child: Icon(Icons.person, color: Colors.black, size: 38),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Icon(
-                              AppData.biometricVerified ? Icons.verified_user : Icons.gpp_maybe,
-                              size: 14,
-                              color: AppData.biometricVerified ? Colors.greenAccent : Colors.orangeAccent,
-                            ),
-                            const SizedBox(width: 4),
                             Text(
-                              AppData.biometricVerified ? 'Identity Verified' : 'Unverified Biometrics',
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: AppData.biometricVerified ? Colors.greenAccent : Colors.orangeAccent,
-                              ),
+                              AppData.currentUserName,
+                              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.white),
                             ),
+                            const SizedBox(height: 4),
+                            Text('ID: ${AppData.currentUserId}', style: const TextStyle(fontSize: 13, color: Colors.white54)),
                           ],
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
+                  ),
+                  const Divider(color: Colors.white10, height: 28),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: [
+                      Column(
+                        children: [
+                          const Text('Coins', style: TextStyle(color: Colors.white54, fontSize: 12)),
+                          const SizedBox(height: 4),
+
+Row(
+                            children: [
+                              const Icon(Icons.monetization_on, color: Colors.amber, size: 18),
+                              const SizedBox(width: 4),
+                              Text('${AppData.userCoins}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+                            ],
+                          ),
+                        ],
+                      ),
+                      Column(
+                        children: [
+                          const Text('Diamonds', style: TextStyle(color: Colors.white54, fontSize: 12)),
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              const Icon(Icons.diamond, color: Colors.cyanAccent, size: 18),
+                              const SizedBox(width: 4),
+                              Text('${AppData.userPoints}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -308,265 +369,125 @@ const PopupMenuItem(value: false, child: Text('Login as Guest User')),
 
             const SizedBox(height: 16),
 
-            // Wallet Balance Card
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF1E2838), Color(0xFF141A24)],
-                ),
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: Colors.white10),
-              ),
-              child: Column(
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('Coins Balance', style: TextStyle(color: Colors.white54, fontSize: 13)),
-                          const SizedBox(height: 4),
-                          Row(
-                            children: [
-                              const Icon(Icons.monetization_on, color: Colors.amber, size: 20),
-                              const SizedBox(width: 6),
-
-Text(
-                                '${AppData.userCoins}',
-                                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('Earnings Points', style: TextStyle(color: Colors.white54, fontSize: 13)),
-                          const SizedBox(height: 4),
-                          Row(
-                            children: [
-                              const Icon(Icons.diamond, color: Colors.cyanAccent, size: 20),
-                              const SizedBox(width: 6),
-                              Text(
-                                '${AppData.userPoints}',
-                                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
-                              ),
-                            ],
-                          ),
-                        ],
-                  KEDER:
-const Divider(color: Colors.white10, height: 28),
-
-                    // 1. Coin Seller እና Store ቁልፎች
-                    Row(
-                      children: [
-                        Expanded(
-                          child: ElevatedButton.icon(
-                            onPressed: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => CoinSellerScreen(
-                                    initialCoins: AppData.userCoins,
-                                    onCoinsUpdated: (newCoins) {
-                                      setState(() {
-                                        AppData.userCoins = newCoins;
-                                      });
-                                      widget.onCoinsUpdated();
-                                    },
-                                  ),
-                                ),
-                              );
+            // 1. Coin Seller & Store Row
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => CoinSellerScreen(
+                            initialCoins: AppData.userCoins,
+                            onCoinsUpdated: (newCoins) {
+                              setState(() {
+                                AppData.userCoins = newCoins;
+                              });
+                              widget.onCoinsUpdated();
                             },
-                            icon: const Icon(Icons.account_balance_wallet, color: Colors.black, size: 18),
-                            label: const Text('Coin Seller 🪙', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.amber,
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                            ),
                           ),
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: ElevatedButton.icon(
-                            onPressed: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => StoreScreen(
-                                    userCoins: AppData.userCoins,
-                                    onCoinsUpdated: (newCoins) {
-                                      setState(() {
-                                        AppData.userCoins = newCoins;
-                                      });
-                                      widget.onCoinsUpdated();
-                                    },
-                                  ),
-                                ),
-                              );
-                            },
-                            icon: const Icon(Icons.storefront, color: Colors.white, size: 18),
-                            label: const Text('Store 🛍️', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF00C9A7),
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-
-                    const SizedBox(height: 14),
-
-                    // 2. Agency Center መግቢያ ካርድ
-                    Container(
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF161B26),
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: Colors.white10),
-                      ),
-                      child: ListTile(
-                        leading: Container(
-                          padding: const EdgeInsets.all(8),
-
-decoration: BoxDecoration(
-                            color: const Color(0xFF00E1B0).withOpacity(0.15),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(Icons.business_center, color: Color(0xFF00E1B0)),
-                        ),
-                        title: const Text(
-                          'Agency Center',
-                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
-                        ),
-                        subtitle: const Text(
-                          'Host & Commission Dashboard',
-                          style: TextStyle(color: Colors.white54, fontSize: 12),
-                        ),
-                        trailing: const Icon(Icons.arrow_forward_ios, color: Colors.white38, size: 14),
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => const AgencyScreen(
-                                agencyName: "Nile Agency Leader",
-                                agencyId: "1000",
-                              ),
-                            ),
-                          );
-                        },
-                      ),
+                      );
+                    },
+                    icon: const Icon(Icons.account_balance_wallet, color: Colors.black, size: 18),
+                    label: const Text('Coin Seller 🪙', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.amber,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     ),
                   ),
-                ],
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => StoreScreen(
+                            userCoins: AppData.userCoins,
+                            onCoinsUpdated: (newCoins) {
+                              setState(() {
+                                AppData.userCoins = newCoins;
+                              });
+                              widget.onCoinsUpdated();
+                            },
+                          ),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.storefront, color: Colors.white, size: 18),
+                    label: const Text('Store 🛍️', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF00C9A7),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+
+const SizedBox(height: 14),
+
+            // 2. Agency Center Card
+            Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFF161B26),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.white10),
+              ),
+              child: ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF00E1B0).withOpacity(0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.business_center, color: Color(0xFF00E1B0)),
+                ),
+                title: const Text('Agency Center', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+                subtitle: const Text('Host & Commission Dashboard', style: TextStyle(color: Colors.white54, fontSize: 12)),
+                trailing: const Icon(Icons.arrow_forward_ios, color: Colors.white38, size: 14),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const AgencyScreen(
+                        agencyName: "Nile Agency Leader",
+                        agencyId: "1000",
+                      ),
+                    ),
+                  );
+                },
               ),
             ),
 
             const SizedBox(height: 14),
 
-// 🎁 Invite Friends & Earn Banner
-            GestureDetector(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => InviteScreen(
-                      userId: AppData.currentUserId,
-                      userName: AppData.currentUserName,
-                      onRewardClaimed: (bonus) {
-                        setState(() {
-                          AppData.userCoins += bonus;
-                        });
-                        widget.onCoinsUpdated();
-                      },
-                    ),
-                  ),
-                );
-              },
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            // 3. Super Admin Portal
+            if (AppData.isSuperAdmin)
+              Container(
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
-                    colors: [Color(0xFF00897B), Color(0xFF004D40)],
+                    colors: [Color(0xFFE50914), Color(0xFFB80000)],
                   ),
                   borderRadius: BorderRadius.circular(14),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFF00897B).withOpacity(0.3),
-                      blurRadius: 8,
-                      offset: const Offset(0, 3),
-                    ),
-                  ],
                 ),
-                child: const Row(
-                  children: [
-                    Icon(Icons.card_giftcard, color: Colors.amber, size: 24),
-                    SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Invite Friends & Earn Coins 🎁',
-                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
-                          ),
-                          Text(
-                            'ለእያንዳንዱ ግብዣ 500 Coins ቦነስ ያግኙ',
-                            style: TextStyle(color: Colors.white70, fontSize: 11),
-                          ),
-                        ],
+                child: ListTile(
+                  leading: const Icon(Icons.admin_panel_settings, color: Colors.white, size: 24),
+                  title: const Text('Master Admin Portal 👑', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  trailing: const Icon(Icons.arrow_forward_ios, color: Colors.white70, size: 14),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const SuperOwnerAdminPortal(),
                       ),
-                    ),
-                    Icon(Icons.arrow_forward_ios, color: Colors.white54, size: 14),
-                  ],
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 20),
-
-                      if (AppData.isSuperAdmin) ...[
-                        GestureDetector(
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => const SuperOwnerAdminPortal(),
-                              ),
-                            );
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                            decoration: BoxDecoration(
-                              gradient: const LinearGradient(
-                                colors: [Color(0xFFE50914), Color(0xFFB80000)],
-                              ),
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                            child: const Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.admin_panel_settings, color: Colors.white, size: 22),
-                                SizedBox(width: 8),
-                                Text(
-                                  'Master Admin Portal 👑',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                  ),
+                    );
+                  },
                 ),
               ),
           ],
@@ -576,163 +497,68 @@ decoration: BoxDecoration(
   }
 }
 
-// ==========================================
-// 👑 Super Owner Admin Portal
-// ==========================================
-class SuperOwnerAdminPortal extends StatefulWidget {
+// ============================================================================
+// 4. SUPER OWNER ADMIN PORTAL
+// ============================================================================
+class SuperOwnerAdminPortal extends StatelessWidget {
   const SuperOwnerAdminPortal({Key? key}) : super(key: key);
-
-  @override
-  State<SuperOwnerAdminPortal> createState() => _SuperOwnerAdminPortalState();
-}
-
-class _SuperOwnerAdminPortalState extends State<SuperOwnerAdminPortal> {
-  final TextEditingController _mintController = TextEditingController();
-  final TextEditingController _targetIdController = TextEditingController();
-  final TextEditingController _transferAmountController = TextEditingController();
-
-  void _mintCoins() {
-    int? amount = int.tryParse(_mintController.text.trim());
-    if (amount != null && amount > 0) {
-      setState(() {
-        AppData.userCoins += amount;
-      });
-      _mintController.clear();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("$amount Nile Coins minted!"), backgroundColor: Colors.green),
-      );
-    }
-  }
-
-  void _transferCoins() {
-    String targetId = _targetIdController.text.trim();
-    int? amount = int.tryParse(_transferAmountController.text.trim());
-
-    if (amount == null || amount <= 0) return;
-    if (amount > AppData.userCoins) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Insufficient reserve balance!"), backgroundColor: Colors.red),
-      );
-      return;
-    }
-
-    setState(() {
-      AppData.userCoins -= amount;
-    });
-
-    _targetIdController.clear();
-    _transferAmountController.clear();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text("Transferred $amount coins to ID: $targetId"), backgroundColor: Colors.green),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0D111A),
+      backgroundColor: const Color(0xFF0B0E14),
       appBar: AppBar(
-        title: const Text('Nile Master Admin Portal', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
         backgroundColor: const Color(0xFF161B26),
+        title: const Text('Master Admin Console', style: TextStyle(fontWeight: FontWeight.bold)),
       ),
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 700),
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: const Color(0xFF161B26),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: Colors.redAccent.withOpacity(0.4)),
+            ),
+            child: const Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFFE50914), Color(0xFF8B0000)],
-                    ),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Row(
-                        children: [
-                          Icon(Icons.shield, color: Colors.white, size: 20),
-                          SizedBox(width: 8),
-                          Text('Nile System Reserve', style: TextStyle(color: Colors.white70, fontSize: 14)),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      Text('${AppData.userCoins} Coins', style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 4),
-                      const Text('Super Owner ID: 1000', style: TextStyle(color: Colors.white60, fontSize: 13)),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 24),
-                const Text('Coin Minting Engine', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _mintController,
-                        keyboardType: TextInputType.number,
-                        style: const TextStyle(color: Colors.white),
+                Text('👑 Nile Voice Master Authority', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 16)),
 
-decoration: InputDecoration(
-                          hintText: 'Enter amount to mint',
-                          filled: true,
-                          fillColor: const Color(0xFF1E2433),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    ElevatedButton(
-                      onPressed: _mintCoins,
-                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00C853)),
-                      child: const Text('Mint', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 24),
-                const Text('Transfer Coins to User', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: _targetIdController,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: InputDecoration(
-                    hintText: 'Target User ID (e.g. 1001)',
-                    filled: true,
-                    fillColor: const Color(0xFF1E2433),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: _transferAmountController,
-                  keyboardType: TextInputType.number,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: InputDecoration(
-                    hintText: 'Coin Amount',
-                    filled: true,
-                    fillColor: const Color(0xFF1E2433),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-                  ),
-                ),
-                const SizedBox(height: 14),
-                ElevatedButton(
-                  onPressed: _transferCoins,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFFFB300),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                  ),
-                  child: const Text('Transfer to User', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
-                ),
+SizedBox(height: 6),
+                Text('Owner ID: 1000 (Full Root Access Granted)', style: TextStyle(color: Colors.white70, fontSize: 13)),
               ],
             ),
           ),
-        ),
+          const SizedBox(height: 16),
+          ListTile(
+            tileColor: const Color(0xFF161B26),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            leading: const Icon(Icons.group, color: Color(0xFF00C9A7)),
+            title: const Text('Manage All Users & Hosts', style: TextStyle(color: Colors.white)),
+            trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.white38),
+            onTap: () {},
+          ),
+          const SizedBox(height: 10),
+          ListTile(
+            tileColor: const Color(0xFF161B26),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            leading: const Icon(Icons.monetization_on, color: Colors.amber),
+            title: const Text('System Coin Minting & Audit', style: TextStyle(color: Colors.white)),
+            trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.white38),
+            onTap: () {},
+          ),
+          const SizedBox(height: 10),
+          ListTile(
+            tileColor: const Color(0xFF161B26),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            leading: const Icon(Icons.security, color: Colors.blueAccent),
+            title: const Text('Security & Server Logs', style: TextStyle(color: Colors.white)),
+            trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.white38),
+            onTap: () {},
+          ),
+        ],
       ),
     );
   }
