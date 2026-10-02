@@ -182,7 +182,7 @@ class _AgencyScreenState extends State<AgencyScreen> {
               child: const Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('Agency Tag', style: TextStyle(fontWeight: FontWeight.w640, color: Colors.black87, fontSize: 14)),
+                Text('Agency Tag', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.black87, fontSize: 14)),
                   Icon(Icons.arrow_forward_ios, size: 14, color: Colors.black38),
                 ],
               ),
