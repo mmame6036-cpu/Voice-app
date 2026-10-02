@@ -5,6 +5,7 @@ import 'store_screen.dart';
 import 'invite_screen.dart';
 import 'room_screen.dart';
 import 'coin_seller_screen.dart';
+import 'agency_screen.dart';
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const NileVoiceApp());
@@ -419,6 +420,44 @@ Text(
                         ),
                       ),
                     ],
+                    const SizedBox(height: 14),
+                      Container(
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF161B26),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: Colors.white10),
+                        ),
+                        child: ListTile(
+                          leading: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF00E1B0).withOpacity(0.15),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.business_center, color: Color(0xFF00E1B0)),
+                          ),
+                          title: const Text(
+                            'Agency Center',
+                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+                          ),
+                          subtitle: const Text(
+                            'Host & Commission Dashboard',
+                            style: TextStyle(color: Colors.white54, fontSize: 12),
+                          ),
+                          trailing: const Icon(Icons.arrow_forward_ios, color: Colors.white38, size: 14),
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const AgencyScreen(
+                                  agencyName: "Nile Agency Leader",
+                                  agencyId: "1000",
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
                   ),
                 ],
               ),
