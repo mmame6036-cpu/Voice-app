@@ -3,14 +3,21 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:permission_handler/permission_handler.dart';
+
 // ==========================================
-// 🎙️ VOICE ROOM SCREEN (30 ወንበሮች፦ 1 ባለቤት + 6 ወርቃማ በጌም ተርንኦቨር ተከፋች + 23 መደበኛ)
+// 🎙️ VOICE ROOM SCREEN (30 ወንበሮች፦ 1 ባለቤት + 6 ወርቃማ + 23 መደበኛ)
 // ==========================================
 class VoiceRoomScreen extends StatefulWidget {
   final String channelName;
   final String roomTitle;
+  final bool isOwner;
 
-  const VoiceRoomScreen({Key? key, required this.channelName, required this.roomTitle}) : super(key: key);
+  const VoiceRoomScreen({
+    Key? key,
+    required this.channelName,
+    required this.roomTitle,
+    this.isOwner = true,
+  }) : super(key: key);
 
   @override
   State<VoiceRoomScreen> createState() => _VoiceRoomScreenState();
@@ -23,14 +30,8 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> {
   final List<int> _remoteUsers = [];
   final String _appId = "aab8b8f3e2444379a1f28b4d82b3d888";
 
-  // የተቀመጠበት ወንበር መለያ
   int? _myCurrentSeat;
-
-  // በክፍሉ ውስጥ በጌም የተንቀሳቀሰ ጠቅላላ ኮይን (Room Total Game Turnover)
-  // ለሙከራ 8,500,000 ተደርጓል (ይህም የመጀመሪያዎቹን 3 ወርቃማ ወንበሮች ይከፍታል)
   int _roomGameTurnover = 8500000;
-
-  // ወርቃማ ወንበር ላይ የተቀመጡበት ሰዓት መከታተያ (Timer)
   Timer? _seatRewardTimer;
   int _secondsOnGoldenSeat = 0;
 
@@ -49,19 +50,25 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> {
     _engine.registerEventHandler(
       RtcEngineEventHandler(
         onJoinChannelSuccess: (RtcConnection connection, int elapsed) {
-          setState(() {
-            _isJoined = true;
-          });
+          if (mounted) {
+            setState(() {
+              _isJoined = true;
+            });
+          }
         },
         onUserJoined: (RtcConnection connection, int remoteUid, int elapsed) {
-          setState(() {
-            _remoteUsers.add(remoteUid);
-          });
+          if (mounted) {
+            setState(() {
+              _remoteUsers.add(remoteUid);
+            });
+          }
         },
         onUserOffline: (RtcConnection connection, int remoteUid, UserOfflineReasonType reason) {
-          setState(() {
-            _remoteUsers.remove(remoteUid);
-          });
+          if (mounted) {
+            setState(() {
+              _remoteUsers.remove(remoteUid);
+            });
+          }
         },
       ),
     );
@@ -89,15 +96,15 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> {
     _engine.muteLocalAudioStream(_isMuted);
   }
 
-  // ወርቃማ ወንበር ላይ ሰዓት ሲቆጥሩ ለተጠቃሚው ነጥብ፣ ለባለቤቱ ኮይን የሚያስብ ቆጣሪ
   void _startSeatRewardTimer() {
     _seatRewardTimer?.cancel();
     _secondsOnGoldenSeat = 0;
     _seatRewardTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      setState(() {
-        _secondsOnGoldenSeat++;
-      });
-      // ማስታወሻ፦ ነጥቡና ኮይኑ ስንት በስንት እንደሚሆን በቀጣይ ስንወስን እዚህ ላይ ስሌቱን እናስገባለን!
+      if (mounted) {
+        setState(() {
+          _secondsOnGoldenSeat++;
+        });
+      }
     });
   }
 
@@ -106,11 +113,9 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> {
     _secondsOnGoldenSeat = 0;
   }
 
-  // የወንበር አያያዝ እና የመክፈቻ ህጎች
   void _handleSeatTap(int seatNumber) {
-    // 1. ወንበር 1፦ የክፍሉ ባለቤት ብቻ
     if (seatNumber == 1) {
-      if (!AppData.isSuperAdmin) {
+      if (!widget.isOwner) {
         _showLockedDialog(
           title: 'የባለቤት ወንበር 👑',
           message: 'ይህ ወንበር ቁጥር 1 የክፍሉ ባለቤት ብቻ የሚቀመጥበት ነው!',
@@ -119,7 +124,6 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> {
       }
     }
 
-    // 2. የመጀመሪያዎቹ 3 ወርቃማ ወንበሮች (ወንበር 2፣ 3፣ 4) -> 7 ሚሊየን ኮይን ያስፈልጋል
     if (seatNumber >= 2 && seatNumber <= 4) {
       const int tier1Target = 7000000;
       if (_roomGameTurnover < tier1Target) {
@@ -132,11 +136,10 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> {
       }
     }
 
-    // 3. ሁለተኛዎቹ 3 ወርቃማ ወንበሮች (ወንበር 5፣ 6፣ 7) -> ተጨማሪ 7 ሚሊየን (ጠቅላላ 14 ሚሊየን) ያስፈልጋል
-
-if (seatNumber >= 5 && seatNumber <= 7) {
+    if (seatNumber >= 5 && seatNumber <= 7) {
       const int tier2Target = 14000000;
-      if (_roomGameTurnover < tier2Target) {
+
+if (_roomGameTurnover < tier2Target) {
         int remaining = tier2Target - _roomGameTurnover;
         _showLockedDialog(
           title: 'ወርቃማ ወንበር (ደረጃ 2) 🔒',
@@ -241,8 +244,6 @@ if (seatNumber >= 5 && seatNumber <= 7) {
       body: Column(
         children: [
           const SizedBox(height: 8),
-
-          // ክፍል ውስጥ የቀጥታ ሁኔታ እና የወርቃማ ወንበር የሰዓት ቆጣሪ
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
             decoration: BoxDecoration(
@@ -251,10 +252,10 @@ if (seatNumber >= 5 && seatNumber <= 7) {
             ),
             child: Text(
               _myCurrentSeat != null && _myCurrentSeat! >= 2 && _myCurrentSeat! <= 7
-
-? '👑 Golden Seat Time: $_secondsOnGoldenSeat sec (Earning...)'
+                  ? '👑 Golden Seat Time: $_secondsOnGoldenSeat sec (Earning...)'
                   : (_isJoined ? '● Live in Nile Voice Room' : 'Connecting...'),
-              style: TextStyle(
+
+style: TextStyle(
                 color: _myCurrentSeat != null && _myCurrentSeat! >= 2 && _myCurrentSeat! <= 7
                     ? Colors.amberAccent
                     : (_isJoined ? Colors.greenAccent : Colors.orangeAccent),
@@ -263,10 +264,7 @@ if (seatNumber >= 5 && seatNumber <= 7) {
               ),
             ),
           ),
-
           const SizedBox(height: 10),
-
-          // 30 ወንበሮች (Scrollable Grid)
           Expanded(
             child: GridView.builder(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -285,7 +283,6 @@ if (seatNumber >= 5 && seatNumber <= 7) {
                 bool isGolden = isGoldenTier1 || isGoldenTier2;
                 bool isOccupiedByMe = _myCurrentSeat == seatNumber;
 
-                // ወንበሩ ተከፍቷል ወይስ ተቆልፏል?
                 bool isLocked = false;
                 if (isGoldenTier1 && !tier1Unlocked) isLocked = true;
                 if (isGoldenTier2 && !tier2Unlocked) isLocked = true;
@@ -327,13 +324,13 @@ if (seatNumber >= 5 && seatNumber <= 7) {
                                       )
                                     ]
                                   : [],
-
-),
+                            ),
                             child: CircleAvatar(
                               backgroundColor: isOccupiedByMe
                                   ? const Color(0xFF00C9A7)
                                   : (isOwnerSeat
-                                      ? const Color(0xFF3E0A0D)
+
+? const Color(0xFF3E0A0D)
                                       : (isGolden
                                           ? (isLocked ? Colors.black45 : const Color(0xFF2A2000))
                                           : const Color(0xFF141923))),
@@ -356,8 +353,6 @@ if (seatNumber >= 5 && seatNumber <= 7) {
                               ),
                             ),
                           ),
-
-                          // ዘውድ ምልክት
                           if (isOwnerSeat)
                             const Positioned(
                               top: -2,
@@ -397,8 +392,6 @@ if (seatNumber >= 5 && seatNumber <= 7) {
               },
             ),
           ),
-
-          // የታችኛው መቆጣጠሪያ
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
             decoration: const BoxDecoration(
@@ -409,8 +402,7 @@ if (seatNumber >= 5 && seatNumber <= 7) {
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
                 IconButton(
-
-onPressed: _toggleMute,
+                  onPressed: _toggleMute,
                   iconSize: 28,
                   icon: Icon(
                     _isMuted ? Icons.mic_off : Icons.mic,
@@ -418,7 +410,8 @@ onPressed: _toggleMute,
                   ),
                 ),
                 if (_myCurrentSeat != null)
-                  ElevatedButton.icon(
+
+ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.white12,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
