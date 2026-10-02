@@ -4,7 +4,7 @@ import 'package:flutter/services.dart';
 import 'store_screen.dart';
 import 'invite_screen.dart';
 import 'room_screen.dart';
-
+import 'coin_seller_screen.dart';
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const NileVoiceApp());
@@ -366,12 +366,23 @@ Text(
                       Expanded(
                         child: ElevatedButton.icon(
                           onPressed: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Recharge Gateway (Telebirr / CBE) coming next!')),
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => CoinSellerScreen(
+                                  initialCoins: AppData.userCoins,
+                                  onCoinsUpdated: (newCoins) {
+                                    setState(() {
+                                      AppData.userCoins = newCoins;
+                                    });
+                                    widget.onCoinsUpdated();
+                                  },
+                                ),
+                              ),
                             );
                           },
                           icon: const Icon(Icons.account_balance_wallet, color: Colors.black, size: 18),
-                          label: const Text('Recharge', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+                          label: const Text('Coin Seller 🪙', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.amber,
                             padding: const EdgeInsets.symmetric(vertical: 12),
