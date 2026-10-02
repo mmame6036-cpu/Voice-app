@@ -1,92 +1,214 @@
+import 'dart:async';
+import 'dart:math';
 import 'package:flutter/material.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
+import 'package:permission_handler/permission_handler.dart';
+// ==========================================
+// 🎙️ VOICE ROOM SCREEN (30 ወንበሮች፦ 1 ባለቤት + 6 ወርቃማ በጌም ተርንኦቨር ተከፋች + 23 መደበኛ)
+// ==========================================
+class VoiceRoomScreen extends StatefulWidget {
+  final String channelName;
+  final String roomTitle;
 
-const String appId = "YOUR_AGORA_APP_ID";
-const String channelId = "voice_room_1";
-
-class RoomScreen extends StatefulWidget {
-  const RoomScreen({super.key});
+  const VoiceRoomScreen({Key? key, required this.channelName, required this.roomTitle}) : super(key: key);
 
   @override
-  State<RoomScreen> createState() => _RoomScreenState();
+  State<VoiceRoomScreen> createState() => _VoiceRoomScreenState();
 }
 
-class _RoomScreenState extends State<RoomScreen>
-    with SingleTickerProviderStateMixin {
+class _VoiceRoomScreenState extends State<VoiceRoomScreen> {
   late RtcEngine _engine;
   bool _isJoined = false;
   bool _isMuted = false;
-  bool _isSpeaking = false;
-  late AnimationController _waveController;
+  final List<int> _remoteUsers = [];
+  final String _appId = "aab8b8f3e2444379a1f28b4d82b3d888";
+
+  // የተቀመጠበት ወንበር መለያ
+  int? _myCurrentSeat;
+
+  // በክፍሉ ውስጥ በጌም የተንቀሳቀሰ ጠቅላላ ኮይን (Room Total Game Turnover)
+  // ለሙከራ 8,500,000 ተደርጓል (ይህም የመጀመሪያዎቹን 3 ወርቃማ ወንበሮች ይከፍታል)
+  int _roomGameTurnover = 8500000;
+
+  // ወርቃማ ወንበር ላይ የተቀመጡበት ሰዓት መከታተያ (Timer)
+  Timer? _seatRewardTimer;
+  int _secondsOnGoldenSeat = 0;
 
   @override
   void initState() {
     super.initState();
-    _waveController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 900),
-    )..repeat(reverse: true);
-
-    _initVoiceEngine();
+    _initAgora();
   }
 
-  Future<void> _initVoiceEngine() async {
+  Future<void> _initAgora() async {
     await [Permission.microphone].request();
 
     _engine = createAgoraRtcEngine();
-    await _engine.initialize(const RtcEngineContext(
-      appId: appId,
-      channelProfile: ChannelProfileType.channelProfileLiveBroadcasting,
-    ));
+    await _engine.initialize(RtcEngineContext(appId: _appId));
 
     _engine.registerEventHandler(
       RtcEngineEventHandler(
         onJoinChannelSuccess: (RtcConnection connection, int elapsed) {
-          if (mounted) {
-            setState(() {
-              _isJoined = true;
-            });
-          }
+          setState(() {
+            _isJoined = true;
+          });
         },
-        onAudioVolumeIndication: (RtcConnection connection,
-            List<AudioVolumeInfo> speakers, int totalVolume, int? vad) {
-          if (mounted) {
-            setState(() {
-              _isSpeaking = totalVolume > 5;
-            });
-          }
+        onUserJoined: (RtcConnection connection, int remoteUid, int elapsed) {
+          setState(() {
+            _remoteUsers.add(remoteUid);
+          });
+        },
+        onUserOffline: (RtcConnection connection, int remoteUid, UserOfflineReasonType reason) {
+          setState(() {
+            _remoteUsers.remove(remoteUid);
+          });
         },
       ),
     );
 
-    await _engine.enableAudioVolumeIndication(
-        interval: 200, smooth: 3, reportVad: true);
+    await _engine.setChannelProfile(ChannelProfileType.channelProfileLiveBroadcasting);
     await _engine.setClientRole(role: ClientRoleType.clientRoleBroadcaster);
     await _engine.enableAudio();
 
     await _engine.joinChannel(
-      token: "",
-      channelId: channelId,
-      uid: 0,
+      token: '',
+      channelId: widget.channelName,
+      uid: Random().nextInt(900000) + 100000,
       options: const ChannelMediaOptions(
-        clientRoleType: ClientRoleType.clientRoleBroadcaster,
-        autoSubscribeAudio: true,
         publishMicrophoneTrack: true,
+        autoSubscribeAudio: true,
+        clientRoleType: ClientRoleType.clientRoleBroadcaster,
       ),
     );
   }
 
-  void _toggleMic() async {
+  void _toggleMute() {
     setState(() {
       _isMuted = !_isMuted;
     });
-    await _engine.muteLocalAudioStream(_isMuted);
+    _engine.muteLocalAudioStream(_isMuted);
+  }
+
+  // ወርቃማ ወንበር ላይ ሰዓት ሲቆጥሩ ለተጠቃሚው ነጥብ፣ ለባለቤቱ ኮይን የሚያስብ ቆጣሪ
+  void _startSeatRewardTimer() {
+    _seatRewardTimer?.cancel();
+    _secondsOnGoldenSeat = 0;
+    _seatRewardTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      setState(() {
+        _secondsOnGoldenSeat++;
+      });
+      // ማስታወሻ፦ ነጥቡና ኮይኑ ስንት በስንት እንደሚሆን በቀጣይ ስንወስን እዚህ ላይ ስሌቱን እናስገባለን!
+    });
+  }
+
+  void _stopSeatRewardTimer() {
+    _seatRewardTimer?.cancel();
+    _secondsOnGoldenSeat = 0;
+  }
+
+  // የወንበር አያያዝ እና የመክፈቻ ህጎች
+  void _handleSeatTap(int seatNumber) {
+    // 1. ወንበር 1፦ የክፍሉ ባለቤት ብቻ
+    if (seatNumber == 1) {
+      if (!AppData.isSuperAdmin) {
+        _showLockedDialog(
+          title: 'የባለቤት ወንበር 👑',
+          message: 'ይህ ወንበር ቁጥር 1 የክፍሉ ባለቤት ብቻ የሚቀመጥበት ነው!',
+        );
+        return;
+      }
+    }
+
+    // 2. የመጀመሪያዎቹ 3 ወርቃማ ወንበሮች (ወንበር 2፣ 3፣ 4) -> 7 ሚሊየን ኮይን ያስፈልጋል
+    if (seatNumber >= 2 && seatNumber <= 4) {
+      const int tier1Target = 7000000;
+      if (_roomGameTurnover < tier1Target) {
+        int remaining = tier1Target - _roomGameTurnover;
+        _showLockedDialog(
+          title: 'ወርቃማ ወንበር (ደረጃ 1) 🔒',
+          message: 'ይህ ወርቃማ ወንበር እንዲከፈት ክፍሉ ውስጥ 7,000,000 የጌም ኮይን መንቀሳቀስ አለበት!\n\nየቀረው የጌም ኮይን፦ $remaining',
+        );
+        return;
+      }
+    }
+
+    // 3. ሁለተኛዎቹ 3 ወርቃማ ወንበሮች (ወንበር 5፣ 6፣ 7) -> ተጨማሪ 7 ሚሊየን (ጠቅላላ 14 ሚሊየን) ያስፈልጋል
+
+if (seatNumber >= 5 && seatNumber <= 7) {
+      const int tier2Target = 14000000;
+      if (_roomGameTurnover < tier2Target) {
+        int remaining = tier2Target - _roomGameTurnover;
+        _showLockedDialog(
+          title: 'ወርቃማ ወንበር (ደረጃ 2) 🔒',
+          message: 'እነዚህ የመጨረሻዎቹ 3 ወርቃማ ወንበሮች እንዲከፈቱ ተጨማሪ 7 ሚሊየን (በድምሩ 14,000,000) የጌም ኮይን ያስፈልጋል!\n\nየቀረው የጌም ኮይን፦ $remaining',
+        );
+        return;
+      }
+    }
+
+    setState(() {
+      _myCurrentSeat = seatNumber;
+    });
+
+    bool isGolden = seatNumber >= 2 && seatNumber <= 7;
+    if (isGolden) {
+      _startSeatRewardTimer();
+    } else {
+      _stopSeatRewardTimer();
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          seatNumber == 1
+              ? '👑 የክፍሉ ባለቤት ወንበር ላይ ተቀምጠዋል!'
+              : (isGolden
+                  ? '✨ እንኳን ደስ አለዎት! በተከፈተው ወርቃማ ወንበር ቁጥር $seatNumber ላይ ተቀምጠዋል!'
+                  : 'በወንበር ቁጥር $seatNumber ላይ ተቀምጠዋል።'),
+        ),
+        backgroundColor: isGolden ? Colors.amber[800] : const Color(0xFF00C9A7),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  void _leaveSeat() {
+    _stopSeatRewardTimer();
+    setState(() {
+      _myCurrentSeat = null;
+    });
+  }
+
+  void _showLockedDialog({required String title, required String message}) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF161B26),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            const Icon(Icons.lock, color: Colors.amber, size: 24),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(title, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+        content: Text(message, style: const TextStyle(color: Colors.white70, fontSize: 13, height: 1.4)),
+        actions: [
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00C9A7)),
+            onPressed: () => Navigator.pop(context),
+            child: const Text('እሺ', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
   void dispose() {
-    _waveController.dispose();
+    _stopSeatRewardTimer();
     _engine.leaveChannel();
     _engine.release();
     super.dispose();
@@ -94,165 +216,221 @@ class _RoomScreenState extends State<RoomScreen>
 
   @override
   Widget build(BuildContext context) {
+    bool tier1Unlocked = _roomGameTurnover >= 7000000;
+    bool tier2Unlocked = _roomGameTurnover >= 14000000;
+
     return Scaffold(
-      backgroundColor: const Color(0xFF0F0C20),
+      backgroundColor: const Color(0xFF0D111A),
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Row(
+        backgroundColor: const Color(0xFF161B26),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const CircleAvatar(
-              radius: 18,
-              backgroundColor: Colors.purpleAccent,
-              child: Icon(Icons.mic, color: Colors.white, size: 20),
-            ),
-            const SizedBox(width: 10),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('VIP Live Room',
-                    style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white)),
-                Text(
-                  _isJoined ? 'የተገናኘ (Live)' : 'በመገናኘት ላይ...',
-                  style: TextStyle(
-                      fontSize: 11,
-                      color:
-                          _isJoined ? Colors.greenAccent : Colors.orangeAccent),
-                ),
-              ],
+            Text(widget.roomTitle, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            Text(
+              '🎮 Game Turnover: $_roomGameTurnover Coins',
+              style: const TextStyle(fontSize: 11, color: Colors.amberAccent),
             ),
           ],
+        ),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.pop(context),
         ),
       ),
       body: Column(
         children: [
-          const SizedBox(height: 25),
-          Center(
-            child: Column(
-              children: [
-                AnimatedBuilder(
-                  animation: _waveController,
-                  builder: (context, child) {
-                    return Container(
-                      padding: EdgeInsets.all(_isSpeaking && !_isMuted
-                          ? _waveController.value * 8
-                          : 0),
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: _isSpeaking && !_isMuted
-                              ? Colors.greenAccent
-                              : Colors.amber,
-                          width: 3,
-                        ),
-                        boxShadow: [
-                          if (_isSpeaking && !_isMuted)
-                            BoxShadow(
-                              color: Colors.greenAccent.withAlpha(128),
-                              blurRadius: 15,
-                              spreadRadius: 4,
-                            ),
-                        ],
-                      ),
-                      child: child,
-                    );
-                  },
-                  child: const CircleAvatar(
-                    radius: 40,
-                    backgroundColor: Color(0xFF2A2247),
-                    child: Icon(Icons.person, size: 45, color: Colors.amber),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Text('Host',
-                        style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 15)),
-                    const SizedBox(width: 5),
-                    Icon(
-                      _isMuted ? Icons.mic_off : Icons.mic,
-                      color: _isMuted ? Colors.redAccent : Colors.greenAccent,
-                      size: 16,
-                    ),
-                  ],
-                ),
-              ],
+          const SizedBox(height: 8),
+
+          // ክፍል ውስጥ የቀጥታ ሁኔታ እና የወርቃማ ወንበር የሰዓት ቆጣሪ
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+            decoration: BoxDecoration(
+              color: _isJoined ? Colors.green.withOpacity(0.2) : Colors.orange.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(20),
             ),
-          ),
-          const SizedBox(height: 35),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: GridView.builder(
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: 8,
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 4,
-                  mainAxisSpacing: 20,
-                  crossAxisSpacing: 20,
-                  childAspectRatio: 0.8,
-                ),
-                itemBuilder: (context, index) {
-                  return Column(
-                    children: [
-                      Container(
-                        height: 52,
-                        width: 52,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: const Color(0xFF1E1736),
-                          border: Border.all(color: Colors.white12),
-                        ),
-                        child: Icon(Icons.chair,
-                            color: Colors.white.withAlpha(77), size: 22),
-                      ),
-                      const SizedBox(height: 6),
-                      Text('${index + 1}',
-                          style: const TextStyle(
-                              color: Colors.white54, fontSize: 12)),
-                    ],
-                  );
-                },
+            child: Text(
+              _myCurrentSeat != null && _myCurrentSeat! >= 2 && _myCurrentSeat! <= 7
+
+? '👑 Golden Seat Time: $_secondsOnGoldenSeat sec (Earning...)'
+                  : (_isJoined ? '● Live in Nile Voice Room' : 'Connecting...'),
+              style: TextStyle(
+                color: _myCurrentSeat != null && _myCurrentSeat! >= 2 && _myCurrentSeat! <= 7
+                    ? Colors.amberAccent
+                    : (_isJoined ? Colors.greenAccent : Colors.orangeAccent),
+                fontWeight: FontWeight.bold,
+                fontSize: 12,
               ),
             ),
           ),
+
+          const SizedBox(height: 10),
+
+          // 30 ወንበሮች (Scrollable Grid)
+          Expanded(
+            child: GridView.builder(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              itemCount: 30,
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 5,
+                crossAxisSpacing: 10,
+                mainAxisSpacing: 14,
+                childAspectRatio: 0.72,
+              ),
+              itemBuilder: (context, index) {
+                int seatNumber = index + 1;
+                bool isOwnerSeat = seatNumber == 1;
+                bool isGoldenTier1 = seatNumber >= 2 && seatNumber <= 4;
+                bool isGoldenTier2 = seatNumber >= 5 && seatNumber <= 7;
+                bool isGolden = isGoldenTier1 || isGoldenTier2;
+                bool isOccupiedByMe = _myCurrentSeat == seatNumber;
+
+                // ወንበሩ ተከፍቷል ወይስ ተቆልፏል?
+                bool isLocked = false;
+                if (isGoldenTier1 && !tier1Unlocked) isLocked = true;
+                if (isGoldenTier2 && !tier2Unlocked) isLocked = true;
+
+                return GestureDetector(
+                  onTap: () => _handleSeatTap(seatNumber),
+                  child: Column(
+                    children: [
+                      Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          Container(
+                            width: 52,
+                            height: 52,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              gradient: isOwnerSeat
+                                  ? const LinearGradient(colors: [Color(0xFFE50914), Color(0xFFB71C1C)])
+                                  : (isGolden
+                                      ? (isLocked
+                                          ? const LinearGradient(colors: [Color(0xFF5D4037), Color(0xFF3E2723)])
+                                          : const LinearGradient(colors: [Color(0xFFFFD700), Color(0xFFFFA000)]))
+                                      : null),
+                              color: (isOwnerSeat || isGolden) ? null : const Color(0xFF1E2433),
+                              border: Border.all(
+                                color: isOwnerSeat
+                                    ? Colors.redAccent
+                                    : (isGolden
+                                        ? (isLocked ? Colors.white24 : Colors.amberAccent)
+                                        : (isOccupiedByMe ? const Color(0xFF00C9A7) : Colors.white12)),
+                                width: (isOwnerSeat || isGolden) ? 2.5 : 1.5,
+                              ),
+                              boxShadow: (isOwnerSeat || (isGolden && !isLocked))
+                                  ? [
+                                      BoxShadow(
+                                        color: (isOwnerSeat ? Colors.red : Colors.amber).withOpacity(0.4),
+                                        blurRadius: 8,
+                                        spreadRadius: 1,
+                                      )
+                                    ]
+                                  : [],
+
+),
+                            child: CircleAvatar(
+                              backgroundColor: isOccupiedByMe
+                                  ? const Color(0xFF00C9A7)
+                                  : (isOwnerSeat
+                                      ? const Color(0xFF3E0A0D)
+                                      : (isGolden
+                                          ? (isLocked ? Colors.black45 : const Color(0xFF2A2000))
+                                          : const Color(0xFF141923))),
+                              child: Icon(
+                                isOccupiedByMe
+                                    ? Icons.mic
+                                    : (isOwnerSeat
+                                        ? Icons.star
+                                        : (isGolden
+                                            ? (isLocked ? Icons.lock : Icons.workspace_premium)
+                                            : Icons.airline_seat_recline_normal)),
+                                color: isOccupiedByMe
+                                    ? Colors.black
+                                    : (isOwnerSeat
+                                        ? Colors.redAccent
+                                        : (isGolden
+                                            ? (isLocked ? Colors.white38 : Colors.amber)
+                                            : Colors.white24)),
+                                size: (isOwnerSeat || isGolden) ? 22 : 18,
+                              ),
+                            ),
+                          ),
+
+                          // ዘውድ ምልክት
+                          if (isOwnerSeat)
+                            const Positioned(
+                              top: -2,
+                              child: Icon(Icons.shield, size: 14, color: Colors.white),
+                            )
+                          else if (isGolden && !isLocked)
+                            const Positioned(
+                              top: -2,
+                              child: Icon(Icons.star, size: 14, color: Colors.amberAccent),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        isOccupiedByMe
+                            ? 'You'
+                            : (isOwnerSeat
+                                ? 'Owner'
+                                : (isGolden
+                                    ? (isLocked ? '🔒 Gold $seatNumber' : 'Gold $seatNumber')
+                                    : '$seatNumber')),
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: (isOwnerSeat || isGolden) ? FontWeight.bold : FontWeight.normal,
+                          color: isOwnerSeat
+                              ? Colors.redAccent
+                              : (isGolden
+                                  ? (isLocked ? Colors.white38 : Colors.amberAccent)
+                                  : Colors.white60),
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+
+          // የታችኛው መቆጣጠሪያ
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
             decoration: const BoxDecoration(
-              color: Color(0xFF16112C),
-              borderRadius: BorderRadius.only(
-                  topLeft: Radius.circular(25), topRight: Radius.circular(25)),
+              color: Color(0xFF161B26),
+              borderRadius: BorderRadius.only(topLeft: Radius.circular(20), topRight: Radius.circular(20)),
             ),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                const Row(
-                  children: [
-                    Icon(Icons.headset, color: Colors.white54, size: 20),
-                    SizedBox(width: 8),
-                    Text('የድምፅ ክፍል ክፍት ነው',
-                        style: TextStyle(color: Colors.white54, fontSize: 12)),
-                  ],
-                ),
-                FloatingActionButton.small(
-                  backgroundColor:
-                      _isMuted ? Colors.redAccent : Colors.tealAccent,
-                  onPressed: _toggleMic,
-                  child: Icon(
+                IconButton(
+
+onPressed: _toggleMute,
+                  iconSize: 28,
+                  icon: Icon(
                     _isMuted ? Icons.mic_off : Icons.mic,
-                    color: _isMuted ? Colors.white : Colors.black,
+                    color: _isMuted ? Colors.red : const Color(0xFF00C9A7),
                   ),
+                ),
+                if (_myCurrentSeat != null)
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white12,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    onPressed: _leaveSeat,
+                    icon: const Icon(Icons.arrow_downward, size: 16, color: Colors.white70),
+                    label: const Text('ውረድ', style: TextStyle(color: Colors.white, fontSize: 12)),
+                  ),
+                IconButton(
+                  onPressed: () => Navigator.pop(context),
+                  iconSize: 28,
+                  icon: const Icon(Icons.call_end, color: Colors.redAccent),
                 ),
               ],
             ),
