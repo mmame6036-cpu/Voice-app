@@ -23,8 +23,7 @@ class _CoinSellerScreenState extends State<CoinSellerScreen> with SingleTickerPr
   double _sellerPoints = 45200.0;
   String _sellerLevel = "Senior Seller 🔰";
 
-  // Transfer Controllers
-  bool _isTransferToUser = true; // true = User, false = Coinseller
+  bool _isTransferToUser = true;
   final TextEditingController _targetIdController = TextEditingController();
   final TextEditingController _coinAmountController = TextEditingController();
   String? _verifiedUserName;
@@ -45,7 +44,6 @@ class _CoinSellerScreenState extends State<CoinSellerScreen> with SingleTickerPr
     super.dispose();
   }
 
-  // ተጠቃሚውን መፈተሻ (Check User ID)
   void _checkUserId() {
     String id = _targetIdController.text.trim();
     if (id.isEmpty) {
@@ -76,21 +74,31 @@ class _CoinSellerScreenState extends State<CoinSellerScreen> with SingleTickerPr
     });
   }
 
-  // ኮይን ማስተላለፊያ (Execute Transfer)
   void _executeTransfer() {
     String id = _targetIdController.text.trim();
-    int? parsedCoins = int.tryParse(_coinAmountController.text.trim());
-
-    // እዚህ ጋር || በትክክል ተስተካክሏል
-    if (id.isEmpty  parsedCoins == null  parsedCoins <= 0) {
+    if (id.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('እባክዎ ትክክለኛ መለያ (ID) እና የኮይን መጠን ያስገቡ')),
+        const SnackBar(content: Text('እባክዎ የተጠቃሚ መለያ ያስገቡ')),
       );
       return;
     }
 
-    // እዚህ ጋር parsedCoins! በሚል ከ null የጸዳ ተደርጓል
-    int transferAmount = parsedCoins!;
+    int? parsedCoins = int.tryParse(_coinAmountController.text.trim());
+    if (parsedCoins == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('እባክዎ ትክክለኛ የኮይን መጠን ያስገቡ')),
+      );
+      return;
+    }
+
+    if (parsedCoins <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('የኮይን መጠን ከ 0 በላይ መሆን አለበት')),
+      );
+      return;
+    }
+
+    int transferAmount = parsedCoins;
 
     if (transferAmount > _sellerBalance) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -115,7 +123,8 @@ class _CoinSellerScreenState extends State<CoinSellerScreen> with SingleTickerPr
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00C9A7)),
-            onPressed: () {
+
+onPressed: () {
               Navigator.pop(context);
               setState(() {
                 _sellerBalance = _sellerBalance - transferAmount;
@@ -123,7 +132,7 @@ class _CoinSellerScreenState extends State<CoinSellerScreen> with SingleTickerPr
               widget.onCoinsUpdated(_sellerBalance);
               _coinAmountController.clear();
 
-ScaffoldMessenger.of(context).showSnackBar(
+              ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text('ለ ${_verifiedUserName ?? id} $transferAmount ኮይን በተሳካ ሁኔታ ተላልፏል!'),
                   backgroundColor: const Color(0xFF00C9A7),
@@ -149,17 +158,10 @@ ScaffoldMessenger.of(context).showSnackBar(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.pop(context),
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.help_outline, color: Colors.white70),
-            onPressed: () {},
-          ),
-        ],
       ),
       body: SingleChildScrollView(
         child: Column(
           children: [
-            // ================= 1. የሴለር ዋና መረጃ ካርድ =================
             Container(
               margin: const EdgeInsets.all(14),
               padding: const EdgeInsets.all(16),
@@ -196,15 +198,6 @@ ScaffoldMessenger.of(context).showSnackBar(
                           ],
                         ),
                       ),
-                      ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF00C9A7),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                        ),
-                        onPressed: () {},
-                        child: const Text('Level Up', style: TextStyle(color: Colors.black, fontSize: 12, fontWeight: FontWeight.bold)),
-                      ),
                     ],
                   ),
                   const Divider(color: Colors.white10, height: 24),
@@ -212,8 +205,7 @@ ScaffoldMessenger.of(context).showSnackBar(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Column(
-
-crossAxisAlignment: CrossAxisAlignment.start,
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const Text('Balance', style: TextStyle(color: Colors.white54, fontSize: 12)),
                           const SizedBox(height: 4),
@@ -223,61 +215,18 @@ crossAxisAlignment: CrossAxisAlignment.start,
                               const SizedBox(width: 6),
                               Text(
                                 '$_sellerBalance',
-                                style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
+
+style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
                               ),
                             ],
                           ),
                         ],
                       ),
-                      OutlinedButton(
-                        style: OutlinedButton.styleFrom(
-                          side: const BorderSide(color: Colors.amber),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                        ),
-                        onPressed: () {},
-                        child: const Text('Details', style: TextStyle(color: Colors.amber, fontSize: 12)),
-                      ),
                     ],
-                  ),
-                  const SizedBox(height: 14),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF1F2633),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Row(
-                      children: [
-                        Icon(Icons.payment, color: Colors.orangeAccent, size: 18),
-                        SizedBox(width: 8),
-                        Text('Payment Method (Telebirr, CBE, USDT)', style: TextStyle(color: Colors.white70, fontSize: 12)),
-                        Spacer(),
-                        Icon(Icons.arrow_forward_ios, color: Colors.white38, size: 12),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF1F2633),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Row(
-                      children: [
-                        Icon(Icons.message, color: Color(0xFF00C9A7), size: 18),
-                        SizedBox(width: 8),
-                        Text('Greeting Message Settings', style: TextStyle(color: Colors.white70, fontSize: 12)),
-                        Spacer(),
-                        Icon(Icons.arrow_forward_ios, color: Colors.white38, size: 12),
-                      ],
-                    ),
                   ),
                 ],
               ),
             ),
-
-            // ================= 2. ሶስቱ ታቦች (TabBar) =================
             Container(
               margin: const EdgeInsets.symmetric(horizontal: 14),
               decoration: BoxDecoration(
@@ -289,7 +238,6 @@ crossAxisAlignment: CrossAxisAlignment.start,
                 indicatorColor: const Color(0xFF00C9A7),
                 labelColor: const Color(0xFF00C9A7),
                 unselectedLabelColor: Colors.white54,
-                indicatorWeight: 3,
                 tabs: const [
                   Tab(text: 'Transfer'),
                   Tab(text: 'Recharge'),
@@ -297,8 +245,6 @@ crossAxisAlignment: CrossAxisAlignment.start,
                 ],
               ),
             ),
-
-// ================= 3. የታቦቹ ይዘት =================
             SizedBox(
               height: 520,
               child: TabBarView(
@@ -316,9 +262,6 @@ crossAxisAlignment: CrossAxisAlignment.start,
     );
   }
 
-  // -------------------------------------------------------------
-  // TAB 1: TRANSFER (ማስተላለፊያ)
-  // -------------------------------------------------------------
   Widget _buildTransferTab() {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
@@ -376,7 +319,8 @@ crossAxisAlignment: CrossAxisAlignment.start,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 ),
                 onPressed: _isCheckingUser ? null : _checkUserId,
-                child: _isCheckingUser
+
+child: _isCheckingUser
                     ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF00C9A7)))
                     : const Text('Check', style: TextStyle(color: Color(0xFF00C9A7), fontWeight: FontWeight.bold)),
               ),
@@ -392,8 +336,7 @@ crossAxisAlignment: CrossAxisAlignment.start,
           TextField(
             controller: _coinAmountController,
             keyboardType: TextInputType.number,
-
-style: const TextStyle(color: Colors.white),
+            style: const TextStyle(color: Colors.white),
             decoration: InputDecoration(
               hintText: 'Enter amount (e.g. 10000)',
               prefixIcon: const Icon(Icons.monetization_on, color: Colors.amber),
@@ -412,21 +355,11 @@ style: const TextStyle(color: Colors.white),
             onPressed: _executeTransfer,
             child: const Text('Transfer', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 15)),
           ),
-          const SizedBox(height: 12),
-          Center(
-            child: TextButton(
-              onPressed: () {},
-              child: const Text('Transfer Detail >', style: TextStyle(color: Color(0xFF00C9A7), fontSize: 12)),
-            ),
-          ),
         ],
       ),
     );
   }
 
-  // -------------------------------------------------------------
-  // TAB 2: RECHARGE (ኮይን መሙያ / መግዣ)
-  // -------------------------------------------------------------
   Widget _buildRechargeTab() {
     final bundles = [
       {'coins': '1,980,000', 'price': '\$200 (Standard)'},
@@ -477,33 +410,11 @@ style: const TextStyle(color: Colors.white),
             );
           },
         ),
-        const SizedBox(height: 16),
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: const Color(0xFF1F2838),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: const Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-
-children: [
-              Text('Recharge Rules:', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
-              SizedBox(height: 4),
-              Text('• Beginner Seller: \$1 = 9,800 Coins', style: TextStyle(color: Colors.white70, fontSize: 11)),
-              Text('• Standard Seller: \$1 = 9,900 Coins (Single recharge ≥ \$200)', style: TextStyle(color: Colors.white70, fontSize: 11)),
-              Text('• Senior Seller: \$1 = 10,000 Coins (Single recharge ≥ \$1000)', style: TextStyle(color: Colors.white70, fontSize: 11)),
-            ],
-          ),
-        ),
       ],
     );
   }
 
-  // -------------------------------------------------------------
-  // TAB 3: EXCHANGE (ነጥብ ወደ ኮይን መቀየሪያ)
-  // -------------------------------------------------------------
-  Widget _buildExchangeTab() {
+Widget _buildExchangeTab() {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
