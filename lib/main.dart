@@ -8,80 +8,216 @@ import 'store_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(const HalaSuperApp());
+  runApp(const NileVoiceApp());
 }
 
-// Global state for simple demonstration across devices
+// Global App State
 class AppData {
-  static String currentUserId = "1000"; // ברירת מחדል: 1000 (Owner) ወይም 1001 (User)
-  static String currentUserName = "KEDIR (Owner)";
-  static int userCoins = 1500;
+  static String currentUserId = "1000";
+  static String currentUserName = "KEDIR (Super Owner)";
+  static int userCoins = 50000;
+  static int userPoints = 0;
   static bool isSuperAdmin = true;
-  static String selectedCountry = 'Global';
+  static bool biometricVerified = true;
 }
 
-class HalaSuperApp extends StatelessWidget {
-  const HalaSuperApp({Key? key}) : super(key: key);
+class NileVoiceApp extends StatelessWidget {
+  const NileVoiceApp({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Hala Voice Global',
+      title: 'Nile Voice Global',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         brightness: Brightness.dark,
-        scaffoldBackgroundColor: const Color(0xFF0F121C),
-        primaryColor: const Color(0xFF00E676),
+        scaffoldBackgroundColor: const Color(0xFF0D111A),
+        primaryColor: const Color(0xFF00C9A7),
         fontFamily: 'sans-serif',
       ),
-      home: const MainHomeScreen(),
+      home: const NileMainScreen(),
     );
   }
 }
 
-class MainHomeScreen extends StatefulWidget {
-  const MainHomeScreen({Key? key}) : super(key: key);
+class NileMainScreen extends StatefulWidget {
+  const NileMainScreen({Key? key}) : super(key: key);
 
   @override
-  State<MainHomeScreen> createState() => _MainHomeScreenState();
+  State<NileMainScreen> createState() => _NileMainScreenState();
 }
 
-class _MainHomeScreenState extends State<MainHomeScreen> {
-  // የሚገኙ ክፍሎች ዝርዝር
+class _NileMainScreenState extends State<NileMainScreen> {
+  int _currentIndex = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    final List<Widget> pages = [
+      const NileRoomsPage(),
+      NileProfileMePage(onCoinsUpdated: () => setState(() {})),
+    ];
+
+    return Scaffold(
+      body: pages[_currentIndex],
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _currentIndex,
+        backgroundColor: const Color(0xFF161B26),
+        selectedItemColor: const Color(0xFF00C9A7),
+        unselectedItemColor: Colors.white54,
+        onTap: (index) {
+          setState(() {
+            _currentIndex = index;
+          });
+        },
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.waves),
+            label: 'Rooms',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.person),
+            label: 'Me',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ==========================================
+// 🌊 1. ROOMS PAGE (የክፍሎች ገጽ)
+// ==========================================
+class NileRoomsPage extends StatefulWidget {
+  const NileRoomsPage({Key? key}) : super(key: key);
+
+  @override
+  State<NileRoomsPage> createState() => _NileRoomsPageState();
+}
+
+class _NileRoomsPageState extends State<NileRoomsPage> {
   final List<Map<String, dynamic>> rooms = [
     {
-      'id': 'room_101',
-      'title': '👑 Habesha Lounge VIP',
+      'id': 'nile_room_1',
+      'title': '🌊 Nile VIP Grand Lounge',
       'host': 'KEDIR',
       'country': 'Ethiopia',
-      'users': '12',
+      'users': '24',
     },
     {
-      'id': 'room_102',
-      'title': '🎵 Arabic & Global Melody',
+      'id': 'nile_room_2',
+      'title': '🎵 Nile Melody & Chat',
       'host': 'Amir',
-      'country': 'Saudi Arabia',
-      'users': '8',
+      'country': 'Global',
+      'users': '15',
     },
   ];
 
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF0D111A),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF161B26),
+        elevation: 0,
+        title: const Row(
+          children: [
+            Icon(Icons.waves, color: Color(0xFF00C9A7)),
+            SizedBox(width: 8),
+            Text(
+              'Nile Voice',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+            ),
+          ],
+        ),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          const Text(
+            'Explore Live Rooms',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white70),
+          ),
+          const SizedBox(height: 12),
+          ...rooms.map((r) => Container(
+
+margin: const EdgeInsets.only(bottom: 12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF161B26),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.white12),
+                ),
+                child: ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  leading: const CircleAvatar(
+                    backgroundColor: Color(0xFF222938),
+                    child: Icon(Icons.mic, color: Color(0xFF00C9A7)),
+                  ),
+                  title: Text(
+                    r['title'],
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.white),
+                  ),
+                  subtitle: Text(
+                    'Host: ${r['host']} • ${r['country']}',
+                    style: const TextStyle(fontSize: 12, color: Colors.white54),
+                  ),
+                  trailing: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF00C9A7),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => VoiceRoomScreen(
+                            channelName: r['id'],
+                            roomTitle: r['title'],
+                          ),
+                        ),
+                      );
+                    },
+                    child: const Text('Join', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+                  ),
+                ),
+              )),
+        ],
+      ),
+    );
+  }
+}
+
+// ==========================================
+// 👤 2. "ME" PROFILE PAGE (Store እና Recharge አጠገብ ለአጠገብ)
+// ==========================================
+class NileProfileMePage extends StatefulWidget {
+  final VoidCallback onCoinsUpdated;
+  const NileProfileMePage({Key? key, required this.onCoinsUpdated}) : super(key: key);
+
+  @override
+  State<NileProfileMePage> createState() => _NileProfileMePageState();
+}
+
+class _NileProfileMePageState extends State<NileProfileMePage> {
   void _switchUserRole(bool asOwner) {
     setState(() {
       if (asOwner) {
         AppData.currentUserId = "1000";
-        AppData.currentUserName = "KEDIR (Owner)";
+        AppData.currentUserName = "KEDIR (Super Owner)";
         AppData.userCoins = 50000;
         AppData.isSuperAdmin = true;
+        AppData.biometricVerified = true;
       } else {
         AppData.currentUserId = "1001";
         AppData.currentUserName = "Guest User";
-        AppData.userCoins = 100; // ተጠቃሚው አነስተኛ ኮይን አለው
+        AppData.userCoins = 100;
         AppData.isSuperAdmin = false;
+        AppData.biometricVerified = false;
       }
     });
+    widget.onCoinsUpdated();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Switched to: ${AppData.currentUserName} (ID: ${AppData.currentUserId})'),
+        content: Text('Switched to: ${AppData.currentUserName}'),
         backgroundColor: asOwner ? Colors.green : Colors.blueGrey,
         duration: const Duration(seconds: 2),
       ),
@@ -91,55 +227,20 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0F121C),
+      backgroundColor: const Color(0xFF0D111A),
       appBar: AppBar(
         backgroundColor: const Color(0xFF161B26),
         elevation: 0,
-        title: Row(
-          children: [
-            const Icon(Icons.mic_external_on, color: Color(0xFF00E676)),
-            const SizedBox(width: 8),
-            Text(
-              AppData.currentUserName,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-          ],
-        ),
+        title: const Text('My Profile', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
         actions: [
-          // ኮይን ባላንስ ማሳያ
-          Container(
-            margin: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: const Color(0xFF232A3B),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.monetization_on, color: Colors.amber, size: 18),
-                const SizedBox(width: 4),
-                Text(
-                  '${AppData.userCoins}',
-                  style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: 13),
-
-),
-              ],
-            ),
-          ),
-          // የመቀየሪያ ቁልፍ (በሁለቱ ስልኮች ሚና ለመቀያየር)
           PopupMenuButton<bool>(
             icon: const Icon(Icons.switch_account, color: Colors.white70),
             tooltip: 'Switch Account Role',
             onSelected: _switchUserRole,
             itemBuilder: (context) => [
-              const PopupMenuItem(
-                value: true,
-                child: Text('Login as Owner (KEDIR)'),
-              ),
-              const PopupMenuItem(
-                value: false,
-                child: Text('Login as Regular User (Guest)'),
-              ),
+              const PopupMenuItem(value: true, child: Text('Login as Owner (KEDIR)')),
+
+const PopupMenuItem(value: false, child: Text('Login as Guest User')),
             ],
           ),
         ],
@@ -147,61 +248,178 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // 1. የስቶር (Store) ቁልፍ
-            GestureDetector(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => StoreScreen(
-                      userCoins: AppData.userCoins,
-                      onCoinsUpdated: (newCoins) {
-                        setState(() {
-                          AppData.userCoins = newCoins;
-                        });
-                      },
+            // Profile Card
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFF161B26),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 32,
+                    backgroundColor: const Color(0xFF00C9A7),
+                    child: Text(
+                      AppData.currentUserName[0],
+                      style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Colors.black),
                     ),
                   ),
-                );
-              },
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF00C9A7), Color(0xFF00897B)],
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          AppData.currentUserName,
+                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'ID: ${AppData.currentUserId}',
+                          style: const TextStyle(fontSize: 13, color: Colors.white54),
+                        ),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Icon(
+                              AppData.biometricVerified ? Icons.verified_user : Icons.gpp_maybe,
+                              size: 14,
+                              color: AppData.biometricVerified ? Colors.greenAccent : Colors.orangeAccent,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              AppData.biometricVerified ? 'Identity Verified' : 'Unverified Biometrics',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: AppData.biometricVerified ? Colors.greenAccent : Colors.orangeAccent,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFF00C9A7).withOpacity(0.35),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: const Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.storefront, color: Colors.white, size: 24),
-                    SizedBox(width: 10),
-                    Text(
-                      'Open Hala Store 🛍️',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
+                ],
               ),
             ),
 
-            const SizedBox(height: 12),
+            const SizedBox(height: 16),
 
-            // 2. የአድሚን ፖርታል ቁልፍ (ለ Owner ብቻ የሚፈቀድ)
+            // Wallet Balance Card
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF1E2838), Color(0xFF141A24)],
+                ),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: Colors.white10),
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Coins Balance', style: TextStyle(color: Colors.white54, fontSize: 13)),
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              const Icon(Icons.monetization_on, color: Colors.amber, size: 20),
+                              const SizedBox(width: 6),
+
+Text(
+                                '${AppData.userCoins}',
+                                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Earnings Points', style: TextStyle(color: Colors.white54, fontSize: 13)),
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              const Icon(Icons.diamond, color: Colors.cyanAccent, size: 20),
+                              const SizedBox(width: 6),
+                              Text(
+                                '${AppData.userPoints}',
+                                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  const Divider(color: Colors.white10, height: 28),
+
+                  // 🔥 ከ Recharge ጎን Store በትክክል እዚህ ተቀምጧል 🔥
+                  Row(
+                    children: [
+                      // 1. Recharge Button
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: () {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Recharge Gateway (Telebirr / CBE) coming next!')),
+                            );
+                          },
+                          icon: const Icon(Icons.account_balance_wallet, color: Colors.black, size: 18),
+                          label: const Text('Recharge', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.amber,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      // 2. Store Button (ልክ ከ Recharge ጎን)
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => StoreScreen(
+                                  userCoins: AppData.userCoins,
+                                  onCoinsUpdated: (newCoins) {
+                                    setState(() {
+                                      AppData.userCoins = newCoins;
+                                    });
+                                    widget.onCoinsUpdated();
+                                  },
+                                ),
+                              ),
+                            );
+                          },
+                          icon: const Icon(Icons.storefront, color: Colors.white, size: 18),
+                          label: const Text('Store 🛍️', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF00C9A7),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+
+shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 20),
+
+            // 👑 Admin Portal Button (ለባለቤቱ ብቻ)
             if (AppData.isSuperAdmin)
               GestureDetector(
                 onTap: () {
@@ -216,85 +434,21 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
                     gradient: const LinearGradient(
                       colors: [Color(0xFFE50914), Color(0xFF8B0000)],
                     ),
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.red.withOpacity(0.35),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
+                    borderRadius: BorderRadius.circular(14),
                   ),
                   child: const Row(
                     mainAxisAlignment: MainAxisAlignment.center,
-
-children: [
-                      Icon(Icons.admin_panel_settings, color: Colors.white, size: 24),
-                      SizedBox(width: 10),
+                    children: [
+                      Icon(Icons.admin_panel_settings, color: Colors.white, size: 22),
+                      SizedBox(width: 8),
                       Text(
                         'Master Admin Portal 👑',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
+                        style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
                       ),
                     ],
                   ),
                 ),
               ),
-
-            const SizedBox(height: 24),
-
-            // 3. የክፍሎች (Voice Rooms) ዝርዝር
-            const Text(
-              'Live Voice Rooms',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
-            ),
-            const SizedBox(height: 12),
-
-            ...rooms.map((r) => Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF161A28),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: Colors.white10),
-                  ),
-                  child: ListTile(
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    leading: const CircleAvatar(
-                      backgroundColor: Color(0xFF1E2433),
-                      child: Icon(Icons.graphic_eq, color: Color(0xFF00E676)),
-                    ),
-                    title: Text(
-                      r['title'],
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.white),
-                    ),
-                    subtitle: Text(
-                      'Host: ${r['host']} • ${r['country']}',
-                      style: const TextStyle(fontSize: 12, color: Colors.white54),
-                    ),
-                    trailing: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF00E676),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      ),
-                      onPressed: () {
-                        // ወደ ክፍሉ መግባት
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => VoiceRoomScreen(
-                              channelName: r['id'],
-                              roomTitle: r['title'],
-                            ),
-                          ),
-                        );
-                      },
-                      child: const Text('Join', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
-                    ),
-                  ),
-                )),
           ],
         ),
       ),
@@ -303,17 +457,13 @@ children: [
 }
 
 // ==========================================
-// 🎙️ የድምፅ ማስተላለፊያ ክፍል (Voice Room Screen)
+// 🎙️ VOICE ROOM SCREEN (አጎራ ማይክ እና ድምፅ)
 // ==========================================
 class VoiceRoomScreen extends StatefulWidget {
   final String channelName;
   final String roomTitle;
 
-  const VoiceRoomScreen({
-    Key? key,
-    required this.channelName,
-    required this.roomTitle,
-  }) : super(key: key);
+  const VoiceRoomScreen({Key? key, required this.channelName, required this.roomTitle}) : super(key: key);
 
   @override
   State<VoiceRoomScreen> createState() => _VoiceRoomScreenState();
@@ -324,9 +474,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> {
   bool _isJoined = false;
   bool _isMuted = false;
   final List<int> _remoteUsers = [];
-
-  // አጎራ App ID (የራስህን ካለህ መተካት ትችላለህ)
-  final String _appId = "aab8b8f3e2444379a1f28b4d82b3d888"; 
+  final String _appId = "aab8b8f3e2444379a1f28b4d82b3d888";
 
   @override
   void initState() {
@@ -335,14 +483,12 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> {
   }
 
   Future<void> _initAgora() async {
-    // 1. የማይክሮፎን ፈቃድ መጠየቅ
     await [Permission.microphone].request();
 
-    // 2. Agora Engine ማስጀመር
     _engine = createAgoraRtcEngine();
     await _engine.initialize(RtcEngineContext(appId: _appId));
 
-_engine.registerEventHandler(
+    _engine.registerEventHandler(
       RtcEngineEventHandler(
         onJoinChannelSuccess: (RtcConnection connection, int elapsed) {
           setState(() {
@@ -362,12 +508,10 @@ _engine.registerEventHandler(
       ),
     );
 
-    // 3. ድምፅ እንዲያስተላልፍ Live Broadcasting ፕሮፋይል ማዘጋጀት
     await _engine.setChannelProfile(ChannelProfileType.channelProfileLiveBroadcasting);
     await _engine.setClientRole(role: ClientRoleType.clientRoleBroadcaster);
     await _engine.enableAudio();
 
-    // 4. ወደ ቻናሉ መቀላቀል
     await _engine.joinChannel(
       token: '',
       channelId: widget.channelName,
@@ -394,10 +538,10 @@ _engine.registerEventHandler(
     super.dispose();
   }
 
-  @override
+@override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0F121C),
+      backgroundColor: const Color(0xFF0D111A),
       appBar: AppBar(
         backgroundColor: const Color(0xFF161B26),
         title: Text(widget.roomTitle, style: const TextStyle(fontSize: 16)),
@@ -408,8 +552,7 @@ _engine.registerEventHandler(
       ),
       body: Column(
         children: [
-          const SizedBox(height: 24),
-          // ሁኔታ ማሳያ
+          const SizedBox(height: 20),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             decoration: BoxDecoration(
@@ -417,16 +560,14 @@ _engine.registerEventHandler(
               borderRadius: BorderRadius.circular(20),
             ),
             child: Text(
-              _isJoined ? '● Connected to Voice Room' : 'Connecting...',
+              _isJoined ? '● Live in Nile Voice Room' : 'Connecting...',
               style: TextStyle(
                 color: _isJoined ? Colors.greenAccent : Colors.orangeAccent,
                 fontWeight: FontWeight.bold,
               ),
             ),
           ),
-          const SizedBox(height: 30),
-
-          // በማይክ ላይ ያሉ ተጠቃሚዎች መቀመጫ (Seats)
+          const SizedBox(height: 24),
           Expanded(
             child: GridView.builder(
               padding: const EdgeInsets.all(20),
@@ -444,7 +585,7 @@ _engine.registerEventHandler(
                   children: [
                     CircleAvatar(
                       radius: 30,
-                      backgroundColor: (isMe || hasRemote) ? const Color(0xFF00E676) : const Color(0xFF1E2433),
+                      backgroundColor: (isMe || hasRemote) ? const Color(0xFF00C9A7) : const Color(0xFF1E2433),
                       child: Icon(
                         (isMe || hasRemote) ? Icons.mic : Icons.lock_open,
                         color: (isMe || hasRemote) ? Colors.black : Colors.white30,
@@ -461,8 +602,6 @@ _engine.registerEventHandler(
               },
             ),
           ),
-
-// የታችኛው የማይክ እና የመውጫ መቆጣጠሪያ
           Container(
             padding: const EdgeInsets.all(20),
             decoration: const BoxDecoration(
@@ -477,27 +616,8 @@ _engine.registerEventHandler(
                   iconSize: 32,
                   icon: Icon(
                     _isMuted ? Icons.mic_off : Icons.mic,
-                    color: _isMuted ? Colors.red : const Color(0xFF00E676),
+                    color: _isMuted ? Colors.red : const Color(0xFF00C9A7),
                   ),
-                ),
-                IconButton(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => StoreScreen(
-                          userCoins: AppData.userCoins,
-                          onCoinsUpdated: (newCoins) {
-                            setState(() {
-                              AppData.userCoins = newCoins;
-                            });
-                          },
-                        ),
-                      ),
-                    );
-                  },
-                  iconSize: 32,
-                  icon: const Icon(Icons.card_giftcard, color: Colors.amber),
                 ),
                 IconButton(
                   onPressed: () => Navigator.pop(context),
@@ -536,7 +656,7 @@ class _SuperOwnerAdminPortalState extends State<SuperOwnerAdminPortal> {
       });
       _mintController.clear();
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("$amount Coins successfully minted!"), backgroundColor: Colors.green),
+        SnackBar(content: Text("$amount Nile Coins minted!"), backgroundColor: Colors.green),
       );
     }
   }
@@ -567,12 +687,11 @@ class _SuperOwnerAdminPortalState extends State<SuperOwnerAdminPortal> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0F121C),
+      backgroundColor: const Color(0xFF0D111A),
       appBar: AppBar(
-        title: const Text('Super Owner Admin Portal', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+        title: const Text('Nile Master Admin Portal', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
         backgroundColor: const Color(0xFF161B26),
-
-),
+      ),
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 700),
@@ -596,18 +715,18 @@ class _SuperOwnerAdminPortalState extends State<SuperOwnerAdminPortal> {
                         children: [
                           Icon(Icons.shield, color: Colors.white, size: 20),
                           SizedBox(width: 8),
-                          Text('Master System Reserve', style: TextStyle(color: Colors.white70, fontSize: 14)),
+                          Text('Nile System Reserve', style: TextStyle(color: Colors.white70, fontSize: 14)),
                         ],
                       ),
                       const SizedBox(height: 10),
                       Text('${AppData.userCoins} Coins', style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold)),
                       const SizedBox(height: 4),
-                      const Text('Admin / Owner ID: 1000', style: TextStyle(color: Colors.white60, fontSize: 13)),
+                      const Text('Super Owner ID: 1000', style: TextStyle(color: Colors.white60, fontSize: 13)),
                     ],
                   ),
                 ),
                 const SizedBox(height: 24),
-                const Text('1. Coin Minting Engine (Generate New Coins)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                const Text('Coin Minting Engine', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 10),
                 Row(
                   children: [
@@ -616,7 +735,8 @@ class _SuperOwnerAdminPortalState extends State<SuperOwnerAdminPortal> {
                         controller: _mintController,
                         keyboardType: TextInputType.number,
                         style: const TextStyle(color: Colors.white),
-                        decoration: InputDecoration(
+
+decoration: InputDecoration(
                           hintText: 'Enter amount to mint',
                           filled: true,
                           fillColor: const Color(0xFF1E2433),
@@ -633,7 +753,7 @@ class _SuperOwnerAdminPortalState extends State<SuperOwnerAdminPortal> {
                   ],
                 ),
                 const SizedBox(height: 24),
-                const Text('2. Credit Coins to User Account', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                const Text('Transfer Coins to User', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 10),
                 TextField(
                   controller: _targetIdController,
@@ -649,8 +769,7 @@ class _SuperOwnerAdminPortalState extends State<SuperOwnerAdminPortal> {
                 TextField(
                   controller: _transferAmountController,
                   keyboardType: TextInputType.number,
-
-style: const TextStyle(color: Colors.white),
+                  style: const TextStyle(color: Colors.white),
                   decoration: InputDecoration(
                     hintText: 'Coin Amount',
                     filled: true,
