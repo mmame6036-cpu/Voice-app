@@ -63,7 +63,6 @@ class _CoinSellerScreenState extends State<CoinSellerScreen> with SingleTickerPr
     Future.delayed(const Duration(milliseconds: 600), () {
       setState(() {
         _isCheckingUser = false;
-        // የናሙና ተጠቃሚዎች ማረጋገጫ
         if (id == "1000") {
           _verifiedUserName = "KEDIR (Master Admin)";
         } else if (id == "1001") {
@@ -80,16 +79,18 @@ class _CoinSellerScreenState extends State<CoinSellerScreen> with SingleTickerPr
   // ኮይን ማስተላለፊያ (Execute Transfer)
   void _executeTransfer() {
     String id = _targetIdController.text.trim();
-    int? coins = int.tryParse(_coinAmountController.text.trim());
+    int? parsedCoins = int.tryParse(_coinAmountController.text.trim());
 
-    if (id.isEmpty  coins == null  coins <= 0) {
+    if (id.isEmpty  parsedCoins == null  parsedCoins <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('እባክዎ ትክክለኛ መለያ (ID) እና የኮይን መጠን ያስገቡ')),
       );
       return;
     }
 
-    if (coins > _sellerBalance) {
+    final int transferAmount = parsedCoins;
+
+    if (transferAmount > _sellerBalance) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('በቂ የኮይን ቀሪ ሂሳብ የለዎትም!'), backgroundColor: Colors.red),
       );
@@ -102,7 +103,7 @@ class _CoinSellerScreenState extends State<CoinSellerScreen> with SingleTickerPr
         backgroundColor: const Color(0xFF161B26),
         title: const Text('የኮይን ማስተላለፊያ ማረጋገጫ', style: TextStyle(color: Colors.white, fontSize: 16)),
         content: Text(
-          'ለተጠቃሚ፦ ${_verifiedUserName ?? id}\nየኮይን መጠን፦ $coins ኮይን\n\nማስተላለፍ ይፈልጋሉ?',
+          'ለተጠቃሚ፦ ${_verifiedUserName ?? id}\nየኮይን መጠን፦ $transferAmount ኮይን\n\nማስተላለፍ ይፈልጋሉ?',
           style: const TextStyle(color: Colors.white70, fontSize: 14),
         ),
         actions: [
@@ -115,14 +116,14 @@ class _CoinSellerScreenState extends State<CoinSellerScreen> with SingleTickerPr
             onPressed: () {
               Navigator.pop(context);
               setState(() {
-                _sellerBalance -= coins;
+                _sellerBalance -= transferAmount;
               });
               widget.onCoinsUpdated(_sellerBalance);
               _coinAmountController.clear();
 
 ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text('ለ ${_verifiedUserName ?? id} $coins ኮይን በተሳካ ሁኔታ ተላልፏል!'),
+                  content: Text('ለ ${_verifiedUserName ?? id} $transferAmount ኮይን በተሳካ ሁኔታ ተላልፏል!'),
                   backgroundColor: const Color(0xFF00C9A7),
                 ),
               );
@@ -237,7 +238,6 @@ crossAxisAlignment: CrossAxisAlignment.start,
                     ],
                   ),
                   const SizedBox(height: 14),
-                  // Payment Method Bar
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                     decoration: BoxDecoration(
@@ -255,7 +255,6 @@ crossAxisAlignment: CrossAxisAlignment.start,
                     ),
                   ),
                   const SizedBox(height: 8),
-                  // Greeting Message Bar
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                     decoration: BoxDecoration(
@@ -353,7 +352,6 @@ crossAxisAlignment: CrossAxisAlignment.start,
             ],
           ),
           const SizedBox(height: 12),
-          // User ID Input + Check Button
           Row(
             children: [
               Expanded(
@@ -387,14 +385,13 @@ crossAxisAlignment: CrossAxisAlignment.start,
             Text('✔ Verified: $_verifiedUserName', style: const TextStyle(color: Colors.greenAccent, fontSize: 12)),
           ],
           const SizedBox(height: 16),
-          // Coin Amount
           const Text('Coin Amount:', style: TextStyle(color: Colors.white70, fontSize: 13)),
           const SizedBox(height: 8),
           TextField(
-
-controller: _coinAmountController,
+            controller: _coinAmountController,
             keyboardType: TextInputType.number,
-            style: const TextStyle(color: Colors.white),
+
+style: const TextStyle(color: Colors.white),
             decoration: InputDecoration(
               hintText: 'Enter amount (e.g. 10000)',
               prefixIcon: const Icon(Icons.monetization_on, color: Colors.amber),
@@ -484,11 +481,11 @@ controller: _coinAmountController,
           decoration: BoxDecoration(
             color: const Color(0xFF1F2838),
             borderRadius: BorderRadius.circular(10),
-
-),
+          ),
           child: const Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+
+children: [
               Text('Recharge Rules:', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
               SizedBox(height: 4),
               Text('• Beginner Seller: \$1 = 9,800 Coins', style: TextStyle(color: Colors.white70, fontSize: 11)),
