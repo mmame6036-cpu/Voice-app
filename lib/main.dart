@@ -597,13 +597,12 @@ const SizedBox(height: 14),
                   onTap: () {
                     Navigator.push(
                       context,
-                      MaterialPageRoute(
-                        builder: (context) => const SuperOwnerAdminPortal(),
-                      ),
-                    );
-                  },
-                ),
-              ),
+                     MaterialPageRoute(
+                    builder: (context) => const SuperOwnerAdminPortal(),
+                  ),
+                );
+              },
+            ),
           ],
         ),
       ),
@@ -615,7 +614,7 @@ const SizedBox(height: 14),
 // 5. SUPER OWNER ADMIN PORTAL
 // ============================================================================
 class SuperOwnerAdminPortal extends StatelessWidget {
-  const SuperOwnerAdminPortal({Key? key}) : super(key: key);
+  const SuperOwnerAdminPortal({super.key});
 
   @override
   Widget build(BuildContext context) {
