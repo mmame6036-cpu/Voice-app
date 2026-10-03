@@ -4,7 +4,7 @@ import 'package:flutter/services.dart';
 import 'store_screen.dart';
 import 'coin_seller_screen.dart';
 import 'agency_screen.dart';
-
+import 'room_screen.dart';
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const NileVoiceApp());
@@ -153,11 +153,11 @@ IconButton(icon: const Icon(Icons.notifications_none), onPressed: () {}),
                   context,
                   MaterialPageRoute(
                     builder: (context) => ActiveVoiceRoomScreen(
-                      roomId: r['id'],
-                      roomTitle: r['title'],
-                      hostName: r['host'],
-                      onCoinsUpdated: onCoinsUpdated,
-                    ),
+                      builder: (context) => VoiceRoomScreen(
+                    channelName: r['id'],
+                    roomTitle: r['title'],
+                    isOwner:r['host'],
+                  ),
                   ),
                 );
               },
