@@ -608,13 +608,12 @@ const SizedBox(height: 14),
       ),
     );
   }
+ }
 }
-
 // ============================================================================
 // 5. SUPER OWNER ADMIN PORTAL
 // ============================================================================
 class SuperOwnerAdminPortal extends StatelessWidget {
-  const SuperOwnerAdminPortal({super.key});
 
   @override
   Widget build(BuildContext context) {
