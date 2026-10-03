@@ -227,65 +227,57 @@ IconButton(icon: const Icon(Icons.notifications_none), onPressed: () {}),
                 onCoinsUpdated: onCoinsUpdated,
               ),
             ),
-            // 1. Coins እና Diamonds ማሳያ ከነ Recharge ቁልፉ ጋር
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
-                    children: [
-                      Column(
-                        children: [
-                          const Text('Coins', style: TextStyle(color: Colors.white54, fontSize: 12)),
-                          const SizedBox(height: 4),
-                          Row(
-                            children: [
-                              const Icon(Icons.monetization_on, color: Colors.amber, size: 18),
-                              const SizedBox(width: 4),
-                              Text('${AppData.userCoins}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
-                            ],
-                          ),
-                        ],
-                      ),
-                      // ፈጣን ሪቻርጅ ቁልፍ
-                      ElevatedButton.icon(
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => StoreScreen(
-                                userCoins: AppData.userCoins,
-                                onCoinsUpdated: (newCoins) {
-                                  setState(() {
-                                    AppData.userCoins = newCoins;
-                                  });
-                                  widget.onCoinsUpdated();
-                                },
-                              ),
-                            ),
-                          );
-                        },
-                        icon: const Icon(Icons.add_circle, color: Colors.black, size: 16),
-                        label: const Text('Recharge', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 12)),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF00C9A7),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                        ),
-                      ),
-                      Column(
-                        children: [
-                          const Text('Diamonds', style: TextStyle(color: Colors.white54, fontSize: 12)),
-                          const SizedBox(height: 4),
-                          Row(
-                            children: [
-                              const Icon(Icons.diamond, color: Colors.cyanAccent, size: 18),
-                              const SizedBox(width: 4),
-                              Text('${AppData.userPoints}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-            
+          );
+        },
+        child: const Icon(Icons.add, color: Colors.black, size: 30),
+      ),
+    );
+  }
+}
+
+// ============================================================================
+// 2. ACTIVE VOICE ROOM SCREEN
+// ============================================================================
+class ActiveVoiceRoomScreen extends StatelessWidget {
+  final String roomId;
+  final String roomTitle;
+  final String hostName;
+  final VoidCallback onCoinsUpdated;
+
+  const ActiveVoiceRoomScreen({
+    Key? key,
+    required this.roomId,
+    required this.roomTitle,
+    required this.hostName,
+    required this.onCoinsUpdated,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF0D111A),
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        title: Text(roomTitle, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        leading: IconButton(
+          icon: const Icon(Icons.keyboard_arrow_down, size: 30),
+          onPressed: () => Navigator.pop(context),
+        ),
+      ),
+      body: Column(
+        children: [
+          const SizedBox(height: 20),
+          Center(
+            child: Column(
+              children: [
+                CircleAvatar(
+                  radius: 40,
+                  backgroundColor: const Color(0xFF00C9A7),
+                  child: const Icon(Icons.mic, size: 40, color: Colors.black),
+                ),
+                const SizedBox(height: 10),
+                Text(hostName, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
                 const Text('Active Speaker', style: TextStyle(fontSize: 12, color: Color(0xFF00C9A7))),
               ],
             ),
@@ -404,6 +396,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ],
                   ),
                   const Divider(color: Colors.white10, height: 28),
+                  
+                  // Balance Row with Recharge Button
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: [
@@ -419,6 +413,32 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             ],
                           ),
                         ],
+                      ),
+                      ElevatedButton.icon(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => StoreScreen(
+                                userCoins: AppData.userCoins,
+                                onCoinsUpdated: (newCoins) {
+                                  setState(() {
+                                    AppData.userCoins = newCoins;
+                                  });
+                                  widget.onCoinsUpdated();
+                                },
+                              ),
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.add_circle, color: Colors.black, size: 16),
+
+label: const Text('Recharge', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 12)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF00C9A7),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                        ),
                       ),
                       Column(
                         children: [
@@ -442,8 +462,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             const SizedBox(height: 16),
 
             // Coin Seller & Store Buttons
-
-Row(
+            Row(
               children: [
                 Expanded(
                   child: ElevatedButton.icon(
@@ -503,7 +522,7 @@ Row(
               ],
             ),
 
-            const SizedBox(height: 14),
+const SizedBox(height: 14),
 
             // Agency Center Dashboard Button
             Container(
@@ -525,8 +544,7 @@ Row(
                 subtitle: const Text('Host & Commission Dashboard', style: TextStyle(color: Colors.white54, fontSize: 12)),
                 trailing: const Icon(Icons.arrow_forward_ios, color: Colors.white38, size: 14),
                 onTap: () {
-
-Navigator.push(
+                  Navigator.push(
                     context,
                     MaterialPageRoute(
                       builder: (context) => const AgencyScreen(
@@ -545,7 +563,7 @@ Navigator.push(
             if (AppData.isSuperAdmin)
               Container(
                 decoration: BoxDecoration(
-                  gradient: const LinearGradient(
+                  gradient: const指示LinearGradient(
                     colors: [Color(0xFFE50914), Color(0xFFB80000)],
                   ),
                   borderRadius: BorderRadius.circular(14),
@@ -599,7 +617,8 @@ class SuperOwnerAdminPortal extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('👑 Nile Voice Master Authority', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 16)),
-                SizedBox(height: 6),
+
+SizedBox(height: 6),
                 Text('Owner ID: 1000 (Full Root Access Granted)', style: TextStyle(color: Colors.white70, fontSize: 13)),
               ],
             ),
@@ -619,8 +638,7 @@ class SuperOwnerAdminPortal extends StatelessWidget {
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             leading: const Icon(Icons.monetization_on, color: Colors.amber),
             title: const Text('System Coin Minting & Audit', style: TextStyle(color: Colors.white)),
-
-trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.white38),
+            trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.white38),
             onTap: () {},
           ),
           const SizedBox(height: 10),
