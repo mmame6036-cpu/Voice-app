@@ -152,11 +152,10 @@ IconButton(icon: const Icon(Icons.notifications_none), onPressed: () {}),
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => ActiveVoiceRoomScreen(
-                      builder: (context) => VoiceRoomScreen(
+                    builder: (context) => VoiceRoomScreen(
                     channelName: r['id'],
                     roomTitle: r['title'],
-                    isOwner:r['host'],
+                    isOwner:false,
                   ),
                   ),
                 );
