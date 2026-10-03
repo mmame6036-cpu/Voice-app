@@ -495,12 +495,8 @@ label: const Text('Recharge', style: TextStyle(color: Colors.black, fontWeight: 
                           builder: (context) => CoinSellerScreen(
                             initialCoins: AppData.userCoins,
                             onCoinsUpdated: (newCoins) {
-                              setState(() {
                                 AppData.userCoins = newCoins;
-                              });
-                              widget.onCoinsUpdated();
                             },
-                          ),
                         ),
                       );
                     },
@@ -529,7 +525,7 @@ label: const Text('Recharge', style: TextStyle(color: Colors.black, fontWeight: 
                    );
                  },
                     icon: const Icon(Icons.storefront, color: Colors.white, size: 18),
-                    label: const Text('Store 🛍️', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    label: const Text('Store 🛍️', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),fFf
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF00C9A7),
                       padding: const EdgeInsets.symmetric(vertical: 12),
