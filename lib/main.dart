@@ -563,7 +563,7 @@ const SizedBox(height: 14),
             if (AppData.isSuperAdmin)
               Container(
                 decoration: BoxDecoration(
-                  gradient: const指示LinearGradient(
+                  gradient: const LinearGradient(
                     colors: [Color(0xFFE50914), Color(0xFFB80000)],
                   ),
                   borderRadius: BorderRadius.circular(14),
