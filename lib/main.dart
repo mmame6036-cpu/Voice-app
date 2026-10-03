@@ -586,7 +586,7 @@ const SizedBox(height: 14),
                     Navigator.push(
                       context,
                      MaterialPageRoute(
-                    builder: (context) => const SuperOwnerAdminPortal(
+                    builder: (context) =>  SuperOwnerAdminPortal(),
                   ),
                 );
               },
