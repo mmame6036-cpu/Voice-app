@@ -520,17 +520,14 @@ label: const Text('Recharge', style: TextStyle(color: Colors.black, fontWeight: 
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => StoreScreen(
-                            userCoins: AppData.userCoins,
-                            onCoinsUpdated: (newCoins) {
-                              setState(() {
-                                AppData.userCoins = newCoins;
-                              });
-                            },
-                          ),
-                        ),
-                      );
-                    },
+                        builder: (context) => StoreScreen(
+                      userCoins: AppData.userCoins,
+                      onCoinsUpdated: (newCoins) {
+                        AppData.userCoins = newCoins;
+                      },
+                    ),
+                   );
+                 },
                     icon: const Icon(Icons.storefront, color: Colors.white, size: 18),
                     label: const Text('Store 🛍️', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                     style: ElevatedButton.styleFrom(
