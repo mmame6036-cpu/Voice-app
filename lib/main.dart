@@ -440,19 +440,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         onPressed: () {
                           Navigator.push(
                             context,
-                            MaterialPageRoute(
-                              builder: (context) => StoreScreen(
-                                userCoins: AppData.userCoins,
-                                onCoinsUpdated: (newCoins) {
-                                  setState(() {
-                                    AppData.userCoins = newCoins;
-                                  });
-                                  widget.onCoinsUpdated();
-                                },
-                              ),
-                            ),
-                          );
-                        },
+
+                MaterialPageRoute(
+                builder: (context) => StoreScreen(
+                  userCoins: AppData.userCoins,
+                  onCoinsUpdated: (newCoins) {
+                    AppData.userCoins = newCoins;
+                  },
+                ),
+              ),
                         icon: const Icon(Icons.add_circle, color: Colors.black, size: 16),
 
 label: const Text('Recharge', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 12)),
