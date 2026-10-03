@@ -213,49 +213,26 @@ IconButton(icon: const Icon(Icons.notifications_none), onPressed: () {}),
           );
         },
       ),
-      floatingActionButton: Container(
-        height: 62,
-        width: 62,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          gradient: const LinearGradient(
-            colors: [Color(0xFFFFD700), Color(0xFFFF8C00)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFFFF8C00).withOpacity(0.4),
-              blurRadius: 10,
-              spreadRadius: 2,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: FloatingActionButton(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          onPressed: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => VoiceRoomScreen(
-                  channelName: '1000',
-                  roomTitle: "${AppData.currentUserName}'s Room",
-                  isOwner: true,
-                ),
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: const Color(0xFF00C9A7),
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => ActiveVoiceRoomScreen(
+                roomId: '999',
+                roomTitle: '${AppData.currentUserName}\'s Room',
+                hostName: AppData.currentUserName,
+                onCoinsUpdated: onCoinsUpdated,
               ),
-            );
+            ),
+          );
         },
-        child: const Icon(
-            Icons.mic_rounded,
-            size: 32,
-            color: Colors.white,
-          ),
-        ),
+        child: const Icon(Icons.add, color: Colors.black, size: 30),
       ),
     );
   }
+}
 
 // ============================================================================
 // 2. ACTIVE VOICE ROOM SCREEN
@@ -440,15 +417,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         onPressed: () {
                           Navigator.push(
                             context,
-
-                MaterialPageRoute(
-                builder: (context) => StoreScreen(
-                  userCoins: AppData.userCoins,
-                  onCoinsUpdated: (newCoins) {
-                    AppData.userCoins = newCoins;
-                  },
-                ),
-              ),
+                            MaterialPageRoute(
+                              builder: (context) => StoreScreen(
+                                userCoins: AppData.userCoins,
+                                onCoinsUpdated: (newCoins) {
+                                  setState(() {
+                                    AppData.userCoins = newCoins;
+                                  });
+                                  widget.onCoinsUpdated();
+                                },
+                              ),
+                            ),
+                          );
+                        },
                         icon: const Icon(Icons.add_circle, color: Colors.black, size: 16),
 
 label: const Text('Recharge', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 12)),
@@ -491,8 +472,12 @@ label: const Text('Recharge', style: TextStyle(color: Colors.black, fontWeight: 
                           builder: (context) => CoinSellerScreen(
                             initialCoins: AppData.userCoins,
                             onCoinsUpdated: (newCoins) {
+                              setState(() {
                                 AppData.userCoins = newCoins;
+                              });
+                              widget.onCoinsUpdated();
                             },
+                          ),
                         ),
                       );
                     },
@@ -512,16 +497,20 @@ label: const Text('Recharge', style: TextStyle(color: Colors.black, fontWeight: 
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                        builder: (context) => StoreScreen(
-                      userCoins: AppData.userCoins,
-                      onCoinsUpdated: (newCoins) {
-                        AppData.userCoins = newCoins;
-                      },
-                    ),
-                   );
-                 },
+                          builder: (context) => StoreScreen(
+                            userCoins: AppData.userCoins,
+                            onCoinsUpdated: (newCoins) {
+                              setState(() {
+                                AppData.userCoins = newCoins;
+                              });
+                              widget.onCoinsUpdated();
+                            },
+                          ),
+                        ),
+                      );
+                    },
                     icon: const Icon(Icons.storefront, color: Colors.white, size: 18),
-                    label: const Text('Store 🛍️', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),fFf
+                    label: const Text('Store 🛍️', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF00C9A7),
                       padding: const EdgeInsets.symmetric(vertical: 12),
@@ -585,23 +574,25 @@ const SizedBox(height: 14),
                   onTap: () {
                     Navigator.push(
                       context,
-                     MaterialPageRoute(
-                    builder: (context) =>  SuperOwnerAdminPortal(),
-                  ),
-                );
-              },
-            ),
+                      MaterialPageRoute(
+                        builder: (context) => const SuperOwnerAdminPortal(),
+                      ),
+                    );
+                  },
+                ),
+              ),
           ],
         ),
       ),
     );
   }
- }
 }
+
 // ============================================================================
 // 5. SUPER OWNER ADMIN PORTAL
 // ============================================================================
 class SuperOwnerAdminPortal extends StatelessWidget {
+  const SuperOwnerAdminPortal({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
