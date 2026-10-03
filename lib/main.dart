@@ -213,26 +213,47 @@ IconButton(icon: const Icon(Icons.notifications_none), onPressed: () {}),
           );
         },
       ),
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: const Color(0xFF00C9A7),
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => ActiveVoiceRoomScreen(
-                roomId: '999',
-                roomTitle: '${AppData.currentUserName}\'s Room',
-                hostName: AppData.currentUserName,
-                onCoinsUpdated: onCoinsUpdated,
-              ),
+      floatingActionButton: Container(
+        height: 62,
+        width: 62,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: const LinearGradient(
+            colors: [Color(0xFFFFD700), Color(0xFFFF8C00)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFFFF8C00).withOpacity(0.4),
+              blurRadius: 10,
+              spreadRadius: 2,
+              offset: const Offset(0, 4),
             ),
-          );
+          ],
+        ),
+        child: FloatingActionButton(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => VoiceRoomScreen(
+                  channelName: '1000',
+                  roomTitle: "${AppData.currentUserName}'s Room",
+                  isOwner: true,
+                ),
+              ),
+            );
         },
-        child: const Icon(Icons.add, color: Colors.black, size: 30),
+        child: const Icon(
+          Icons.mic_rounded,
+          size: 32,
+          color: Colors.white,
       ),
-    );
-  }
-}
+    ),
+  ),
 
 // ============================================================================
 // 2. ACTIVE VOICE ROOM SCREEN
