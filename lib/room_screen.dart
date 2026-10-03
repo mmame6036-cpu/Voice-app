@@ -39,6 +39,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> {
   void initState() {
     super.initState();
     _initAgora();
+    _initSocket();
   }
 
   Future<void> _initAgora() async {
@@ -88,7 +89,16 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> {
       ),
     );
   }
-
+void _initSocket() {
+    socket = IO.io(
+      'https://voice-app-9i6c.onrender.com',
+      IO.OptionBuilder().setTransports(['websocket']).build(),
+    );
+    socket?.connect();
+    socket?.onConnect((_) {
+      socket?.emit('join_room', widget.channelName);
+    });
+  }
   void _toggleMute() {
     setState(() {
       _isMuted = !_isMuted;
