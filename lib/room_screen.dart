@@ -3,7 +3,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:permission_handler/permission_handler.dart';
-
+import 'package:socket_io_client/socket_io_client.dart' as IO;
 // ==========================================
 // 🎙️ VOICE ROOM SCREEN (30 ወንበሮች፦ 1 ባለቤት + 6 ወርቃማ + 23 መደበኛ)
 // ==========================================
@@ -27,6 +27,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> {
   late RtcEngine _engine;
   bool _isJoined = false;
   bool _isMuted = false;
+  IO.Socket? socket;
   final List<int> _remoteUsers = [];
   final String _appId = "aab8b8f3e2444379a1f28b4d82b3d888";
 
