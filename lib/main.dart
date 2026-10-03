@@ -248,12 +248,14 @@ IconButton(icon: const Icon(Icons.notifications_none), onPressed: () {}),
             );
         },
         child: const Icon(
-          Icons.mic_rounded,
-          size: 32,
-          color: Colors.white,
+            Icons.mic_rounded,
+            size: 32,
+            color: Colors.white,
+          ),
+        ),
       ),
-    ),
-  ),
+    );
+  }
 
 // ============================================================================
 // 2. ACTIVE VOICE ROOM SCREEN
