@@ -526,7 +526,6 @@ label: const Text('Recharge', style: TextStyle(color: Colors.black, fontWeight: 
                               setState(() {
                                 AppData.userCoins = newCoins;
                               });
-                              widget.onCoinsUpdated();
                             },
                           ),
                         ),
