@@ -159,7 +159,7 @@ IconButton(icon: const Icon(Icons.notifications_none), onPressed: () {}),
                    ),
                   ),
                  );
-              },
+                },
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Row(
