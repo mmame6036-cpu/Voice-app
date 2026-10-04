@@ -1,5 +1,11 @@
 import 'package:flutter/material.dart';
 import 'settings_screen.dart';
+import 'recharge_screen.dart';
+import 'coin_seller_screen.dart';
+import 'host_center_screen.dart';
+import 'agency_screen.dart';
+import 'store_screen.dart';
+import 'invite_screen.dart';
 
 class ProfileScreen extends StatelessWidget {
   final String userId;
@@ -13,12 +19,13 @@ class ProfileScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('የኔ ፕሮፋይል (Profile)', style: TextStyle(color: Colors.white)),
         backgroundColor: const Color(0xFF1E1F2E),
+        iconTheme: const IconThemeData(color: Colors.white),
         elevation: 0,
       ),
       body: ListView(
         padding: const EdgeInsets.all(16.0),
         children: [
-          // የፕሮፋይል ምስል እና ስም
+          // የፕሮፋይል ራስጌ
           Center(
             child: Column(
               children: [
@@ -35,41 +42,82 @@ class ProfileScreen extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(height: 30),
+          const SizedBox(height: 25),
 
-          // ሪቻርጅ (Recharge)
+          // 1. ሆስት ሴንተር (Host Center)
+          _buildMenuItem(
+            icon: Icons.mic_external_on,
+            iconColor: Colors.purpleAccent,
+            title: 'ሆስት ሴንተር (Host Center)',
+            onTap: () {
+              Navigator.push(context, MaterialPageRoute(builder: (context) => const HostCenterScreen()));
+            },
+          ),
+          const SizedBox(height: 12),
+
+          // 2. ሪቻርጅ (Recharge)
           _buildMenuItem(
             icon: Icons.account_balance_wallet,
             iconColor: Colors.orangeAccent,
-            title: 'ሪቻርጅ (Recharge)',
+            title: 'ኮይን ሪቻርጅ (Recharge)',
             onTap: () {
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('የሪቻርጅ ገጽ በቅርቡ ይከፈታል')));
+              Navigator.push(context, MaterialPageRoute(builder: (context) => const RechargeScreen()));
             },
           ),
           const SizedBox(height: 12),
 
-          // ኮይን ሻጭ (Coin Seller)
+          // 3. ኮይን ሻጭ (Coin Seller)
           _buildMenuItem(
             icon: Icons.storefront,
-            iconColor: Colors.blueAccent,
+            iconColor: Colors.greenAccent,
             title: 'ኮይን ሻጭ (Coin Seller)',
             onTap: () {
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('የኮይን ሻጭ ገጽ በቅርቡ ይከፈታል')));
+              Navigator.push(context, MaterialPageRoute(builder: (context) => const CoinSellerScreen()));
             },
           ),
           const SizedBox(height: 12),
 
-          // ሲቲንግ (Settings)
+          // 4. ኤጀንሲ (Agency)
           _buildMenuItem(
-            icon: Icons.settings,
+            icon: Icons.business,
+            iconColor: Colors.blueAccent,
+            title: 'ኤጀንሲ ማዕከል (Agency)',
+            onTap: () {
+              Navigator.push(context, MaterialPageRoute(builder: (context) => const AgencyScreen()));
+            },
+          ),
+          const SizedBox(height: 12),
+
+          // 5. ስቶር / ሱቅ (Store)
+          _buildMenuItem(
+            icon: Icons.shopping_bag,
+            iconColor: Colors.amberAccent,
+            title: 'የእቃዎች ሱቅ (Store)',
+            onTap: () {
+              Navigator.push(context, MaterialPageRoute(builder: (context) => const StoreScreen()));
+            },
+          ),
+          const SizedBox(height: 12),
+
+          // 6. ጋብዝ (Invite Friends)
+          _buildMenuItem(
+            icon: Icons.person_add_alt_1,
+            iconColor: Colors.tealAccent,
+            title: 'ጓደኞችን ጋብዝ (Invite)',
+            onTap: () {
+              Navigator.push(context, MaterialPageRoute(builder: (context) => const InviteScreen()));
+            },
+          ),
+          const SizedBox(height: 12),
+
+          // 7. ሲቲንግ (Settings)
+          _buildMenuItem(
+
+icon: Icons.settings,
             iconColor: Colors.grey,
             title: 'ማስተካከያ (Settings)',
             onTap: () {
-              // ወደሰራነው የሲቲንግ ገጽ ይወስደናል
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const SettingsScreen()),
-              );
+              Navigator.push(context, MaterialPageRoute(builder: (context) => const SettingsScreen()));
             },
           ),
         ],
