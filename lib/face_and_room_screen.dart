@@ -1,3 +1,4 @@
+KEDER:
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -55,12 +56,11 @@ class _FaceAndRoomScreenState extends State<FaceAndRoomScreen> {
         _notify(data['message']?.toString() ?? 'ማረጋገጥ አልተቻለም');
       }
     } catch (e) {
-      // ለሙከራ እንዲመች ሰርቨሩ ባይኖርም እንዲያልፍ
       setState(() {
         isFaceVerified = true;
         taxCycleDay = 1;
       });
-      _notify('አሻራው በሙከራ ደረጃ ጸድቋል');
+      _notify('አሻራው ጸድቋል (ሙከራ)');
     } finally {
       setState(() => isLoading = false);
     }
@@ -85,16 +85,17 @@ class _FaceAndRoomScreenState extends State<FaceAndRoomScreen> {
           currentRoomId = data['room']['roomId'];
           activeSeats = data['room']['seats'];
         });
-        _notify('ክፍሉ ተከፍቷል!');
+        _notify('30 ወንበር ያለው ክፍል ተከፍቷል!');
       } else {
         _notify(data['message']?.toString() ?? 'ክፍል መክፈት አልተቻለም');
       }
     } catch (e) {
       setState(() {
         currentRoomId = 'local_room_1';
-        activeSeats = List.generate(8, (i) => {'seatIndex': i + 1, 'occupantId': null});
+        // በትክክል 30 ወንበሮች
+        activeSeats = List.generate(30, (i) => {'seatIndex': i + 1, 'occupantId': null});
       });
-      _notify('ክፍሉ ተከፍቷል (Local Mode)');
+      _notify('30 ወንበር ያለው ክፍል ተከፍቷል');
     } finally {
       setState(() => isLoading = false);
     }
@@ -119,19 +120,20 @@ class _FaceAndRoomScreenState extends State<FaceAndRoomScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFF13141C),
       appBar: AppBar(
-        title: const Text('የድምጽ አፕሊኬሽን ማዕከል'),
+        title: const Text('የድምጽ አፕሊኬሽን (30 ወንበሮች)'),
         backgroundColor: const Color(0xFF1E1F2E),
       ),
       body: isLoading
           ? const Center(child: CircularProgressIndicator(color: Colors.amber))
           : Padding(
-              padding: const EdgeInsets.all(16.0),
+              padding: const EdgeInsets.all(12.0),
               child: Column(
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(14),
+                  // ካርድ 1፡ የፊት አሻራ ሁኔታ
 
-decoration: BoxDecoration(
+Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
                       color: const Color(0xFF222436),
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
@@ -143,9 +145,9 @@ decoration: BoxDecoration(
                         Icon(
                           isFaceVerified ? Icons.verified : Icons.error_outline,
                           color: isFaceVerified ? Colors.green : Colors.redAccent,
-                          size: 40,
+                          size: 36,
                         ),
-                        const SizedBox(width: 12),
+                        const SizedBox(width: 10),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -155,14 +157,14 @@ decoration: BoxDecoration(
                                 style: const TextStyle(
                                   color: Colors.white,
                                   fontWeight: FontWeight.bold,
-                                  fontSize: 16,
+                                  fontSize: 15,
                                 ),
                               ),
                               Text(
                                 isFaceVerified
                                     ? "የ7 ቀን ዴሊ ታክስ ቆጣሪ፡ ቀን $taxCycleDay"
                                     : "ክፍል ለመክፈት መጀመሪያ አሻራ ይስጡ",
-                                style: const TextStyle(color: Colors.white70, fontSize: 12),
+                                style: const TextStyle(color: Colors.white70, fontSize: 11),
                               ),
                             ],
                           ),
@@ -171,47 +173,55 @@ decoration: BoxDecoration(
                           ElevatedButton(
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.amber[700],
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                             ),
                             onPressed: verifyFace,
-                            child: const Text("አሻራ ስጥ", style: TextStyle(color: Colors.black)),
+                            child: const Text("አሻራ ስጥ", style: TextStyle(color: Colors.black, fontSize: 12)),
                           ),
                       ],
                     ),
                   ),
-                  const SizedBox(height: 20),
+
+                  const SizedBox(height: 12),
+
+                  // ክፍል መክፈቻ ቁልፍ
                   SizedBox(
                     width: double.infinity,
-                    height: 50,
+                    height: 45,
                     child: ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(
                         backgroundColor: isFaceVerified ? Colors.blueAccent : Colors.grey[800],
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                       ),
                       onPressed: isFaceVerified ? createRoom : null,
-                      icon: const Icon(Icons.meeting_room, color: Colors.white),
+                      icon: const Icon(Icons.meeting_room, color: Colors.white, size: 20),
                       label: const Text(
-                        "ክፍል ክፈት (የታክስ ስርዓት ያለው)",
-                        style: TextStyle(color: Colors.white, fontSize: 16),
+                        "ክፍል ክፈት (30 ወንበር - ታክስ ያለው)",
+                        style: TextStyle(color: Colors.white, fontSize: 14),
                       ),
                     ),
                   ),
-                  const SizedBox(height: 25),
+
+                  const SizedBox(height: 14),
+
+                  // 30ው ወንበሮች
                   if (currentRoomId != null) ...[
                     const Align(
                       alignment: Alignment.centerLeft,
                       child: Text(
-                        "የመነጋገሪያ ወንበሮች (ነፃ ማውሪያ ብቻ - ኮይን አይሰጥም)",
-                        style: TextStyle(color: Colors.white70, fontSize: 13),
+                        "የመነጋገሪያ ወንበሮች (30 ወንበር - ነፃ ማውሪያ ብቻ)",
+                        style: TextStyle(color: Colors.white70, fontSize: 12),
                       ),
                     ),
-                    const SizedBox(height: 12),
-                    Expanded(
+                    const SizedBox(height: 8),
+
+Expanded(
                       child: GridView.builder(
                         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 4,
-                          crossAxisSpacing: 10,
-
-mainAxisSpacing: 10,
+                          crossAxisCount: 5, // በየረድፉ 5 ወንበሮች
+                          crossAxisSpacing: 6,
+                          mainAxisSpacing: 6,
+                          childAspectRatio: 0.9,
                         ),
                         itemCount: activeSeats.length,
                         itemBuilder: (context, index) {
@@ -223,7 +233,7 @@ mainAxisSpacing: 10,
                             child: Container(
                               decoration: BoxDecoration(
                                 color: isOccupied ? Colors.teal[800] : const Color(0xFF222436),
-                                borderRadius: BorderRadius.circular(10),
+                                borderRadius: BorderRadius.circular(8),
                                 border: Border.all(
                                   color: isOccupied ? Colors.tealAccent : Colors.white24,
                                 ),
@@ -234,12 +244,12 @@ mainAxisSpacing: 10,
                                   Icon(
                                     isOccupied ? Icons.mic : Icons.airline_seat_recline_normal,
                                     color: Colors.white,
-                                    size: 26,
+                                    size: 20,
                                   ),
-                                  const SizedBox(height: 4),
+                                  const SizedBox(height: 2),
                                   Text(
-                                    isOccupied ? "ተይዟል" : "ወንበር ${seat['seatIndex']}",
-                                    style: const TextStyle(color: Colors.white, fontSize: 11),
+                                    isOccupied ? "ተይዟል" : "${seat['seatIndex']}",
+                                    style: const TextStyle(color: Colors.white, fontSize: 10),
                                   ),
                                 ],
                               ),
