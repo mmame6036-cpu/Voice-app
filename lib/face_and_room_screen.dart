@@ -1,7 +1,7 @@
-KEDER:
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:local_auth/local_auth.dart';
 
 class FaceAndRoomScreen extends StatefulWidget {
   final String userId;
@@ -18,6 +18,7 @@ class FaceAndRoomScreen extends StatefulWidget {
 }
 
 class _FaceAndRoomScreenState extends State<FaceAndRoomScreen> {
+  final LocalAuthentication auth = LocalAuthentication();
   bool isFaceVerified = false;
   String verificationDate = '';
   int taxCycleDay = 0;
@@ -37,30 +38,44 @@ class _FaceAndRoomScreenState extends State<FaceAndRoomScreen> {
     return jsonDecode(responseBody) as Map<String, dynamic>;
   }
 
+  // እውነተኛ የፊት/ባዮሜትሪክ መፈተሻ
   Future<void> verifyFace() async {
-    setState(() => isLoading = true);
     try {
-      final data = await _sendPost('/verify-face', {
-        'userId': widget.userId,
-        'faceImageData': 'face_scan_verified_token',
-      });
+      final bool canAuthenticateWithBiometrics = await auth.canCheckBiometrics;
+      final bool canAuthenticate = canAuthenticateWithBiometrics || await auth.isDeviceSupported();
 
-      if (data['success'] == true) {
+      if (!canAuthenticate) {
+        _notify('ይህ ስልክ የፊት ወይም የባዮሜትሪክ አሻራ አይደግፍም!');
+        return;
+      }
+
+      final bool didAuthenticate = await auth.authenticate(
+        localizedReason: 'ክፍል ለመክፈት እባክዎ እውነተኛ የፊት አሻራዎን ያረጋግጡ',
+        options: const AuthenticationOptions(
+          biometricOnly: true,
+          stickyAuth: true,
+        ),
+      );
+
+      if (didAuthenticate) {
+        setState(() => isLoading = true);
+
+        final data = await _sendPost('/verify-face', {
+          'userId': widget.userId,
+          'faceImageData': 'hardware_biometric_success_token',
+        });
+
         setState(() {
           isFaceVerified = true;
-          verificationDate = data['verifiedAt'] ?? '';
+          verificationDate = data['verifiedAt'] ?? DateTime.now().toString();
           taxCycleDay = 1;
         });
-        _notify(data['message']?.toString() ?? 'የፊት አሻራ ጸድቋል');
+        _notify('የፊት አሻራዎ በእውነተኛ ማረጋገጫ ጸድቋል!');
       } else {
-        _notify(data['message']?.toString() ?? 'ማረጋገጥ አልተቻለም');
+        _notify('የፊት አሻራ ማረጋገጫው አልተሳካም፤ አልፈቀደም!');
       }
     } catch (e) {
-      setState(() {
-        isFaceVerified = true;
-        taxCycleDay = 1;
-      });
-      _notify('አሻራው ጸድቋል (ሙከራ)');
+      _notify('የአሻራ ፍተሻ ስህተት ተከስቷል፡ $e');
     } finally {
       setState(() => isLoading = false);
     }
@@ -68,7 +83,7 @@ class _FaceAndRoomScreenState extends State<FaceAndRoomScreen> {
 
   Future<void> createRoom() async {
     if (!isFaceVerified) {
-      _notify('ክፍል ለመክፈት መጀመሪያ የፊት አሻራዎን ያረጋግጡ!');
+      _notify('ክፍል ለመክፈት መጀመሪያ እውነተኛ የፊት አሻራዎን ያረጋግጡ!');
       return;
     }
 
@@ -92,7 +107,6 @@ class _FaceAndRoomScreenState extends State<FaceAndRoomScreen> {
     } catch (e) {
       setState(() {
         currentRoomId = 'local_room_1';
-        // በትክክል 30 ወንበሮች
         activeSeats = List.generate(30, (i) => {'seatIndex': i + 1, 'occupantId': null});
       });
       _notify('30 ወንበር ያለው ክፍል ተከፍቷል');
@@ -115,7 +129,7 @@ class _FaceAndRoomScreenState extends State<FaceAndRoomScreen> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
-  @override
+@override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF13141C),
@@ -129,9 +143,7 @@ class _FaceAndRoomScreenState extends State<FaceAndRoomScreen> {
               padding: const EdgeInsets.all(12.0),
               child: Column(
                 children: [
-                  // ካርድ 1፡ የፊት አሻራ ሁኔታ
-
-Container(
+                  Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
                       color: const Color(0xFF222436),
@@ -163,7 +175,7 @@ Container(
                               Text(
                                 isFaceVerified
                                     ? "የ7 ቀን ዴሊ ታክስ ቆጣሪ፡ ቀን $taxCycleDay"
-                                    : "ክፍል ለመክፈት መጀመሪያ አሻራ ይስጡ",
+                                    : "ክፍል ለመክፈት መጀመሪያ እውነተኛ አሻራ ይስጡ",
                                 style: const TextStyle(color: Colors.white70, fontSize: 11),
                               ),
                             ],
@@ -181,10 +193,7 @@ Container(
                       ],
                     ),
                   ),
-
                   const SizedBox(height: 12),
-
-                  // ክፍል መክፈቻ ቁልፍ
                   SizedBox(
                     width: double.infinity,
                     height: 45,
@@ -201,11 +210,9 @@ Container(
                       ),
                     ),
                   ),
-
                   const SizedBox(height: 14),
 
-                  // 30ው ወንበሮች
-                  if (currentRoomId != null) ...[
+if (currentRoomId != null) ...[
                     const Align(
                       alignment: Alignment.centerLeft,
                       child: Text(
@@ -214,11 +221,10 @@ Container(
                       ),
                     ),
                     const SizedBox(height: 8),
-
-Expanded(
+                    Expanded(
                       child: GridView.builder(
                         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 5, // በየረድፉ 5 ወንበሮች
+                          crossAxisCount: 5,
                           crossAxisSpacing: 6,
                           mainAxisSpacing: 6,
                           childAspectRatio: 0.9,
