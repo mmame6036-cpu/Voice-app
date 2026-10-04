@@ -1,5 +1,6 @@
-package com.example.helloworld
+package com.example.your_app_name // (ይህንን እንዳለ ተወው)
 
-import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.android.FlutterFragmentActivity
 
-class MainActivity : FlutterActivity()
+class MainActivity: FlutterFragmentActivity() {
+}
