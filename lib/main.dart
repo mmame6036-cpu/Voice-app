@@ -5,6 +5,7 @@ import 'store_screen.dart';
 import 'coin_seller_screen.dart';
 import 'agency_screen.dart';
 import 'room_screen.dart';
+import 'face_and_room_screen.dart';
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const NileVoiceApp());
