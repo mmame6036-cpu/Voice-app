@@ -150,16 +150,15 @@ IconButton(icon: const Icon(Icons.notifications_none), onPressed: () {}),
             child: InkWell(
               borderRadius: BorderRadius.circular(16),
               onTap: () {
-                Navigator.push(
+               Navigator.push(
                   context,
-                  MaterialPageRoute(
-                    builder: (context) => VoiceRoomScreen(
-                    channelName: r['id'],
-                    roomTitle: r['title'],
-                    isOwner:false,
+                 MaterialPageRoute(
+                   builder: (context) => FaceAndRoomScreen(
+                     userId: AppData.currentUserId,
+                     baseUrl: 'http://localhost:3000/api',
+                   ),
                   ),
-                  ),
-                );
+                 );
               },
               child: Padding(
                 padding: const EdgeInsets.all(16),
