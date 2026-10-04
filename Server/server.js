@@ -1,3 +1,4 @@
+KEDER:
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
@@ -5,7 +6,7 @@ const cors = require('cors');
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -15,7 +16,7 @@ const io = new Server(server, {
   }
 });
 
-// የናይል ቮይስ ዳታቤዝ (In-Memory Central Storage)
+// የማዕከላዊ ዳታቤዝ ማከማቻ (In-Memory Central Storage)
 const db = {
   users: {
     "1000": {
@@ -24,126 +25,138 @@ const db = {
       role: "owner",
       coins: 50000,
       points: 0,
-      biometricVerified: true,
-      backpack: ["special_id_1000"]
-    },
-    "1001": {
-      id: "1001",
-      name: "Guest User",
-      role: "user",
-      coins: 100,
-      points: 0,
-      biometricVerified: false,
-      backpack: []
+      faceVerified: false,
+      faceVerifiedAt: null,
+      taxCycleDay: 0
     }
   },
-  rooms: {
-    "nile_room_1": {
-      id: "nile_room_1",
-      title: "🌊 Nile VIP Grand Lounge",
-      hostId: "1000",
-      speakers: []
-    }
-  }
+  rooms: {}
 };
 
-// መነሻ ገጽ
-app.get('/', (req, res) => {
-  res.send('🌊 Nile Voice Backend Engine is Running Live!');
-});
+// 1. የፊት አሻራ ማረጋገጫ እና የ7 ቀን ታክስ ማስጀመሪያ API
+app.post('/api/verify-face', (req, res) => {
+  const { userId, faceImageData } = req.body;
 
-// የተጠቃሚ መረጃ ማረጋገጫ API
-app.get('/api/user/:id', (req, res) => {
-  const user = db.users[req.params.id];
+  if (!userId) {
+    return res.status(400).json({ success: false, message: "የተጠቃሚ መለያ ያስፈልጋል!" });
+  }
+
+  let user = db.users[userId];
   if (!user) {
-    return res.status(404).json({ success: false, message: 'User not found' });
+    user = {
+      id: userId,
+      name: User_${userId},
+      role: "user",
+      coins: 500,
+      points: 0,
+      faceVerified: false,
+      faceVerifiedAt: null,
+      taxCycleDay: 0
+    };
+    db.users[userId] = user;
   }
-  res.json({ success: true, user });
-});
 
-// ባዮሜትሪክስ ማረጋገጫ API
-app.post('/api/user/verify-biometrics', (req, res) => {
-  const { userId, verificationType } = req.body;
-  if (!db.users[userId]) {
-    return res.status(404).json({ success: false, message: 'User not found' });
+  if (user.faceVerified) {
+    return res.status(200).json({
+      success: true,
+      message: "የፊት አሻራዎ አስቀድሞ ተረጋግጧል!",
+      verifiedAt: user.faceVerifiedAt
+    });
   }
-  db.users[userId].biometricVerified = true;
-  res.json({
+
+  const now = new Date();
+  user.faceVerified = true;
+  user.faceVerifiedAt = now.toISOString(); // የ7 ቀኑ ዴሊ ታክስ መነሻ
+  user.taxCycleDay = 1;
+
+  return res.status(200).json({
     success: true,
-    message: ${verificationType} verification successful! Access granted.,
-    user: db.users[userId]
+    message: "የፊት አሻራዎ ጸድቋል! የ7 ቀን ታክስ ቆጣሪ ተጀምሯል።",
+    verifiedAt: user.faceVerifiedAt
   });
 });
 
-// የስቶር ግዢ ትዕዛዝ ማከናወኛ
-app.post('/api/store/buy', (req, res) => {
-  const { userId, itemId, price } = req.body;
+// 2. ክፍል መክፈቻ API (አሻራ ካልተሰጠ ይከለክላል)
+app.post('/api/rooms/create', (req, res) => {
+  const { userId, roomTitle, dailyTax } = req.body;
   const user = db.users[userId];
 
-  if (!user) {
-    return res.status(404).json({ success: false, message: 'User not found' });
-  }
-
-  if (!user.biometricVerified) {
+  if (!user || !user.faceVerified) {
     return res.status(403).json({
       success: false,
-      message: 'Access Denied: Biometric verification is strictly required.'
+      message: "ክፍል ለመክፈት መጀመሪያ የፊት አሻራዎን ማረጋገጥ አለብዎት!"
     });
   }
 
-  if (user.coins < price) {
-    return res.status(400).json({
-      success: false,
-      message: 'Insufficient Coins! Please recharge your wallet.'
-    });
+  const roomId = room_${Date.now()};
+  const newRoom = {
+    roomId,
+    ownerId: userId,
+    title: roomTitle || "የቀጥታ ድምጽ ክፍል",
+    dailyTax: dailyTax || 20,
+    createdAt: new Date().toISOString(),
+    seats: Array(8).fill(null).map((_, i) => ({ seatIndex: i + 1, occupantId: null }))
+  };
+
+  db.rooms[roomId] = newRoom;
+  return res.status(201).json({ success: true, message: "ክፍሉ ተከፍቷል!", room: newRoom });
+});
+
+// 3. ወንበር መያዣ API (ተጠቃሚዎች ነፃ ወንበር ይይዛሉ፣ ምንም ኮይን/ፖይንት አያገኙም)
+app.post('/api/rooms/take-seat', (req, res) => {
+  const { roomId, seatIndex, userId } = req.body;
+  const room = db.rooms[roomId];
+
+  if (!room) {
+    return res.status(404).json({ success: false, message: "ክፍሉ አልተገኘም!" });
   }
 
-  user.coins -= price;
-  user.backpack.push(itemId);
+  const targetSeat = room.seats.find(s => s.seatIndex === seatIndex);
+  if (!targetSeat) {
+    return res.status(400).json({ success: false, message: "ትክክለኛ ያልሆነ የወንበር ቁጥር!" });
+  }
 
-  io.emit('wallet_updated', { userId: user.id, newBalance: user.coins });
+  if (targetSeat.occupantId) {
+    return res.status(400).json({ success: false, message: "ወንበሩ ተይዟል!" });
+  }
 
-  res.json({
+  targetSeat.occupantId = userId;
+  return res.status(200).json({
     success: true,
-    message: 'Item purchased successfully!',
-    newBalance: user.coins,
-    backpack: user.backpack
+    message: ወንበር ${seatIndex} ተይዟል (ነፃ ማውሪያ ነው፤ ምንም ኮይን አያመነጭም)።,
+    seats: room.seats
   });
 });
 
-// የቀጥታ ግንኙነት (Socket.io)
-io.on('connection', (socket) => {
-  console.log('⚡ Connected to Nile Voice Socket:', socket.id);
+// 4. የ7 ቀን ዴሊ ታክስ ቆጣሪ ስሌት (ከክፍሉ ባለቤት ብቻ ይቆርጣል)
+function processDailyTax() {
+  const now = new Date();
+  Object.values(db.rooms).forEach(room => {
+    const owner = db.users[room.ownerId];
+    if (!owner || !owner.faceVerifiedAt) return;
 
-  socket.on('join_room', ({ roomId, userId }) => {
-    socket.join(roomId);
-    io.to(roomId).emit('user_joined_room', { userId });
-  });
+    const verifiedDate = new Date(owner.faceVerifiedAt);
+    const passedDays = Math.floor((now - verifiedDate) / (1000 * 60 * 60 * 24));
+    const currentDay = (passedDays % 7) + 1;
 
-  socket.on('send_gift', ({ fromUserId, toUserId, roomId, giftId, coinValue }) => {
-    const sender = db.users[fromUserId];
-    const receiver = db.users[toUserId];
-
-    if (sender && sender.coins >= coinValue) {
-      sender.coins -= coinValue;
-      if (receiver) {
-        receiver.points += coinValue;
-      }
-
-      io.to(roomId).emit('gift_received', {
-        fromUser: sender.name,
-        giftId: giftId,
-        coins: coinValue
-      });
+    if (owner.coins >= room.dailyTax) {
+      owner.coins -= room.dailyTax;
+      console.log([ዴሊ ታክስ] ቀን ${currentDay}፡ ከባለቤት ${owner.id} ${room.dailyTax} ኮይን ተቆርጧል);
+    } else {
+      console.log([ማስጠንቀቂያ] ባለቤት ${owner.id} በቂ ኮይን ስለሌለው ክፍሉ ይዘጋል);
     }
   });
+}
 
-  socket.on('disconnect', () => {
-    console.log('🔌 Client disconnected:', socket.id);
-  });
+// በየሰዓቱ ታክሱን ማረጋገጥ
+setInterval(processDailyTax, 1000 * 60 * 60);
+
+// Socket.io ግንኙነት
+io.on('connection', (socket) => {
+  console.log('አዲስ ተጠቃሚ ተገናኝቷል:', socket.id);
 });
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log(🌊 Nile Voice Server is live on port ${PORT});
+  console.log(ሰርቨሩ በፖርት ${PORT} ላይ በተሳካ ሁኔታ ስራ ጀምሯል);
 });
