@@ -61,7 +61,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   @override
   Widget build(BuildContext context) {
     final List<Widget> pages = [
-      RoomsHomeScreen(onCoinsUpdated: _updateState),
+      RoomHomeScreen(onCoinsUpdated: _updateState),
       const MessagesScreen(),
       ProfileScreen(onCoinsUpdated: _updateState),
     ];
@@ -78,7 +78,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         items: const [
           BottomNavigationBarItem(
             icon: Icon(Icons.mic),
-            label: 'Rooms',
+            label: 'Home',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.chat_bubble_outline),
