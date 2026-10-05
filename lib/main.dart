@@ -78,7 +78,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         items: const [
           BottomNavigationBarItem(
             icon: Icon(Icons.mic),
-            label: 'Rooms',
+            label: 'Home',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.chat_bubble_outline),
