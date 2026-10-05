@@ -20,7 +20,7 @@ class _LevelScreenState extends State<LevelScreen> with SingleTickerProviderStat
     {'range': 'Lv.60-69', 'tagVal': '60', 'color': Colors.redAccent, 'hasMedal': true, 'medal': Icons.diamond},
     {'range': 'Lv.70-79', 'tagVal': '70', 'color': Colors.pinkAccent, 'hasMedal': true, 'medal': Icons.auto_awesome},
     {'range': 'Lv.80-89', 'tagVal': '80', 'color': Colors.cyanAccent, 'hasMedal': true, 'medal': Icons.brightness_auto},
-    {'range': 'Lv.90-99', 'tagVal': '90', 'color': Colors.amberAccent, 'hasMedal': true, 'medal': Icons.crown},
+    {'range': 'Lv.90-99', 'tagVal': '90', 'color': Colors.amberAccent, 'hasMedal': true, 'medal': Icons.emoji_events},
   ];
 
   @override
