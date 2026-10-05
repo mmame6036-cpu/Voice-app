@@ -69,9 +69,11 @@ class _FaceAndRoomScreenState extends State<FaceAndRoomScreen> {
           isFaceVerified = true;
           verificationDate = data['verifiedAt'] ?? DateTime.now().toString();
           taxCycleDay = 1;
-        });
-        _notify('የፊት አሻራዎ በእውነተኛ ማረጋገጫ ጸድቋል!');
-      } else {
+        _notify('የፊት አሻራ ማረጋገጫ በተሳካ ሁኔታ ተጠናቋል!');
+  Future.delayed(const Duration(seconds: 1), () {
+    if (mounted) Navigator.pop(context, true);
+  });
+} else {
         _notify('የፊት አሻራ ማረጋገጫው አልተሳካም፤ አልፈቀደም!');
       }
     } catch (e) {
