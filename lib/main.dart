@@ -10,7 +10,6 @@ import 'host_center_screen.dart';
 import 'settings_screen.dart';
 import 'level_screen.dart';
 import 'support_screen.dart';
-import 'task_screen.dart';
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const NileVoiceApp());
@@ -117,7 +116,7 @@ class RoomsHomeScreen extends StatelessWidget {
       {
         'id': '102',
         'title': '🎤 Golden Voices Lounge',
-        'host': 'Yared';
+        'host': 'Yared',
         'users': 32,
         'tag': 'Live Singing',
         'color': const Color(0xFF261E38),
@@ -621,42 +620,6 @@ const SizedBox(height: 14),
                 ),
               ),
               const SizedBox(height: 14),
-            // Task Button (የፊት አሻራ ማረጋገጫ)
-              Container(
-                decoration: BoxDecoration(
-                  color: const Color(0xFF161B26),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: Colors.white10),
-                ),
-                child: ListTile(
-                  leading: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.tealAccent.withOpacity(0.15),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.assignment_turned_in, color: Colors.tealAccent),
-                  ),
-                  title: const Text(
-                    'Task',
-                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                  ),
-                  subtitle: const Text(
-                    'ዕለታዊ ተግባራት እና የፊት አሻራ',
-                    style: TextStyle(color: Colors.white54, fontSize: 12),
-                  ),
-                  trailing: const Icon(Icons.arrow_forward_ios, color: Colors.white38, size: 16),
-            onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => TaskScreen(
-                      userId: AppData.currentUserId,
-                    ),
-                  ),
-                );
-              },
-              const SizedBox(height: 14),
               // 2. Settings Button
               Container(
                 decoration: BoxDecoration(
@@ -704,45 +667,43 @@ const SizedBox(height: 14),
                   subtitle: const Text('FAQs, Host rules & Ticket support', style: TextStyle(color: Colors.white54, fontSize: 12)),
                   trailing: const Icon(Icons.arrow_forward_ios, color: Colors.white38, size: 16),
                   onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const SupportScreen()),
-                );
-              },
-            ),
-          ),
-        const SizedBox(height: 14),
-              // Super Admin Portal
-              AppData.isSuperAdmin
-                  ? Container(
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFFE50914), Color(0xFFB80000)],
-                        ),
-                        borderRadius: BorderRadius.circular(14),
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const SupportScreen()),
+                    );
+                  },
+                ),
+              ),
+            // Super Admin Portal
+            if (AppData.isSuperAdmin)
+              Container(
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFFE50914), Color(0xFFB80000)],
+                  ),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: ListTile(
+                  leading: const Icon(Icons.admin_panel_settings, color: Colors.white, size: 24),
+                  title: const Text('Master Admin Portal 👑', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  trailing: const Icon(Icons.arrow_forward_ios, color: Colors.white70, size: 14),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const SuperOwnerAdminPortal(),
                       ),
-                      child: ListTile(
-                        leading: const Icon(Icons.admin_panel_settings, color: Colors.white, size: 24),
-                        title: const Text('Master Admin Portal 👑', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                        trailing: const Icon(Icons.arrow_forward_ios, color: Colors.white70, size: 14),
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => const SuperOwnerAdminPortal(),
-                            ),
-                          );
-                        },
-                      ),
-                    )
-                  : const SizedBox.shrink(),
-        
-              ],
-            ),
-          ),
-        );
-      }
-    }
+                    );
+                  },
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 // ============================================================================
 // 5. SUPER OWNER ADMIN PORTAL
 // ============================================================================
