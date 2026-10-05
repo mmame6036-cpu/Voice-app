@@ -26,7 +26,6 @@ class _FaceAndRoomScreenState extends State<FaceAndRoomScreen> {
   List<dynamic> activeSeats = [];
   bool isLoading = false;
 void _notify(String message) {
-    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
