@@ -131,7 +131,6 @@ void _notify(String message) {
   }
 
 void _notify(String msg) {
-    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(msg),
