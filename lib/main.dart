@@ -704,15 +704,16 @@ const SizedBox(height: 14),
                   subtitle: const Text('FAQs, Host rules & Ticket support', style: TextStyle(color: Colors.white54, fontSize: 12)),
                   trailing: const Icon(Icons.arrow_forward_ios, color: Colors.white38, size: 16),
                   onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => const SupportScreen()),
-                    );
-                  },
-                ),
-              ),
-            // Super Admin Portal
-            if (AppData.isSuperAdmin)
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const SupportScreen()),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 14),
+          // Super Admin Portal
+          if (AppData.isSuperAdmin == true)
               Container(
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
