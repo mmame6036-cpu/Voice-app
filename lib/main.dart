@@ -61,7 +61,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   @override
   Widget build(BuildContext context) {
     final List<Widget> pages = [
-      RoomHomeScreen(onCoinsUpdated: _updateState),
+      RoomsHomeScreen(onCoinsUpdated: _updateState),
       const MessagesScreen(),
       ProfileScreen(onCoinsUpdated: _updateState),
     ];
@@ -78,7 +78,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         items: const [
           BottomNavigationBarItem(
             icon: Icon(Icons.mic),
-            label: 'Home',
+            label: 'Rooms',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.chat_bubble_outline),
@@ -585,45 +585,6 @@ const SizedBox(height: 14),
                     Navigator.push(
                       context,
                       MaterialPageRoute(builder: (context) => const HostCenterScreen()),
-                    );
-                  },
-                ),
-              ),
-            const SizedBox(height: 14),
-              // Task Button (የፊት አሻራ ማረጋገጫ)
-              Container(
-                decoration: BoxDecoration(
-                  color: const Color(0xFF161B26),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: Colors.white10),
-                ),
-                child: ListTile(
-                  leading: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.tealAccent.withOpacity(0.15),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.assignment_turned_in, color: Colors.tealAccent),
-                  ),
-                  title: const Text(
-                    'Task (የፊት አሻራ)',
-                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                  ),
-                  subtitle: const Text(
-                    'የፊት አሻራ ማረጋገጫ እና ዕለታዊ ተግባራት',
-                    style: TextStyle(color: Colors.white54, fontSize: 12),
-                  ),
-                  trailing: const Icon(Icons.arrow_forward_ios, color: Colors.white38, size: 16),
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => FaceAndRoomScreen(
-                          userId: AppData.currentUserId,
-                          baseUrl: 'http://localhost:3000/api',
-                        ),
-                      ),
                     );
                   },
                 ),
