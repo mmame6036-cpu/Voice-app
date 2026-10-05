@@ -9,6 +9,7 @@ import 'face_and_room_screen.dart';
 import 'host_center_screen.dart';
 import 'settings_screen.dart';
 import 'level_screen.dart';
+import 'support_screen.dart';
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const NileVoiceApp());
@@ -643,8 +644,34 @@ const SizedBox(height: 14),
                   },
                 ),
               ),
-            const SizedBox(height: 14),
-
+              const SizedBox(height: 14),
+              // Support (Help & Feedback) Button
+              Container(
+                decoration: BoxDecoration(
+                  color: const Color(0xFF161B26),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: Colors.white10),
+                ),
+                child: ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.purpleAccent.withOpacity(0.15),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.help_outline, color: Colors.purpleAccent),
+                  ),
+                  title: const Text('Support (Help & Feedback)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  subtitle: const Text('FAQs, Host rules & Ticket support', style: TextStyle(color: Colors.white54, fontSize: 12)),
+                  trailing: const Icon(Icons.arrow_forward_ios, color: Colors.white38, size: 16),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const SupportScreen()),
+                    );
+                  },
+                ),
+              ),
             // Super Admin Portal
             if (AppData.isSuperAdmin)
               Container(
