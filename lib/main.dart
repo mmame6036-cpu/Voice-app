@@ -6,6 +6,8 @@ import 'coin_seller_screen.dart';
 import 'agency_screen.dart';
 import 'room_screen.dart';
 import 'face_and_room_screen.dart';
+import 'host_center_screen.dart';
+import 'settings_screen.dart';
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const NileVoiceApp());
@@ -555,7 +557,64 @@ const SizedBox(height: 14),
                 },
               ),
             ),
+            const SizedBox(height: 14),
+              // 1. Host Center Button
+              Container(
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF8A2BE2), Color(0xFF4A0E4E)],
+                  ),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: Colors.white10),
+                ),
+                child: ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.15),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.mic_external_on, color: Colors.white),
+                  ),
+                  title: const Text('Host Center', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  subtitle: const Text('Live duration & Host earnings', style: TextStyle(color: Colors.white54, fontSize: 12)),
+                  trailing: const Icon(Icons.arrow_forward_ios, color: Colors.white, size: 16),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const HostCenterScreen()),
+                    );
+                  },
+                ),
+              ),
 
+              const SizedBox(height: 14),
+              // 2. Settings Button
+              Container(
+                decoration: BoxDecoration(
+                  color: const Color(0xFF161B26),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: Colors.white10),
+                ),
+                child: ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.settings, color: Colors.white70),
+                  ),
+                  title: const Text('Settings', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  trailing: const Icon(Icons.arrow_forward_ios, color: Colors.white38, size: 16),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const SettingsScreen()),
+                    );
+                  },
+                ),
+              ),
             const SizedBox(height: 14),
 
             // Super Admin Portal
