@@ -711,36 +711,32 @@ const SizedBox(height: 14),
               },
             ),
           ),
-          const SizedBox(height: 14),
-          // Super Admin Portal
-          if (AppData.isSuperAdmin == true)
-              Container(
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFFE50914), Color(0xFFB80000)],
-                  ),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: ListTile(
-                  leading: const Icon(Icons.admin_panel_settings, color: Colors.white, size: 24),
-                  title: const Text('Master Admin Portal 👑', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                  trailing: const Icon(Icons.arrow_forward_ios, color: Colors.white70, size: 14),
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const SuperOwnerAdminPortal(),
+        const SizedBox(height: 14),
+              // Super Admin Portal
+              AppData.isSuperAdmin
+                  ? Container(
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFFE50914), Color(0xFFB80000)],
+                        ),
+                        borderRadius: BorderRadius.circular(14),
                       ),
-                    );
-                  },
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-}
+                      child: ListTile(
+                        leading: const Icon(Icons.admin_panel_settings, color: Colors.white, size: 24),
+                        title: const Text('Master Admin Portal 👑', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                        trailing: const Icon(Icons.arrow_forward_ios, color: Colors.white70, size: 14),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const SuperOwnerAdminPortal(),
+                            ),
+                          );
+                        },
+                      ),
+                    )
+                  : const SizedBox.shrink(),
+        
 
 // ============================================================================
 // 5. SUPER OWNER ADMIN PORTAL
