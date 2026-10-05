@@ -154,16 +154,18 @@ IconButton(icon: const Icon(Icons.notifications_none), onPressed: () {}),
             child: InkWell(
               borderRadius: BorderRadius.circular(16),
               onTap: () {
-               Navigator.push(
-                  context,
-                 MaterialPageRoute(
-                   builder: (context) => FaceAndRoomScreen(
-                     userId: AppData.currentUserId,
-                     baseUrl: 'http://localhost:3000/api',
-                   ),
-                  ),
-                 );
-                },
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (context) => ActiveVoiceRoomScreen(
+        roomId: '999',
+        roomTitle: '${AppData.currentUserName}\'s Room',
+        hostName: AppData.currentUserName,
+        onCoinsUpdated: widget.onCoinsUpdated,
+      ),
+    ),
+  );
+},
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Row(
