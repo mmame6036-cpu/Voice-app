@@ -10,6 +10,7 @@ import 'host_center_screen.dart';
 import 'settings_screen.dart';
 import 'level_screen.dart';
 import 'support_screen.dart';
+import 'task_screen.dart';
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const NileVoiceApp());
@@ -463,7 +464,12 @@ label: const Text('Recharge', style: TextStyle(color: Colors.black, fontWeight: 
                 ],
               ),
             ),
-
+ onTap: () {
+  Navigator.push(
+    context,
+    MaterialPageRoute(builder: (context) => const TaskScreen()), // የገፁን ክላስ የሰየምከው በዚህ ስም ከሆነ
+  );
+}
             const SizedBox(height: 16),
 
             // Coin Seller & Store Buttons
