@@ -10,6 +10,7 @@ import 'host_center_screen.dart';
 import 'settings_screen.dart';
 import 'level_screen.dart';
 import 'support_screen.dart';
+import 'task_screen.dart';
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const NileVoiceApp());
@@ -645,19 +646,16 @@ const SizedBox(height: 14),
                     style: TextStyle(color: Colors.white54, fontSize: 12),
                   ),
                   trailing: const Icon(Icons.arrow_forward_ios, color: Colors.white38, size: 16),
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => FaceAndRoomScreen(
-                          userId: AppData.currentUserId,
-                          baseUrl: 'http://localhost:3000/api',
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
+            onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => TaskScreen(
+                      userId: AppData.currentUserId,
+                    ),
+                  ),
+                );
+              },
               const SizedBox(height: 14),
               // 2. Settings Button
               Container(
