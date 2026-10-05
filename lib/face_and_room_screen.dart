@@ -135,8 +135,14 @@ void _notify(String message) {
     });
   }
 
-  void _notify(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+void _notify(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg),
+        duration: const Duration(seconds: 2),
+      ),
+    );
   }
 
 @override
