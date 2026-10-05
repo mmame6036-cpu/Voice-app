@@ -464,12 +464,12 @@ label: const Text('Recharge', style: TextStyle(color: Colors.black, fontWeight: 
                 ],
               ),
             ),
- onTap: () {
-  Navigator.push(
-    context,
-    MaterialPageRoute(builder: (context) => const TaskScreen()), // የገፁን ክላስ የሰየምከው በዚህ ስም ከሆነ
-  );
-}
+          onTap: () {
+              Navigator.push(
+              context,
+               MaterialPageRoute(builder: (context) => const TaskScreen()), // የገፁን ክላስ የሰየምከው በዚህ ስም ከሆነ
+             );
+           }
             const SizedBox(height: 16),
 
             // Coin Seller & Store Buttons
