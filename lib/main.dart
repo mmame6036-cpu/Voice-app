@@ -161,7 +161,7 @@ IconButton(icon: const Icon(Icons.notifications_none), onPressed: () {}),
         roomId: '999',
         roomTitle: '${AppData.currentUserName}\'s Room',
         hostName: AppData.currentUserName,
-        onCoinsUpdated: widget.onCoinsUpdated,
+        onCoinsUpdated: onCoinsUpdated,
       ),
     ),
   );
