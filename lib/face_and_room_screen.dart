@@ -25,7 +25,15 @@ class _FaceAndRoomScreenState extends State<FaceAndRoomScreen> {
   String? currentRoomId;
   List<dynamic> activeSeats = [];
   bool isLoading = false;
-
+void _notify(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
   Future<Map<String, dynamic>> _sendPost(String path, Map<String, dynamic> body) async {
     final client = HttpClient();
     final uri = Uri.parse('${widget.baseUrl}$path');
