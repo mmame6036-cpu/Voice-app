@@ -117,7 +117,7 @@ class RoomsHomeScreen extends StatelessWidget {
       {
         'id': '102',
         'title': '🎤 Golden Voices Lounge',
-        'host': 'Yared',
+        'host': 'Yared';
         'users': 32,
         'tag': 'Live Singing',
         'color': const Color(0xFF261E38),
