@@ -73,22 +73,17 @@ void _notify(String message) {
           'faceImageData': 'hardware_biometric_success_token',
         });
 
-        setState(() {
-          isFaceVerified = true;
-          verificationDate = data['verifiedAt'] ?? DateTime.now().toString();
-          taxCycleDay = 1;
         _notify('የፊት አሻራ ማረጋገጫ በተሳካ ሁኔታ ተጠናቋል!');
-  Future.delayed(const Duration(seconds: 1), () {
-    if (mounted) Navigator.pop(context, true);
-  });
-} else {
-        _notify('የፊት አሻራ ማረጋገጫው አልተሳካም፤ አልፈቀደም!');
-      }
-    } catch (e) {
-      _notify('የአሻራ ፍተሻ ስህተት ተከስቷል፡ $e');
-    } finally {
-      setState(() => isLoading = false);
+      Future.delayed(const Duration(seconds: 1), () {
+        if (mounted) Navigator.pop(context, true);
+      });
+    } else {
+      _notify('የፊት አሻራ ማረጋገጫው አልተሳካም፤ አልፈቀደም!');
     }
+  } catch (e) {
+    _notify('የአሻራ ፍተሻ ስህተት ተከስቷል: $e');
+  } finally {
+    setState(() => isLoading = false);
   }
 
   Future<void> createRoom() async {
