@@ -8,6 +8,7 @@ import 'room_screen.dart';
 import 'face_and_room_screen.dart';
 import 'host_center_screen.dart';
 import 'settings_screen.dart';
+import 'level_screen.dart';
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const NileVoiceApp());
@@ -587,7 +588,34 @@ const SizedBox(height: 14),
                   },
                 ),
               ),
-
+            const SizedBox(height: 14),
+              // Level (Wealth & Charm) Button
+              Container(
+                decoration: BoxDecoration(
+                  color: const Color(0xFF161B26),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: Colors.white10),
+                ),
+                child: ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.withOpacity(0.15),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.military_tech, color: Colors.amber),
+                  ),
+                  title: const Text('Level (Wealth & Charm)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  subtitle: const Text('Badges, Medals & Upgrades', style: TextStyle(color: Colors.white54, fontSize: 12)),
+                  trailing: const Icon(Icons.arrow_forward_ios, color: Colors.white38, size: 16),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const LevelScreen()),
+                    );
+                  },
+                ),
+              ),
               const SizedBox(height: 14),
               // 2. Settings Button
               Container(
