@@ -454,24 +454,19 @@ label: const Text('Recharge', style: TextStyle(color: Colors.black, fontWeight: 
                             children: [
                               const Icon(Icons.diamond, color: Colors.cyanAccent, size: 18),
                               const SizedBox(width: 4),
-                              Text('${AppData.userPoints}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          onTap: () {
-              Navigator.push(
-              context,
-               MaterialPageRoute(builder: (context) => const TaskScreen()), // የገፁን ክላስ የሰየምከው በዚህ ስም ከሆነ
-             );
-           }
-            const SizedBox(height: 16),
-
+                              
+Text('${AppData.userPoints}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+            ],
+          ),
+        ),
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const TaskScreen()),
+          );
+        },
+      ),
+      const SizedBox(height: 16),
             // Coin Seller & Store Buttons
             Row(
               children: [
