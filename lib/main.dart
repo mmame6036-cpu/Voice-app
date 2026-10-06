@@ -11,6 +11,7 @@ import 'settings_screen.dart';
 import 'level_screen.dart';
 import 'support_screen.dart';
 import 'task_screen.dart';
+import 'room_chairs_grid.dart';
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const NileVoiceApp());
@@ -557,6 +558,11 @@ const SizedBox(height: 14),
               ),
             ),
             const SizedBox(height: 14),
+            // 30 Chairs Grid Section
+                const RoomChairsGrid(
+                 userCoinsSpent: 0,
+              ),
+             const SizedBox(height: 14),
             // Agency Center Dashboard Button
             Container(
               decoration: BoxDecoration(
