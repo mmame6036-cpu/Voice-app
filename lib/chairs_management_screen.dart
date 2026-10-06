@@ -1,67 +1,137 @@
 import 'package:flutter/material.dart';
+import 'chairs_management_screen.dart';
 
-class ChairsManagementScreen extends StatefulWidget {
-  final int userCoins;
-  final int userPoints;
-  final Function(int addedPoints)? onPointsRewardClaimed;
-
-  const ChairsManagementScreen({
-    Key? key,
-    this.userCoins = 0,
-    this.userPoints = 0,
-    this.onPointsRewardClaimed,
-  }) : super(key: key);
+class TaskScreen extends StatefulWidget {
+  const TaskScreen({Key? key}) : super(key: key);
 
   @override
-  State<ChairsManagementScreen> createState() => _ChairsManagementScreenState();
+  State<TaskScreen> createState() => _TaskScreenState();
 }
 
-class _ChairsManagementScreenState extends State<ChairsManagementScreen> {
-  late int currentPoints;
-  late int gameCoinsSpent;
+class _TaskScreenState extends State<TaskScreen> {
+  // የፊት አሻራ መረጋገጡን መቆጣጠሪያ
+  bool isFaceVerified = false;
 
-  // ስጦታው መወሰዱን መከታተያ
-  static bool tier2Claimed = false;
-  static bool tier3Claimed = false;
+  // የታስኮች ዝርዝር
+  final List<Map<String, dynamic>> tasksList = [
+    {
+      'title': 'የመጀመሪያውን ቪአይፒ ወንበር ክፈት',
+      'desc': 'በጌም 200,000 ኮይን በማንቀሳቀስ ወንበር 11-20ን ይክፈቱ',
+      'reward': '+20,000 Pts',
+      'icon': Icons.chair,
+    },
+    {
+      'title': 'የፕሪሚየም ወንበር ተልዕኮ',
+      'desc': 'ተጨማሪ 200,000 ኮይን በማንቀሳቀስ ወንበር 21-30ን ያጠናቁ',
+      'reward': '+20,000 Pts',
+      'icon': Icons.workspace_premium,
+    },
+    {
+      'title': 'ዕለታዊ የድምፅ ክፍል ተሳትፎ',
+      'desc': 'በቀጥታ የድምፅ ሩም ውስጥ ለ30 ደቂቃ ይቆዩ',
+      'reward': '+5,000 Pts',
+      'icon': Icons.mic,
+    },
+    {
+      'title': 'የጌም ተሳትፎ ተልዕኮ',
+      'desc': 'በሚኒ ጌሞች ላይ በመሳተፍ ተጨማሪ ነጥብ ይሰብስቡ',
+      'reward': '+10,000 Pts',
+      'icon': Icons.sports_esports,
+    },
+  ];
 
-  @override
-  void initState() {
-    super.initState();
-    currentPoints = widget.userPoints;
-    gameCoinsSpent = widget.userCoins;
-  }
+  // የፊት አሻራ ማረጋገጫ መጠየቂያ Dialog
+  void _verifyFaceAndNavigate() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF161B26),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            children: const [
+              Icon(Icons.face_retouching_natural, color: Colors.cyanAccent),
+              SizedBox(width: 8),
+              Text(
+                'የፊት አሻራ ማረጋገጫ',
+                style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: const [
+              Icon(Icons.camera_front, size: 70, color: Colors.cyanAccent),
+              SizedBox(height: 16),
+              Text(
+                'እባክዎ ፊትዎን ወደ ካሜራው ያሳዩ...',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.white70, fontSize: 14),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(dialogContext); // ሰርዝ
+              },
+              child: const Text('ሰርዝ', style: TextStyle(color: Colors.redAccent)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.cyanAccent),
+              onPressed: () {
+                Navigator.pop(dialogContext); // Dialogውን ዝጋ
+                setState(() {
+                  isFaceVerified = true; // ተረጋገጠ
+                });
 
-  void _claimReward(int tier, int pointsReward) {
-    setState(() {
-      if (tier == 2) {
-        tier2Claimed = true;
-      } else if (tier == 3) {
-        tier3Claimed = true;
-      }
-      currentPoints += pointsReward;
-    });
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('የፊት አሻራ ማረጋገጫ ተሳክቷል!'),
+                    backgroundColor: Colors.green,
+                    duration: Duration(seconds: 1),
+                  ),
+                );
 
-    if (widget.onPointsRewardClaimed != null) {
-      widget.onPointsRewardClaimed!(pointsReward);
-    }
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('እንኳን ደስ አለዎት! $pointsReward Points ተጨምሯል!'),
-        backgroundColor: Colors.green,
-      ),
+                // በቀጥታ ወደ ወንበሮቹ ገጽ ይወስዳል
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const ChairsManagementScreen(),
+                  ),
+                );
+              },
+              child: const Text('አረጋግጥ', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        );
+      },
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final bool isTier2Unlocked = gameCoinsSpent >= 200000;
-    final bool isTier3Unlocked = gameCoinsSpent >= 400000;
+  // "Go" በተን ሲነካ የሚሰራ
+  void _onGoPressed() {
+    if (!isFaceVerified) {
+      // ገና ካልተረጋገጠ መጀመሪያ የፊት አሻራ ይጠይቃል
+      _verifyFaceAndNavigate();
+    } else {
+      // አስቀድሞ ከተረጋገጠ በቀጥታ ወደ ወንበር ገጽ ይሄዳል
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => const ChairsManagementScreen(),
+        ),
+      );
+    }
+  }
 
+@override
+  Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF0F131C),
       appBar: AppBar(
-        title: const Text('የወንበሮች ደረጃ (30 Chairs)'),
+        title: const Text('የተግባራት ማዕከል (Task Center)'),
         backgroundColor: const Color(0xFF161B26),
         centerTitle: true,
         elevation: 0,
@@ -69,58 +139,38 @@ class _ChairsManagementScreenState extends State<ChairsManagementScreen> {
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // የስታተስ ካርድ
-            _buildUserSummaryCard(),
-            const SizedBox(height: 18),
+            // 1. ከላይ የተቀመጠ የፊት አሻራ ሳጥን
+            _buildFaceVerificationHeader(),
+            const SizedBox(height: 20),
 
-            // ደረጃ 1 (1 - 10) ነፃ
-            _buildTierCard(
-              title: 'ደረጃ 1፦ መደበኛ ወንበሮች (1 - 10)',
-              description: 'ለሁሉም አዲስ ተጠቃሚዎች ክፍት የሆነ',
-              startChair: 1,
-              endChair: 10,
-              isUnlocked: true,
-              themeColor: Colors.tealAccent,
-              child: const SizedBox.shrink(),
-            ),
-            const SizedBox(height: 18),
-
-            // ደረጃ 2 (11 - 20) 200,000 ኮይን -> 20,000 Points
-            _buildTierCard(
-              title: 'ደረጃ 2፦ ቪአይፒ ወንበሮች (11 - 20)',
-              description: 'በጌም 200,000 ኮይን ሲንቀሳቀስ ይከፈታል',
-              startChair: 11,
-              endChair: 20,
-              isUnlocked: isTier2Unlocked,
-              themeColor: Colors.amber,
-              child: _buildRewardSection(
-                targetCoins: 200000,
-                currentCoins: gameCoinsSpent,
-                rewardPoints: 20000,
-                isUnlocked: isTier2Unlocked,
-                isClaimed: tier2Claimed,
-                onClaim: () => _claimReward(2, 20000),
+            // 2. የታስኮች አርዕስት
+            const Text(
+              'ዕለታዊ እና ልዩ ተግባራት',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
               ),
             ),
-            const SizedBox(height: 18),
+            const SizedBox(height: 12),
 
-            // ደረጃ 3 (21 - 30) ተጨማሪ 200,000 ኮይን (400k) -> 20,000 Points
-            _buildTierCard(
-              title: 'ደረጃ 3፦ ፕሪሚየም ወንበሮች (21 - 30)',
-              description: 'በጌም 400,000 ኮይን ሲንቀሳቀስ ይከፈታል',
-              startChair: 21,
-              endChair: 30,
-              isUnlocked: isTier3Unlocked,
-              themeColor: const Color(0xFFD946EF),
-              child: _buildRewardSection(
-                targetCoins: 400000,
-                currentCoins: gameCoinsSpent,
-                rewardPoints: 20000,
-                isUnlocked: isTier3Unlocked,
-                isClaimed: tier3Claimed,
-                onClaim: () => _claimReward(3, 20000),
-              ),
+            // 3. ወደ ታች የተዘረዘሩ ታስኮች ከ "Go" በተን ጋር
+            ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: tasksList.length,
+              separatorBuilder: (context, index) => const SizedBox(height: 12),
+              itemBuilder: (context, index) {
+                final task = tasksList[index];
+                return _buildTaskItem(
+                  title: task['title'] as String,
+                  desc: task['desc'] as String,
+                  reward: task['reward'] as String,
+                  icon: task['icon'] as IconData,
+                );
+              },
             ),
           ],
         ),
@@ -128,184 +178,134 @@ class _ChairsManagementScreenState extends State<ChairsManagementScreen> {
     );
   }
 
-Widget _buildUserSummaryCard() {
+  // የፊት አሻራ ሳጥን ዲዛይን
+  Widget _buildFaceVerificationHeader() {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF1B2232),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white12),
+        color: const Color(0xFF161B26),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isFaceVerified ? Colors.greenAccent : Colors.cyanAccent.withOpacity(0.5),
+          width: 1.5,
+        ),
       ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          Column(
-            children: [
-              const Text('ያንቀሳቀሱት ኮይን', style: TextStyle(color: Colors.white60, fontSize: 12)),
-              const SizedBox(height: 4),
-              Text('$gameCoinsSpent', style: const TextStyle(color: Colors.amber, fontSize: 18, fontWeight: FontWeight.bold)),
-            ],
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: isFaceVerified
+                  ? Colors.greenAccent.withOpacity(0.15)
+                  : Colors.cyanAccent.withOpacity(0.15),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.face_retouching_natural,
+              color: isFaceVerified ? Colors.greenAccent : Colors.cyanAccent,
+              size: 32,
+            ),
           ),
-          Container(height: 30, width: 1, color: Colors.white12),
-          Column(
-            children: [
-              const Text('ያለዎት Points', style: TextStyle(color: Colors.white60, fontSize: 12)),
-              const SizedBox(height: 4),
-              Text('$currentPoints', style: const TextStyle(color: Colors.cyanAccent, fontSize: 18, fontWeight: FontWeight.bold)),
-            ],
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  isFaceVerified ? 'የፊት አሻራ ተረጋግጧል' : 'የፊት አሻራ ማረጋገጫ ሳጥን',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  isFaceVerified
+                      ? 'ማረጋገጫው አልፏል፤ ተግባራትን መፈፀም ይችላሉ'
+                      : 'ወደ ወንበር ለመሄድ መጀመሪያ የፊት አሻራ ያረጋግጡ',
+                  style: const TextStyle(color: Colors.white60, fontSize: 12),
+                ),
+              ],
+            ),
           ),
+          if (isFaceVerified)
+            const Icon(Icons.check_circle, color: Colors.greenAccent, size: 24)
+          else
+            TextButton(
+              onPressed: _verifyFaceAndNavigate,
+              child: const Text('አረጋግጥ', style: TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold)),
+            ),
         ],
       ),
     );
   }
 
-  Widget _buildTierCard({
+  // እያንዳንዱ የተዘረዘረ ታስክ ከ "Go" በተን ጋር
+
+Widget _buildTaskItem({
     required String title,
-    required String description,
-    required int startChair,
-    required int endChair,
-    required bool isUnlocked,
-    required Color themeColor,
-    required Widget child,
+    required String desc,
+    required String reward,
+    required IconData icon,
   }) {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFF161B26),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: isUnlocked ? themeColor.withOpacity(0.5) : Colors.white10),
+        color: const Color(0xFF1B2232),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.white10),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(title, style: TextStyle(color: themeColor, fontWeight: FontWeight.bold, fontSize: 14)),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: isUnlocked ? Colors.green.withOpacity(0.2) : Colors.red.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  children: [
-                    Icon(isUnlocked ? Icons.lock_open : Icons.lock, size: 14, color: isUnlocked ? Colors.greenAccent : Colors.redAccent),
-                    const SizedBox(width: 4),
-                    Text(
-                      isUnlocked ? 'ክፍት ነው' : 'ዝግ ነው',
-                      style: TextStyle(color: isUnlocked ? Colors.greenAccent : Colors.redAccent, fontSize: 11, fontWeight: FontWeight.bold),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Text(description, style: const TextStyle(color: Colors.white60, fontSize: 12)),
-          const SizedBox(height: 12),
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: 10,
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 5,
-              mainAxisSpacing: 8,
-              crossAxisSpacing: 8,
-              childAspectRatio: 1.0,
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: Colors.amber.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(10),
             ),
-            itemBuilder: (context, index) {
-              final chairNum = startChair + index;
-              return Container(
-                decoration: BoxDecoration(
-                  color: isUnlocked ? themeColor.withOpacity(0.12) : Colors.white.withOpacity(0.03),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: isUnlocked ? themeColor.withOpacity(0.7) : Colors.white12,
-
-),
-                ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.chair, color: isUnlocked ? themeColor : Colors.white24, size: 22),
-                    const SizedBox(height: 2),
-                    Text(
-                      '$chairNum',
-                      style: TextStyle(
-                        color: isUnlocked ? Colors.white : Colors.white24,
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            },
+            child: Icon(icon, color: Colors.amber, size: 24),
           ),
-          child,
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRewardSection({
-    required int targetCoins,
-    required int currentCoins,
-    required int rewardPoints,
-    required bool isUnlocked,
-    required bool isClaimed,
-    required VoidCallback onClaim,
-  }) {
-    final double progress = (currentCoins / targetCoins).clamp(0.0, 1.0);
-    final int percent = (progress * 100).toInt();
-
-    return Column(
-      children: [
-        const SizedBox(height: 12),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: LinearProgressIndicator(
-            value: progress,
-            minHeight: 8,
-            backgroundColor: Colors.white10,
-            valueColor: AlwaysStoppedAnimation<Color>(isUnlocked ? Colors.greenAccent : Colors.amber),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  desc,
+                  style: const TextStyle(color: Colors.white60, fontSize: 11),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  reward,
+                  style: const TextStyle(color: Colors.greenAccent, fontSize: 11, fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
           ),
-        ),
-        const SizedBox(height: 6),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text('ሂደት፡ $percent%', style: const TextStyle(color: Colors.white60, fontSize: 11)),
-            Text('$currentCoins / $targetCoins ኮይን', style: const TextStyle(color: Colors.white60, fontSize: 11)),
-          ],
-        ),
-        const SizedBox(height: 8),
-        SizedBox(
-          width: double.infinity,
-          height: 36,
-          child: ElevatedButton(
-            onPressed: (isUnlocked && !isClaimed) ? onClaim : null,
+          const SizedBox(width: 10),
+          // "Go" በተን
+          ElevatedButton(
+            onPressed: _onGoPressed,
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.amber,
-              disabledBackgroundColor: Colors.white10,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              foregroundColor: Colors.black,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              elevation: 0,
             ),
-            child: Text(
-              isClaimed
-                  ? 'ተወስዷል (Claimed)'
-                  : isUnlocked
-                      ? 'ስጦታውን ውሰድ (+$rewardPoints Points)'
-                      : 'ለመክፈት $targetCoins ኮይን ያስፈልጋል',
-              style: TextStyle(
-                color: (isUnlocked && !isClaimed) ? Colors.black : Colors.white38,
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-              ),
+            child: const Text(
+              'Go',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
