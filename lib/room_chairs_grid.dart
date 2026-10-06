@@ -63,19 +63,12 @@ class RoomChairsGrid extends StatelessWidget {
               bool isUnlocked = true;
               Color tierColor = Colors.tealAccent;
 
-              // ደረጃ 1፦ 1 - 10 (ክፍት)
+              isUnlocked = true; // ሁሉም 30 ወንበሮች ክፍት እንዲሆኑ
               if (chairNum <= 10) {
-                isUnlocked = true;
                 tierColor = Colors.tealAccent;
-              }
-              // ደረጃ 2፦ 11 - 20 (VIP)
-              else if (chairNum <= 20) {
-                isUnlocked = isTier2Unlocked;
+              } else if (chairNum <= 20) {
                 tierColor = Colors.amber;
-              }
-              // ደረጃ 3፦ 21 - 30 (Premium)
-              else {
-                isUnlocked = isTier3Unlocked;
+              } else {
                 tierColor = const Color(0xFFD946EF);
               }
 
