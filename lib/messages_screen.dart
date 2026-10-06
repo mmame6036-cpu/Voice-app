@@ -12,10 +12,9 @@ class _MessagesScreenState extends State<MessagesScreen> {
     {
       'name': 'System Notice',
       'avatar': '📢',
-      'lastMsg': 'Welcome to Nile Voice! Enjoy your experience.',
+      'lastMsg': 'Welcome to Nile Voice! Enjoy your rooms.',
       'time': '10:45 AM',
       'unread': 1,
-      'isSystem': true,
       'color': const Color(0xFF00C9A7),
     },
     {
@@ -24,25 +23,22 @@ class _MessagesScreenState extends State<MessagesScreen> {
       'lastMsg': 'Join my room, we are having a great time!',
       'time': '09:30 AM',
       'unread': 2,
-      'isSystem': false,
       'color': const Color(0xFFD946EF),
     },
     {
       'name': 'Yared',
       'avatar': '🎤',
-      'lastMsg': 'Thanks for the gift in the live stage!',
+      'lastMsg': 'Thanks for the gift on stage!',
       'time': 'Yesterday',
       'unread': 0,
-      'isSystem': false,
       'color': const Color(0xFF3B82F6),
     },
     {
       'name': 'Sara',
       'avatar': '🎮',
-      'lastMsg': 'Are you playing the mini-game today?',
+      'lastMsg': 'Are you playing today?',
       'time': 'Yesterday',
       'unread': 0,
-      'isSystem': false,
       'color': const Color(0xFFF59E0B),
     },
   ];
@@ -122,10 +118,10 @@ class _MessagesScreenState extends State<MessagesScreen> {
                         color: item['unread'] > 0 ? Colors.white70 : Colors.white38,
                         fontSize: 13,
                         fontWeight: item['unread'] > 0 ? FontWeight.w500 : FontWeight.normal,
+                      ),
+                    ),
 
 ),
-                    ),
-                  ),
                   if (item['unread'] > 0)
                     Container(
                       margin: const EdgeInsets.only(left: 8),
@@ -145,7 +141,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
             onTap: () {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text('Opening conversation with ${item['name']}...'),
+                  content: Text('Chat with ${item['name']}'),
                   duration: const Duration(seconds: 1),
                 ),
               );
