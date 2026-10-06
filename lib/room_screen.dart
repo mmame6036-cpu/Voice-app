@@ -1,4 +1,3 @@
-KEDER:
 import 'package:flutter/material.dart';
 import 'room_chairs_grid.dart';
 import 'room_games_sheet.dart';
@@ -59,9 +58,9 @@ class _RoomScreenState extends State<RoomScreen> {
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              Color(0xFF25103F), // የላይኛው ውብ የሮያል ፐርፕል ቀለም
-              Color(0xFF150A26), // የመሀከለኛው ክፍል
-              Color(0xFF0C0517), // የታችኛው ጠቆር ያለ ክፍል
+              Color(0xFF25103F),
+              Color(0xFF150A26),
+              Color(0xFF0C0517),
             ],
           ),
         ),
@@ -72,7 +71,7 @@ class _RoomScreenState extends State<RoomScreen> {
               children: [
                 const SizedBox(height: 12),
 
-                // 1. Host Stage Header
+                // Host Stage Header
                 Container(
                   margin: const EdgeInsets.symmetric(horizontal: 16),
                   padding: const EdgeInsets.all(12),
@@ -107,9 +106,9 @@ class _RoomScreenState extends State<RoomScreen> {
                       ),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
 
-decoration: BoxDecoration(
-                          color: Colors.redAccent.withOpacity(0.2),
+color: Colors.redAccent.withOpacity(0.2),
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(color: Colors.redAccent),
                         ),
@@ -127,7 +126,7 @@ decoration: BoxDecoration(
 
                 const SizedBox(height: 16),
 
-                // 2. Chairs Grid (የወንበሮቹ ዝርዝር)
+                // Chairs Grid (የወንበሮቹ ዝርዝር)
                 const Padding(
                   padding: EdgeInsets.symmetric(horizontal: 16),
                   child: RoomChairsGrid(),
