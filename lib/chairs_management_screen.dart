@@ -1,21 +1,35 @@
 import 'package:flutter/material.dart';
-import 'main.dart'; // AppData ን ለመጠቀም
 
 class ChairsManagementScreen extends StatefulWidget {
-  const ChairsManagementScreen({Key? key}) : super(key: key);
+  final int userCoins;
+  final int userPoints;
+  final Function(int addedPoints)? onPointsRewardClaimed;
+
+  const ChairsManagementScreen({
+    Key? key,
+    this.userCoins = 0,
+    this.userPoints = 0,
+    this.onPointsRewardClaimed,
+  }) : super(key: key);
 
   @override
   State<ChairsManagementScreen> createState() => _ChairsManagementScreenState();
 }
 
 class _ChairsManagementScreenState extends State<ChairsManagementScreen> {
-  // ዩዘሩ በጌም ያንቀሳቀሰው ኮይን (ከ AppData ወይም ከሰርቨር)
-  // ለሙከራ 250000 አድርገህ መሞከር ትችላለህ
-  int get gameCoinsSpent => AppData.userCoins; 
+  late int currentPoints;
+  late int gameCoinsSpent;
 
-  // ስጦታው (20k Points) ተወስዷል ወይስ አልተወሰደም የሚል ምልክት
+  // ስጦታው መወሰዱን መከታተያ
   static bool tier2Claimed = false;
   static bool tier3Claimed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    currentPoints = widget.userPoints;
+    gameCoinsSpent = widget.userCoins;
+  }
 
   void _claimReward(int tier, int pointsReward) {
     setState(() {
@@ -24,12 +38,16 @@ class _ChairsManagementScreenState extends State<ChairsManagementScreen> {
       } else if (tier == 3) {
         tier3Claimed = true;
       }
-      AppData.userPoints += pointsReward;
+      currentPoints += pointsReward;
     });
+
+    if (widget.onPointsRewardClaimed != null) {
+      widget.onPointsRewardClaimed!(pointsReward);
+    }
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('እንኳን ደስ አለዎት! $pointsReward Points ወደ አካውንትዎ ገቢ ሆኗል!'),
+        content: Text('እንኳን ደስ አለዎት! $pointsReward Points ተጨምሯል!'),
         backgroundColor: Colors.green,
       ),
     );
@@ -52,11 +70,11 @@ class _ChairsManagementScreenState extends State<ChairsManagementScreen> {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            // የዩዘሩ ሁኔታ ማጠቃለያ ካርድ
+            // የስታተስ ካርድ
             _buildUserSummaryCard(),
             const SizedBox(height: 18),
 
-            // ደረጃ 1፦ ወንበር 1 - 10 (ለሁሉም ክፍት)
+            // ደረጃ 1 (1 - 10) ነፃ
             _buildTierCard(
               title: 'ደረጃ 1፦ መደበኛ ወንበሮች (1 - 10)',
               description: 'ለሁሉም አዲስ ተጠቃሚዎች ክፍት የሆነ',
@@ -68,7 +86,7 @@ class _ChairsManagementScreenState extends State<ChairsManagementScreen> {
             ),
             const SizedBox(height: 18),
 
-            // ደረጃ 2፦ ወንበር 11 - 20 (200,000 ኮይን -> 20,000 Points)
+            // ደረጃ 2 (11 - 20) 200,000 ኮይን -> 20,000 Points
             _buildTierCard(
               title: 'ደረጃ 2፦ ቪአይፒ ወንበሮች (11 - 20)',
               description: 'በጌም 200,000 ኮይን ሲንቀሳቀስ ይከፈታል',
@@ -87,7 +105,7 @@ class _ChairsManagementScreenState extends State<ChairsManagementScreen> {
             ),
             const SizedBox(height: 18),
 
-            // ደረጃ 3፦ ወንበር 21 - 30 (ተጨማሪ 200,000 ኮይን -> 20,000 Points)
+            // ደረጃ 3 (21 - 30) ተጨማሪ 200,000 ኮይን (400k) -> 20,000 Points
             _buildTierCard(
               title: 'ደረጃ 3፦ ፕሪሚየም ወንበሮች (21 - 30)',
               description: 'በጌም 400,000 ኮይን ሲንቀሳቀስ ይከፈታል',
@@ -110,14 +128,12 @@ class _ChairsManagementScreenState extends State<ChairsManagementScreen> {
     );
   }
 
-  // የዩዘሩን ኮይን እና ፖይንት የሚያሳይ
-  Widget _buildUserSummaryCard() {
+Widget _buildUserSummaryCard() {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: const Color(0xFF1B2232),
-
-borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(color: Colors.white12),
       ),
       child: Row(
@@ -135,7 +151,7 @@ borderRadius: BorderRadius.circular(14),
             children: [
               const Text('ያለዎት Points', style: TextStyle(color: Colors.white60, fontSize: 12)),
               const SizedBox(height: 4),
-              Text('${AppData.userPoints}', style: const TextStyle(color: Colors.cyanAccent, fontSize: 18, fontWeight: FontWeight.bold)),
+              Text('$currentPoints', style: const TextStyle(color: Colors.cyanAccent, fontSize: 18, fontWeight: FontWeight.bold)),
             ],
           ),
         ],
@@ -143,7 +159,6 @@ borderRadius: BorderRadius.circular(14),
     );
   }
 
-  // የእያንዳንዱ ደረጃ ካርድ
   Widget _buildTierCard({
     required String title,
     required String description,
@@ -189,8 +204,6 @@ borderRadius: BorderRadius.circular(14),
           const SizedBox(height: 4),
           Text(description, style: const TextStyle(color: Colors.white60, fontSize: 12)),
           const SizedBox(height: 12),
-
-          // 10ሩ ወንበሮች
           GridView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
@@ -209,17 +222,13 @@ borderRadius: BorderRadius.circular(14),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
                     color: isUnlocked ? themeColor.withOpacity(0.7) : Colors.white12,
-                  ),
+
+),
                 ),
                 child: Column(
-
-mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(
-                      Icons.chair,
-                      color: isUnlocked ? themeColor : Colors.white24,
-                      size: 22,
-                    ),
+                    Icon(Icons.chair, color: isUnlocked ? themeColor : Colors.white24, size: 22),
                     const SizedBox(height: 2),
                     Text(
                       '$chairNum',
@@ -240,7 +249,6 @@ mainAxisAlignment: MainAxisAlignment.center,
     );
   }
 
-  // የሽልማት እና የፕሮግረስ ባር ክፍል
   Widget _buildRewardSection({
     required int targetCoins,
     required int currentCoins,
