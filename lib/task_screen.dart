@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:local_auth/local_auth.dart';
+import 'chairs_management_screen.dart';
 
 class TaskScreen extends StatefulWidget {
-  final String userId;
+  final dynamic userId;
+  final dynamic userData;
 
   const TaskScreen({
     Key? key,
-    required this.userId,
+    this.userId,
+    this.userData,
   }) : super(key: key);
 
   @override
