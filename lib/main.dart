@@ -310,34 +310,6 @@ class ActiveVoiceRoomScreen extends StatelessWidget {
 }
 
 // ============================================================================
-// 3. MESSAGES SCREEN
-// ============================================================================
-class MessagesScreen extends StatelessWidget {
-  const MessagesScreen({Key? key}) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF161B26),
-        elevation: 0,
-        title: const Text('Messages', style: TextStyle(fontWeight: FontWeight.bold)),
-      ),
-      body: const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.forum_outlined, size: 64, color: Colors.white24),
-            SizedBox(height: 12),
-            Text('No new messages', style: TextStyle(color: Colors.white54, fontSize: 15)),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ============================================================================
 // 4. PROFILE SCREEN (ME)
 // ============================================================================
 class ProfileScreen extends StatefulWidget {
