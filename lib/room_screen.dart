@@ -1,3 +1,4 @@
+import 'room_chairs_grid.dart';
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
@@ -118,7 +119,7 @@ void _initSocket() {
       }
     });
   }
-
+const RoomChairsGrid(),
   void _stopSeatRewardTimer() {
     _seatRewardTimer?.cancel();
     _secondsOnGoldenSeat = 0;
