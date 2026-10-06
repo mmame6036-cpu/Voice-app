@@ -459,13 +459,28 @@ Text('${AppData.userPoints}', style: const TextStyle(fontSize: 16, fontWeight: F
             ],
           ),
         ),
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const TaskScreen()),
-          );
-        },
-      ),
+    GestureDetector(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const TaskScreen()),
+              );
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.white12,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('Task Center', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  Text('${AppData.userPoints}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.cyanAccent)),
+                ],
+              ),
+            ),
+          ),
       const SizedBox(height: 16),
             // Coin Seller & Store Buttons
             Row(
