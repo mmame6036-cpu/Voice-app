@@ -158,12 +158,11 @@ IconButton(icon: const Icon(Icons.notifications_none), onPressed: () {}),
               onTap: () {
   Navigator.push(
     context,
-    MaterialPageRoute(
-      builder: (context) => ActiveVoiceRoomScreen(
-        roomId: '999',
-        roomTitle: '${AppData.currentUserName}\'s Room',
-        hostName: AppData.currentUserName,
-        onCoinsUpdated: onCoinsUpdated,
+  MaterialPageRoute(
+        builder: (context) => RoomScreen(
+          roomTitle: r['title'] ?? 'Live Room',
+          hostName: r['host'] ?? 'Host',
+        ),
       ),
     ),
   );
