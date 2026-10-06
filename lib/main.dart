@@ -12,6 +12,7 @@ import 'level_screen.dart';
 import 'support_screen.dart';
 import 'task_screen.dart';
 import 'room_chairs_grid.dart';
+import 'messages_screen.dart';
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const NileVoiceApp());
