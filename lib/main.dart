@@ -162,7 +162,6 @@ IconButton(icon: const Icon(Icons.notifications_none), onPressed: () {}),
         builder: (context) => RoomScreen(
           roomTitle: r['title'] ?? 'Live Room',
           hostName: r['host'] ?? 'Host',
-        ),
       ),
     ),
   );
