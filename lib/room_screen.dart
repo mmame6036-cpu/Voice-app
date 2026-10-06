@@ -119,7 +119,10 @@ void _initSocket() {
       }
     });
   }
-const RoomChairsGrid(),
+// በ Column children ውስጥ እንዲህ አስቀምጠው
+              const SizedBox(height: 12),
+              const RoomChairsGrid(),
+              const SizedBox(height: 12),
   void _stopSeatRewardTimer() {
     _seatRewardTimer?.cancel();
     _secondsOnGoldenSeat = 0;
