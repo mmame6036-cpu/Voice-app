@@ -225,11 +225,9 @@ IconButton(icon: const Icon(Icons.notifications_none), onPressed: () {}),
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (context) => ActiveVoiceRoomScreen(
-                roomId: '999',
-                roomTitle: '${AppData.currentUserName}\'s Room',
-                hostName: AppData.currentUserName,
-                onCoinsUpdated: onCoinsUpdated,
+            builder: (context) => const RoomScreen(
+                roomTitle: 'My Live Stage',
+                hostName: 'Host (Me)',
               ),
             ),
           );
