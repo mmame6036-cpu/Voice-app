@@ -558,11 +558,6 @@ const SizedBox(height: 14),
               ),
             ),
             const SizedBox(height: 14),
-            // 30 Chairs Grid Section
-                const RoomChairsGrid(
-                 userCoinsSpent: 0,
-              ),
-             const SizedBox(height: 14),
             // Agency Center Dashboard Button
             Container(
               decoration: BoxDecoration(
