@@ -17,7 +17,6 @@ class TaskScreen extends StatefulWidget {
 
 class _TaskScreenState extends State<TaskScreen> {
   bool isFaceVerified = false;
-  bool isLoading = false;
 
   // የነጥብና የታስክ ሁኔታዎች
   int totalPoints = 0;
@@ -85,7 +84,7 @@ class _TaskScreenState extends State<TaskScreen> {
                 // በቀጥታ ወደ ወንበሮቹ ገጽ ይወስዳል
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (context) => ChairsManagementScreen()),
+                  MaterialPageRoute(builder: (context) => const ChairsManagementScreen()),
                 );
               },
               child: const Text('አረጋግጥ', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
@@ -103,7 +102,7 @@ class _TaskScreenState extends State<TaskScreen> {
     } else {
       Navigator.push(
         context,
-        MaterialPageRoute(builder: (context) => ChairsManagementScreen()),
+        MaterialPageRoute(builder: (context) => const ChairsManagementScreen()),
       );
     }
   }
@@ -332,7 +331,6 @@ Container(
                   ],
                 ),
               ),
-              // "Go" በተን
               ElevatedButton(
                 onPressed: onGo,
                 style: ElevatedButton.styleFrom(
