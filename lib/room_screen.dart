@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'room_chairs_grid.dart';
-
+import 'room_games_sheet.dart';
 class RoomScreen extends StatefulWidget {
   final String roomTitle;
   final String hostName;
@@ -151,6 +151,14 @@ class _RoomScreenState extends State<RoomScreen> {
             IconButton(
               icon: const Icon(Icons.card_giftcard, color: Colors.amber),
               onPressed: () {},
+            ),
+            IconButton(
+              icon: const Icon(Icons.sports_esports_rounded, color: Color(0xFFFFD700)),
+              onPressed: () {
+                RoomGamesSheet.show(context, onCoinsChanged: () {
+                  setState(() {});
+                });
+              },
             ),
             IconButton(
               icon: const Icon(Icons.message_outlined, color: Colors.white70),
