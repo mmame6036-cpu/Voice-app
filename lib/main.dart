@@ -10,7 +10,6 @@ import 'host_center_screen.dart';
 import 'settings_screen.dart';
 import 'level_screen.dart';
 import 'support_screen.dart';
-import 'task_screen.dart';
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const NileVoiceApp());
@@ -529,34 +528,7 @@ label: const Text('Recharge', style: TextStyle(color: Colors.black, fontWeight: 
             ),
 
 const SizedBox(height: 14),
-          // Task Center Button
-            Container(
-              decoration: BoxDecoration(
-                color: const Color(0xFF161B26),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: Colors.white10),
-              ),
-              child: ListTile(
-                leading: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.cyanAccent.withOpacity(0.15),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.assignment_outlined, color: Colors.cyanAccent),
-                ),
-                title: const Text('Task Center', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                subtitle: const Text('ዕለታዊ ተግባራት እና የወንበር ደረጃ', style: TextStyle(color: Colors.white54, fontSize: 12)),
-                trailing: const Icon(Icons.arrow_forward_ios, color: Colors.white38, size: 16),
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => const TaskScreen()),
-                  );
-                },
-              ),
-            ),
-            const SizedBox(height: 14),
+
             // Agency Center Dashboard Button
             Container(
               decoration: BoxDecoration(
