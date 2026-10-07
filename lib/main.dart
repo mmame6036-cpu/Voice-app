@@ -26,6 +26,7 @@ class AppData {
   static int userPoints = 0;
   static bool isSuperAdmin = true;
   static bool biometricVerified = true;
+  static const String serverUrl = 'https://voice-app-2-jd95.onrender.com';
 }
 
 class NileVoiceApp extends StatelessWidget {
