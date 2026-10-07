@@ -32,7 +32,7 @@ const userSchema = new mongoose.Schema({
 });
 const User = mongoose.model('User', userSchema);
 
-// Room & Seats Schema
+// Room & Seats Schema (እስከ 30 ወንበር የሚደግፍ)
 const roomSchema = new mongoose.Schema({
   roomId: { type: String, required: true, unique: true },
   hostId: { type: String, required: true },
@@ -41,7 +41,7 @@ const roomSchema = new mongoose.Schema({
   seats: [
     {
       seatIndex: Number,
-      occupantId: { type: String, default: null }
+      occupantName: { type: String, default: null }
     }
   ],
   createdAt: { type: Date, default: Date.now }
@@ -96,15 +96,15 @@ app.post('/verify-face', async (req, res) => {
   }
 });
 
-// አዲስ ክፍል መክፈቻ API
+// አዲስ ክፍል መክፈቻ API (30 ወንበሮችን አዘጋጅቶ ይከፍታል)
 app.post('/rooms/create', async (req, res) => {
   try {
     const { userId, roomTitle, dailyTax } = req.body;
 
     const newRoomId = 'room_' + Date.now();
-    const defaultSeats = Array.from({ length: 8 }, (_, i) => ({
+    const defaultSeats = Array.from({ length: 30 }, (_, i) => ({
       seatIndex: i + 1,
-      occupantId: null
+      occupantName: null
     }));
 
     const newRoom = new Room({
@@ -137,12 +137,11 @@ app.get('/rooms', async (req, res) => {
   }
 });
 
-// አድሚን ብቻ ኮይን የሚያመነጭበት ሴኪዩር API
+// አድሚን ብቻ ኮይን የሚያመነጭበት API
 app.post('/admin/mint-coins', async (req, res) => {
   try {
     const { adminKey, targetUserId, amount } = req.body;
 
-    // የአድሚን ሴኪዩሪቲ ኪይ ማረጋገጫ
     if (adminKey !== process.env.ADMIN_SECRET_KEY) {
       return res.status(403).json({ success: false, message: 'ያልተፈቀደ ሙከራ!' });
     }
@@ -155,7 +154,6 @@ let user = await User.findOne({ userId: targetUserId });
     user.coins += Number(amount);
     await user.save();
 
-    // ኦዲት ሎግ መመዝገብ
     await Transaction.create({
       senderId: 'ADMIN_SYSTEM',
       receiverId: targetUserId,
@@ -169,39 +167,32 @@ let user = await User.findOne({ userId: targetUserId });
   }
 });
 
-// --- 4. Socket.io Real-Time Engine (ቀጥታ ክፍል እና ወንበሮች) ---
+// --- 4. Socket.io Real-Time Engine (የቀጥታ ወንበር ማመሳሰያ) ---
 io.on('connection', (socket) => {
-  console.log('User connected to socket:', socket.id);
+  console.log('✅ User connected to socket:', socket.id);
 
-  socket.on('join_room', (roomId) => {
+  // ክፍል ሲገባ የሚከናወን
+  socket.on('join_room', (data) => {
+    const roomId = typeof data === 'object' ? data.room : data;
     socket.join(roomId);
+    console.log(📡 User joined room: ${roomId});
     io.to(roomId).emit('user_joined', { socketId: socket.id });
   });
 
-  // ወንበር ሲያዝ ለክፍሉ ሰዎች በሙሉ ማሳወቂያ
-  socket.on('take_seat', async ({ roomId, seatIndex, userId }) => {
-    try {
-      const room = await Room.findOne({ roomId });
-      if (room) {
-        const seat = room.seats.find(s => s.seatIndex === seatIndex);
-        if (seat && !seat.occupantId) {
-          seat.occupantId = userId;
-          await room.save();
-          io.to(roomId).emit('seat_updated', { seatIndex, occupantId: userId });
-        }
-      }
-    } catch (e) {
-      console.error(e);
-    }
+  // ወንበር ሲያዝ ወይም ሲለቀቅ ለሁሉም ስልኮች ያሰራጫል
+  socket.on('chair_action', (data) => {
+    console.log('🪑 Chair action broadcasted:', data);
+    // የመጣውን የወንበር መረጃ ለሁሉም ስልኮች በቀጥታ ያስተላልፋል
+    io.emit('chair_action', data);
   });
 
   socket.on('disconnect', () => {
-    console.log('User disconnected:', socket.id);
+    console.log('❌ User disconnected:', socket.id);
   });
 });
 
 // Server Listen
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
-  console.log('Server listening on port ' + PORT);
+  console.log('🚀 Server listening on port ' + PORT);
 });
