@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'room_chairs_grid.dart';
 import 'room_games_sheet.dart';
+import 'main.dart';
 
 class RoomScreen extends StatefulWidget {
   final String roomTitle;
@@ -18,6 +20,62 @@ class RoomScreen extends StatefulWidget {
 
 class _RoomScreenState extends State<RoomScreen> {
   bool isMuted = false;
+  IO.Socket? socket;
+
+  @override
+  void initState() {
+    super.initState();
+    _connectSocket();
+  }
+
+  void _connectSocket() {
+    try {
+      socket = IO.io(
+        AppData.serverUrl,
+        IO.OptionBuilder()
+            .setTransports(['websocket'])
+            .disableAutoConnect()
+            .build(),
+      );
+
+      socket?.connect();
+
+      socket?.onConnect((_) {
+        // ወደ ክፍሉ መግባትን ለሰርቨር ማሳወቅ
+        socket?.emit('join_room', {
+          'room': widget.roomTitle,
+          'user': AppData.currentUserName,
+        });
+      });
+
+      // ሌላ ሰው ወንበር ሲይዝ ወይም ሲለቅ ከሰርቨር የሚመጣውን መቀበል
+      socket?.on('chair_action', (data) {
+        if (mounted) {
+          setState(() {
+            int chair = data['chairNum'];
+            String user = data['userName'];
+            String action = data['action'];
+
+            if (action == 'join') {
+              occupiedChairs.removeWhere((k, v) => v == user);
+              occupiedChairs[chair] = user;
+            } else if (action == 'leave') {
+              occupiedChairs.remove(chair);
+            }
+          });
+        }
+      });
+    } catch (e) {
+      debugPrint('Socket connection error: $e');
+    }
+  }
+
+  @override
+  void dispose() {
+    socket?.disconnect();
+    socket?.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -79,7 +137,8 @@ class _RoomScreenState extends State<RoomScreen> {
                     color: const Color(0xFF1B2234),
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(color: Colors.white10),
-                  ),
+
+),
                   child: Row(
                     children: [
                       CircleAvatar(
@@ -107,8 +166,7 @@ class _RoomScreenState extends State<RoomScreen> {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
-
-color: Colors.redAccent.withOpacity(0.2),
+                          color: Colors.redAccent.withOpacity(0.2),
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(color: Colors.redAccent),
                         ),
@@ -126,10 +184,12 @@ color: Colors.redAccent.withOpacity(0.2),
 
                 const SizedBox(height: 16),
 
-                // Chairs Grid (የወንበሮቹ ዝርዝር)
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 16),
-                  child: RoomChairsGrid(),
+                // Chairs Grid (ሶኬቱ የተሰጠው ክፍል)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: RoomChairsGrid(
+                    socket: socket,
+                  ),
                 ),
 
                 const SizedBox(height: 16),
