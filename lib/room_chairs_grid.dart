@@ -84,16 +84,36 @@ class RoomChairsGrid extends StatelessWidget {
                 borderRadius: BorderRadius.circular(10),
                 onTap: () {
                   if (isUnlocked) {
-                    occupiedChairs[chairNum] = AppData.currentUserName;
+                    final String myName = AppData.currentUserName;
+
+                    // 1. አስቀድሞ በዚህ ወንበር ላይ የተቀመጠው ይሄው ሰው ከሆነ፣ ከወንበሩ እንዲነሳ (Leave) ያድርገው
+                    if (occupiedChairs[chairNum] == myName) {
+                      occupiedChairs.remove(chairNum);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Left Chair #$chairNum'),
+                          backgroundColor: Colors.grey[800],
+                          duration: const Duration(seconds: 1),
+                        ),
+                      );
+                    } else {
+                      // 2. ተጠቃሚው ቀድሞ የተቀመጠበት ሌላ ወንበር ካለ ከዚያ ወንበር ያስነሳው
+                      occupiedChairs.removeWhere((key, value) => value == myName);
+
+                      // 3. አሁን ወደ ነካው ወንበር ያስቀምጠው
+                      occupiedChairs[chairNum] = myName;
+
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Joined Chair #$chairNum as $myName'),
+                          backgroundColor: Colors.teal,
+                          duration: const Duration(seconds: 1),
+                        ),
+                      );
+                    }
+
                     if (onChairTap != null) onChairTap!(chairNum);
                     (context as Element).markNeedsBuild();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Joined Chair #$chairNum as ${AppData.currentUserName}'),
-                        backgroundColor: Colors.teal,
-                        duration: const Duration(seconds: 1),
-                      ),
-                    );
                   } else {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
@@ -103,8 +123,7 @@ class RoomChairsGrid extends StatelessWidget {
                           label: 'Upgrade',
                           textColor: Colors.white,
                           onPressed: () {
-
-Navigator.push(
+                            Navigator.push(
                               context,
                               MaterialPageRoute(
                                 builder: (context) => ChairsManagementScreen(
