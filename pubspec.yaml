@@ -15,7 +15,7 @@ dependencies:
   socket_io_client: ^2.0.3+1
   local_auth: ^2.1.6
   webview_flutter:^4.10.0
-j
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
