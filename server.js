@@ -163,7 +163,7 @@ let user = await User.findOne({ userId: targetUserId });
       type: 'admin_mint'
     });
 
-    res.json({ success: true, message: ${amount} ኮይን ተጨምሯል, newBalance: user.coins });
+    res.json({ success: true, message: amount + ' ኮይን ተጨምሯል', newBalance: user.coins });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
