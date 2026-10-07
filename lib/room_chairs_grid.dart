@@ -1,206 +1,157 @@
 import 'package:flutter/material.dart';
-import 'chairs_management_screen.dart';
 import 'main.dart';
 
-// የተቀመጡ ሰዎችን መረጃ የሚይዝ
+// በክፍሉ ውስጥ የተቀመጡ ሰዎች
 Map<int, String> occupiedChairs = {};
+
 class RoomChairsGrid extends StatelessWidget {
-  final int userCoinsSpent;
-  final Function(int chairIndex)? onChairTap;
   final dynamic socket;
+  final Function(int chairIndex)? onChairTap;
 
   const RoomChairsGrid({
     Key? key,
-    this.userCoinsSpent = 0,
-    this.onChairTap,
     this.socket,
+    this.onChairTap,
   }) : super(key: key);
+
+  void _onSeatClick(BuildContext context, int chairNum) {
+    final String myName = AppData.currentUserName;
+
+    if (occupiedChairs[chairNum] == myName) {
+      occupiedChairs.remove(chairNum);
+    } else {
+      occupiedChairs.removeWhere((k, v) => v == myName);
+      occupiedChairs[chairNum] = myName;
+    }
+
+    if (socket != null) {
+      socket.emit('chair_action', {
+        'chairNum': chairNum,
+        'userName': myName,
+        'action': occupiedChairs.containsKey(chairNum) ? 'join' : 'leave',
+      });
+    }
+
+    if (onChairTap != null) onChairTap!(chairNum);
+    (context as Element).markNeedsBuild();
+  }
+
+  Widget _buildSeat(BuildContext context, int chairNum, {bool isHost = false}) {
+    final bool isOccupied = occupiedChairs.containsKey(chairNum);
+    final String? occupantName = occupiedChairs[chairNum];
+    final double size = isHost ? 64.0 : 42.0;
+
+    return GestureDetector(
+      onTap: () => _onSeatClick(context, chairNum),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: size,
+            height: size,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: isOccupied ? Colors.amber.withOpacity(0.25) : Colors.black.withOpacity(0.4),
+              border: Border.all(
+                color: isOccupied ? const Color(0xFFFFD700) : Colors.white24,
+                width: isOccupied ? 2.0 : 1.0,
+              ),
+              boxShadow: isOccupied
+                  ? [
+                      BoxShadow(
+                        color: const Color(0xFFFFD700).withOpacity(0.5),
+                        blurRadius: 8,
+                        spreadRadius: 1,
+                      )
+                    ]
+                  : [],
+            ),
+            child: Center(
+              child: isOccupied
+                  ? CircleAvatar(
+                      radius: (size / 2) - 3,
+                      backgroundColor: Colors.teal,
+                      child: Text(
+                        occupantName != null && occupantName.isNotEmpty ? occupantName[0].toUpperCase() : 'U',
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                      ),
+                    )
+                  : Icon(
+                      Icons.weekend_rounded,
+                      color: Colors.white60,
+                      size: isHost ? 28 : 18,
+                    ),
+            ),
+          ),
+          const SizedBox(height: 3),
+          SizedBox(
+            width: size + 10,
+            child: Text(
+              isOccupied ? occupantName! : '$chairNum',
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: isOccupied ? const Color(0xFFFFD700) : Colors.white54,
+                fontSize: 10,
+                fontWeight: isOccupied ? FontWeight.bold : FontWeight.normal,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    final bool isTier2Unlocked = userCoinsSpent >= 200000;
-    final bool isTier3Unlocked = userCoinsSpent >= 400000;
-
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: const Color(0xFF131722).withOpacity(0.9),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white10),
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 14),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // ረድፍ 1፦ የሆስት ወንበር (ወንበር 1) እና 2, 3, 4, 5
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: const [
-              Text(
-                'Live Stage (30 Chairs)',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
-                ),
-              ),
-              Text(
-                '1-10 Free | 11-20 VIP | 21-30 Premium',
-                style: TextStyle(
-                  color: Colors.white54,
-                  fontSize: 10,
-                ),
-              ),
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              _buildSeat(context, 1, isHost: true),
+              for (int i = 2; i <= 5; i++) _buildSeat(context, i),
             ],
           ),
-          const SizedBox(height: 12),
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: 30,
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 5,
-              crossAxisSpacing: 8,
-              mainAxisSpacing: 8,
-              childAspectRatio: 0.85,
-            ),
-            itemBuilder: (context, index) {
-              final int chairNum = index + 1;
-              bool isUnlocked = true;
-              Color tierColor = Colors.tealAccent;
+          const SizedBox(height: 14),
 
-              if (chairNum <= 10) {
-                tierColor = Colors.tealAccent;
-                isUnlocked = true;
-              } else if (chairNum <= 20) {
-                tierColor = Colors.amber;
-                isUnlocked = isTier2Unlocked;
-              } else {
-                tierColor = const Color(0xFFFD946EF);
-                isUnlocked = isTier3Unlocked;
-              }
+// ረድፍ 2፦ 6 እስከ 10
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [for (int i = 6; i <= 10; i++) _buildSeat(context, i)],
+          ),
+          const SizedBox(height: 14),
 
-              final bool isOccupied = occupiedChairs.containsKey(chairNum);
+          // ረድፍ 3፦ 11 እስከ 15
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [for (int i = 11; i <= 15; i++) _buildSeat(context, i)],
+          ),
+          const SizedBox(height: 14),
 
-              return InkWell(
-                borderRadius: BorderRadius.circular(10),
-                onTap: () {
-                  if (isUnlocked) {
-                    final String myName = AppData.currentUserName;
+          // ረድፍ 4፦ 16 እስከ 20
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [for (int i = 16; i <= 20; i++) _buildSeat(context, i)],
+          ),
+          const SizedBox(height: 14),
 
-                    // 1. አስቀድሞ በዚህ ወንበር ላይ የተቀመጠው ይሄው ሰው ከሆነ፣ ከወንበሩ እንዲነሳ (Leave) ያድርገው
-                    if (occupiedChairs[chairNum] == myName) {
-                      occupiedChairs.remove(chairNum);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Left Chair #$chairNum'),
-                          backgroundColor: Colors.grey[800],
-                          duration: const Duration(seconds: 1),
-                        ),
-                      );
-                    } else {
-                      // 2. ተጠቃሚው ቀድሞ የተቀመጠበት ሌላ ወንበር ካለ ከዚያ ወንበር ያስነሳው
-                      occupiedChairs.removeWhere((key, value) => value == myName);
+          // ረድፍ 5፦ 21 እስከ 25
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [for (int i = 21; i <= 25; i++) _buildSeat(context, i)],
+          ),
+          const SizedBox(height: 14),
 
-                      // 3. አሁን ወደ ነካው ወንበር ያስቀምጠው
-                      occupiedChairs[chairNum] = myName;
-
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Joined Chair #$chairNum as $myName'),
-                          backgroundColor: Colors.teal,
-                          duration: const Duration(seconds: 1),
-                        ),
-                      );
-                    }
-                  if (socket != null) {
-                      socket.emit('chair_action', {
-                        'chairNum': chairNum,
-                        'userName': myName,
-                        'action': occupiedChairs.containsKey(chairNum) ? 'join' : 'leave',
-                      });
-                    }
-                    if (onChairTap != null) onChairTap!(chairNum);
-                    (context as Element).markNeedsBuild();
-                  } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Chair #$chairNum is locked!'),
-                        backgroundColor: Colors.redAccent,
-                        action: SnackBarAction(
-                          label: 'Upgrade',
-                          textColor: Colors.white,
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => ChairsManagementScreen(
-                                  userCoins: userCoinsSpent,
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                    );
-                  }
-                },
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: isUnlocked
-                        ? tierColor.withOpacity(isOccupied ? 0.35 : 0.12)
-                        : Colors.grey.withOpacity(0.08),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(
-                      color: isOccupied
-                          ? Colors.greenAccent
-                          : (isUnlocked ? tierColor.withOpacity(0.4) : Colors.white10),
-                      width: isOccupied ? 1.5 : 1,
-                    ),
-                  ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      if (isOccupied) ...[
-                        const CircleAvatar(
-                          radius: 14,
-                          backgroundColor: Colors.teal,
-                          child: Icon(Icons.person, size: 18, color: Colors.white),
-                        ),
-                        const SizedBox(height: 4),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 2),
-                          child: Text(
-                            occupiedChairs[chairNum] ?? '',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 9,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ] else ...[
-                        Icon(
-                          isUnlocked ? Icons.weekend : Icons.lock,
-                          size: 20,
-                          color: isUnlocked ? tierColor : Colors.grey,
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '$chairNum',
-                          style: TextStyle(
-                            color: isUnlocked ? Colors.white70 : Colors.grey,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              );
-            },
+          // ረድፍ 6፦ 26 እስከ 30
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [for (int i = 26; i <= 30; i++) _buildSeat(context, i)],
           ),
         ],
       ),
