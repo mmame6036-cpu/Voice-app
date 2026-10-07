@@ -27,24 +27,22 @@ class _RoomGamesSheetState extends State<RoomGamesSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final double sheetHeight = MediaQuery.of(context).size.height * 0.85;
+    final double sheetHeight = MediaQuery.of(context).size.height * 0.88;
 
     return Container(
       height: sheetHeight,
       decoration: const BoxDecoration(
-        color: Color(0xFF090D1C),
+        color: Color(0xFF070C1A),
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       child: Column(
         children: [
-          // የላይኛው መጎተቻ
           Container(
             margin: const EdgeInsets.only(top: 8),
             width: 36,
             height: 4,
             decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2)),
           ),
-          // ራስጌ
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
             child: Row(
@@ -83,8 +81,6 @@ class _RoomGamesSheetState extends State<RoomGamesSheet> {
             ),
           ),
           const Divider(color: Colors.white12, height: 1),
-
-          // ጌም ሲመረጥ ወደ Ocean Hunt ይገባል
           Expanded(
             child: activeGameTitle == null
                 ? _buildGameCards()
@@ -100,7 +96,7 @@ class _RoomGamesSheetState extends State<RoomGamesSheet> {
 
   Widget _buildGameCards() {
     final games = [
-      {'title': 'Ocean Hunt', 'subtitle': 'አሳ አደን እና ሳንቲም', 'icon': Icons.water_drop_rounded, 'color': Colors.blueAccent},
+      {'title': 'Ocean Hunt', 'subtitle': 'የአሳ አደን እና ሳንቲም', 'icon': Icons.water_drop_rounded, 'color': Colors.blueAccent},
       {'title': 'Chicken Road', 'subtitle': 'የዕድል መንገድ', 'icon': Icons.egg_rounded, 'color': Colors.amber},
       {'title': 'Fruit Party', 'subtitle': 'የፍራፍሬ ስፒን', 'icon': Icons.fastfood_rounded, 'color': Colors.orangeAccent},
       {'title': 'GaroGems', 'subtitle': 'የዕንቁ ሳጥን', 'icon': Icons.diamond_rounded, 'color': Colors.purpleAccent},
@@ -165,7 +161,7 @@ return GridView.builder(
 }
 
 // ==========================================
-// እውነተኛው OCEAN HUNT (የአሳ አደን) ጨዋታ
+// የተሻሻለው እውነተኛ OCEAN HUNT ጨዋታ
 // ==========================================
 class OceanHuntGameView extends StatefulWidget {
   final dynamic socket;
@@ -183,6 +179,7 @@ class _FishTarget {
   double speed;
   String name;
   String emoji;
+  double size;
   int reward;
   bool isMovingRight;
 
@@ -192,56 +189,71 @@ class _FishTarget {
     required this.speed,
     required this.name,
     required this.emoji,
+    required this.size,
     required this.reward,
     required this.isMovingRight,
   });
 }
 
-class _Bullet {
-  double x;
-  double y;
-  double targetX;
-  double targetY;
-  _Bullet({required this.x, required this.y, required this.targetX, required this.targetY});
+class _NetBurst {
+  final Offset pos;
+  final int reward;
+  final String text;
+  double scale = 0.2;
+  double opacity = 1.0;
+  _NetBurst({required this.pos, required this.reward, required this.text});
 }
 
-class _OceanHuntGameViewState extends State<OceanHuntGameView> with SingleTickerProviderStateMixin {
+class _OceanHuntGameViewState extends State<OceanHuntGameView> {
   late Timer _gameLoopTimer;
-  final Random _rnd = Random();
-  int selectedBet = 50; // የመድፍ ጥይት ዋጋ
+  int selectedBet = 50;
   List<_FishTarget> fishes = [];
-  List<_Bullet> bullets = [];
-  String statusMsg = 'አሳዎቹን ለመምታት ስክሪኑን ይንኩ! 🎯';
+  List<_NetBurst> bursts = [];
+  double cannonAngle = 0.0;
+  String statusMsg = '🎯 አሳዎችን ለመምታት ይንኩ!';
 
   @override
   void initState() {
     super.initState();
-    _spawnInitialFishes();
+    _spawnFishes();
 
-    // የጨዋታው ሉፕ (አሳዎቹ እንዲዋኙ የሚያደርግ)
-    _gameLoopTimer = Timer.periodic(const Duration(milliseconds: 40), (timer) {
+    _gameLoopTimer = Timer.periodic(const Duration(milliseconds: 35), (timer) {
       if (!mounted) return;
       setState(() {
         for (var f in fishes) {
           if (f.isMovingRight) {
             f.x += f.speed;
-            if (f.x > 1.1) f.x = -0.2;
+            if (f.x > 1.15) {
+              f.x = -0.2;
+              f.y = 0.15 + (Random().nextDouble() * 0.55);
+            }
           } else {
             f.x -= f.speed;
-            if (f.x < -0.2) f.x = 1.1;
+            if (f.x < -0.25) {
+              f.x = 1.15;
+              f.y = 0.15 + (Random().nextDouble() * 0.55);
+            }
           }
         }
+
+// የመረብ ፍንዳታ አኒሜሽን ማዘመን
+        for (var b in bursts) {
+          b.scale += 0.08;
+          b.opacity -= 0.06;
+        }
+        bursts.removeWhere((b) => b.opacity <= 0.0);
       });
     });
   }
 
-void _spawnInitialFishes() {
+  void _spawnFishes() {
     fishes = [
-      _FishTarget(x: 0.1, y: 0.2, speed: 0.007, name: 'Clownfish', emoji: '🐠', reward: 30, isMovingRight: true),
-      _FishTarget(x: 0.6, y: 0.35, speed: 0.005, name: 'Turtle', emoji: '🐢', reward: 80, isMovingRight: false),
-      _FishTarget(x: 0.2, y: 0.5, speed: 0.009, name: 'Blue Tang', emoji: '🐟', reward: 50, isMovingRight: true),
-      _FishTarget(x: 0.8, y: 0.65, speed: 0.004, name: 'Shark', emoji: '🦈', reward: 250, isMovingRight: false),
-      _FishTarget(x: -0.1, y: 0.3, speed: 0.003, name: 'Golden Whale', emoji: '🐋', reward: 600, isMovingRight: true),
+      _FishTarget(x: -0.1, y: 0.18, speed: 0.007, name: 'Clownfish', emoji: '🐠', size: 36, reward: 20, isMovingRight: true),
+      _FishTarget(x: 1.1, y: 0.28, speed: 0.005, name: 'Turtle', emoji: '🐢', size: 42, reward: 60, isMovingRight: false),
+      _FishTarget(x: -0.2, y: 0.42, speed: 0.008, name: 'Blue Tang', emoji: '🐟', size: 34, reward: 40, isMovingRight: true),
+      _FishTarget(x: 1.05, y: 0.55, speed: 0.004, name: 'Shark', emoji: '🦈', size: 54, reward: 250, isMovingRight: false),
+      _FishTarget(x: -0.3, y: 0.32, speed: 0.003, name: 'Golden Whale', emoji: '🐋', size: 64, reward: 600, isMovingRight: true),
+      _FishTarget(x: 1.2, y: 0.68, speed: 0.006, name: 'Octopus', emoji: '🐙', size: 44, reward: 120, isMovingRight: false),
     ];
   }
 
@@ -251,8 +263,7 @@ void _spawnInitialFishes() {
     super.dispose();
   }
 
-  // ስክሪኑ ሲነካ ጥይት ይተኩሳል
-  void _shootAt(TapDownDetails details, Size size) {
+  void _fireCannon(TapDownDetails details, Size size) {
     if (AppData.userCoins < selectedBet) {
       setState(() => statusMsg = 'በቂ ሳንቲም የለዎትም!');
       return;
@@ -263,42 +274,53 @@ void _spawnInitialFishes() {
     });
     widget.onCoinsChanged();
 
-    double tapX = details.localPosition.dx / size.width;
-    double tapY = details.localPosition.dy / size.height;
+    final tapPos = details.localPosition;
+    final cannonPos = Offset(size.width / 2, size.height - 40);
 
-    // አሳ ተመቷል ወይ ማረጋገጥ
-    bool hitAny = false;
+    // የመድፉን አቅጣጫ ማስተካከል
+    final dx = tapPos.dx - cannonPos.dx;
+    final dy = tapPos.dy - cannonPos.dy;
+    setState(() {
+      cannonAngle = atan2(dx, -dy);
+    });
+
+    final tapXRatio = tapPos.dx / size.width;
+    final tapYRatio = tapPos.dy / size.height;
+
+    bool hit = false;
     for (var f in fishes) {
-      double dx = (f.x - tapX).abs();
-      double dy = (f.y - tapY).abs();
+      double fdx = (f.x - tapXRatio).abs();
+      double fdy = (f.y - tapYRatio).abs();
 
-      if (dx < 0.12 && dy < 0.10) {
-        // አሳው ተመቷል!
-        hitAny = true;
-        int winAmount = (f.reward * (selectedBet / 50)).round();
+      if (fdx < 0.12 && fdy < 0.10) {
+        hit = true;
+        int win = (f.reward * (selectedBet / 50)).round();
+
         setState(() {
-          AppData.userCoins += winAmount;
-          statusMsg = '🎯 ${f.name} ተመታ! +$winAmount ሳንቲም አሸነፉ!';
-          // አሳው ሲመታ ቦታውን ይቀይራል
-          f.x = f.isMovingRight ? -0.2 : 1.1;
+          AppData.userCoins += win;
+          statusMsg = '🎉 ${f.name} ተመታ! +$win ሳንቲም!';
+          bursts.add(_NetBurst(pos: tapPos, reward: win, text: '+$win 💰'));
+          // አሳው ሲመታ ወደ መነሻ ይመለሳል
+          f.x = f.isMovingRight ? -0.25 : 1.15;
+          f.y = 0.15 + (Random().nextDouble() * 0.55);
         });
         widget.onCoinsChanged();
 
-        // ትልቅ አሳ ከሆነ ለክፍሉ ማሳወቅ
-        if (winAmount >= 200 && widget.socket != null) {
+        if (win >= 200 && widget.socket != null) {
           widget.socket.emit('game_win', {
             'winner': AppData.currentUserName,
             'game': 'Ocean Hunt',
-            'amount': winAmount,
+            'amount': win,
           });
         }
         break;
       }
     }
 
-    if (!hitAny) {
+    if (!hit) {
       setState(() {
-        statusMsg = 'አልመታም! በድጋሚ ይሞክሩ 🎯';
+        bursts.add(_NetBurst(pos: tapPos, reward: 0, text: 'MISS'));
+        statusMsg = 'አልደረሰም! በድጋሚ ይሞክሩ';
       });
     }
   }
@@ -310,28 +332,31 @@ void _spawnInitialFishes() {
         final size = Size(constraints.maxWidth, constraints.maxHeight);
 
         return GestureDetector(
-          onTapDown: (details) => _shootAt(details, size),
+          onTapDown: (details) => _fireCannon(details, size),
           child: Container(
             width: double.infinity,
             height: double.infinity,
             decoration: const BoxDecoration(
               gradient: RadialGradient(
-                center: Alignment.center,
-                radius: 1.2,
+                center: Alignment(0, -0.3),
+                radius: 1.3,
                 colors: [
-                  Color(0xFF0D47A1), // የባህር ሰማያዊ
-                  Color(0xFF001026), // ጥልቅ ውቅያኖስ
+                  Color(0xFF0D47A1),
+                  Color(0xFF041936),
+                  Color(0xFF010814),
                 ],
               ),
             ),
             child: Stack(
+              clipBehavior: Clip.none,
               children: [
-                // የውቅያኖስ አረፋዎች
-                Positioned(top: 20, left: 30, child: _buildBubble(18)),
-                Positioned(top: 80, right: 40, child: _buildBubble(26)),
-                Positioned(top: 180, left: 80, child: _buildBubble(14)),
+                // የውሃ ውስጥ አረፋዎች
+                Positioned(top: 30, left: 20, child: _buildBubble(14)),
+                Positioned(top: 100, right: 30, child: _buildBubble(22)),
+                Positioned(top: 220, left: 70, child: _buildBubble(18)),
+                Positioned(top: 320, right: 80, child: _buildBubble(12)),
 
-                // የሚዋኙ አሳዎች
+// የሚዋኙ አሳዎች
                 ...fishes.map((f) {
                   return Positioned(
                     left: f.x * size.width,
@@ -340,14 +365,15 @@ void _spawnInitialFishes() {
                       alignment: Alignment.center,
                       transform: Matrix4.identity()..scale(f.isMovingRight ? 1.0 : -1.0, 1.0),
                       child: Column(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text(f.emoji, style: const TextStyle(fontSize: 38)),
+                          Text(f.emoji, style: TextStyle(fontSize: f.size)),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
                             decoration: BoxDecoration(
-
-color: Colors.black54,
+                              color: Colors.black.withOpacity(0.6),
                               borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: const Color(0xFFFFD700).withOpacity(0.6), width: 0.6),
                             ),
                             child: Text(
                               '+${f.reward}',
@@ -360,96 +386,27 @@ color: Colors.black54,
                   );
                 }).toList(),
 
-                // የውጤት ጽሁፍ
-                Positioned(
-                  top: 12,
-                  left: 0,
-                  right: 0,
-                  child: Center(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.6),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: const Color(0xFFFFD700).withOpacity(0.5)),
-                      ),
-                      child: Text(
-                        statusMsg,
-                        style: const TextStyle(color: Color(0xFFFFD700), fontSize: 12, fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                  ),
-                ),
-
-                // የመድፍ መቆጣጠሪያና ውርርድ (Bottom Turret Bar)
-                Positioned(
-                  bottom: 10,
-                  left: 12,
-                  right: 12,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF051026).withOpacity(0.85),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: Colors.blueAccent.withOpacity(0.5)),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        // መድፍ
-                        Row(
-                          children: const [
-                            Icon(Icons.gps_fixed_rounded, color: Colors.cyanAccent, size: 28),
-                            SizedBox(width: 6),
-                            Text('CANNON', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
-                          ],
-                        ),
-                        // የጥይት ሳንቲም ምርጫ
-                        Row(
-                          children: [10, 50, 100, 500].map((b) {
-                            final sel = selectedBet == b;
-                            return GestureDetector(
-                              onTap: () => setState(() => selectedBet = b),
-                              child: Container(
-                                margin: const EdgeInsets.symmetric(horizontal: 3),
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: sel ? const Color(0xFFFFD700) : Colors.white10,
-                                  borderRadius: BorderRadius.circular(8),
+                // የመረብና የሳንቲም ፍንዳታ (Net Burst FX)
+                ...bursts.map((b) {
+                  return Positioned(
+                    left: b.pos.dx - 45,
+                    top: b.pos.dy - 45,
+                    child: Opacity(
+                      opacity: b.opacity.clamp(0.0, 1.0),
+                      child: Transform.scale(
+                        scale: b.scale.clamp(0.2, 1.8),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 90,
+                              height: 90,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: b.reward > 0 ? const Color(0xFFFFD700) : Colors.redAccent,
+                                  width: 3,
                                 ),
-                                child: Text(
-                                  '$b',
-                                  style: TextStyle(
-                                    color: sel ? Colors.black : Colors.white,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                            );
-                          }).toList(),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-Widget _buildBubble(double size) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: Colors.white.withOpacity(0.12),
-        border: Border.all(color: Colors.white24),
-      ),
-    );
-  }
-}
+                                gradient: RadialGradient(
+                                  colors: [
+                                    (b.reward > 0 ? const Color(0xFFFFD700) : Colors.redAccent).with
