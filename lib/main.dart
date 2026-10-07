@@ -224,22 +224,51 @@ IconButton(icon: const Icon(Icons.notifications_none), onPressed: () {}),
           );
         },
       ),
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: const Color(0xFF00C9A7),
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-            builder: (context) => const RoomScreen(
-                roomTitle: 'My Live Stage',
-                hostName: 'Host (Me)',
+      floatingActionButton: Container(
+        height: 56,
+        width: 56,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: const LinearGradient(
+            colors: [Color(0xFF00E5FF), Color(0xFF00B0FF)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF00E5FF).withOpacity(0.45),
+              blurRadius: 10,
+              spreadRadius: 2,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            customBorder: const CircleBorder(),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const RoomScreen(
+                    roomTitle: 'Ethio Nile Coffee Club',
+                    hostName: 'KEDIR...',
+                  ),
+                ),
+              );
+            },
+            child: const Center(
+              child: Icon(
+                Icons.mic_rounded,
+                color: Colors.white,
+                size: 28,
               ),
             ),
-          );
-        },
-        child: const Icon(Icons.add, color: Colors.black, size: 30),
+          ),
+          floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+        ),
       ),
-    );
   }
 }
 
