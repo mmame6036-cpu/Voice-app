@@ -112,7 +112,7 @@ class RoomChairsGrid extends StatelessWidget {
                         ),
                       );
                     }
-if (socket != null) {
+                  if (socket != null) {
                       socket.emit('chair_action', {
                         'chairNum': chairNum,
                         'userName': myName,
