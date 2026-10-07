@@ -21,8 +21,10 @@ void main() {
 
 // Global App State
 class AppData {
-  static String currentUserId = "1000";
-  static String currentUserName = "KEDIR (Super Owner)";
+  // እያንዳንዱ ስልክ ሲከፈት የተለየ ባለ 6 ድጅት አይዲ እንዲያገኝ
+  static String currentUserId = (100000 + Random().nextInt(900000)).toString();
+  // ስሙ የተጠቃሚው አይዲ መጨረሻ ቁጥር ተደርጎ በራሱ ይመረጣል (ለምሳሌ User_451)
+  static String currentUserName = "User_${currentUserId.substring(3)}";
   static int userCoins = 50000;
   static int userPoints = 0;
   static bool isSuperAdmin = true;
