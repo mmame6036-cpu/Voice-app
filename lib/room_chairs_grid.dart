@@ -112,7 +112,13 @@ class RoomChairsGrid extends StatelessWidget {
                         ),
                       );
                     }
-
+if (socket != null) {
+                      socket.emit('chair_action', {
+                        'chairNum': chairNum,
+                        'userName': myName,
+                        'action': occupiedChairs.containsKey(chairNum) ? 'join' : 'leave',
+                      });
+                    }
                     if (onChairTap != null) onChairTap!(chairNum);
                     (context as Element).markNeedsBuild();
                   } else {
