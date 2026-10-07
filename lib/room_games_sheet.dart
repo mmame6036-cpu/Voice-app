@@ -27,7 +27,7 @@ class _RoomGamesSheetState extends State<RoomGamesSheet> {
 
   @override
   Widget build(BuildContext context) {
-    // ጌም ሲመረጥ ልክ እንደ ቪዲዮው የስክሪኑን ግማሽ ያህል (0.55) ይይዛል
+    // ጌም ሲመረጥ የስክሪኑን ግማሽ ያህል (0.58) ይይዛል
     final double sheetHeight = activeGameTitle != null
         ? MediaQuery.of(context).size.height * 0.58
         : MediaQuery.of(context).size.height * 0.50;
@@ -88,33 +88,38 @@ class _RoomGamesSheetState extends State<RoomGamesSheet> {
           ),
           const Divider(color: Colors.white12, height: 1),
 
-          // እያንዳንዱ ጌም በራሱ የተለየ ስክሪን ይከፍታል
+          // እያንዳንዱ ጨዋታ በራሱ የተለየ ስክሪን ይከፍታል
           Expanded(
             child: activeGameTitle == null
                 ? _buildGameCards()
-                : activeGameTitle == 'Ocean Hunt'
-                    ? OceanHuntGameView(
+                : activeGameTitle == 'Chicken Road'
+                    ? ChickenRoadGameView(
                         socket: widget.socket,
                         onCoinsChanged: widget.onCoinsChanged,
                       )
-                    : TreasuresSlotGameView(
-                        gameName: activeGameTitle!,
-                        socket: widget.socket,
-                        onCoinsChanged: widget.onCoinsChanged,
-                      ),
+                    : activeGameTitle == 'Ocean Hunt'
+                        ? OceanHuntGameView(
+                            socket: widget.socket,
+
+onCoinsChanged: widget.onCoinsChanged,
+                          )
+                        : TreasuresSlotGameView(
+                            gameName: activeGameTitle!,
+                            socket: widget.socket,
+                            onCoinsChanged: widget.onCoinsChanged,
+                          ),
           ),
         ],
       ),
     );
   }
 
-// የጌሞች መምረጫ ካርዶች
   Widget _buildGameCards() {
     final games = [
-      {'title': 'Treasures', 'subtitle': 'ባለ 5-ሪል ስፒን', 'icon': Icons.casino_rounded, 'color': Colors.amber},
+      {'title': 'Chicken Road', 'subtitle': 'የዶሮዋ መንገድ (30 ደረጃዎች)', 'icon': Icons.egg_rounded, 'color': Colors.amber},
+      {'title': 'Treasures', 'subtitle': 'ባለ 5-ሪል ስፒን', 'icon': Icons.casino_rounded, 'color': Colors.deepOrangeAccent},
       {'title': 'Ocean Hunt', 'subtitle': 'የአሳ አደን እና መድፍ', 'icon': Icons.water_drop_rounded, 'color': Colors.blueAccent},
       {'title': 'Fruit Party', 'subtitle': 'የፍራፍሬ ስፒን', 'icon': Icons.fastfood_rounded, 'color': Colors.orangeAccent},
-      {'title': 'GaroGems', 'subtitle': 'የዕንቁ ሳጥን', 'icon': Icons.diamond_rounded, 'color': Colors.purpleAccent},
     ];
 
     return GridView.builder(
@@ -129,11 +134,7 @@ class _RoomGamesSheetState extends State<RoomGamesSheet> {
       itemBuilder: (context, idx) {
         final g = games[idx];
         return GestureDetector(
-          onTap: () {
-            setState(() {
-              activeGameTitle = g['title'] as String;
-            });
-          },
+          onTap: () => setState(() => activeGameTitle = g['title'] as String),
           child: Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
@@ -176,7 +177,467 @@ class _RoomGamesSheetState extends State<RoomGamesSheet> {
 }
 
 // =========================================================================
-// 1. በቪዲዮው ላይ የታየው ትክክለኛው TREASURES / SLOT MACHINE ጨዋታ
+// 1. CHICKEN ROAD (30 ደረጃዎች፣ 4 የችግር ሞዶች፣ መኪኖች እና CASH OUT)
+// =========================================================================
+class ChickenRoadGameView extends StatefulWidget {
+  final dynamic socket;
+  final VoidCallback onCoinsChanged;
+
+  const ChickenRoadGameView({Key? key, this.socket, required this.onCoinsChanged}) : super(key: key);
+
+  @override
+  State<ChickenRoadGameView> createState() => _ChickenRoadGameViewState();
+}
+
+class _Car {
+  final int laneIndex;
+  double y;
+  final double speed;
+  final String emoji;
+  _Car({required this.laneIndex, required this.y, required this.speed, required this.emoji});
+}
+
+class _ChickenRoadGameViewState extends State<ChickenRoadGameView> {
+  final ScrollController _scrollController = ScrollController();
+  Timer? _gameLoopTimer;
+  final Random _rnd = Random();
+
+String selectedDifficulty = 'MEDIUM'; // EASY, MEDIUM, HARD, HELL
+  int betAmount = 100;
+  bool isPlaying = false;
+  int currentLane = 0; // 0 ማለት መነሻ ላይ ነው፤ 1-30 መንገዶቹ ናቸው
+  String statusMsg = 'ውርርድ ይምረጡና PLAY ይጫኑ!';
+
+  List<_Car> cars = [];
+
+  // አራቱም የችግር ደረጃዎች እና 30ዎቹ እጥፎች (Multipliers)
+  final Map<String, List<double>> difficultyMultipliers = {
+    'EASY': [
+      1.03, 1.06, 1.10, 1.15, 1.21, 1.28, 1.36, 1.45, 1.56, 1.68,
+      1.82, 1.98, 2.17, 2.39, 2.65, 2.96, 3.33, 3.77, 4.31, 4.97,
+      5.79, 6.82, 8.14, 9.87, 12.18, 15.34, 19.82, 26.43, 36.85, 54.12
+    ],
+    'MEDIUM': [
+      1.08, 1.21, 1.37, 1.56, 1.78, 2.05, 2.37, 2.77, 3.24, 3.85,
+      4.62, 5.61, 6.91, 8.64, 10.99, 14.29, 18.96, 26.07, 37.24, 53.82,
+      82.36, 137.59, 256.36, 638.82, 2457.0, 5800.0, 12000.0, 24000.0, 48000.0, 96000.0
+    ],
+    'HARD': [
+      1.18, 1.46, 1.83, 2.31, 2.95, 3.82, 5.02, 6.66, 9.04, 12.52,
+      17.74, 25.80, 38.71, 60.21, 97.40, 166.87, 305.94, 595.86, 1283.03, 3267.64,
+      10891.94, 62182.19, 150000.0, 300000.0, 600000.0, 1200000.0, 2500000.0, 5000000.0, 10000000.0, 20000000.0
+    ],
+    'HELL': [
+      1.44, 2.21, 3.45, 5.53, 9.09, 15.09, 26.78, 48.70, 92.54, 185.08,
+      391.25, 894.28, 2235.72, 6096.15, 18600.32, 64232.79, 267920.8, 800000.0, 2400000.0, 7200000.0,
+      21600000.0, 64800000.0, 194400000.0, 583200000.0, 1000000000.0, 2000000000.0, 4000000000.0, 8000000000.0, 16000000000.0, 32000000000.0
+    ],
+  };
+
+  @override
+  void initState() {
+    super.initState();
+    _spawnCars();
+
+    // የመኪኖቹ እንቅስቃሴ ሉፕ
+    _gameLoopTimer = Timer.periodic(const Duration(milliseconds: 35), (timer) {
+      if (!mounted) return;
+      setState(() {
+        for (var c in cars) {
+          c.y += c.speed;
+          if (c.y > 1.2) {
+            c.y = -0.3;
+          }
+        }
+      });
+    });
+  }
+
+  void _spawnCars() {
+    cars.clear();
+    final carIcons = ['🚒', '🚓', '🚕', '🚙', '🚑', '🚌'];
+    for (int lane = 1; lane <= 30; lane++) {
+      int carCount = selectedDifficulty == 'EASY'
+          ? 1
+          : selectedDifficulty == 'MEDIUM'
+              ? 2
+              : selectedDifficulty == 'HARD'
+                  ? 2
+                  : 3;
+
+      for (int i = 0; i < carCount; i++) {
+        cars.add(_Car(
+          laneIndex: lane,
+          y: -0.2 - (i * 0.5) - (_rnd.nextDouble() * 0.3),
+          speed: 0.015 + (_rnd.nextDouble() * 0.02),
+          emoji: carIcons[_rnd.nextInt(carIcons.length)],
+        ));
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _gameLoopTimer?.cancel();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onPlayOrCashOut() {
+    if (!isPlaying) {
+      // ጨዋታ መጀመር
+      if (AppData.userCoins < betAmount) {
+        _showInsufficientBalance();
+        return;
+      }
+
+      setState(() {
+        AppData.userCoins -= betAmount;
+        isPlaying = true;
+        currentLane = 0;
+        statusMsg = 'ዶሮዋን ለማሻገር መስመሩን ይንኩ!';
+      });
+      widget.onCoinsChanged();
+      _scrollController.animateTo(0, duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
+    } else {
+      // CASH OUT (ሳንቲም መሰብሰብ)
+      if (currentLane == 0) return;
+      final mult = difficultyMultipliers[selectedDifficulty]![currentLane - 1];
+      final win = (betAmount * mult).round();
+
+      setState(() {
+        AppData.userCoins += win;
+        isPlaying = false;
+        currentLane = 0;
+        statusMsg = '🎉 አሸነፉ! +$win ሳንቲም ተሰብስቧል!';
+      });
+      widget.onCoinsChanged();
+
+      if (win >= 500 && widget.socket != null) {
+        widget.socket.emit('game_win', {
+          'winner': AppData.currentUserName,
+          'game': 'Chicken Road',
+          'amount': win,
+        });
+      }
+    }
+  }
+
+  // ወደ ቀጣዩ መስመር መሻገር
+  void _stepToLane(int targetLane) {
+    if (!isPlaying || targetLane != currentLane + 1) return;
+
+    // አደጋ (መኪና መግጨት የመከሰት ዕድል እንደ ደረጃው)
+    double crashChance = selectedDifficulty == 'EASY'
+        ? 0.08
+        : selectedDifficulty == 'MEDIUM'
+            ? 0.16
+            : selectedDifficulty == 'HARD'
+                ? 0.28
+                : 0.42;
+
+if (_rnd.nextDouble() < crashChance) {
+      // ተገጭታለች!
+      setState(() {
+        isPlaying = false;
+        currentLane = 0;
+        statusMsg = '💥 መኪና ገጨዎት! ውርርዱ ተበልቷል!';
+      });
+      return;
+    }
+
+    // በሰላም ተሻግራለች
+    setState(() {
+      currentLane = targetLane;
+      final mult = difficultyMultipliers[selectedDifficulty]![currentLane - 1];
+      final currentWin = (betAmount * mult).round();
+      statusMsg = 'ደረጃ $currentLane ተሻገሩ! እጥፍ: ${mult}x (+$currentWin)';
+    });
+
+    // ካሜራው ዶሮዋን እንዲከተል
+    final scrollTarget = (currentLane * 74.0) - 120.0;
+    if (scrollTarget > 0) {
+      _scrollController.animateTo(
+        scrollTarget,
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOut,
+      );
+    }
+
+    // 30ኛ ደረጃ ላይ ከደረሰች ከፍተኛ ድል
+    if (currentLane == 30) {
+      final mult = difficultyMultipliers[selectedDifficulty]![29];
+      final jackpot = (betAmount * mult).round();
+      setState(() {
+        AppData.userCoins += jackpot;
+        isPlaying = false;
+        currentLane = 0;
+        statusMsg = '🏆 ጃክፖት! 30ኛውን ደረጃ ጨርሰው +$jackpot አሸነፉ!';
+      });
+      widget.onCoinsChanged();
+    }
+  }
+
+  void _showInsufficientBalance() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E143E),
+        title: const Text('Insufficient Balance', style: TextStyle(color: Colors.white, fontSize: 15)),
+        content: const Text('Insufficient account balance go to recharge?', style: TextStyle(color: Colors.white70, fontSize: 13)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('No', style: TextStyle(color: Colors.white54))),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFFD700)),
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Yes', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final multipliers = difficultyMultipliers[selectedDifficulty]!;
+    final double currentMult = currentLane > 0 ? multipliers[currentLane - 1] : 0.0;
+    final int currentWin = (betAmount * currentMult).round();
+
+    return Container(
+      decoration: const BoxDecoration(
+        color: Color(0xFF1E2430),
+      ),
+      child: Column(
+        children: [
+          // 1. የቀጥታ ሩጫ ባነር
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(colors: [Color(0xFF2E7D32), Color(0xFF1B5E20)]),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(statusMsg, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                if (isPlaying && currentLane > 0)
+                  Text('+$currentWin 🪙', style: const TextStyle(color: Color(0xFFFFD700), fontSize: 12, fontWeight: FontWeight.bold)),
+              ],
+            ),
+          ),
+
+          // 2. የ 30 መንገዶች ሜዳ (መንገዱ ወደ ቀኝ ይሸበለላል)
+          Expanded(
+            child: SingleChildScrollView(
+              controller: _scrollController,
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              child: SizedBox(
+                width: 31 * 74.0 + 80.0,
+                child: Stack(
+                  children: [
+                    // የመንገድ ረድፎች
+                    Row(
+                      children: [
+                        // የመነሻ ሳር ሜዳ (Start Grass)
+                        Container(
+                          width: 80,
+                          height: double.infinity,
+
+color: const Color(0xFF4CAF50),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              if (currentLane == 0)
+                                const Text('🐔', style: TextStyle(fontSize: 36))
+                              else
+                                const Text('🏁', style: TextStyle(fontSize: 28)),
+                              const SizedBox(height: 4),
+                              const Text('START', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
+                            ],
+                          ),
+                        ),
+
+                        // 30ዎቹ መንገዶች
+                        ...List.generate(30, (idx) {
+                          final laneNum = idx + 1;
+                          final mult = multipliers[idx];
+                          final isCurrent = currentLane == laneNum;
+
+                          return GestureDetector(
+                            onTap: () => _stepToLane(laneNum),
+                            child: Container(
+                              width: 74,
+                              height: double.infinity,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF37474F),
+                                border: Border(
+                                  right: const BorderSide(color: Colors.white24, width: 1.5, style: BorderStyle.solid),
+                                  left: idx == 0 ? const BorderSide(color: Colors.white24, width: 1.5) : BorderSide.none,
+                                ),
+                              ),
+                              child: Stack(
+                                alignment: Alignment.center,
+                                children: [
+                                  // የመንገድ መስመር ምልክት
+                                  Positioned(
+                                    top: 10,
+                                    bottom: 50,
+                                    child: Column(
+                                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                      children: List.generate(4, (_) => Container(width: 4, height: 16, color: Colors.white24)),
+                                    ),
+                                  ),
+
+                                  // በዚሁ መንገድ ላይ የሚወርዱ መኪኖች
+                                  ...cars.where((c) => c.laneIndex == laneNum).map((c) {
+                                    return Positioned(
+                                      top: c.y * 180,
+                                      child: Text(c.emoji, style: const TextStyle(fontSize: 26)),
+                                    );
+                                  }).toList(),
+
+                                  // ዶሮዋ በዚህ መንገድ ላይ ካለች
+                                  if (isCurrent)
+                                    const Positioned(
+                                      bottom: 48,
+                                      child: Text('🐔', style: TextStyle(fontSize: 32)),
+                                    ),
+
+                                  // የታችኛው የፍተሻ ክዳን እና የብዜት ቁጥር (Multiplier lid)
+                                  Positioned(
+                                    bottom: 6,
+                                    child: Column(
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: isCurrent ? const Color(0xFFFFD700) : Colors.black87,
+
+borderRadius: BorderRadius.circular(10),
+                                            border: Border.all(color: isCurrent ? Colors.amber : Colors.white24),
+                                          ),
+                                          child: Text(
+                                            '${mult}x',
+                                            style: TextStyle(
+                                              color: isCurrent ? Colors.black : Colors.white,
+                                              fontSize: 9,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          '$laneNum',
+                                          style: const TextStyle(color: Colors.white54, fontSize: 10, fontWeight: FontWeight.bold),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        }),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+          // 3. የታችኛው መቆጣጠሪያ ሰሌዳ (Control Panel)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            color: const Color(0xFF10141D),
+            child: Column(
+              children: [
+                // የችግር ደረጃ መምረጫ (EASY, MEDIUM, HARD, HELL)
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: ['EASY', 'MEDIUM', 'HARD', 'HELL'].map((diff) {
+                    final isSel = selectedDifficulty == diff;
+                    return GestureDetector(
+                      onTap: isPlaying
+                          ? null
+                          : () {
+                              setState(() {
+                                selectedDifficulty = diff;
+                                _spawnCars();
+                              });
+                            },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: isSel ? const Color(0xFFFFD700) : Colors.white10,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          diff,
+                          style: TextStyle(
+                            color: isSel ? Colors.black : Colors.white70,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+
+                const SizedBox(height: 6),
+
+                // የውርርድ መጠን እና PLAY / CASH OUT ቁልፍ
+                Row(
+                  children: [
+                    // ውርርድ መቀነሻ (-)
+                    IconButton(
+                      icon: const Icon(Icons.remove_circle, color: Colors.blueAccent, size: 26),
+                      onPressed: isPlaying || betAmount <= 10 ? null : () => setState(() => betAmount -= 50),
+                    ),
+                    // የውርርድ መጠን
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+
+decoration: BoxDecoration(
+                        color: Colors.black45,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFFFD700).withOpacity(0.5)),
+                      ),
+                      child: Text('BET $betAmount', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                    ),
+                    // ውርርድ መጨመሪያ (+)
+                    IconButton(
+                      icon: const Icon(Icons.add_circle, color: Colors.blueAccent, size: 26),
+                      onPressed: isPlaying ? null : () => setState(() => betAmount += 50),
+                    ),
+                    const Spacer(),
+                    // አረንጓዴው PLAY ወይም CASH OUT ቁልፍ
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: isPlaying ? Colors.amber : const Color(0xFF00E676),
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      ),
+                      onPressed: _onPlayOrCashOut,
+                      child: Text(
+                        isPlaying ? (currentLane > 0 ? 'CASH OUT' : 'WAIT') : 'PLAY',
+                        style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 14),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// =========================================================================
+// 2. TREASURES / 5-REEL SLOT MACHINE (የቪዲዮው ካሲኖ ስፒን)
 // =========================================================================
 class TreasuresSlotGameView extends StatefulWidget {
   final String gameName;
@@ -208,7 +669,6 @@ class _TreasuresSlotGameViewState extends State<TreasuresSlotGameView> {
   @override
   void initState() {
     super.initState();
-    // 5 ሪሎች፣ እያንዳንዳቸው 3 ረድፎች አሏቸው
     reels = [
       ['🐙', '10', '🐢'],
       ['10', '👾', 'Q'],
@@ -224,7 +684,7 @@ class _TreasuresSlotGameViewState extends State<TreasuresSlotGameView> {
     super.dispose();
   }
 
-void _showBettingPanel() {
+  void _showBettingPanel() {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -241,652 +701,5 @@ void _showBettingPanel() {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Text(
-                    'Please select your bet amount',
-                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
-                  ),
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: betOptions.map((b) {
-                      final sel = singleLineBet == b;
-                      return GestureDetector(
-                        onTap: () {
-                          setSheetState(() => singleLineBet = b);
-                          setState(() => singleLineBet = b);
-                        },
-                        child: Container(
-                          width: 58,
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                          decoration: BoxDecoration(
-                            color: sel ? const Color(0xFF2979FF) : Colors.white10,
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: sel ? Colors.cyanAccent : Colors.transparent),
-                          ),
-                          child: Center(
-                            child: Text(
-                              '$b',
-                              style: TextStyle(
-                                color: sel ? Colors.white : Colors.white70,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ),
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                  const SizedBox(height: 16),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: Colors.black38,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text('Single line bet: $singleLineBet', style: const TextStyle(color: Colors.white70, fontSize: 11)),
-                        Text('Winning lines: $winningLines', style: const TextStyle(color: Colors.white70, fontSize: 11)),
-                        Text('Bet Amount: $totalBet', style: const TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold, fontSize: 12)),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF76FF03),
-                      padding: const EdgeInsets.symmetric(horizontal: 50, vertical: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                    ),
-                    onPressed: () => Navigator.pop(ctx),
-                    child: const Text('Confirm', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 13)),
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
-void _spin() {
-    if (isSpinning) return;
-
-    // ሳንቲም ካነሰ በቪዲዮው ላይ የታየው ማስጠንቀቂያ ይመጣል
-    if (AppData.userCoins < totalBet) {
-      showDialog(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          backgroundColor: const Color(0xFF1E143E),
-          title: const Text('Insufficient Balance', style: TextStyle(color: Colors.white, fontSize: 15)),
-          content: const Text(
-            'Insufficient account balance go to recharge?',
-            style: TextStyle(color: Colors.white70, fontSize: 13),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('No', style: TextStyle(color: Colors.white54)),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFFD700)),
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Yes', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
-            ),
-          ],
-        ),
-      );
-      return;
-    }
-
-    setState(() {
-      isSpinning = true;
-      AppData.userCoins -= totalBet;
-      winAmount = 0;
-    });
-    widget.onCoinsChanged();
-
-    final rnd = Random();
-    int ticks = 0;
-
-    _spinTimer = Timer.periodic(const Duration(milliseconds: 100), (timer) {
-      ticks++;
-      setState(() {
-        for (int c = 0; c < 5; c++) {
-          for (int r = 0; r < 3; r++) {
-            reels[c][r] = symbols[rnd.nextInt(symbols.length)];
-          }
-        }
-      });
-
-      if (ticks >= 15) {
-        timer.cancel();
-        final won = rnd.nextBool();
-        int calculatedWin = 0;
-        if (won) {
-          calculatedWin = (totalBet * (2 + rnd.nextInt(5)));
-        }
-
-        setState(() {
-          isSpinning = false;
-          winAmount = calculatedWin;
-          if (calculatedWin > 0) {
-            AppData.userCoins += calculatedWin;
-          }
-        });
-        widget.onCoinsChanged();
-
-        if (calculatedWin > 0 && widget.socket != null) {
-          widget.socket.emit('game_win', {
-            'winner': AppData.currentUserName,
-            'game': widget.gameName,
-            'amount': calculatedWin,
-          });
-        }
-      }
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Color(0xFF2A0845), Color(0xFF100720)],
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-        ),
-      ),
-      child: Column(
-        children: [
-          // የጨዋታው ራስጌ ባነር
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(colors: [Colors.purple, Colors.deepPurpleAccent]),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(widget.gameName.toUpperCase(), style: const TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold, fontSize: 13)),
-                Text('WIN: $winAmount', style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 13)),
-              ],
-            ),
-          ),
-
-          // 5-Reel Slot ቦርድ
-          Expanded(
-            child: Container(
-              margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.55),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: const Color(0xFFFFD700).withOpacity(0.5), width: 1.5),
-              ),
-              child: Row(
-
-mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: List.generate(5, (colIdx) {
-                  return Column(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: List.generate(3, (rowIdx) {
-                      return Container(
-                        width: 52,
-                        height: 48,
-                        decoration: BoxDecoration(
-                          color: Colors.white10,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.white12),
-                        ),
-                        child: Center(
-                          child: Text(
-                            reels[colIdx][rowIdx],
-                            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
-                          ),
-                        ),
-                      );
-                    }),
-                  );
-                }),
-              ),
-            ),
-          ),
-
-          // የታችኛው ውርርድ መምረጫ እና SPIN ቁልፍ
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            color: Colors.black54,
-            child: Row(
-              children: [
-                GestureDetector(
-                  onTap: _showBettingPanel,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: Colors.white12,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFFFFD700).withOpacity(0.6)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Text('TOTAL BET', style: TextStyle(color: Colors.white54, fontSize: 9)),
-                        Text('$totalBet 🪙', style: const TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold, fontSize: 13)),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF76FF03),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                    ),
-                    onPressed: isSpinning ? null : _spin,
-                    child: Text(
-                      isSpinning ? 'SPINNING...' : 'SPIN',
-                      style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 15),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// =========================================================================
-// 2. እውነተኛው OCEAN HUNT (የአሳ አደን እና መረብ) ጨዋታ (ሳይጠፋ በራሱ ይከፈታል)
-// =========================================================================
-class OceanHuntGameView extends StatefulWidget {
-  final dynamic socket;
-  final VoidCallback onCoinsChanged;
-
-  const OceanHuntGameView({Key? key, this.socket, required this.onCoinsChanged}) : super(key: key);
-
-  @override
-  State<OceanHuntGameView> createState() => _OceanHuntGameViewState();
-}
-
-class _FishTarget {
-  double x;
-  double y;
-  double speed;
-  String name;
-  String emoji;
-  double size;
-  int reward;
-  bool isMovingRight;
-
-  _FishTarget({
-    required this.x,
-    required this.y,
-    required this.speed,
-    required this.name,
-    required this.emoji,
-    required this.size,
-    required this.reward,
-    required this.isMovingRight,
-  });
-}
-
-class _NetBurst {
-  final Offset pos;
-  final int reward;
-  final String text;
-  double scale = 0.2;
-  double opacity = 1.0;
-  _NetBurst({required this.pos, required this.reward, required this.text});
-}
-
-class _OceanHuntGameViewState extends State<OceanHuntGameView> {
-  late Timer _gameLoopTimer;
-  int selectedBet = 50;
-  List<_FishTarget> fishes = [];
-  List<_NetBurst> bursts = [];
-  double cannonAngle = 0.0;
-  String statusMsg = '🎯 አሳዎችን ለመምታት ይንኩ!';
-
-  @override
-  void initState() {
-    super.initState();
-    _spawnFishes();
-
-    _gameLoopTimer = Timer.periodic(const Duration(milliseconds: 35), (timer) {
-      if (!mounted) return;
-      setState(() {
-        for (var f in fishes) {
-          if (f.isMovingRight) {
-            f.x += f.speed;
-            if (f.x > 1.15) {
-              f.x = -0.2;
-              f.y = 0.15 + (Random().nextDouble() * 0.55);
-            }
-          } else {
-            f.x -= f.speed;
-            if (f.x < -0.25) {
-              f.x = 1.15;
-              f.y = 0.15 + (Random().nextDouble() * 0.55);
-            }
-          }
-        }
-
-        for (var b in bursts) {
-          b.scale += 0.08;
-          b.opacity -= 0.06;
-        }
-        bursts.removeWhere((b) => b.opacity <= 0.0);
-      });
-    });
-  }
-
-  void _spawnFishes() {
-    fishes = [
-      _FishTarget(x: -0.1, y: 0.18, speed: 0.007, name: 'Clownfish', emoji: '🐠', size: 36, reward: 20, isMovingRight: true),
-      _FishTarget(x: 1.1, y: 0.28, speed: 0.005, name: 'Turtle', emoji: '🐢', size: 42, reward: 60, isMovingRight: false),
-      _FishTarget(x: -0.2, y: 0.42, speed: 0.008, name: 'Blue Tang', emoji: '🐟', size: 34, reward: 40, isMovingRight: true),
-      _FishTarget(x: 1.05, y: 0.55, speed: 0.004, name: 'Shark', emoji: '🦈', size: 54, reward: 250, isMovingRight: false),
-      _FishTarget(x: -0.3, y: 0.32, speed: 0.003, name: 'Golden Whale', emoji: '🐋', size: 64, reward: 600, isMovingRight: true),
-      _FishTarget(x: 1.2, y: 0.68, speed: 0.006, name: 'Octopus', emoji: '🐙', size: 44, reward: 120, isMovingRight: false),
-    ];
-  }
-
-  @override
-  void dispose() {
-    _gameLoopTimer.cancel();
-    super.dispose();
-  }
-
-  void _fireCannon(TapDownDetails details, Size size) {
-    if (AppData.userCoins < selectedBet) {
-      setState(() => statusMsg = 'በቂ ሳንቲም የለዎትም!');
-      return;
-    }
-
-    setState(() {
-      AppData.userCoins -= selectedBet;
-    });
-    widget.onCoinsChanged();
-
-    final tapPos = details.localPosition;
-    final cannonPos = Offset(size.width / 2, size.height - 40);
-
-    final dx = tapPos.dx - cannonPos.dx;
-    final dy = tapPos.dy - cannonPos.dy;
-    setState(() {
-      cannonAngle = atan2(dx, -dy);
-    });
-
-    final tapXRatio = tapPos.dx / size.width;
-    final tapYRatio = tapPos.dy / size.height;
-
-    bool hit = false;
-    for (var f in fishes) {
-      double fdx = (f.x - tapXRatio).abs();
-      double fdy = (f.y - tapYRatio).abs();
-
-      if (fdx < 0.12 && fdy < 0.10) {
-        hit = true;
-        int win = (f.reward * (selectedBet / 50)).round();
-
-        setState(() {
-          AppData.userCoins += win;
-          statusMsg = '🎉 ${f.name} ተመታ! +$win ሳንቲም!';
-          bursts.add(_NetBurst(pos: tapPos, reward: win, text: '+$win 💰'));
-          f.x = f.isMovingRight ? -0.25 : 1.15;
-          f.y = 0.15 + (Random().nextDouble() * 0.55);
-        });
-        widget.onCoinsChanged();
-
-        if (win >= 200 && widget.socket != null) {
-          widget.socket.emit('game_win', {
-            'winner': AppData.currentUserName,
-            'game': 'Ocean Hunt',
-            'amount': win,
-          });
-        }
-        break;
-      }
-    }
-
-    if (!hit) {
-      setState(() {
-        bursts.add(_NetBurst(pos: tapPos, reward: 0, text: 'MISS'));
-        statusMsg = 'አልደረሰም! በድጋሚ ይሞክሩ';
-      });
-    }
-  }
-
-  Widget _buildBubble(double size) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: Colors.white.withOpacity(0.12),
-        border: Border.all(color: Colors.white24),
-      ),
-    );
-  }
-
-@override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final size = Size(constraints.maxWidth, constraints.maxHeight);
-
-        return GestureDetector(
-          onTapDown: (details) => _fireCannon(details, size),
-          child: Container(
-            width: double.infinity,
-            height: double.infinity,
-            decoration: const BoxDecoration(
-              gradient: RadialGradient(
-                center: Alignment(0, -0.3),
-                radius: 1.3,
-                colors: [
-                  Color(0xFF0D47A1),
-                  Color(0xFF041936),
-                  Color(0xFF010814),
-                ],
-              ),
-            ),
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                Positioned(top: 20, left: 20, child: _buildBubble(14)),
-                Positioned(top: 70, right: 30, child: _buildBubble(22)),
-
-                ...fishes.map((f) {
-                  return Positioned(
-                    left: f.x * size.width,
-                    top: f.y * size.height,
-                    child: Transform(
-                      alignment: Alignment.center,
-                      transform: Matrix4.identity()..scale(f.isMovingRight ? 1.0 : -1.0, 1.0),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(f.emoji, style: TextStyle(fontSize: f.size)),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withOpacity(0.6),
-                              borderRadius: BorderRadius.circular(6),
-                              border: Border.all(color: const Color(0xFFFFD700).withOpacity(0.6), width: 0.6),
-                            ),
-                            child: Text(
-                              '+${f.reward}',
-                              style: const TextStyle(color: Color(0xFFFFD700), fontSize: 9, fontWeight: FontWeight.bold),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                }).toList(),
-
-                ...bursts.map((b) {
-                  final burstColor = b.reward > 0 ? const Color(0xFFFFD700) : Colors.redAccent;
-                  return Positioned(
-                    left: b.pos.dx - 45,
-                    top: b.pos.dy - 45,
-                    child: Opacity(
-                      opacity: b.opacity.clamp(0.0, 1.0),
-                      child: Transform.scale(
-                        scale: b.scale.clamp(0.2, 1.8),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Container(
-                              width: 90,
-                              height: 90,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                border: Border.all(color: burstColor, width: 3),
-                                gradient: RadialGradient(
-                                  colors: [burstColor.withOpacity(0.4), Colors.transparent],
-                                ),
-                              ),
-                              child: Center(
-                                child: Icon(
-                                  b.reward > 0 ? Icons.auto_awesome : Icons.close,
-                                  color: burstColor,
-                                  size: 30,
-                                ),
-
-),
-                            ),
-                            Text(
-                              b.text,
-                              style: TextStyle(
-                                color: burstColor,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 13,
-                                shadows: const [Shadow(blurRadius: 4, color: Colors.black)],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  );
-                }).toList(),
-
-                Positioned(
-                  top: 8,
-                  left: 0,
-                  right: 0,
-                  child: Center(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.65),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: const Color(0xFFFFD700).withOpacity(0.5)),
-                      ),
-                      child: Text(
-                        statusMsg,
-                        style: const TextStyle(color: Color(0xFFFFD700), fontSize: 12, fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                  ),
-                ),
-
-                Positioned(
-                  bottom: 45,
-                  left: (size.width / 2) - 26,
-                  child: Transform.rotate(
-                    angle: cannonAngle,
-                    alignment: Alignment.bottomCenter,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(
-                          width: 14,
-                          height: 24,
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [Colors.cyanAccent, Color(0xFF007799)],
-                            ),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                        ),
-                        Container(
-                          width: 34,
-                          height: 18,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF1B2A47),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: Colors.cyanAccent),
-                          ),
-                          child: const Icon(Icons.bolt, color: Colors.cyanAccent, size: 14),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-
-                Positioned(
-                  bottom: 6,
-                  left: 10,
-                  right: 10,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF061126).withOpacity(0.9),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Colors.blueAccent.withOpacity(0.4)),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text('⚡ CANNON', style: TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold, fontSize: 11)),
-                        Row(
-                          children: [10, 50, 100, 500].map((b) {
-
-final sel = selectedBet == b;
-                            return GestureDetector(
-                              onTap: () => setState(() => selectedBet = b),
-                              child: Container(
-                                margin: const EdgeInsets.symmetric(horizontal: 3),
-                                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                                decoration: BoxDecoration(
-                                  color: sel ? const Color(0xFFFFD700) : Colors.white10,
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Text(
-                                  '$b',
-                                  style: TextStyle(
-                                    color: sel ? Colors.black : Colors.white,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                            );
-                          }).toList(),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
+                  const Text('Please select your bet amount', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                  const SizedBox(height: 1
