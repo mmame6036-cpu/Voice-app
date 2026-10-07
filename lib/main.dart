@@ -266,9 +266,10 @@ IconButton(icon: const Icon(Icons.notifications_none), onPressed: () {}),
               ),
             ),
           ),
-          floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
         ),
       ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+    );
   }
 }
 
