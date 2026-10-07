@@ -241,7 +241,7 @@ color: Colors.black.withOpacity(0.6),
                         child: const Text('Say Hello...', style: TextStyle(color: Colors.white54, fontSize: 12)),
                       ),
                       Row(
-                        children: [
+                    children: [
                 Container(
                   width: 140,
                   height: 36,
