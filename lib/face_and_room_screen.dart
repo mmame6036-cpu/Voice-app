@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
-
+import 'home_aura_background.dart';
 class FaceAndRoomScreen extends StatefulWidget {
   final String userId;
   final String baseUrl;
@@ -122,7 +122,8 @@ class _FaceAndRoomScreenState extends State<FaceAndRoomScreen> {
         title: const Text('የድምጽ አፕሊኬሽን ማዕከል'),
         backgroundColor: const Color(0xFF1E1F2E),
       ),
-      body: isLoading
+      body: HomeAuraBackground(
+        child:isLoading
           ? const Center(child: CircularProgressIndicator(color: Colors.amber))
           : Padding(
               padding: const EdgeInsets.all(16.0),
@@ -242,6 +243,7 @@ mainAxisSpacing: 10,
                                     style: const TextStyle(color: Colors.white, fontSize: 11),
                                   ),
                                 ],
+                              ),
                               ),
                             ),
                           );
