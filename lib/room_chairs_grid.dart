@@ -108,43 +108,60 @@ userCoins: userCoinsSpent,
                     );
                   }
                 },
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: isUnlocked
-                        ? tierColor.withOpacity(0.12)
-                        : Colors.white.withOpacity(0.03),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(
-                      color: isUnlocked
-                          ? tierColor.withOpacity(0.6)
-                          : Colors.white12,
-                      width: 1.2,
-                    ),
-                  ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        isUnlocked ? Icons.chair : Icons.lock_outline,
-                        size: 22,
-                        color: isUnlocked ? tierColor : Colors.white24,
-                      ),
-                      const SizedBox(height: 3),
-                      Text(
-                        '$chairNum',
-                        style: TextStyle(
-                          color: isUnlocked ? Colors.white : Colors.white24,
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
+              
+child: Container(
+        decoration: BoxDecoration(
+          color: isUnlocked
+              ? tierColor.withOpacity(occupiedChairs.containsKey(chairNum) ? 0.35 : 0.12)
+              : Colors.grey.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: occupiedChairs.containsKey(chairNum)
+                ? Colors.greenAccent
+                : (isUnlocked ? tierColor.withOpacity(0.4) : Colors.white10),
+            width: occupiedChairs.containsKey(chairNum) ? 1.5 : 1,
           ),
-        ],
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            if (occupiedChairs.containsKey(chairNum)) ...[
+              // ሰው ሲቀመጥ የሚታይ ፕሮፋይል እና ስም
+              const CircleAvatar(
+                radius: 14,
+                backgroundColor: Colors.teal,
+                child: Icon(Icons.person, size: 18, color: Colors.white),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                occupiedChairs[chairNum] ?? '',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ] else ...[
+              // ወንበሩ ክፍት ሲሆን የሚታየው የወንበር አይኮን
+              Icon(
+                isUnlocked ? Icons.weekend : Icons.lock,
+                size: 20,
+                color: isUnlocked ? tierColor : Colors.grey,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '$chairNum',
+                style: TextStyle(
+                  color: isUnlocked ? Colors.white70 : Colors.grey,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }
