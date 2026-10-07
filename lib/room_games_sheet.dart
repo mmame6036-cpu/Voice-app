@@ -161,7 +161,7 @@ return GridView.builder(
 }
 
 // ==========================================
-// የተሻሻለው እውነተኛ OCEAN HUNT ጨዋታ
+// የተሟላው OCEAN HUNT (የአሳ አደን) ጨዋታ
 // ==========================================
 class OceanHuntGameView extends StatefulWidget {
   final dynamic socket;
@@ -236,8 +236,7 @@ class _OceanHuntGameViewState extends State<OceanHuntGameView> {
           }
         }
 
-// የመረብ ፍንዳታ አኒሜሽን ማዘመን
-        for (var b in bursts) {
+for (var b in bursts) {
           b.scale += 0.08;
           b.opacity -= 0.06;
         }
@@ -277,7 +276,6 @@ class _OceanHuntGameViewState extends State<OceanHuntGameView> {
     final tapPos = details.localPosition;
     final cannonPos = Offset(size.width / 2, size.height - 40);
 
-    // የመድፉን አቅጣጫ ማስተካከል
     final dx = tapPos.dx - cannonPos.dx;
     final dy = tapPos.dy - cannonPos.dy;
     setState(() {
@@ -300,7 +298,6 @@ class _OceanHuntGameViewState extends State<OceanHuntGameView> {
           AppData.userCoins += win;
           statusMsg = '🎉 ${f.name} ተመታ! +$win ሳንቲም!';
           bursts.add(_NetBurst(pos: tapPos, reward: win, text: '+$win 💰'));
-          // አሳው ሲመታ ወደ መነሻ ይመለሳል
           f.x = f.isMovingRight ? -0.25 : 1.15;
           f.y = 0.15 + (Random().nextDouble() * 0.55);
         });
@@ -323,6 +320,18 @@ class _OceanHuntGameViewState extends State<OceanHuntGameView> {
         statusMsg = 'አልደረሰም! በድጋሚ ይሞክሩ';
       });
     }
+  }
+
+  Widget _buildBubble(double size) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: Colors.white.withOpacity(0.12),
+        border: Border.all(color: Colors.white24),
+      ),
+    );
   }
 
   @override
@@ -350,14 +359,12 @@ class _OceanHuntGameViewState extends State<OceanHuntGameView> {
             child: Stack(
               clipBehavior: Clip.none,
               children: [
-                // የውሃ ውስጥ አረፋዎች
                 Positioned(top: 30, left: 20, child: _buildBubble(14)),
                 Positioned(top: 100, right: 30, child: _buildBubble(22)),
                 Positioned(top: 220, left: 70, child: _buildBubble(18)),
                 Positioned(top: 320, right: 80, child: _buildBubble(12)),
 
-// የሚዋኙ አሳዎች
-                ...fishes.map((f) {
+...fishes.map((f) {
                   return Positioned(
                     left: f.x * size.width,
                     top: f.y * size.height,
@@ -386,8 +393,8 @@ class _OceanHuntGameViewState extends State<OceanHuntGameView> {
                   );
                 }).toList(),
 
-                // የመረብና የሳንቲም ፍንዳታ (Net Burst FX)
                 ...bursts.map((b) {
+                  final burstColor = b.reward > 0 ? const Color(0xFFFFD700) : Colors.redAccent;
                   return Positioned(
                     left: b.pos.dx - 45,
                     top: b.pos.dy - 45,
@@ -404,9 +411,152 @@ class _OceanHuntGameViewState extends State<OceanHuntGameView> {
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
                                 border: Border.all(
-                                  color: b.reward > 0 ? const Color(0xFFFFD700) : Colors.redAccent,
+                                  color: burstColor,
                                   width: 3,
                                 ),
                                 gradient: RadialGradient(
                                   colors: [
-                                    (b.reward > 0 ? const Color(0xFFFFD700) : Colors.redAccent).with
+                                    burstColor.withOpacity(0.4),
+                                    Colors.transparent,
+                                  ],
+                                ),
+                              ),
+                              child: Center(
+                                child: Icon(
+                                  b.reward > 0 ? Icons.auto_awesome : Icons.close,
+                                  color: burstColor,
+                                  size: 30,
+                                ),
+                              ),
+                            ),
+                            Text(
+                              b.text,
+                              style: TextStyle(
+                                color: burstColor,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                                shadows: const [Shadow(blurRadius: 4, color: Colors.black)],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+
+                Positioned(
+                  top: 10,
+                  left: 0,
+                  right: 0,
+
+child: Center(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.65),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: const Color(0xFFFFD700).withOpacity(0.5)),
+                      ),
+                      child: Text(
+                        statusMsg,
+                        style: const TextStyle(color: Color(0xFFFFD700), fontSize: 12, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ),
+                ),
+
+                Positioned(
+                  bottom: 50,
+                  left: (size.width / 2) - 26,
+                  child: Transform.rotate(
+                    angle: cannonAngle,
+                    alignment: Alignment.bottomCenter,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 14,
+                          height: 26,
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [Colors.cyanAccent, Color(0xFF007799)],
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                            ),
+                            borderRadius: BorderRadius.circular(4),
+                            boxShadow: [
+                              BoxShadow(color: Colors.cyanAccent.withOpacity(0.6), blurRadius: 8),
+                            ],
+                          ),
+                        ),
+                        Container(
+                          width: 36,
+                          height: 20,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF1B2A47),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: Colors.cyanAccent),
+                          ),
+                          child: const Icon(Icons.bolt, color: Colors.cyanAccent, size: 16),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                Positioned(
+                  bottom: 8,
+                  left: 12,
+                  right: 12,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF061126).withOpacity(0.9),
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(color: Colors.blueAccent.withOpacity(0.4)),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          '⚡ CANNON',
+                          style: TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold, fontSize: 12),
+                        ),
+                        Row(
+                          children: [10, 50, 100, 500].map((b) {
+                            final sel = selectedBet == b;
+                            return GestureDetector(
+                              onTap: () => setState(() => selectedBet = b),
+                              child: Container(
+                                margin: const EdgeInsets.symmetric(horizontal: 3),
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+
+decoration: BoxDecoration(
+                                  color: sel ? const Color(0xFFFFD700) : Colors.white10,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  '$b',
+                                  style: TextStyle(
+                                    color: sel ? Colors.black : Colors.white,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
