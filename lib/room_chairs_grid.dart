@@ -4,15 +4,16 @@ import 'main.dart';
 
 // የተቀመጡ ሰዎችን መረጃ የሚይዝ
 Map<int, String> occupiedChairs = {};
-
 class RoomChairsGrid extends StatelessWidget {
   final int userCoinsSpent;
   final Function(int chairIndex)? onChairTap;
+  final dynamic socket;
 
   const RoomChairsGrid({
     Key? key,
     this.userCoinsSpent = 0,
     this.onChairTap,
+    this.socket,
   }) : super(key: key);
 
   @override
