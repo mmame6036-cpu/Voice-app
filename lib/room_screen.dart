@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'room_chairs_grid.dart';
+import 'room_gift_sheet.dart';
 import 'room_games_sheet.dart';
 import 'main.dart';
 
@@ -10,8 +12,8 @@ class RoomScreen extends StatefulWidget {
 
   const RoomScreen({
     Key? key,
-    this.roomTitle = 'Live Room',
-    this.hostName = 'Host',
+    this.roomTitle = 'Ethio Nile Coffee Club',
+    this.hostName = 'Kedir oumer',
   }) : super(key: key);
 
   @override
@@ -19,13 +21,30 @@ class RoomScreen extends StatefulWidget {
 }
 
 class _RoomScreenState extends State<RoomScreen> {
-  bool isMuted = false;
   IO.Socket? socket;
+  List<String> liveAnnouncements = [
+    '✨ VIP5 🌟 STAR entered room',
+    '🎁 User sent Star x18 and won prizes!',
+  ];
+  List<String> chatMessages = [
+    'System: Please protect your privacy and stay safe.',
+  ];
+  Timer? _bannerTimer;
 
   @override
   void initState() {
     super.initState();
     _connectSocket();
+
+    // ባነሩ በየጊዜው እንዲለዋወጥ
+    _bannerTimer = Timer.periodic(const Duration(seconds: 4), (timer) {
+      if (mounted) {
+        setState(() {
+          liveAnnouncements.add('🔥 Room activity active now!');
+          if (liveAnnouncements.length > 5) liveAnnouncements.removeAt(0);
+        });
+      }
+    });
   }
 
   void _connectSocket() {
@@ -41,14 +60,12 @@ class _RoomScreenState extends State<RoomScreen> {
       socket?.connect();
 
       socket?.onConnect((_) {
-        // ወደ ክፍሉ መግባትን ለሰርቨር ማሳወቅ
         socket?.emit('join_room', {
           'room': widget.roomTitle,
           'user': AppData.currentUserName,
         });
       });
 
-      // ሌላ ሰው ወንበር ሲይዝ ወይም ሲለቅ ከሰርቨር የሚመጣውን መቀበል
       socket?.on('chair_action', (data) {
         if (mounted) {
           setState(() {
@@ -59,19 +76,31 @@ class _RoomScreenState extends State<RoomScreen> {
             if (action == 'join') {
               occupiedChairs.removeWhere((k, v) => v == user);
               occupiedChairs[chair] = user;
-            } else if (action == 'leave') {
+              chatMessages.add('$user entered chair #$chair');
+            } else {
               occupiedChairs.remove(chair);
+              chatMessages.add('$user left chair #$chair');
             }
           });
         }
       });
+
+      socket?.on('gift_sent', (data) {
+        if (mounted) {
+          setState(() {
+            liveAnnouncements.add('🎁 ${data['sender']} sent ${data['giftName']}!');
+            chatMessages.add('${data['sender']} sent ${data['giftName']}');
+          });
+        }
+      });
     } catch (e) {
-      debugPrint('Socket connection error: $e');
+      debugPrint('Socket error: $e');
     }
   }
 
   @override
   void dispose() {
+    _bannerTimer?.cancel();
     socket?.disconnect();
     socket?.dispose();
     super.dispose();
@@ -80,156 +109,156 @@ class _RoomScreenState extends State<RoomScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0C0517),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF25103F),
-        elevation: 0,
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              widget.roomTitle,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+      backgroundColor: const Color(0xFF070B18),
+      body: Stack(
+        children: [
+          // 1. የከዋክብትና የሌሊት ዳራ (Background Gradient & Star effect)
+          Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Color(0xFF0F172A),
+                  Color(0xFF090D1C),
+                  Color(0xFF02040A),
+                ],
+              ),
             ),
-            Text(
-              'Host: ${widget.hostName}',
-              style: const TextStyle(fontSize: 12, color: Colors.white54),
-            ),
-          ],
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.share, color: Colors.white70),
-            onPressed: () {},
           ),
-          IconButton(
-            icon: const Icon(Icons.close, color: Colors.redAccent),
-            onPressed: () => Navigator.pop(context),
-          ),
-        ],
-      ),
-      body: Container(
-        width: double.infinity,
-        height: double.infinity,
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Color(0xFF25103F),
-              Color(0xFF150A26),
-              Color(0xFF0C0517),
-            ],
-          ),
-        ),
-        child: SafeArea(
-          child: SingleChildScrollView(
-            physics: const BouncingScrollPhysics(),
+
+          SafeArea(
             child: Column(
               children: [
-                const SizedBox(height: 12),
-
-                // Host Stage Header
-                Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 16),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1B2234),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.white10),
-
-),
+                // የላይኛው ራስጌ (Header)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                   child: Row(
                     children: [
                       CircleAvatar(
-                        radius: 28,
-                        backgroundColor: Colors.tealAccent.withOpacity(0.2),
-                        child: const Icon(Icons.mic, color: Colors.tealAccent, size: 28),
-                      ),
-                      const SizedBox(width: 14),
+                        radius: 18,
+                        backgroundColor: Colors.teal,
+                        child: Text(widget.hostName[0], style: const TextStyle(color: Colors.white)),
+
+),
+                      const SizedBox(width: 8),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
                               widget.hostName,
-                              style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
                             ),
-                            const SizedBox(height: 4),
-                            const Text(
-                              'Main Stage Host',
-                              style: TextStyle(color: Colors.white54, fontSize: 12),
-                            ),
+                            Text('ID: 1410685', style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 10)),
                           ],
                         ),
                       ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.redAccent.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.redAccent),
-                        ),
-                        child: const Row(
-                          children: [
-                            CircleAvatar(radius: 4, backgroundColor: Colors.redAccent),
-                            SizedBox(width: 6),
-                            Text('LIVE', style: TextStyle(color: Colors.redAccent, fontSize: 10, fontWeight: FontWeight.bold)),
-                          ],
+                      IconButton(
+                        icon: const Icon(Icons.close_rounded, color: Colors.white70),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // 2. የሚንቀሳቀስ የቀጥታ ባነር (Live Announcement Banner)
+                Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF880E4F), Color(0xFF4A148C)],
+                    ),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFFFFD700).withOpacity(0.5)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.auto_awesome, color: Color(0xFFFFD700), size: 16),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          liveAnnouncements.last,
+                          style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     ],
                   ),
                 ),
 
-                const SizedBox(height: 16),
+                const SizedBox(height: 6),
 
-                // Chairs Grid (ሶኬቱ የተሰጠው ክፍል)
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: RoomChairsGrid(
-                    socket: socket,
+                // 3. 30ው ክብ ወንበሮች
+                Expanded(
+                  child: SingleChildScrollView(
+                    physics: const BouncingScrollPhysics(),
+                    child: Column(
+                      children: [
+                        RoomChairsGrid(
+                          socket: socket,
+                          onChairTap: (chair) => setState(() {}),
+                        ),
+                        const SizedBox(height: 12),
+                        // የቀጥታ ቻት ቦክስ (Chat Box)
+                        Container(
+                          height: 90,
+                          margin: const EdgeInsets.symmetric(horizontal: 16),
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.35),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: ListView.builder(
+                            itemCount: chatMessages.length,
+                            itemBuilder: (context, idx) => Text(
+                              chatMessages[idx],
+                              style: const TextStyle(color: Colors.white70, fontSize: 11),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
 
-                const SizedBox(height: 16),
+                // 4. የታችኛው የመቆጣጠሪያ ባር (Bottom Control Bar)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+
+color: Colors.black.withOpacity(0.6),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.white12,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: const Text('Say Hello...', style: TextStyle(color: Colors.white54, fontSize: 12)),
+                      ),
+                      Row(
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.sports_esports_rounded, color: Colors.amberAccent),
+                            onPressed: () => RoomGamesSheet.show(context, onCoinsChanged: () => setState(() {})),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.card_giftcard_rounded, color: Color(0xFFFFD700), size: 26),
+                            onPressed: () => RoomGiftSheet.show(context, socket: socket, onGiftSent: () => setState(() {})),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
-        ),
-      ),
-      bottomNavigationBar: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        color: const Color(0xFF161B26),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: [
-            IconButton(
-              icon: Icon(isMuted ? Icons.mic_off : Icons.mic, color: Colors.white),
-              onPressed: () {
-                setState(() {
-                  isMuted = !isMuted;
-                });
-              },
-            ),
-            IconButton(
-              icon: const Icon(Icons.card_giftcard, color: Colors.amber),
-              onPressed: () {},
-            ),
-            IconButton(
-              icon: const Icon(Icons.sports_esports_rounded, color: Color(0xFFFFD700)),
-              onPressed: () {
-                RoomGamesSheet.show(context, onCoinsChanged: () {
-                  setState(() {});
-                });
-              },
-            ),
-            IconButton(
-              icon: const Icon(Icons.message_outlined, color: Colors.white70),
-              onPressed: () {},
-            ),
-          ],
-        ),
+        ],
       ),
     );
   }
