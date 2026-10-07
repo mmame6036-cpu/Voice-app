@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 import 'chairs_management_screen.dart';
+import 'main.dart';
+
+// የተቀመጡ ሰዎችን መረጃ የሚይዝ
+Map<int, String> occupiedChairs = {};
 
 class RoomChairsGrid extends StatelessWidget {
   final int userCoinsSpent;
