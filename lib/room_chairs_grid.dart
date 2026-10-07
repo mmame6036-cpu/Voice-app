@@ -75,16 +75,18 @@ class RoomChairsGrid extends StatelessWidget {
               return InkWell(
                 borderRadius: BorderRadius.circular(10),
                 onTap: () {
-                  if (isUnlocked) {
-                    if (onChairTap != null) onChairTap!(chairNum);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Joined Chair #$chairNum'),
-                        backgroundColor: Colors.teal,
-                        duration: const Duration(seconds: 1),
-                      ),
-                    );
-                  } else {
+  if (isUnlocked) {
+    occupiedChairs[chairNum] = AppData.currentUserName;
+    if (onChairTap != null) onChairTap!(chairNum);
+    (context as Element).markNeedsBuild();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Joined Chair #$chairNum as ${AppData.currentUserName}'),
+        backgroundColor: Colors.teal,
+        duration: const Duration(seconds: 1),
+      ),
+    );
+  } else {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: Text('Chair #$chairNum is locked!'),
