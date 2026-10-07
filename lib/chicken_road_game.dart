@@ -34,6 +34,7 @@ class _ChickenRoadGameViewState extends State<ChickenRoadGameView> {
 
   List<_Car> cars = [];
 
+  // 30ዎቹ ደረጃዎች ለእያንዳንዱ ሞድ
   final Map<String, List<double>> difficultyMultipliers = {
     'EASY': [
       1.03, 1.06, 1.10, 1.15, 1.21, 1.28, 1.36, 1.45, 1.56, 1.68,
@@ -90,7 +91,7 @@ class _ChickenRoadGameViewState extends State<ChickenRoadGameView> {
       for (int i = 0; i < carCount; i++) {
         cars.add(_Car(
           laneIndex: lane,
-          y: -0.2 - (i * 0.5) - (_rnd.nextDouble() * 0.3),
+          y: -0.2 - (i * 0.45) - (_rnd.nextDouble() * 0.2),
           speed: 0.015 + (_rnd.nextDouble() * 0.02),
           emoji: carIcons[_rnd.nextInt(carIcons.length)],
         ));
@@ -119,13 +120,15 @@ class _ChickenRoadGameViewState extends State<ChickenRoadGameView> {
         statusMsg = 'ዶሮዋን ለማሻገር መስመሩን ይንኩ!';
       });
       widget.onCoinsChanged();
-      _scrollController.animateTo(0, duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(0, duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
+      }
     } else {
       if (currentLane == 0) return;
       final mult = difficultyMultipliers[selectedDifficulty]![currentLane - 1];
       final win = (betAmount * mult).round();
 
-      setState(() {
+setState(() {
         AppData.userCoins += win;
         isPlaying = false;
         currentLane = 0;
@@ -133,7 +136,7 @@ class _ChickenRoadGameViewState extends State<ChickenRoadGameView> {
       });
       widget.onCoinsChanged();
 
-if (win >= 500 && widget.socket != null) {
+      if (win >= 500 && widget.socket != null) {
         widget.socket.emit('game_win', {
           'winner': AppData.currentUserName,
           'game': 'Chicken Road',
@@ -171,7 +174,7 @@ if (win >= 500 && widget.socket != null) {
     });
 
     final scrollTarget = (currentLane * 74.0) - 120.0;
-    if (scrollTarget > 0) {
+    if (_scrollController.hasClients && scrollTarget > 0) {
       _scrollController.animateTo(
         scrollTarget,
         duration: const Duration(milliseconds: 250),
@@ -223,6 +226,7 @@ if (win >= 500 && widget.socket != null) {
       ),
       child: Column(
         children: [
+          // የቀጥታ ሩጫ ባነር
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
             decoration: const BoxDecoration(
@@ -245,7 +249,8 @@ if (win >= 500 && widget.socket != null) {
             ),
           ),
 
-Expanded(
+// የ 30 መንገዶች ሰሌዳ
+          Expanded(
             child: SingleChildScrollView(
               controller: _scrollController,
               scrollDirection: Axis.horizontal,
@@ -318,9 +323,9 @@ Expanded(
                                       decoration: BoxDecoration(
                                         color: isCurrent ? const Color(0xFFFFD700) : Colors.black87,
                                         borderRadius: BorderRadius.circular(10),
-                                        border: Border.all(color: isCurrent ? Colors.amber : Colors.white24),
 
-),
+border: Border.all(color: isCurrent ? Colors.amber : Colors.white24),
+                                      ),
                                       child: Text(
                                         '${mult}x',
                                         style: TextStyle(
@@ -348,6 +353,8 @@ Expanded(
               ),
             ),
           ),
+
+          // የታችኛው መቆጣጠሪያ ክፍል
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             color: const Color(0xFF10141D),
@@ -399,11 +406,11 @@ Expanded(
                         border: Border.all(color: const Color(0xFFFFD700).withOpacity(0.5)),
                       ),
                       child: Text('BET $betAmount', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
-                    ),
+
+),
                     IconButton(
                       icon: const Icon(Icons.add_circle, color: Colors.blueAccent, size: 26),
-
-onPressed: isPlaying ? null : () => setState(() => betAmount += 50),
+                      onPressed: isPlaying ? null : () => setState(() => betAmount += 50),
                     ),
                     const Spacer(),
                     ElevatedButton(
