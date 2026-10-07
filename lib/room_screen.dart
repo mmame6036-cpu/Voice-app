@@ -242,18 +242,56 @@ color: Colors.black.withOpacity(0.6),
                       ),
                       Row(
                         children: [
-                          IconButton(
-                            icon: const Icon(Icons.sports_esports_rounded, color: Colors.amberAccent),
-                            onPressed: () => RoomGamesSheet.show(context, onCoinsChanged: () => setState(() {})),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.card_giftcard_rounded, color: Color(0xFFFFD700), size: 26),
-                            onPressed: () => RoomGiftSheet.show(context, socket: socket, onGiftSent: () => setState(() {})),
-                          ),
-                        ],
-                      ),
-                    ],
+                Container(
+                  width: 140,
+                  height: 36,
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  decoration: BoxDecoration(
+                    color: Colors.white12,
+                    borderRadius: BorderRadius.circular(18),
                   ),
+                  child: TextField(
+                    style: const TextStyle(color: Colors.white, fontSize: 11),
+                    decoration: const InputDecoration(
+                      hintText: 'Say Hello...',
+                      hintStyle: TextStyle(color: Colors.white38, fontSize: 11),
+                      border: InputBorder.none,
+                      isDense: true,
+                      contentPadding: EdgeInsets.symmetric(vertical: 9),
+                    ),
+                    onSubmitted: (text) {
+                      if (text.trim().isNotEmpty && socket != null) {
+                        socket?.emit('chat_message', {
+                          'sender': AppData.currentUserName,
+                          'text': text.trim(),
+                        });
+                      }
+                    },
+                  ),
+                ),
+                Row(
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.sports_esports_rounded, color: Colors.amberAccent, size: 24),
+                      onPressed: () {
+                        RoomGamesSheet.show(
+                          context,
+                          socket: socket,
+                          onCoinsChanged: () => setState(() {}),
+                        );
+                      },
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.card_giftcard_rounded, color: Color(0xFFFFD700), size: 24),
+                      onPressed: () {
+                        RoomGiftSheet.show(
+                          context,
+                          socket: socket,
+                          onGiftSent: () => setState(() {}),
+                        );
+                      },
+                    ),
+                  ],
                 ),
               ],
             ),
