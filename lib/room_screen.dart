@@ -29,6 +29,7 @@ class _RoomScreenState extends State<RoomScreen> {
   List<String> chatMessages = [
     'System: Please protect your privacy and stay safe.',
   ];
+  Map<int, String> occupiedChairs = {};
   Timer? _bannerTimer;
 
   @override
@@ -36,7 +37,6 @@ class _RoomScreenState extends State<RoomScreen> {
     super.initState();
     _connectSocket();
 
-    // ባነሩ በየጊዜው እንዲለዋወጥ
     _bannerTimer = Timer.periodic(const Duration(seconds: 4), (timer) {
       if (mounted) {
         setState(() {
@@ -93,6 +93,14 @@ class _RoomScreenState extends State<RoomScreen> {
           });
         }
       });
+
+      socket?.on('game_win', (data) {
+        if (mounted) {
+          setState(() {
+            liveAnnouncements.add('🎉 ${data['winner']} won ${data['amount']} in ${data['game']}!');
+          });
+        }
+      });
     } catch (e) {
       debugPrint('Socket error: $e');
     }
@@ -112,7 +120,6 @@ class _RoomScreenState extends State<RoomScreen> {
       backgroundColor: const Color(0xFF070B18),
       body: Stack(
         children: [
-          // 1. የከዋክብትና የሌሊት ዳራ (Background Gradient & Star effect)
           Container(
             decoration: const BoxDecoration(
               gradient: LinearGradient(
@@ -126,21 +133,23 @@ class _RoomScreenState extends State<RoomScreen> {
               ),
             ),
           ),
-
           SafeArea(
             child: Column(
               children: [
-                // የላይኛው ራስጌ (Header)
+                // 1. የላይኛው ራስጌ (Header)
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                   child: Row(
                     children: [
-                      CircleAvatar(
+
+CircleAvatar(
                         radius: 18,
                         backgroundColor: Colors.teal,
-                        child: Text(widget.hostName[0], style: const TextStyle(color: Colors.white)),
-
-),
+                        child: Text(
+                          widget.hostName.isNotEmpty ? widget.hostName[0] : 'U',
+                          style: const TextStyle(color: Colors.white),
+                        ),
+                      ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Column(
@@ -148,9 +157,19 @@ class _RoomScreenState extends State<RoomScreen> {
                           children: [
                             Text(
                               widget.hostName,
-                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                              ),
                             ),
-                            Text('ID: 1410685', style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 10)),
+                            Text(
+                              'ID: 1410685',
+                              style: TextStyle(
+                                color: Colors.white.withOpacity(0.5),
+                                fontSize: 10,
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -162,7 +181,7 @@ class _RoomScreenState extends State<RoomScreen> {
                   ),
                 ),
 
-                // 2. የሚንቀሳቀስ የቀጥታ ባነር (Live Announcement Banner)
+                // 2. የቀጥታ ባነር (Live Announcement Banner)
                 Container(
                   margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -179,8 +198,12 @@ class _RoomScreenState extends State<RoomScreen> {
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          liveAnnouncements.last,
-                          style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                          liveAnnouncements.isNotEmpty ? liveAnnouncements.last : '',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -191,7 +214,7 @@ class _RoomScreenState extends State<RoomScreen> {
 
                 const SizedBox(height: 6),
 
-                // 3. 30ው ክብ ወንበሮች
+                // 3. ወንበሮች እና ቻት ዝርዝር
                 Expanded(
                   child: SingleChildScrollView(
                     physics: const BouncingScrollPhysics(),
@@ -202,13 +225,13 @@ class _RoomScreenState extends State<RoomScreen> {
                           onChairTap: (chair) => setState(() {}),
                         ),
                         const SizedBox(height: 12),
-                        // የቀጥታ ቻት ቦክስ (Chat Box)
                         Container(
                           height: 90,
                           margin: const EdgeInsets.symmetric(horizontal: 16),
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
-                            color: Colors.black.withOpacity(0.35),
+
+color: Colors.black.withOpacity(0.35),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: ListView.builder(
@@ -227,71 +250,75 @@ class _RoomScreenState extends State<RoomScreen> {
                 // 4. የታችኛው የመቆጣጠሪያ ባር (Bottom Control Bar)
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-
-color: Colors.black.withOpacity(0.6),
+                  color: Colors.black.withOpacity(0.6),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: Colors.white12,
-                          borderRadius: BorderRadius.circular(20),
+                      // የቻት መጻፊያ ሳጥን
+                      Expanded(
+                        child: Container(
+                          height: 38,
+                          margin: const EdgeInsets.only(right: 12),
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          decoration: BoxDecoration(
+                            color: Colors.white12,
+                            borderRadius: BorderRadius.circular(19),
+                          ),
+                          child: TextField(
+                            style: const TextStyle(color: Colors.white, fontSize: 12),
+                            decoration: const InputDecoration(
+                              hintText: 'Say Hello...',
+                              hintStyle: TextStyle(color: Colors.white38, fontSize: 12),
+                              border: InputBorder.none,
+                              isDense: true,
+                              contentPadding: EdgeInsets.symmetric(vertical: 10),
+                            ),
+                            onSubmitted: (text) {
+                              if (text.trim().isNotEmpty && socket != null) {
+                                socket?.emit('chat_message', {
+                                  'sender': AppData.currentUserName,
+                                  'text': text.trim(),
+                                });
+                              }
+                            },
+                          ),
                         ),
-                        child: const Text('Say Hello...', style: TextStyle(color: Colors.white54, fontSize: 12)),
                       ),
+                      // የጌም እና የስጦታ ቁልፎች
                       Row(
-                    children: [
-                Container(
-                  width: 140,
-                  height: 36,
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                  decoration: BoxDecoration(
-                    color: Colors.white12,
-                    borderRadius: BorderRadius.circular(18),
+                        children: [
+                          IconButton(
+                            icon: const Icon(
+                              Icons.sports_esports_rounded,
+                              color: Colors.amberAccent,
+                              size: 26,
+                            ),
+                            onPressed: () {
+                              RoomGamesSheet.show(
+                                context,
+                                socket: socket,
+                                onCoinsChanged: () => setState(() {}),
+                              );
+                            },
+                          ),
+                          IconButton(
+                            icon: const Icon(
+                              Icons.card_giftcard_rounded,
+                              color: Color(0xFFFFD700),
+                              size: 26,
+                            ),
+                            onPressed: () {
+                              RoomGiftSheet.show(
+                                context,
+                                socket: socket,
+                                onGiftSent: () => setState(() {}),
+                              );
+                            },
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
-                  child: TextField(
-                    style: const TextStyle(color: Colors.white, fontSize: 11),
-                    decoration: const InputDecoration(
-                      hintText: 'Say Hello...',
-                      hintStyle: TextStyle(color: Colors.white38, fontSize: 11),
-                      border: InputBorder.none,
-                      isDense: true,
-                      contentPadding: EdgeInsets.symmetric(vertical: 9),
-                    ),
-                    onSubmitted: (text) {
-                      if (text.trim().isNotEmpty && socket != null) {
-                        socket?.emit('chat_message', {
-                          'sender': AppData.currentUserName,
-                          'text': text.trim(),
-                        });
-                      }
-                    },
-                  ),
-                ),
-                Row(
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.sports_esports_rounded, color: Colors.amberAccent, size: 24),
-                      onPressed: () {
-                        RoomGamesSheet.show(
-                          context,
-                          socket: socket,
-                          onCoinsChanged: () => setState(() {}),
-                        );
-                      },
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.card_giftcard_rounded, color: Color(0xFFFFD700), size: 24),
-                      onPressed: () {
-                        RoomGiftSheet.show(
-                          context,
-                          socket: socket,
-                          onGiftSent: () => setState(() {}),
-                        );
-                      },
-                    ),
-                  ],
                 ),
               ],
             ),
