@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -60,7 +60,7 @@ class _RoomScreenState extends State<RoomScreen> {
   // የአጎራ ድምፅ ሞተር ማስጀመሪያ
   Future<void> _initAgoraVoice() async {
     try {
-      // 1. የማይክሮፎን ፈቃድ
+      // 1. የማይክሮፎን ፈቃድ መጠየቅ
       await Permission.microphone.request();
 
       // 2. የአጎራ ሞተር ማዘጋጀት
@@ -94,15 +94,20 @@ class _RoomScreenState extends State<RoomScreen> {
       await _engine!.muteLocalAudioStream(false);
       await _engine!.setDefaultAudioRouteToSpeakerphone(true);
 
-      // 4. ከ Render ሰርቨርህ ቶከን መጠየቅ
+      // 4. ከ Render ሰርቨርህ ቶከን መጠየቅ (በ dart:io HttpClient አማካኝነት)
       const String channelName = 'NileVoiceMainRoom';
       String rtcToken = '';
 
       try {
-        final url = Uri.parse('${AppData.serverUrl}/rtc-token?channelName=$channelName&uid=0');
-        final response = await http.get(url).timeout(const Duration(seconds: 10));
+        final client = HttpClient();
+        client.connectionTimeout = const Duration(seconds: 10);
+        final request = await client.getUrl(
+          Uri.parse('${AppData.serverUrl}/rtc-token?channelName=$channelName&uid=0'),
+        );
+        final response = await request.close();
         if (response.statusCode == 200) {
-          final data = jsonDecode(response.body);
+          final responseBody = await response.transform(utf8.decoder).join();
+          final data = jsonDecode(responseBody);
           rtcToken = data['token'] ?? '';
           debugPrint('Token fetched successfully!');
         }
@@ -114,7 +119,8 @@ class _RoomScreenState extends State<RoomScreen> {
       await _engine!.joinChannel(
         token: rtcToken,
         channelId: channelName,
-        uid: 0,
+
+uid: 0,
         options: const ChannelMediaOptions(
           clientRoleType: ClientRoleType.clientRoleBroadcaster,
           channelProfile: ChannelProfileType.channelProfileLiveBroadcasting,
@@ -127,7 +133,7 @@ class _RoomScreenState extends State<RoomScreen> {
     }
   }
 
-// ማይክራፎን ማብሪያና ማጥፊያ
+  // ማይክራፎን ማብሪያና ማጥፊያ
   void _toggleMic() async {
     if (_engine == null) return;
     setState(() {
@@ -249,7 +255,8 @@ class _RoomScreenState extends State<RoomScreen> {
                       CircleAvatar(
                         radius: 18,
                         backgroundColor: Colors.teal,
-                        child: Text(
+
+child: Text(
                           widget.hostName.isNotEmpty ? widget.hostName[0] : 'U',
                           style: const TextStyle(color: Colors.white),
                         ),
@@ -257,8 +264,7 @@ class _RoomScreenState extends State<RoomScreen> {
                       const SizedBox(width: 8),
                       Expanded(
                         child: Column(
-
-crossAxisAlignment: CrossAxisAlignment.start,
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
                               widget.hostName,
@@ -330,7 +336,8 @@ crossAxisAlignment: CrossAxisAlignment.start,
                     ),
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(color: const Color(0xFFFFD700).withOpacity(0.5)),
-                  ),
+
+),
                   child: Row(
                     children: [
                       const Icon(Icons.auto_awesome, color: Color(0xFFFFD700), size: 16),
@@ -338,8 +345,7 @@ crossAxisAlignment: CrossAxisAlignment.start,
                       Expanded(
                         child: Text(
                           liveAnnouncements.isNotEmpty ? liveAnnouncements.last : '',
-
-style: const TextStyle(
+                          style: const TextStyle(
                             color: Colors.white,
                             fontSize: 11,
                             fontWeight: FontWeight.bold,
@@ -418,14 +424,14 @@ style: const TextStyle(
                           padding: const EdgeInsets.symmetric(horizontal: 12),
                           decoration: BoxDecoration(
                             color: Colors.white12,
-                            borderRadius: BorderRadius.circular(19),
+
+borderRadius: BorderRadius.circular(19),
                           ),
                           child: TextField(
                             style: const TextStyle(color: Colors.white, fontSize: 12),
                             decoration: const InputDecoration(
                               hintText: 'Say Hello...',
-
-hintStyle: TextStyle(color: Colors.white38, fontSize: 12),
+                              hintStyle: TextStyle(color: Colors.white38, fontSize: 12),
                               border: InputBorder.none,
                               isDense: true,
                               contentPadding: EdgeInsets.symmetric(vertical: 10),
