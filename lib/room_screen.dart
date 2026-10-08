@@ -27,7 +27,7 @@ class _RoomScreenState extends State<RoomScreen> {
   IO.Socket? socket;
   RtcEngine? _engine;
   bool isJoinedVoice = false;
-  bool isMuted = true;
+  bool isMuted = false; // በነባሪ ድምፅ ክፍት እንዲሆን
 
   List<String> liveAnnouncements = [
     '✨ VIP5 🌟 STAR entered room',
@@ -58,8 +58,13 @@ class _RoomScreenState extends State<RoomScreen> {
   // የአጎራ ድምፅ ሞተር ማስጀመሪያ
   Future<void> _initAgoraVoice() async {
     try {
-      await [Permission.microphone].request();
+      // 1. የማይክሮፎን ፈቃድ መጠየቅ
+      var status = await Permission.microphone.request();
+      if (!status.isGranted) {
+        debugPrint('Microphone permission denied');
+      }
 
+      // 2. የአጎራ ሞተር ማዘጋጀት
       _engine = createAgoraRtcEngine();
       await _engine!.initialize(const RtcEngineContext(
         appId: AppData.agoraAppId,
@@ -69,30 +74,36 @@ class _RoomScreenState extends State<RoomScreen> {
       _engine!.registerEventHandler(
         RtcEngineEventHandler(
           onJoinChannelSuccess: (RtcConnection connection, int elapsed) {
+            debugPrint('Agora Voice Joined: ${connection.channelId}');
             if (mounted) {
               setState(() => isJoinedVoice = true);
             }
           },
-          onUserMuteAudio: (RtcConnection connection, int remoteUid, bool muted) {
-            // ሌሎች ድምፃቸውን ሲዘጉ
+          onUserJoined: (RtcConnection connection, int remoteUid, int elapsed) {
+            debugPrint('Remote user joined voice: $remoteUid');
+          },
+          onError: (ErrorCodeType err, String msg) {
+            debugPrint('Agora Error: $err - $msg');
           },
         ),
       );
 
+      // 3. የድምፅ ማስተካከያዎች
       await _engine!.setClientRole(role: ClientRoleType.clientRoleBroadcaster);
       await _engine!.enableAudio();
+      await _engine!.enableLocalAudio(true);
+      await _engine!.muteLocalAudioStream(false);
       await _engine!.setDefaultAudioRouteToSpeakerphone(true);
 
-      // በነባሪ ድምፅ እንዳይረብሽ ዝም (Mute) ይደረጋል
-      await _engine!.muteLocalAudioStream(true);
-
-      // ወደ ድምፅ ክፍሉ መቀላቀል
+      // 4. ወደ ድምፅ ክፍሉ በቀጥታ መግባት
       await _engine!.joinChannel(
         token: '',
-        channelId: widget.roomTitle.replaceAll(' ', '_'),
-        uid: int.tryParse(AppData.currentUserId) ?? 0,
+        channelId: widget.roomTitle.trim().replaceAll(' ', '_'),
+        uid: 0,
         options: const ChannelMediaOptions(
           clientRoleType: ClientRoleType.clientRoleBroadcaster,
+          channelProfile: ChannelProfileType.channelProfileLiveBroadcasting,
+          publishMicrophoneTrack: true,
           autoSubscribeAudio: true,
         ),
       );
@@ -101,7 +112,7 @@ class _RoomScreenState extends State<RoomScreen> {
     }
   }
 
-  // ማይክራፎን ማብሪያና ማጥፊያ
+  // ማይክራፎን ማብሪያና ማጥፊያ ቁልፍ
   void _toggleMic() async {
     if (_engine == null) return;
     setState(() {
@@ -111,7 +122,7 @@ class _RoomScreenState extends State<RoomScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(isMuted ? '🔇 ማይክራፎን ተዘግቷል' : '🎙️ ማይክራፎን ተከፍቷል'),
-        duration: const Duration(milliseconds: 900),
+        duration: const Duration(milliseconds: 700),
       ),
     );
   }
@@ -126,7 +137,7 @@ class _RoomScreenState extends State<RoomScreen> {
             .build(),
       );
 
-      socket?.connect();
+socket?.connect();
 
       socket?.onConnect((_) {
         socket?.emit('join_room', {
@@ -142,11 +153,10 @@ class _RoomScreenState extends State<RoomScreen> {
             String user = data['userName'];
             String action = data['action'];
 
-if (action == 'join') {
+            if (action == 'join') {
               occupiedChairs.removeWhere((k, v) => v == user);
               occupiedChairs[chair] = user;
               chatMessages.add('$user entered chair #$chair');
-              // ራሱ ተጠቃሚው ከሆነ ማይኩን ይከፍትለታል
               if (user == AppData.currentUserName) {
                 isMuted = false;
                 _engine?.muteLocalAudioStream(false);
@@ -216,7 +226,7 @@ if (action == 'join') {
           SafeArea(
             child: Column(
               children: [
-                // 1. የላይኛው ራስጌ (Header)
+                // 1. የላይኛው ራስጌ
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                   child: Row(
@@ -246,17 +256,16 @@ if (action == 'join') {
                               'ID: ${AppData.currentUserId}',
                               style: TextStyle(
                                 color: Colors.white.withOpacity(0.5),
-                                fontSize: 10,
+
+fontSize: 10,
                               ),
                             ),
                           ],
                         ),
                       ),
-                      // ሳንቲም ባላንስ
                       GestureDetector(
                         onTap: () {
-
-Navigator.push(
+                          Navigator.push(
                             context,
                             MaterialPageRoute(
                               builder: (_) => RechargeScreen(
@@ -296,7 +305,7 @@ Navigator.push(
                   ),
                 ),
 
-                // 2. የቀጥታ ባነር (Live Announcement Banner)
+                // 2. ባነር
                 Container(
                   margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -329,18 +338,18 @@ Navigator.push(
 
                 const SizedBox(height: 6),
 
-                // 3. ወንበሮች እና ቻት ዝርዝር
+                // 3. ወንበሮችና ቻት
                 Expanded(
                   child: SingleChildScrollView(
                     physics: const BouncingScrollPhysics(),
                     child: Column(
-                      children: [
+
+children: [
                         RoomChairsGrid(
                           socket: socket,
                           onChairTap: (chair) => setState(() {}),
                         ),
-
-const SizedBox(height: 12),
+                        const SizedBox(height: 12),
                         Container(
                           height: 90,
                           margin: const EdgeInsets.symmetric(horizontal: 16),
@@ -362,13 +371,12 @@ const SizedBox(height: 12),
                   ),
                 ),
 
-                // 4. የታችኛው የመቆጣጠሪያ ባር (Bottom Control Bar)
+                // 4. ታችኛው ባር
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   color: Colors.black.withOpacity(0.6),
                   child: Row(
                     children: [
-                      // የማይክራፎን መቆጣጠሪያ ቁልፍ
                       GestureDetector(
                         onTap: _toggleMic,
                         child: Container(
@@ -388,7 +396,6 @@ const SizedBox(height: 12),
                           ),
                         ),
                       ),
-                      // የቻት መጻፊያ ሳጥን
                       Expanded(
                         child: Container(
                           height: 38,
@@ -414,20 +421,15 @@ const SizedBox(height: 12),
                                   'text': text.trim(),
                                 });
                               }
-                            },
+
+},
                           ),
                         ),
                       ),
-
-// የጌም እና የስጦታ ቁልፎች
                       Row(
                         children: [
                           IconButton(
-                            icon: const Icon(
-                              Icons.sports_esports_rounded,
-                              color: Colors.amberAccent,
-                              size: 24,
-                            ),
+                            icon: const Icon(Icons.sports_esports_rounded, color: Colors.amberAccent, size: 24),
                             onPressed: () {
                               RoomGamesSheet.show(
                                 context,
@@ -437,11 +439,7 @@ const SizedBox(height: 12),
                             },
                           ),
                           IconButton(
-                            icon: const Icon(
-                              Icons.card_giftcard_rounded,
-                              color: Color(0xFFFFD700),
-                              size: 24,
-                            ),
+                            icon: const Icon(Icons.card_giftcard_rounded, color: Color(0xFFFFD700), size: 24),
                             onPressed: () {
                               RoomGiftSheet.show(
                                 context,
