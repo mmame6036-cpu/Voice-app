@@ -74,8 +74,8 @@ class _RoomScreenState extends State<RoomScreen> {
             debugPrint('Agora Voice Joined: ${connection.channelId}');
             if (mounted) setState(() => isJoinedVoice = true);
           },
-          // ትክክለኛው የሞገድ አመልካች አፃፃፍ
-          onAudioVolumeIndication: (RtcConnection connection, List<AudioVolumeInfo> speakers, int totalVolume) {
+          // 4ቱንም ፓራሜትሮች በትክክል በማስገባት ስህተቱ ተስተካክሏል
+          onAudioVolumeIndication: (RtcConnection connection, List<AudioVolumeInfo> speakers, int totalVolume, int speakerNumber) {
             if (mounted) {
               setState(() {
                 speakingChairs.clear();
