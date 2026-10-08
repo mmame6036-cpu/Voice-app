@@ -21,6 +21,7 @@ void main() {
 
 // Global App State
 class AppData {
+  static const String agoraAppId = '21091aff01114a66b580ce15b0f1b642';
   // እያንዳንዱ ስልክ ሲከፈት የተለየ ባለ 6 ድጅት አይዲ እንዲያገኝ
   static String currentUserId = (100000 + Random().nextInt(900000)).toString();
   // ስሙ የተጠቃሚው አይዲ መጨረሻ ቁጥር ተደርጎ በራሱ ይመረጣል (ለምሳሌ User_451)
