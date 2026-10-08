@@ -29,29 +29,38 @@ class _RoomScreenState extends State<RoomScreen> {
   IO.Socket? socket;
   RtcEngine? _engine;
   bool isJoinedVoice = false;
-  bool isMuted = false;
+  bool isMuted = true; // በነባሪ ወንበር እስኪይዝ ማይክ ዝግ ነው
+  int myUid = 0;
+  int? myChairNum;
+
+  Map<int, String> occupiedChairs = {};
   Map<int, bool> speakingChairs = {};
 
   List<String> liveAnnouncements = [
-    '✨ VIP5 🌟 STAR entered room',
-    '🎁 User sent Star x18 and won prizes!',
+    '✨ Welcome to Ethio Nile Room!',
   ];
   List<String> chatMessages = [
     'System: Please protect your privacy and stay safe.',
   ];
-  Map<int, String> occupiedChairs = {};
   Timer? _bannerTimer;
 
   @override
   void initState() {
     super.initState();
+    // ለእያንዳንዱ ስልክ የተለየ የቁጥር መለያ (Unique UID) ማመንጨት
+    final cleanId = AppData.currentUserId.replaceAll(RegExp(r'[^0-9]'), '');
+    myUid = (int.tryParse(cleanId) ?? 0);
+    if (myUid == 0) {
+      myUid = (DateTime.now().millisecondsSinceEpoch % 89999) + 10000;
+    }
+
     _connectSocket();
     _initAgoraVoice();
 
-    _bannerTimer = Timer.periodic(const Duration(seconds: 4), (timer) {
+    _bannerTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
       if (mounted) {
         setState(() {
-          liveAnnouncements.add('🔥 Room activity active now!');
+          liveAnnouncements.add('🔥 Voice Room Live & Active!');
           if (liveAnnouncements.length > 5) liveAnnouncements.removeAt(0);
         });
       }
@@ -71,13 +80,8 @@ class _RoomScreenState extends State<RoomScreen> {
       _engine!.registerEventHandler(
         RtcEngineEventHandler(
           onJoinChannelSuccess: (RtcConnection connection, int elapsed) {
-            debugPrint('Agora Voice Joined: ${connection.channelId}');
-            if (mounted) {
-              setState(() {
-                isJoinedVoice = true;
-                speakingChairs[1] = true; // በተሳካ ሁኔታ ሲገባ ሞገዱ ወዲያውኑ ይበራል
-              });
-            }
+            debugPrint('Agora Voice Connected on UID: $myUid');
+            if (mounted) setState(() => isJoinedVoice = true);
           },
           onError: (ErrorCodeType err, String msg) {
             debugPrint('Agora Error: $err - $msg');
@@ -85,20 +89,22 @@ class _RoomScreenState extends State<RoomScreen> {
         ),
       );
 
+      // በነባሪ እንደ አድማጭ መግባት
       await _engine!.setClientRole(role: ClientRoleType.clientRoleBroadcaster);
       await _engine!.enableAudio();
       await _engine!.enableLocalAudio(true);
-      await _engine!.muteLocalAudioStream(false);
+      await _engine!.muteLocalAudioStream(true); // ወንበር እስኪይዝ ማይክ ይዘጋል
       await _engine!.setDefaultAudioRouteToSpeakerphone(true);
 
       const String channelName = 'NileVoiceMainRoom';
       String rtcToken = '';
 
+      // የራስን UID ይዞ ከሰርቨሩ ቶከን መጠየቅ
       try {
         final client = HttpClient();
         client.connectionTimeout = const Duration(seconds: 10);
         final request = await client.getUrl(
-          Uri.parse('${AppData.serverUrl}/rtc-token?channelName=$channelName&uid=0'),
+          Uri.parse('${AppData.serverUrl}/rtc-token?channelName=$channelName&uid=$myUid'),
         );
         final response = await request.close();
         if (response.statusCode == 200) {
@@ -110,10 +116,12 @@ class _RoomScreenState extends State<RoomScreen> {
         debugPrint('Token fetch error: $tokenErr');
       }
 
+      // እውነተኛ ድምፅ ለማስተላለፍ በራሱ UID መግባት
       await _engine!.joinChannel(
         token: rtcToken,
         channelId: channelName,
-        uid: 0,
+
+uid: myUid,
         options: const ChannelMediaOptions(
           clientRoleType: ClientRoleType.clientRoleBroadcaster,
           channelProfile: ChannelProfileType.channelProfileLiveBroadcasting,
@@ -126,14 +134,33 @@ class _RoomScreenState extends State<RoomScreen> {
     }
   }
 
-void _toggleMic() async {
+  void _toggleMic() async {
+    if (myChairNum == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('⚠️ ድምፅ ለማውራት መጀመሪያ ባዶ ወንበር ይያዙ!'),
+          duration: Duration(milliseconds: 900),
+        ),
+      );
+      return;
+    }
+
     if (_engine == null) return;
     setState(() {
       isMuted = !isMuted;
-      // ማይክ ሲጠፋ ሞገዱ ይጠፋል፣ ሲበራ ሞገዱ ይበራል
-      speakingChairs[1] = !isMuted;
+      if (myChairNum != null) {
+        speakingChairs[myChairNum!] = !isMuted;
+      }
     });
+
     await _engine!.muteLocalAudioStream(isMuted);
+
+    // የድምፅ ሞገዱን ለሌላው ስልክ በሶኬት ማሳወቅ
+    socket?.emit('chair_speaking', {
+      'chairNum': myChairNum,
+      'isSpeaking': !isMuted,
+    });
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(isMuted ? '🔇 ማይክራፎን ተዘግቷል' : '🎙️ ማይክራፎን ተከፍቷል'),
@@ -161,6 +188,7 @@ void _toggleMic() async {
         });
       });
 
+      // ወንበር ሲያዝ ወይም ሲለቀቅ
       socket?.on('chair_action', (data) {
         if (mounted) {
           setState(() {
@@ -171,21 +199,44 @@ void _toggleMic() async {
             if (action == 'join') {
               occupiedChairs.removeWhere((k, v) => v == user);
               occupiedChairs[chair] = user;
-              chatMessages.add('$user entered chair #$chair');
+              chatMessages.add('💺 $user ወንበር #$chair ያዘ');
+
               if (user == AppData.currentUserName) {
+                myChairNum = chair;
                 isMuted = false;
-                speakingChairs[1] = true;
+                speakingChairs[chair] = true;
                 _engine?.muteLocalAudioStream(false);
               }
             } else {
               occupiedChairs.remove(chair);
-              chatMessages.add('$user left chair #$chair');
+              speakingChairs[chair] = false;
+              chatMessages.add('🚪 $user ከወንበር #$chair ወጣ');
+
               if (user == AppData.currentUserName) {
+                myChairNum = null;
                 isMuted = true;
-                speakingChairs[1] = false;
                 _engine?.muteLocalAudioStream(true);
               }
             }
+          });
+        }
+      });
+
+      // የሌላው ሰው ድምፅ ሞገድ ሲበራ
+      socket?.on('chair_speaking', (data) {
+        if (mounted) {
+          setState(() {
+            int chair = data['chairNum'];
+            bool isSpk = data['isSpeaking'];
+            speakingChairs[chair] = isSpk;
+          });
+        }
+      });
+
+      socket?.on('chat_message', (data) {
+        if (mounted) {
+          setState(() {
+            chatMessages.add('${data['sender']}: ${data['text']}');
           });
         }
       });
@@ -194,15 +245,6 @@ void _toggleMic() async {
         if (mounted) {
           setState(() {
             liveAnnouncements.add('🎁 ${data['sender']} sent ${data['giftName']}!');
-            chatMessages.add('${data['sender']} sent ${data['giftName']}');
-          });
-        }
-      });
-
-      socket?.on('game_win', (data) {
-        if (mounted) {
-          setState(() {
-            liveAnnouncements.add('🎉 ${data['winner']} won ${data['amount']} in ${data['game']}!');
           });
         }
       });
@@ -225,7 +267,8 @@ void _toggleMic() async {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF070B18),
-      body: Stack(
+
+body: Stack(
         children: [
           Container(
             decoration: const BoxDecoration(
@@ -243,8 +286,9 @@ void _toggleMic() async {
           SafeArea(
             child: Column(
               children: [
+                // 1. ራስጌ
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                   child: Row(
                     children: [
                       CircleAvatar(
@@ -256,8 +300,7 @@ void _toggleMic() async {
                         ),
                       ),
                       const SizedBox(width: 8),
-
-Expanded(
+                      Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -313,9 +356,11 @@ Expanded(
                     ],
                   ),
                 ),
+
+// 2. ባነር
                 Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(
                       colors: [Color(0xFF880E4F), Color(0xFF4A148C)],
@@ -325,54 +370,56 @@ Expanded(
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.auto_awesome, color: Color(0xFFFFD700), size: 16),
+                      const Icon(Icons.auto_awesome, color: Color(0xFFFFD700), size: 15),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           liveAnnouncements.isNotEmpty ? liveAnnouncements.last : '',
                           style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
                           maxLines: 1,
-
-overflow: TextOverflow.ellipsis,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 6),
+
+                const SizedBox(height: 4),
+
+                // 3. የተጣበቡ ወንበሮች እና ቻት
                 Expanded(
-                  child: SingleChildScrollView(
-                    physics: const BouncingScrollPhysics(),
-                    child: Column(
-                      children: [
-                        RoomChairsGrid(
-                          socket: socket,
-                          speakingUsers: speakingChairs,
-                          onChairTap: (chair) => setState(() {}),
+                  child: Column(
+                    children: [
+                      RoomChairsGrid(
+                        socket: socket,
+                        occupiedChairs: occupiedChairs,
+                        speakingUsers: speakingChairs,
+                        onChairTap: (chair) => setState(() {}),
+                      ),
+                      const Spacer(),
+                      Container(
+                        height: 80,
+                        margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.35),
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                        const SizedBox(height: 12),
-                        Container(
-                          height: 90,
-                          margin: const EdgeInsets.symmetric(horizontal: 16),
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withOpacity(0.35),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: ListView.builder(
-                            itemCount: chatMessages.length,
-                            itemBuilder: (context, idx) => Text(
-                              chatMessages[idx],
-                              style: const TextStyle(color: Colors.white70, fontSize: 11),
-                            ),
+                        child: ListView.builder(
+                          itemCount: chatMessages.length,
+                          itemBuilder: (context, idx) => Text(
+                            chatMessages[idx],
+                            style: const TextStyle(color: Colors.white70, fontSize: 11),
                           ),
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
+
+                // 4. ታችኛው ባር
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                   color: Colors.black.withOpacity(0.6),
                   child: Row(
                     children: [
@@ -393,27 +440,27 @@ overflow: TextOverflow.ellipsis,
                             color: isMuted ? Colors.white54 : Colors.greenAccent,
                             size: 20,
                           ),
-                        ),
+
+),
                       ),
                       Expanded(
                         child: Container(
-                          height: 38,
+                          height: 36,
                           margin: const EdgeInsets.only(right: 8),
                           padding: const EdgeInsets.symmetric(horizontal: 12),
                           decoration: BoxDecoration(
                             color: Colors.white12,
-                            borderRadius: BorderRadius.circular(19),
+                            borderRadius: BorderRadius.circular(18),
                           ),
                           child: TextField(
                             style: const TextStyle(color: Colors.white, fontSize: 12),
                             decoration: const InputDecoration(
                               hintText: 'Say Hello...',
-                              hintStyle: TextStyle(color: Colors.white38, fontSize: 12),
+                              hintStyle: TextStyle(color: Colors.white38, fontSize: 11),
                               border: InputBorder.none,
                               isDense: true,
-                              contentPadding: EdgeInsets.symmetric(vertical: 10),
-
-),
+                              contentPadding: EdgeInsets.symmetric(vertical: 8),
+                            ),
                             onSubmitted: (text) {
                               if (text.trim().isNotEmpty && socket != null) {
                                 socket?.emit('chat_message', {
@@ -428,7 +475,7 @@ overflow: TextOverflow.ellipsis,
                       Row(
                         children: [
                           IconButton(
-                            icon: const Icon(Icons.sports_esports_rounded, color: Colors.amberAccent, size: 24),
+                            icon: const Icon(Icons.sports_esports_rounded, color: Colors.amberAccent, size: 22),
                             onPressed: () {
                               RoomGamesSheet.show(
                                 context,
@@ -438,7 +485,7 @@ overflow: TextOverflow.ellipsis,
                             },
                           ),
                           IconButton(
-                            icon: const Icon(Icons.card_giftcard_rounded, color: Color(0xFFFFD700), size: 24),
+                            icon: const Icon(Icons.card_giftcard_rounded, color: Color(0xFFFFD700), size: 22),
                             onPressed: () {
                               RoomGiftSheet.show(
                                 context,
