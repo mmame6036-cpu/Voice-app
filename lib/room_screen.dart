@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -27,7 +29,7 @@ class _RoomScreenState extends State<RoomScreen> {
   IO.Socket? socket;
   RtcEngine? _engine;
   bool isJoinedVoice = false;
-  bool isMuted = false; // በነባሪ ድምፅ ክፍት እንዲሆን
+  bool isMuted = false;
 
   List<String> liveAnnouncements = [
     '✨ VIP5 🌟 STAR entered room',
@@ -58,11 +60,8 @@ class _RoomScreenState extends State<RoomScreen> {
   // የአጎራ ድምፅ ሞተር ማስጀመሪያ
   Future<void> _initAgoraVoice() async {
     try {
-      // 1. የማይክሮፎን ፈቃድ መጠየቅ
-      var status = await Permission.microphone.request();
-      if (!status.isGranted) {
-        debugPrint('Microphone permission denied');
-      }
+      // 1. የማይክሮፎን ፈቃድ
+      await Permission.microphone.request();
 
       // 2. የአጎራ ሞተር ማዘጋጀት
       _engine = createAgoraRtcEngine();
@@ -88,17 +87,33 @@ class _RoomScreenState extends State<RoomScreen> {
         ),
       );
 
-      // 3. የድምፅ ማስተካከያዎች
+      // 3. ድምፅ ማስተካከያዎች
       await _engine!.setClientRole(role: ClientRoleType.clientRoleBroadcaster);
       await _engine!.enableAudio();
       await _engine!.enableLocalAudio(true);
       await _engine!.muteLocalAudioStream(false);
       await _engine!.setDefaultAudioRouteToSpeakerphone(true);
 
-      // 4. ወደ ድምፅ ክፍሉ በቀጥታ መግባት
+      // 4. ከ Render ሰርቨርህ ቶከን መጠየቅ
+      const String channelName = 'NileVoiceMainRoom';
+      String rtcToken = '';
+
+      try {
+        final url = Uri.parse('${AppData.serverUrl}/rtc-token?channelName=$channelName&uid=0');
+        final response = await http.get(url).timeout(const Duration(seconds: 10));
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body);
+          rtcToken = data['token'] ?? '';
+          debugPrint('Token fetched successfully!');
+        }
+      } catch (tokenErr) {
+        debugPrint('Token fetch error: $tokenErr');
+      }
+
+      // 5. በቶከኑ ወደ ድምፅ ክፍሉ መግባት
       await _engine!.joinChannel(
-        token: '',
-        channelId: widget.roomTitle.trim().replaceAll(' ', '_'),
+        token: rtcToken,
+        channelId: channelName,
         uid: 0,
         options: const ChannelMediaOptions(
           clientRoleType: ClientRoleType.clientRoleBroadcaster,
@@ -112,7 +127,7 @@ class _RoomScreenState extends State<RoomScreen> {
     }
   }
 
-  // ማይክራፎን ማብሪያና ማጥፊያ ቁልፍ
+// ማይክራፎን ማብሪያና ማጥፊያ
   void _toggleMic() async {
     if (_engine == null) return;
     setState(() {
@@ -137,11 +152,11 @@ class _RoomScreenState extends State<RoomScreen> {
             .build(),
       );
 
-socket?.connect();
+      socket?.connect();
 
       socket?.onConnect((_) {
         socket?.emit('join_room', {
-          'room': widget.roomTitle,
+          'room': 'NileVoiceMainRoom',
           'user': AppData.currentUserName,
         });
       });
@@ -242,7 +257,8 @@ socket?.connect();
                       const SizedBox(width: 8),
                       Expanded(
                         child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+
+crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
                               widget.hostName,
@@ -256,8 +272,7 @@ socket?.connect();
                               'ID: ${AppData.currentUserId}',
                               style: TextStyle(
                                 color: Colors.white.withOpacity(0.5),
-
-fontSize: 10,
+                                fontSize: 10,
                               ),
                             ),
                           ],
@@ -323,7 +338,8 @@ fontSize: 10,
                       Expanded(
                         child: Text(
                           liveAnnouncements.isNotEmpty ? liveAnnouncements.last : '',
-                          style: const TextStyle(
+
+style: const TextStyle(
                             color: Colors.white,
                             fontSize: 11,
                             fontWeight: FontWeight.bold,
@@ -343,8 +359,7 @@ fontSize: 10,
                   child: SingleChildScrollView(
                     physics: const BouncingScrollPhysics(),
                     child: Column(
-
-children: [
+                      children: [
                         RoomChairsGrid(
                           socket: socket,
                           onChairTap: (chair) => setState(() {}),
@@ -409,7 +424,8 @@ children: [
                             style: const TextStyle(color: Colors.white, fontSize: 12),
                             decoration: const InputDecoration(
                               hintText: 'Say Hello...',
-                              hintStyle: TextStyle(color: Colors.white38, fontSize: 12),
+
+hintStyle: TextStyle(color: Colors.white38, fontSize: 12),
                               border: InputBorder.none,
                               isDense: true,
                               contentPadding: EdgeInsets.symmetric(vertical: 10),
@@ -421,8 +437,7 @@ children: [
                                   'text': text.trim(),
                                 });
                               }
-
-},
+                            },
                           ),
                         ),
                       ),
