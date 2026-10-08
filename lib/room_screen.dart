@@ -30,6 +30,7 @@ class _RoomScreenState extends State<RoomScreen> {
   RtcEngine? _engine;
   bool isJoinedVoice = false;
   bool isMuted = false;
+  Map<int, bool> speakingChairs = {}; // ድምፅ የሚያወጡ ወንበሮች ዝርዝር
 
   List<String> liveAnnouncements = [
     '✨ VIP5 🌟 STAR entered room',
@@ -57,13 +58,10 @@ class _RoomScreenState extends State<RoomScreen> {
     });
   }
 
-  // የአጎራ ድምፅ ሞተር ማስጀመሪያ
   Future<void> _initAgoraVoice() async {
     try {
-      // 1. የማይክሮፎን ፈቃድ መጠየቅ
       await Permission.microphone.request();
 
-      // 2. የአጎራ ሞተር ማዘጋጀት
       _engine = createAgoraRtcEngine();
       await _engine!.initialize(const RtcEngineContext(
         appId: AppData.agoraAppId,
@@ -74,12 +72,23 @@ class _RoomScreenState extends State<RoomScreen> {
         RtcEngineEventHandler(
           onJoinChannelSuccess: (RtcConnection connection, int elapsed) {
             debugPrint('Agora Voice Joined: ${connection.channelId}');
-            if (mounted) {
-              setState(() => isJoinedVoice = true);
-            }
+            if (mounted) setState(() => isJoinedVoice = true);
           },
-          onUserJoined: (RtcConnection connection, int remoteUid, int elapsed) {
-            debugPrint('Remote user joined voice: $remoteUid');
+          // የድምፅ መጠን ሞገድ ተቆጣጣሪ
+          onAudioVolumeIndication: (RtcConnection connection, List<AudioVolumeInfo> speakers, int totalVolume) {
+            if (mounted) {
+              setState(() {
+                speakingChairs.clear();
+                for (var speaker in speakers) {
+                  if (speaker.volume != null && speaker.volume! > 5) {
+                    // የራስህ ድምፅ ከሆነ (uid == 0) ወንበር 1 ላይ ሞገዱ ይበራል
+                    if (speaker.uid == 0) {
+                      speakingChairs[1] = true;
+                    }
+                  }
+                }
+              });
+            }
           },
           onError: (ErrorCodeType err, String msg) {
             debugPrint('Agora Error: $err - $msg');
@@ -87,14 +96,19 @@ class _RoomScreenState extends State<RoomScreen> {
         ),
       );
 
-      // 3. ድምፅ ማስተካከያዎች
       await _engine!.setClientRole(role: ClientRoleType.clientRoleBroadcaster);
       await _engine!.enableAudio();
       await _engine!.enableLocalAudio(true);
       await _engine!.muteLocalAudioStream(false);
       await _engine!.setDefaultAudioRouteToSpeakerphone(true);
 
-      // 4. ከ Render ሰርቨርህ ቶከን መጠየቅ (በ dart:io HttpClient አማካኝነት)
+      // አጎራ የድምፅ ሞገድን በየ 200 ሚሊሰከንድ እንዲለካ ማብራት
+      await _engine!.enableAudioVolumeIndication(
+        interval: 200,
+        smooth: 3,
+        reportVad: true,
+      );
+
       const String channelName = 'NileVoiceMainRoom';
       String rtcToken = '';
 
@@ -105,22 +119,20 @@ class _RoomScreenState extends State<RoomScreen> {
           Uri.parse('${AppData.serverUrl}/rtc-token?channelName=$channelName&uid=0'),
         );
         final response = await request.close();
-        if (response.statusCode == 200) {
+
+if (response.statusCode == 200) {
           final responseBody = await response.transform(utf8.decoder).join();
           final data = jsonDecode(responseBody);
           rtcToken = data['token'] ?? '';
-          debugPrint('Token fetched successfully!');
         }
       } catch (tokenErr) {
         debugPrint('Token fetch error: $tokenErr');
       }
 
-      // 5. በቶከኑ ወደ ድምፅ ክፍሉ መግባት
       await _engine!.joinChannel(
         token: rtcToken,
         channelId: channelName,
-
-uid: 0,
+        uid: 0,
         options: const ChannelMediaOptions(
           clientRoleType: ClientRoleType.clientRoleBroadcaster,
           channelProfile: ChannelProfileType.channelProfileLiveBroadcasting,
@@ -133,11 +145,11 @@ uid: 0,
     }
   }
 
-  // ማይክራፎን ማብሪያና ማጥፊያ
   void _toggleMic() async {
     if (_engine == null) return;
     setState(() {
       isMuted = !isMuted;
+      if (isMuted) speakingChairs[1] = false;
     });
     await _engine!.muteLocalAudioStream(isMuted);
     ScaffoldMessenger.of(context).showSnackBar(
@@ -242,12 +254,13 @@ uid: 0,
                   Color(0xFF02040A),
                 ],
               ),
-            ),
+
+),
           ),
           SafeArea(
             child: Column(
               children: [
-                // 1. የላይኛው ራስጌ
+                // 1. ራስጌ
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                   child: Row(
@@ -255,8 +268,7 @@ uid: 0,
                       CircleAvatar(
                         radius: 18,
                         backgroundColor: Colors.teal,
-
-child: Text(
+                        child: Text(
                           widget.hostName.isNotEmpty ? widget.hostName[0] : 'U',
                           style: const TextStyle(color: Colors.white),
                         ),
@@ -268,18 +280,11 @@ child: Text(
                           children: [
                             Text(
                               widget.hostName,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 13,
-                              ),
+                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
                             ),
                             Text(
                               'ID: ${AppData.currentUserId}',
-                              style: TextStyle(
-                                color: Colors.white.withOpacity(0.5),
-                                fontSize: 10,
-                              ),
+                              style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 10),
                             ),
                           ],
                         ),
@@ -333,11 +338,11 @@ child: Text(
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(
                       colors: [Color(0xFF880E4F), Color(0xFF4A148C)],
-                    ),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: const Color(0xFFFFD700).withOpacity(0.5)),
 
 ),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFFFFD700).withOpacity(0.5)),
+                  ),
                   child: Row(
                     children: [
                       const Icon(Icons.auto_awesome, color: Color(0xFFFFD700), size: 16),
@@ -345,11 +350,7 @@ child: Text(
                       Expanded(
                         child: Text(
                           liveAnnouncements.isNotEmpty ? liveAnnouncements.last : '',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                          ),
+                          style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -360,7 +361,7 @@ child: Text(
 
                 const SizedBox(height: 6),
 
-                // 3. ወንበሮችና ቻት
+                // 3. ወንበሮች (የሞገድ አኒሜሽን የተካተተበት)
                 Expanded(
                   child: SingleChildScrollView(
                     physics: const BouncingScrollPhysics(),
@@ -368,6 +369,7 @@ child: Text(
                       children: [
                         RoomChairsGrid(
                           socket: socket,
+                          speakingUsers: speakingChairs,
                           onChairTap: (chair) => setState(() {}),
                         ),
                         const SizedBox(height: 12),
@@ -422,10 +424,10 @@ child: Text(
                           height: 38,
                           margin: const EdgeInsets.only(right: 8),
                           padding: const EdgeInsets.symmetric(horizontal: 12),
-                          decoration: BoxDecoration(
-                            color: Colors.white12,
 
-borderRadius: BorderRadius.circular(19),
+decoration: BoxDecoration(
+                            color: Colors.white12,
+                            borderRadius: BorderRadius.circular(19),
                           ),
                           child: TextField(
                             style: const TextStyle(color: Colors.white, fontSize: 12),
