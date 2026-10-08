@@ -15,7 +15,7 @@ class RoomScreen extends StatefulWidget {
   final String roomTitle;
   final String hostName;
 
-  RoomScreen({
+  const RoomScreen({
     Key? key,
     this.roomTitle = 'Ethio Nile Coffee Club',
     this.hostName = 'Kedir oumer',
@@ -29,7 +29,7 @@ class _RoomScreenState extends State<RoomScreen> {
   IO.Socket? socket;
   RtcEngine? _engine;
   bool isJoinedVoice = false;
-  bool isMuted = true; // ወንበር እስኪይዝ ድረስ ድምፅ ዝግ ይሆናል
+  bool isMuted = false; // ድምፅ ወዲያውኑ ክፍት እንዲሆን
   int myUid = 0;
   int? myChairNum;
 
@@ -73,16 +73,20 @@ class _RoomScreenState extends State<RoomScreen> {
       await Permission.microphone.request();
 
       _engine = createAgoraRtcEngine();
-      await _engine!.initialize(const RtcEngineContext(
+      await _engine!.initialize(RtcEngineContext(
         appId: AppData.agoraAppId,
-        channelProfile: ChannelProfileType.channelProfileLiveBroadcasting,
+        channelProfile: ChannelProfileType.channelProfileCommunication,
       ));
 
       _engine!.registerEventHandler(
         RtcEngineEventHandler(
           onJoinChannelSuccess: (RtcConnection connection, int elapsed) {
             debugPrint('Agora Voice Connected successfully on UID: $myUid');
-            if (mounted) setState(() => isJoinedVoice = true);
+            if (mounted) {
+              setState(() {
+                isJoinedVoice = true;
+              });
+            }
           },
           onUserJoined: (RtcConnection connection, int remoteUid, int elapsed) {
             debugPrint('Remote user entered audio channel: $remoteUid');
@@ -93,12 +97,14 @@ class _RoomScreenState extends State<RoomScreen> {
         ),
       );
 
-      // የድምፅ ማስተካከያዎችን ማዘጋጀት
-      await _engine!.setClientRole(role: ClientRoleType.clientRoleBroadcaster);
+      // ድምፅ ማሰራጫውንና መቀበያውን ሙሉ በሙሉ መክፈት
       await _engine!.enableAudio();
       await _engine!.enableLocalAudio(true);
-      await _engine!.muteLocalAudioStream(true); // መጀመሪያ ወንበር እስኪይዝ ድምፁ እንዳይረብሽ
+      await _engine!.muteLocalAudioStream(false);
+      await _engine!.muteAllRemoteAudioStreams(false);
       await _engine!.setDefaultAudioRouteToSpeakerphone(true);
+      await _engine!.adjustRecordingSignalVolume(100);
+      await _engine!.adjustPlaybackSignalVolume(100);
 
       const String channelName = 'NileVoiceMainRoom';
       String rtcToken = '';
@@ -121,14 +127,13 @@ class _RoomScreenState extends State<RoomScreen> {
         debugPrint('Token fetch error: $tokenErr');
       }
 
-// በዚያው በራሱ myUid ቻነሉን መቀላቀል
+// ሁለቱም ስልኮች እርስ በእርስ እንዲደማመጡ ቻነሉን መቀላቀል
       await _engine!.joinChannel(
         token: rtcToken,
         channelId: channelName,
         uid: myUid,
         options: const ChannelMediaOptions(
           clientRoleType: ClientRoleType.clientRoleBroadcaster,
-          channelProfile: ChannelProfileType.channelProfileLiveBroadcasting,
           publishMicrophoneTrack: true,
           autoSubscribeAudio: true,
         ),
@@ -139,16 +144,6 @@ class _RoomScreenState extends State<RoomScreen> {
   }
 
   void _toggleMic() async {
-    if (myChairNum == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('⚠️ ድምፅ ለማውራት መጀመሪያ ባዶ ወንበር ይያዙ!'),
-          duration: Duration(milliseconds: 900),
-        ),
-      );
-      return;
-    }
-
     if (_engine == null) return;
     setState(() {
       isMuted = !isMuted;
@@ -159,10 +154,12 @@ class _RoomScreenState extends State<RoomScreen> {
 
     await _engine!.muteLocalAudioStream(isMuted);
 
-    socket?.emit('chair_speaking', {
-      'chairNum': myChairNum,
-      'isSpeaking': !isMuted,
-    });
+    if (myChairNum != null) {
+      socket?.emit('chair_speaking', {
+        'chairNum': myChairNum,
+        'isSpeaking': !isMuted,
+      });
+    }
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -191,6 +188,7 @@ class _RoomScreenState extends State<RoomScreen> {
         });
       });
 
+      // ወንበር ሲያዝ ወይም ሲለቀቅ
       socket?.on('chair_action', (data) {
         if (mounted) {
           setState(() {
@@ -224,6 +222,7 @@ class _RoomScreenState extends State<RoomScreen> {
         }
       });
 
+      // የሌላው ሰው ድምፅ ሞገድ ሲበራ
       socket?.on('chair_speaking', (data) {
         if (mounted) {
           setState(() {
@@ -268,14 +267,14 @@ class _RoomScreenState extends State<RoomScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF070B18),
-
-body: Stack(
+      body: Stack(
         children: [
           Container(
             decoration: const BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
+
+end: Alignment.bottomCenter,
                 colors: [
                   Color(0xFF0F172A),
                   Color(0xFF090D1C),
@@ -358,10 +357,11 @@ body: Stack(
                   ),
                 ),
 
-// 2. ባነር
+                // 2. ባነር
                 Container(
                   margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+
+padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(
                       colors: [Color(0xFF880E4F), Color(0xFF4A148C)],
@@ -387,7 +387,7 @@ body: Stack(
 
                 const SizedBox(height: 4),
 
-                // 3. ወንበሮች እና ቻት
+                // 3. የተጣበቡ ወንበሮች እና ቻት
                 Expanded(
                   child: Column(
                     children: [
@@ -442,12 +442,12 @@ body: Stack(
                             size: 20,
                           ),
                         ),
-
-),
+                      ),
                       Expanded(
                         child: Container(
                           height: 36,
-                          margin: const EdgeInsets.only(right: 8),
+
+margin: const EdgeInsets.only(right: 8),
                           padding: const EdgeInsets.symmetric(horizontal: 12),
                           decoration: BoxDecoration(
                             color: Colors.white12,
