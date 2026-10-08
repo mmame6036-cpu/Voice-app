@@ -4,6 +4,7 @@ const http = require('http');
 const { Server } = require('socket.io');
 const mongoose = require('mongoose');
 const cors = require('cors');
+const { RtcTokenBuilder, RtcRole } = require('agora-token');
 
 const app = express();
 const server = http.createServer(app);
@@ -28,7 +29,39 @@ app.get('/', (req, res) => {
   res.send('Server is running perfectly!');
 });
 
-// 3. Socket.io Real-time Engine
+// 3. Agora RTC Token ማመንጫ Route
+const AGORA_APP_ID = process.env.AGORA_APP_ID || '21091aff01114a66b580ce15b0f1b642';
+// ማሳሰቢያ፦ ከአጎራ ኮንሶልህ ላይ ያየኸውን Primary Certificate እዚህ አስገባ
+const AGORA_APP_CERTIFICATE = process.env.AGORA_APP_CERTIFICATE || 'YOUR_PRIMARY_CERTIFICATE_HERE';
+
+app.get('/rtc-token', (req, res) => {
+  const channelName = req.query.channelName || 'NileVoiceMainRoom';
+  const uid = req.query.uid ? parseInt(req.query.uid) : 0;
+  const role = RtcRole.PUBLISHER;
+  const expireTime = 3600 * 24; // ለ 24 ሰዓት የሚሰራ
+  const currentTime = Math.floor(Date.now() / 1000);
+  const privilegeExpireTime = currentTime + expireTime;
+
+  if (!AGORA_APP_CERTIFICATE || AGORA_APP_CERTIFICATE === 'YOUR_PRIMARY_CERTIFICATE_HERE') {
+    return res.status(500).json({ error: 'Agora Primary Certificate አልተሞላም' });
+  }
+
+  try {
+    const token = RtcTokenBuilder.buildTokenWithUid(
+      AGORA_APP_ID,
+      AGORA_APP_CERTIFICATE,
+      channelName,
+      uid,
+      role,
+      privilegeExpireTime
+    );
+    return res.json({ token, channelName });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+// 4. Socket.io Real-time Engine
 io.on('connection', (socket) => {
   console.log('Socket connected:', socket.id);
 
@@ -42,12 +75,20 @@ io.on('connection', (socket) => {
     io.emit('chair_action', data);
   });
 
+  socket.on('chat_message', (data) => {
+    io.emit('chat_message', data);
+  });
+
+  socket.on('gift_sent', (data) => {
+    io.emit('gift_sent', data);
+  });
+
   socket.on('disconnect', () => {
     console.log('Socket disconnected:', socket.id);
   });
 });
 
-// 4. Start Server
+// 5. Start Server
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
   console.log('Server running on port ' + PORT);
