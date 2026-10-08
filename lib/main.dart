@@ -252,7 +252,7 @@ IconButton(icon: const Icon(Icons.notifications_none), onPressed: () {}),
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (context) => const RoomScreen(
+                  builder: (context) => RoomScreen(
                     roomTitle: 'Ethio Nile Coffee Club',
                     hostName: 'KEDIR...',
                   ),
