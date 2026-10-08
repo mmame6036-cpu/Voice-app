@@ -30,7 +30,7 @@ class _RoomScreenState extends State<RoomScreen> {
   RtcEngine? _engine;
   bool isJoinedVoice = false;
   bool isMuted = false;
-  Map<int, bool> speakingChairs = {}; // ድምፅ የሚያወጡ ወንበሮች ዝርዝር
+  Map<int, bool> speakingChairs = {};
 
   List<String> liveAnnouncements = [
     '✨ VIP5 🌟 STAR entered room',
@@ -74,17 +74,15 @@ class _RoomScreenState extends State<RoomScreen> {
             debugPrint('Agora Voice Joined: ${connection.channelId}');
             if (mounted) setState(() => isJoinedVoice = true);
           },
-          // የድምፅ መጠን ሞገድ ተቆጣጣሪ
+          // ትክክለኛው የሞገድ አመልካች አፃፃፍ
           onAudioVolumeIndication: (RtcConnection connection, List<AudioVolumeInfo> speakers, int totalVolume) {
             if (mounted) {
               setState(() {
                 speakingChairs.clear();
-                for (var speaker in speakers) {
-                  if (speaker.volume != null && speaker.volume! > 5) {
-                    // የራስህ ድምፅ ከሆነ (uid == 0) ወንበር 1 ላይ ሞገዱ ይበራል
-                    if (speaker.uid == 0) {
-                      speakingChairs[1] = true;
-                    }
+                for (final speaker in speakers) {
+                  final vol = speaker.volume ?? 0;
+                  if (vol > 5) {
+                    speakingChairs[1] = true;
                   }
                 }
               });
@@ -102,7 +100,6 @@ class _RoomScreenState extends State<RoomScreen> {
       await _engine!.muteLocalAudioStream(false);
       await _engine!.setDefaultAudioRouteToSpeakerphone(true);
 
-      // አጎራ የድምፅ ሞገድን በየ 200 ሚሊሰከንድ እንዲለካ ማብራት
       await _engine!.enableAudioVolumeIndication(
         interval: 200,
         smooth: 3,
@@ -119,8 +116,7 @@ class _RoomScreenState extends State<RoomScreen> {
           Uri.parse('${AppData.serverUrl}/rtc-token?channelName=$channelName&uid=0'),
         );
         final response = await request.close();
-
-if (response.statusCode == 200) {
+        if (response.statusCode == 200) {
           final responseBody = await response.transform(utf8.decoder).join();
           final data = jsonDecode(responseBody);
           rtcToken = data['token'] ?? '';
@@ -129,7 +125,7 @@ if (response.statusCode == 200) {
         debugPrint('Token fetch error: $tokenErr');
       }
 
-      await _engine!.joinChannel(
+await _engine!.joinChannel(
         token: rtcToken,
         channelId: channelName,
         uid: 0,
@@ -254,19 +250,18 @@ if (response.statusCode == 200) {
                   Color(0xFF02040A),
                 ],
               ),
-
-),
+            ),
           ),
           SafeArea(
             child: Column(
               children: [
-                // 1. ራስጌ
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                   child: Row(
                     children: [
                       CircleAvatar(
-                        radius: 18,
+
+radius: 18,
                         backgroundColor: Colors.teal,
                         child: Text(
                           widget.hostName.isNotEmpty ? widget.hostName[0] : 'U',
@@ -330,23 +325,21 @@ if (response.statusCode == 200) {
                     ],
                   ),
                 ),
-
-                // 2. ባነር
                 Container(
                   margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(
                       colors: [Color(0xFF880E4F), Color(0xFF4A148C)],
-
-),
+                    ),
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(color: const Color(0xFFFFD700).withOpacity(0.5)),
                   ),
                   child: Row(
                     children: [
                       const Icon(Icons.auto_awesome, color: Color(0xFFFFD700), size: 16),
-                      const SizedBox(width: 8),
+
+const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           liveAnnouncements.isNotEmpty ? liveAnnouncements.last : '',
@@ -358,10 +351,7 @@ if (response.statusCode == 200) {
                     ],
                   ),
                 ),
-
                 const SizedBox(height: 6),
-
-                // 3. ወንበሮች (የሞገድ አኒሜሽን የተካተተበት)
                 Expanded(
                   child: SingleChildScrollView(
                     physics: const BouncingScrollPhysics(),
@@ -393,8 +383,6 @@ if (response.statusCode == 200) {
                     ),
                   ),
                 ),
-
-                // 4. ታችኛው ባር
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   color: Colors.black.withOpacity(0.6),
@@ -424,15 +412,15 @@ if (response.statusCode == 200) {
                           height: 38,
                           margin: const EdgeInsets.only(right: 8),
                           padding: const EdgeInsets.symmetric(horizontal: 12),
-
-decoration: BoxDecoration(
+                          decoration: BoxDecoration(
                             color: Colors.white12,
                             borderRadius: BorderRadius.circular(19),
                           ),
                           child: TextField(
                             style: const TextStyle(color: Colors.white, fontSize: 12),
                             decoration: const InputDecoration(
-                              hintText: 'Say Hello...',
+
+hintText: 'Say Hello...',
                               hintStyle: TextStyle(color: Colors.white38, fontSize: 12),
                               border: InputBorder.none,
                               isDense: true,
