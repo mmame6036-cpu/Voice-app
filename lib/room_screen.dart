@@ -72,19 +72,10 @@ class _RoomScreenState extends State<RoomScreen> {
         RtcEngineEventHandler(
           onJoinChannelSuccess: (RtcConnection connection, int elapsed) {
             debugPrint('Agora Voice Joined: ${connection.channelId}');
-            if (mounted) setState(() => isJoinedVoice = true);
-          },
-          // 4ቱንም ፓራሜትሮች በትክክል በማስገባት ስህተቱ ተስተካክሏል
-          onAudioVolumeIndication: (RtcConnection connection, List<AudioVolumeInfo> speakers, int totalVolume, int speakerNumber) {
             if (mounted) {
               setState(() {
-                speakingChairs.clear();
-                for (final speaker in speakers) {
-                  final vol = speaker.volume ?? 0;
-                  if (vol > 5) {
-                    speakingChairs[1] = true;
-                  }
-                }
+                isJoinedVoice = true;
+                speakingChairs[1] = true; // በተሳካ ሁኔታ ሲገባ ሞገዱ ወዲያውኑ ይበራል
               });
             }
           },
@@ -99,12 +90,6 @@ class _RoomScreenState extends State<RoomScreen> {
       await _engine!.enableLocalAudio(true);
       await _engine!.muteLocalAudioStream(false);
       await _engine!.setDefaultAudioRouteToSpeakerphone(true);
-
-      await _engine!.enableAudioVolumeIndication(
-        interval: 200,
-        smooth: 3,
-        reportVad: true,
-      );
 
       const String channelName = 'NileVoiceMainRoom';
       String rtcToken = '';
@@ -125,7 +110,7 @@ class _RoomScreenState extends State<RoomScreen> {
         debugPrint('Token fetch error: $tokenErr');
       }
 
-await _engine!.joinChannel(
+      await _engine!.joinChannel(
         token: rtcToken,
         channelId: channelName,
         uid: 0,
@@ -141,11 +126,12 @@ await _engine!.joinChannel(
     }
   }
 
-  void _toggleMic() async {
+void _toggleMic() async {
     if (_engine == null) return;
     setState(() {
       isMuted = !isMuted;
-      if (isMuted) speakingChairs[1] = false;
+      // ማይክ ሲጠፋ ሞገዱ ይጠፋል፣ ሲበራ ሞገዱ ይበራል
+      speakingChairs[1] = !isMuted;
     });
     await _engine!.muteLocalAudioStream(isMuted);
     ScaffoldMessenger.of(context).showSnackBar(
@@ -188,6 +174,7 @@ await _engine!.joinChannel(
               chatMessages.add('$user entered chair #$chair');
               if (user == AppData.currentUserName) {
                 isMuted = false;
+                speakingChairs[1] = true;
                 _engine?.muteLocalAudioStream(false);
               }
             } else {
@@ -195,6 +182,7 @@ await _engine!.joinChannel(
               chatMessages.add('$user left chair #$chair');
               if (user == AppData.currentUserName) {
                 isMuted = true;
+                speakingChairs[1] = false;
                 _engine?.muteLocalAudioStream(true);
               }
             }
@@ -260,8 +248,7 @@ await _engine!.joinChannel(
                   child: Row(
                     children: [
                       CircleAvatar(
-
-radius: 18,
+                        radius: 18,
                         backgroundColor: Colors.teal,
                         child: Text(
                           widget.hostName.isNotEmpty ? widget.hostName[0] : 'U',
@@ -269,7 +256,8 @@ radius: 18,
                         ),
                       ),
                       const SizedBox(width: 8),
-                      Expanded(
+
+Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -338,14 +326,14 @@ radius: 18,
                   child: Row(
                     children: [
                       const Icon(Icons.auto_awesome, color: Color(0xFFFFD700), size: 16),
-
-const SizedBox(width: 8),
+                      const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           liveAnnouncements.isNotEmpty ? liveAnnouncements.last : '',
                           style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
                           maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+
+overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     ],
@@ -419,13 +407,13 @@ const SizedBox(width: 8),
                           child: TextField(
                             style: const TextStyle(color: Colors.white, fontSize: 12),
                             decoration: const InputDecoration(
-
-hintText: 'Say Hello...',
+                              hintText: 'Say Hello...',
                               hintStyle: TextStyle(color: Colors.white38, fontSize: 12),
                               border: InputBorder.none,
                               isDense: true,
                               contentPadding: EdgeInsets.symmetric(vertical: 10),
-                            ),
+
+),
                             onSubmitted: (text) {
                               if (text.trim().isNotEmpty && socket != null) {
                                 socket?.emit('chat_message', {
