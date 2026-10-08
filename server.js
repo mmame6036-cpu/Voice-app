@@ -31,8 +31,7 @@ app.get('/', (req, res) => {
 
 // 3. Agora RTC Token ማመንጫ Route
 const AGORA_APP_ID = process.env.AGORA_APP_ID || '21091aff01114a66b580ce15b0f1b642';
-// ማሳሰቢያ፦ ከአጎራ ኮንሶልህ ላይ ያየኸውን Primary Certificate እዚህ አስገባ
-const AGORA_APP_CERTIFICATE = process.env.AGORA_APP_CERTIFICATE || 'YOUR_PRIMARY_CERTIFICATE_HERE';
+const AGORA_APP_CERTIFICATE = process.env.AGORA_APP_CERTIFICATE || '150ff1ae871e4d80a9e51092d00524a5';
 
 app.get('/rtc-token', (req, res) => {
   const channelName = req.query.channelName || 'NileVoiceMainRoom';
@@ -41,10 +40,6 @@ app.get('/rtc-token', (req, res) => {
   const expireTime = 3600 * 24; // ለ 24 ሰዓት የሚሰራ
   const currentTime = Math.floor(Date.now() / 1000);
   const privilegeExpireTime = currentTime + expireTime;
-
-  if (!AGORA_APP_CERTIFICATE || AGORA_APP_CERTIFICATE === 'YOUR_PRIMARY_CERTIFICATE_HERE') {
-    return res.status(500).json({ error: 'Agora Primary Certificate አልተሞላም' });
-  }
 
   try {
     const token = RtcTokenBuilder.buildTokenWithUid(
