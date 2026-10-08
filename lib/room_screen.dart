@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
+import 'package:agora_rtc_engine/agora_rtc_engine.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'room_chairs_grid.dart';
 import 'room_gift_sheet.dart';
 import 'room_games_sheet.dart';
@@ -23,6 +25,10 @@ class RoomScreen extends StatefulWidget {
 
 class _RoomScreenState extends State<RoomScreen> {
   IO.Socket? socket;
+  RtcEngine? _engine;
+  bool isJoinedVoice = false;
+  bool isMuted = true;
+
   List<String> liveAnnouncements = [
     '✨ VIP5 🌟 STAR entered room',
     '🎁 User sent Star x18 and won prizes!',
@@ -37,6 +43,7 @@ class _RoomScreenState extends State<RoomScreen> {
   void initState() {
     super.initState();
     _connectSocket();
+    _initAgoraVoice();
 
     _bannerTimer = Timer.periodic(const Duration(seconds: 4), (timer) {
       if (mounted) {
@@ -46,6 +53,67 @@ class _RoomScreenState extends State<RoomScreen> {
         });
       }
     });
+  }
+
+  // የአጎራ ድምፅ ሞተር ማስጀመሪያ
+  Future<void> _initAgoraVoice() async {
+    try {
+      await [Permission.microphone].request();
+
+      _engine = createAgoraRtcEngine();
+      await _engine!.initialize(const RtcEngineContext(
+        appId: AppData.agoraAppId,
+        channelProfile: ChannelProfileType.channelProfileLiveBroadcasting,
+      ));
+
+      _engine!.registerEventHandler(
+        RtcEngineEventHandler(
+          onJoinChannelSuccess: (RtcConnection connection, int elapsed) {
+            if (mounted) {
+              setState(() => isJoinedVoice = true);
+            }
+          },
+          onUserMuteAudio: (RtcConnection connection, int remoteUid, bool muted) {
+            // ሌሎች ድምፃቸውን ሲዘጉ
+          },
+        ),
+      );
+
+      await _engine!.setClientRole(role: ClientRoleType.clientRoleBroadcaster);
+      await _engine!.enableAudio();
+      await _engine!.setDefaultAudioRouteToSpeakerphone(true);
+
+      // በነባሪ ድምፅ እንዳይረብሽ ዝም (Mute) ይደረጋል
+      await _engine!.muteLocalAudioStream(true);
+
+      // ወደ ድምፅ ክፍሉ መቀላቀል
+      await _engine!.joinChannel(
+        token: '',
+        channelId: widget.roomTitle.replaceAll(' ', '_'),
+        uid: int.tryParse(AppData.currentUserId) ?? 0,
+        options: const ChannelMediaOptions(
+          clientRoleType: ClientRoleType.clientRoleBroadcaster,
+          autoSubscribeAudio: true,
+        ),
+      );
+    } catch (e) {
+      debugPrint('Agora init error: $e');
+    }
+  }
+
+  // ማይክራፎን ማብሪያና ማጥፊያ
+  void _toggleMic() async {
+    if (_engine == null) return;
+    setState(() {
+      isMuted = !isMuted;
+    });
+    await _engine!.muteLocalAudioStream(isMuted);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(isMuted ? '🔇 ማይክራፎን ተዘግቷል' : '🎙️ ማይክራፎን ተከፍቷል'),
+        duration: const Duration(milliseconds: 900),
+      ),
+    );
   }
 
   void _connectSocket() {
@@ -74,13 +142,22 @@ class _RoomScreenState extends State<RoomScreen> {
             String user = data['userName'];
             String action = data['action'];
 
-            if (action == 'join') {
+if (action == 'join') {
               occupiedChairs.removeWhere((k, v) => v == user);
               occupiedChairs[chair] = user;
               chatMessages.add('$user entered chair #$chair');
+              // ራሱ ተጠቃሚው ከሆነ ማይኩን ይከፍትለታል
+              if (user == AppData.currentUserName) {
+                isMuted = false;
+                _engine?.muteLocalAudioStream(false);
+              }
             } else {
               occupiedChairs.remove(chair);
               chatMessages.add('$user left chair #$chair');
+              if (user == AppData.currentUserName) {
+                isMuted = true;
+                _engine?.muteLocalAudioStream(true);
+              }
             }
           });
         }
@@ -110,6 +187,8 @@ class _RoomScreenState extends State<RoomScreen> {
   @override
   void dispose() {
     _bannerTimer?.cancel();
+    _engine?.leaveChannel();
+    _engine?.release();
     socket?.disconnect();
     socket?.dispose();
     super.dispose();
@@ -141,8 +220,7 @@ class _RoomScreenState extends State<RoomScreen> {
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                   child: Row(
-
-children: [
+                    children: [
                       CircleAvatar(
                         radius: 18,
                         backgroundColor: Colors.teal,
@@ -165,7 +243,7 @@ children: [
                               ),
                             ),
                             Text(
-                              'ID: 1410685',
+                              'ID: ${AppData.currentUserId}',
                               style: TextStyle(
                                 color: Colors.white.withOpacity(0.5),
                                 fontSize: 10,
@@ -174,10 +252,11 @@ children: [
                           ],
                         ),
                       ),
-                      // ሳንቲም ባላንስ ማሳያና ወደ Recharge መግቢያ
+                      // ሳንቲም ባላንስ
                       GestureDetector(
                         onTap: () {
-                          Navigator.push(
+
+Navigator.push(
                             context,
                             MaterialPageRoute(
                               builder: (_) => RechargeScreen(
@@ -223,8 +302,7 @@ children: [
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(
-
-colors: [Color(0xFF880E4F), Color(0xFF4A148C)],
+                      colors: [Color(0xFF880E4F), Color(0xFF4A148C)],
                     ),
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(color: const Color(0xFFFFD700).withOpacity(0.5)),
@@ -261,7 +339,8 @@ colors: [Color(0xFF880E4F), Color(0xFF4A148C)],
                           socket: socket,
                           onChairTap: (chair) => setState(() {}),
                         ),
-                        const SizedBox(height: 12),
+
+const SizedBox(height: 12),
                         Container(
                           height: 90,
                           margin: const EdgeInsets.symmetric(horizontal: 16),
@@ -288,13 +367,32 @@ colors: [Color(0xFF880E4F), Color(0xFF4A148C)],
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   color: Colors.black.withOpacity(0.6),
                   child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
+                      // የማይክራፎን መቆጣጠሪያ ቁልፍ
+                      GestureDetector(
+                        onTap: _toggleMic,
+                        child: Container(
+                          padding: const EdgeInsets.all(8),
+                          margin: const EdgeInsets.only(right: 8),
+                          decoration: BoxDecoration(
+                            color: isMuted ? Colors.white12 : Colors.green.withOpacity(0.3),
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: isMuted ? Colors.white24 : Colors.greenAccent,
+                            ),
+                          ),
+                          child: Icon(
+                            isMuted ? Icons.mic_off_rounded : Icons.mic_rounded,
+                            color: isMuted ? Colors.white54 : Colors.greenAccent,
+                            size: 20,
+                          ),
+                        ),
+                      ),
                       // የቻት መጻፊያ ሳጥን
                       Expanded(
                         child: Container(
                           height: 38,
-                          margin: const EdgeInsets.only(right: 12),
+                          margin: const EdgeInsets.only(right: 8),
                           padding: const EdgeInsets.symmetric(horizontal: 12),
                           decoration: BoxDecoration(
                             color: Colors.white12,
@@ -308,8 +406,7 @@ colors: [Color(0xFF880E4F), Color(0xFF4A148C)],
                               border: InputBorder.none,
                               isDense: true,
                               contentPadding: EdgeInsets.symmetric(vertical: 10),
-
-),
+                            ),
                             onSubmitted: (text) {
                               if (text.trim().isNotEmpty && socket != null) {
                                 socket?.emit('chat_message', {
@@ -321,14 +418,15 @@ colors: [Color(0xFF880E4F), Color(0xFF4A148C)],
                           ),
                         ),
                       ),
-                      // የጌም እና የስጦታ ቁልፎች
+
+// የጌም እና የስጦታ ቁልፎች
                       Row(
                         children: [
                           IconButton(
                             icon: const Icon(
                               Icons.sports_esports_rounded,
                               color: Colors.amberAccent,
-                              size: 26,
+                              size: 24,
                             ),
                             onPressed: () {
                               RoomGamesSheet.show(
@@ -342,7 +440,7 @@ colors: [Color(0xFF880E4F), Color(0xFF4A148C)],
                             icon: const Icon(
                               Icons.card_giftcard_rounded,
                               color: Color(0xFFFFD700),
-                              size: 26,
+                              size: 24,
                             ),
                             onPressed: () {
                               RoomGiftSheet.show(
