@@ -69,7 +69,9 @@ io.on('connection', (socket) => {
     console.log('Chair action:', data);
     io.emit('chair_action', data);
   });
-
+socket.on('chair_speaking', (data) => {
+    io.emit('chair_speaking', data);
+  });
   socket.on('chat_message', (data) => {
     io.emit('chat_message', data);
   });
