@@ -29,7 +29,7 @@ class _RoomScreenState extends State<RoomScreen> {
   IO.Socket? socket;
   RtcEngine? _engine;
   bool isJoinedVoice = false;
-  bool isMuted = true; // በነባሪ ወንበር እስኪይዝ ማይክ ዝግ ነው
+  bool isMuted = true; // ወንበር እስኪይዝ ድረስ ድምፅ ዝግ ይሆናል
   int myUid = 0;
   int? myChairNum;
 
@@ -47,9 +47,9 @@ class _RoomScreenState extends State<RoomScreen> {
   @override
   void initState() {
     super.initState();
-    // ለእያንዳንዱ ስልክ የተለየ የቁጥር መለያ (Unique UID) ማመንጨት
+    // ለእያንዳንዱ ስልክ የተለየ እና ትክክለኛ የቁጥር UID ማዘጋጀት
     final cleanId = AppData.currentUserId.replaceAll(RegExp(r'[^0-9]'), '');
-    myUid = (int.tryParse(cleanId) ?? 0);
+    myUid = int.tryParse(cleanId) ?? 0;
     if (myUid == 0) {
       myUid = (DateTime.now().millisecondsSinceEpoch % 89999) + 10000;
     }
@@ -69,6 +69,7 @@ class _RoomScreenState extends State<RoomScreen> {
 
   Future<void> _initAgoraVoice() async {
     try {
+      // የማይክሮፎን ፈቃድ ማረጋገጥ
       await Permission.microphone.request();
 
       _engine = createAgoraRtcEngine();
@@ -80,8 +81,11 @@ class _RoomScreenState extends State<RoomScreen> {
       _engine!.registerEventHandler(
         RtcEngineEventHandler(
           onJoinChannelSuccess: (RtcConnection connection, int elapsed) {
-            debugPrint('Agora Voice Connected on UID: $myUid');
+            debugPrint('Agora Voice Connected successfully on UID: $myUid');
             if (mounted) setState(() => isJoinedVoice = true);
+          },
+          onUserJoined: (RtcConnection connection, int remoteUid, int elapsed) {
+            debugPrint('Remote user entered audio channel: $remoteUid');
           },
           onError: (ErrorCodeType err, String msg) {
             debugPrint('Agora Error: $err - $msg');
@@ -89,17 +93,17 @@ class _RoomScreenState extends State<RoomScreen> {
         ),
       );
 
-      // በነባሪ እንደ አድማጭ መግባት
+      // የድምፅ ማስተካከያዎችን ማዘጋጀት
       await _engine!.setClientRole(role: ClientRoleType.clientRoleBroadcaster);
       await _engine!.enableAudio();
       await _engine!.enableLocalAudio(true);
-      await _engine!.muteLocalAudioStream(true); // ወንበር እስኪይዝ ማይክ ይዘጋል
+      await _engine!.muteLocalAudioStream(true); // መጀመሪያ ወንበር እስኪይዝ ድምፁ እንዳይረብሽ
       await _engine!.setDefaultAudioRouteToSpeakerphone(true);
 
       const String channelName = 'NileVoiceMainRoom';
       String rtcToken = '';
 
-      // የራስን UID ይዞ ከሰርቨሩ ቶከን መጠየቅ
+      // የራሱን myUid ልኮ ለራሱ UID የሚሆን ትክክለኛ ቶከን መጠየቅ
       try {
         final client = HttpClient();
         client.connectionTimeout = const Duration(seconds: 10);
@@ -111,17 +115,17 @@ class _RoomScreenState extends State<RoomScreen> {
           final responseBody = await response.transform(utf8.decoder).join();
           final data = jsonDecode(responseBody);
           rtcToken = data['token'] ?? '';
+          debugPrint('Token received for UID $myUid');
         }
       } catch (tokenErr) {
         debugPrint('Token fetch error: $tokenErr');
       }
 
-      // እውነተኛ ድምፅ ለማስተላለፍ በራሱ UID መግባት
+// በዚያው በራሱ myUid ቻነሉን መቀላቀል
       await _engine!.joinChannel(
         token: rtcToken,
         channelId: channelName,
-
-uid: myUid,
+        uid: myUid,
         options: const ChannelMediaOptions(
           clientRoleType: ClientRoleType.clientRoleBroadcaster,
           channelProfile: ChannelProfileType.channelProfileLiveBroadcasting,
@@ -155,7 +159,6 @@ uid: myUid,
 
     await _engine!.muteLocalAudioStream(isMuted);
 
-    // የድምፅ ሞገዱን ለሌላው ስልክ በሶኬት ማሳወቅ
     socket?.emit('chair_speaking', {
       'chairNum': myChairNum,
       'isSpeaking': !isMuted,
@@ -188,7 +191,6 @@ uid: myUid,
         });
       });
 
-      // ወንበር ሲያዝ ወይም ሲለቀቅ
       socket?.on('chair_action', (data) {
         if (mounted) {
           setState(() {
@@ -222,7 +224,6 @@ uid: myUid,
         }
       });
 
-      // የሌላው ሰው ድምፅ ሞገድ ሲበራ
       socket?.on('chair_speaking', (data) {
         if (mounted) {
           setState(() {
@@ -386,7 +387,7 @@ body: Stack(
 
                 const SizedBox(height: 4),
 
-                // 3. የተጣበቡ ወንበሮች እና ቻት
+                // 3. ወንበሮች እና ቻት
                 Expanded(
                   child: Column(
                     children: [
@@ -440,9 +441,9 @@ body: Stack(
                             color: isMuted ? Colors.white54 : Colors.greenAccent,
                             size: 20,
                           ),
+                        ),
 
 ),
-                      ),
                       Expanded(
                         child: Container(
                           height: 36,
