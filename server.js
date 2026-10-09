@@ -1,47 +1,27 @@
-require('dotenv').config();
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
-const mongoose = require('mongoose');
-const cors = require('cors');
-const { RtcTokenBuilder, RtcRole } = require('agora-token');
+const { RtcTokenBuilder, RtcRole } = require('agora-access-token');
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
-  cors: {
-    origin: '*',
-    methods: ['GET', 'POST']
-  }
+  cors: { origin: '*' }
 });
 
-app.use(cors());
-app.use(express.json());
-
-// 1. Database
-const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/voice_app';
-mongoose.connect(MONGO_URI)
-  .then(() => console.log('MongoDB connected'))
-  .catch((err) => console.log('MongoDB error:', err.message));
-
-// 2. Test Route
-app.get('/', (req, res) => {
-  res.send('Server is running perfectly!');
-});
-
-// 3. Agora RTC Token ማመንጫ Route
 const AGORA_APP_ID = process.env.AGORA_APP_ID || '21091aff01114a66b580ce15b0f1b642';
 const AGORA_APP_CERTIFICATE = process.env.AGORA_APP_CERTIFICATE || '150ff1ae871e4d80a9e51092d00524a5';
 
+// 1. የድምፅ ቶከን ማመንጫ (RtcRole.PUBLISHER)
 app.get('/rtc-token', (req, res) => {
-  const channelName = req.query.channelName || 'NileVoiceMainRoom';
-  const uid = req.query.uid ? parseInt(req.query.uid) : 0;
-  const role = RtcRole.PUBLISHER;
-  const expireTime = 3600 * 24; // ለ 24 ሰዓት የሚሰራ
-  const currentTime = Math.floor(Date.now() / 1000);
-  const privilegeExpireTime = currentTime + expireTime;
-
   try {
+    const channelName = req.query.channelName || 'room_1001';
+    const uid = req.query.uid ? parseInt(req.query.uid) : 0;
+    const role = RtcRole.PUBLISHER; // ድምፅ እንዲያስተላልፍ የግዴታ PUBLISHER
+    const expireTime = 3600 * 24; // 24 ሰዓት
+    const currentTime = Math.floor(Date.now() / 1000);
+    const privilegeExpireTime = currentTime + expireTime;
+
     const token = RtcTokenBuilder.buildTokenWithUid(
       AGORA_APP_ID,
       AGORA_APP_CERTIFICATE,
@@ -50,43 +30,47 @@ app.get('/rtc-token', (req, res) => {
       role,
       privilegeExpireTime
     );
-    return res.json({ token, channelName });
+
+    return res.json({ token, channelName, uid });
   } catch (error) {
     return res.status(500).json({ error: error.message });
   }
 });
 
-// 4. Socket.io Real-time Engine
+// 2. የሶኬት መረጃ ማስተላለፊያ
 io.on('connection', (socket) => {
-  console.log('Socket connected:', socket.id);
-
+  // ክፍል መቀላቀል
   socket.on('join_room', (data) => {
-    const roomId = (typeof data === 'object' && data.room) ? data.room : data;
+    const roomId = data.room || '1001';
     socket.join(roomId);
   });
 
+  // ወንበር መያዝ ወይም መልቀቅ
   socket.on('chair_action', (data) => {
-    console.log('Chair action:', data);
-    io.emit('chair_action', data);
+    const roomId = data.room || '1001';
+    io.to(roomId).emit('chair_action', data);
   });
-socket.on('chair_speaking', (data) => {
-    io.emit('chair_speaking', data);
+
+  // ድምፅ ሲያወራ ማሳወቂያ
+  socket.on('chair_speaking', (data) => {
+    const roomId = data.room || '1001';
+    io.to(roomId).emit('chair_speaking', data);
   });
+
+  // ቻት
   socket.on('chat_message', (data) => {
-    io.emit('chat_message', data);
+    const roomId = data.room || '1001';
+    io.to(roomId).emit('chat_message', data);
   });
 
+  // ስጦታ
   socket.on('gift_sent', (data) => {
-    io.emit('gift_sent', data);
-  });
-
-  socket.on('disconnect', () => {
-    console.log('Socket disconnected:', socket.id);
+    const roomId = data.room || '1001';
+    io.to(roomId).emit('gift_sent', data);
   });
 });
 
-// 5. Start Server
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log('Server running on port ' + PORT);
+  console.log(Server running on port ${PORT});
 });
