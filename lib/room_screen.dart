@@ -31,7 +31,6 @@ class RoomScreen extends StatefulWidget {
 }
 
 class _RoomScreenState extends State<RoomScreen> with TickerProviderStateMixin {
-  // ሁልጊዜ ክፍሉ 1001 እንዲሆን እዚህ ጋር እንቆልፈዋለን!
   final String fixedRoomId = '1001';
 
   IO.Socket? socket;
@@ -69,7 +68,6 @@ class _RoomScreenState extends State<RoomScreen> with TickerProviderStateMixin {
       duration: const Duration(seconds: 15),
     )..repeat();
 
-    // UID ቁጥር ብቻ እንዲሆን ማረጋገጥ
     final cleanId = AppData.currentUserId.replaceAll(RegExp(r'[^0-9]'), '');
     myUid = int.tryParse(cleanId) ?? 0;
     if (myUid <= 0) {
@@ -108,7 +106,7 @@ class _RoomScreenState extends State<RoomScreen> with TickerProviderStateMixin {
             }
           },
           onUserJoined: (RtcConnection connection, int remoteUid, int elapsed) {
-            debugPrint('Remote user joined: $remoteUid');
+            debugPrint('Remote user joined voice: $remoteUid');
           },
           onUserMuteAudio: (RtcConnection connection, int remoteUid, bool muted) {
             debugPrint('Remote user $remoteUid muted: $muted');
@@ -131,8 +129,7 @@ class _RoomScreenState extends State<RoomScreen> with TickerProviderStateMixin {
       final String channelName = 'room_$fixedRoomId';
       String rtcToken = '';
 
-// የቶከን ጥሪ ከ Render ሰርቨር
-      try {
+try {
         final client = HttpClient();
         client.connectionTimeout = const Duration(seconds: 8);
         final request = await client.getUrl(
@@ -145,7 +142,7 @@ class _RoomScreenState extends State<RoomScreen> with TickerProviderStateMixin {
           rtcToken = data['token'] ?? '';
         }
       } catch (tokenErr) {
-        debugPrint('Token fetch error (Joining with blank token fallback): $tokenErr');
+        debugPrint('Token fetch error (Fallback to empty token): $tokenErr');
       }
 
       await _engine!.joinChannel(
@@ -323,7 +320,6 @@ class _RoomScreenState extends State<RoomScreen> with TickerProviderStateMixin {
           SafeArea(
             child: Column(
               children: [
-                // 1. ራስጌ
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                   child: Row(
@@ -394,8 +390,6 @@ borderRadius: BorderRadius.circular(16),
                     ],
                   ),
                 ),
-
-                // 2. ባነር
                 Container(
                   margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
@@ -421,10 +415,7 @@ borderRadius: BorderRadius.circular(16),
                     ],
                   ),
                 ),
-
                 const SizedBox(height: 4),
-
-                // 3. ወንበሮች እና ቻት
                 Expanded(
                   child: Column(
                     children: [
@@ -451,14 +442,13 @@ borderRadius: BorderRadius.circular(16),
                           itemBuilder: (context, idx) => Text(
                             chatMessages[idx],
                             style: const TextStyle(color: Colors.white70, fontSize: 11),
-                          ),
+
+),
                         ),
                       ),
                     ],
                   ),
                 ),
-
-// 4. ታችኛው ባር
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                   color: Colors.black.withOpacity(0.65),
@@ -532,7 +522,8 @@ borderRadius: BorderRadius.circular(16),
                                 context,
                                 socket: socket,
                                 onGiftSent: () => setState(() {}),
-                              );
+
+);
                             },
                           ),
                         ],
