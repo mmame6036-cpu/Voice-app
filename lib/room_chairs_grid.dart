@@ -1,19 +1,54 @@
+class AmbientParticlesPainter extends CustomPainter {
+  final double progress;
+  AmbientParticlesPainter({required this.progress});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()..style = PaintingStyle.fill;
+    final random = math.Random(42);
+
+    for (int i = 0; i < 18; i++) {
+      final double baseX = random.nextDouble() * size.width;
+      final double speed = 0.3 + (random.nextDouble() * 0.7);
+      final double yOffset = (progress * size.height * speed + (i * 45)) % size.height;
+      final double currentY = size.height - yOffset;
+      final double radius = 2.0 + (random.nextDouble() * 3.5);
+      final double opacity = 0.15 + (0.35 * math.sin((progress * 2 * math.pi) + i).abs());
+
+      final colorList = [
+        const Color(0xFF00E5FF),
+        const Color(0xFFD500F9),
+        const Color(0xFFFFD700),
+      ];
+      final color = colorList[i % colorList.length].withOpacity(opacity);
+
+      paint.color = color;
+      canvas.drawCircle(Offset(baseX, currentY), radius, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant AmbientParticlesPainter oldDelegate) => true;
+}
+
 import 'package:flutter/material.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'main.dart';
 
 class RoomChairsGrid extends StatefulWidget {
   final IO.Socket? socket;
-  final Function(int)? onChairTap;
+  final String roomId;
   final Map<int, String> occupiedChairs;
   final Map<int, bool> speakingUsers;
+  final Function(int chairNum)? onChairTap;
 
   const RoomChairsGrid({
     Key? key,
-    this.socket,
+    required this.socket,
+    this.roomId = '1001',
+    required this.occupiedChairs,
+    required this.speakingUsers,
     this.onChairTap,
-    this.occupiedChairs = const {},
-    this.speakingUsers = const {},
   }) : super(key: key);
 
   @override
@@ -29,7 +64,7 @@ class _RoomChairsGridState extends State<RoomChairsGrid> with SingleTickerProvid
     super.initState();
     _waveController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 600),
+      duration: const Duration(milliseconds: 1000),
     )..repeat(reverse: true);
 
     _scaleAnimation = Tween<double>(begin: 1.0, end: 1.15).animate(
@@ -43,121 +78,123 @@ class _RoomChairsGridState extends State<RoomChairsGrid> with SingleTickerProvid
     super.dispose();
   }
 
+  void _handleSeatTap(int chairNum) {
+    final occupant = widget.occupiedChairs[chairNum];
+    final isMe = occupant == AppData.currentUserName;
+
+    if (occupant != null && !isMe) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('ወንበር #$chairNum በ $occupant ተይዟል!'),
+          duration: const Duration(milliseconds: 800),
+        ),
+      );
+      return;
+    }
+
+    if (widget.onChairTap != null) widget.onChairTap!(chairNum);
+
+    // ክፍሉን እና የተጠቃሚውን መረጃ ሙሉ በሙሉ መላክ
+    widget.socket?.emit('chair_action', {
+      'room': widget.roomId,
+      'chairNum': chairNum,
+      'userName': AppData.currentUserName,
+      'action': isMe ? 'leave' : 'join',
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    // 20 የታመቁና የተጣበቡ ወንበሮች (5 አምዶች x 4 ረድፎች)
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 5,
-        mainAxisSpacing: 8,
-        crossAxisSpacing: 8,
-        childAspectRatio: 0.82,
-      ),
-      itemCount: 20,
-      itemBuilder: (context, index) {
-        final chairNum = index + 1;
-        final occupantName = widget.occupiedChairs[chairNum];
-        final bool isOccupied = occupantName != null && occupantName.isNotEmpty;
-        final bool isMe = isOccupied && occupantName == AppData.currentUserName;
-        final bool isSpeaking = widget.speakingUsers[chairNum] ?? false;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: GridView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        itemCount: 20,
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 5,
+          mainAxisSpacing: 12,
+          crossAxisSpacing: 10,
+          childAspectRatio: 0.8,
+        ),
+        itemBuilder: (context, index) {
+          final chairNum = index + 1;
+          final occupant = widget.occupiedChairs[chairNum];
+          final isOccupied = occupant != null;
+          final isSpeaking = widget.speakingUsers[chairNum] ?? false;
 
-        return GestureDetector(
-          onTap: () {
-            // ሌላ ሰው የያዘውን ወንበር እንዳይነካ መከልከል
-            if (isOccupied && !isMe) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('⚠️ ወንበር #$chairNum በ $occupantName ተይዟል!'),
-                  duration: const Duration(milliseconds: 800),
-                ),
-              );
-              return;
-            }
+          return GestureDetector(
+            onTap: () => _handleSeatTap(chairNum),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                AnimatedBuilder(
+                  animation: _waveController,
+                  builder: (context, child) {
+                    final scale = isSpeaking ? _scaleAnimation.value : 1.0;
+                    final glow = isSpeaking ? (0.3 + (_waveController.value * 0.7)) : 0.0;
 
-            if (widget.onChairTap != null) widget.onChairTap!(chairNum);
+                    return Transform.scale(
+                      scale: scale,
+                      child: Container(
+                        width: 46,
+                        height: 46,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: isOccupied ? Colors.teal.withOpacity(0.2) : Colors.white.withOpacity(0.06),
+                          border: Border.all(
+                            color: isSpeaking
+                                ? Colors.greenAccent.withOpacity(glow)
+                                : (isOccupied ? Colors.tealAccent : Colors.white24),
 
-            // ወንበር መያዝ ወይም መልቀቅ
-            widget.socket?.emit('chair_action', {
-              'room':  '1001',
-              'chairNum': chairNum,
-              'userName': AppData.currentUserName,
-              'action': isMe ? 'leave' : 'join',
-            });
-          },
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              AnimatedBuilder(
-                animation: _waveController,
-                builder: (context, child) {
-                  final scale = isSpeaking ? _scaleAnimation.value : 1.0;
-                  final glow = isSpeaking ? (0.3 + (_waveController.value * 0.5)) : 0.0;
-
-                  return Transform.scale(
-                    scale: scale,
-                    child: Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        boxShadow: isSpeaking
-                            ? [
-                                BoxShadow(
-                                  color: const Color(0xFF00E676).withOpacity(glow),
-                                  blurRadius: 10 + (_waveController.value * 6),
-                                  spreadRadius: 2 + (_waveController.value * 3),
-
-)
-                              ]
-                            : [],
-                        border: Border.all(
-                          color: isSpeaking
-                              ? const Color(0xFF00E676)
-                              : (isMe
-                                  ? const Color(0xFFFFD700)
-                                  : (isOccupied ? Colors.tealAccent : Colors.white12)),
-                          width: isSpeaking ? 2.5 : 1.5,
+width: isSpeaking ? 2.5 : 1.2,
+                          ),
+                          boxShadow: isSpeaking
+                              ? [
+                                  BoxShadow(
+                                    color: Colors.greenAccent.withOpacity(glow * 0.6),
+                                    blurRadius: 10,
+                                    spreadRadius: 2,
+                                  )
+                                ]
+                              : [],
                         ),
-                        color: isOccupied
-                            ? (isMe ? const Color(0xFF00897B) : const Color(0xFF1E293B))
-                            : Colors.white.withOpacity(0.04),
-                      ),
-                      child: Center(
-                        child: isOccupied
-                            ? Text(
-                                occupantName.isNotEmpty ? occupantName[0].toUpperCase() : 'U',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 15,
+                        child: Center(
+                          child: isOccupied
+                              ? Text(
+                                  occupant.isNotEmpty ? occupant[0].toUpperCase() : 'U',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                  ),
+                                )
+                              : Icon(
+                                  Icons.chair_rounded,
+                                  size: 20,
+                                  color: Colors.white.withOpacity(0.35),
                                 ),
-                              )
-                            : const Icon(Icons.chair_rounded, color: Colors.white30, size: 20),
+                        ),
                       ),
-                    ),
-                  );
-                },
-              ),
-              const SizedBox(height: 3),
-              Text(
-                isOccupied ? occupantName : '$chairNum',
-                style: TextStyle(
-                  color: isSpeaking
-                      ? const Color(0xFF00E676)
-                      : (isOccupied ? Colors.white : Colors.white38),
-                  fontSize: 9,
-                  fontWeight: isOccupied ? FontWeight.bold : FontWeight.normal,
+                    );
+                  },
                 ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
-          ),
-        );
-      },
+                const SizedBox(height: 4),
+                Text(
+                  isOccupied ? occupant : '$chairNum',
+                  style: TextStyle(
+                    color: isOccupied ? Colors.tealAccent : Colors.white38,
+                    fontSize: 10,
+                    fontWeight: isOccupied ? FontWeight.bold : FontWeight.normal,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          );
+        },
+      ),
     );
   }
 }
