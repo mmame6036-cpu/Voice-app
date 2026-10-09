@@ -54,20 +54,35 @@ class _RoomChairsGridState extends State<RoomChairsGrid> with SingleTickerProvid
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('ወንበር #$chairNum በ $occupant ተይዟል!'),
-          duration: const Duration(milliseconds: 800),
+          backgroundColor: Colors.redAccent,
+          duration: const Duration(milliseconds: 1000),
         ),
       );
       return;
     }
 
-    if (widget.onChairTap != null) widget.onChairTap!(chairNum);
+    // ወዲያውኑ የአካባቢውን ተግባር ያነሳሳል
+    if (widget.onChairTap != null) {
+      widget.onChairTap!(chairNum);
+    }
 
-    widget.socket?.emit('chair_action', {
-      'room': widget.roomId,
-      'chairNum': chairNum,
-      'userName': AppData.currentUserName,
-      'action': isMe ? 'leave' : 'join',
-    });
+    // ሶኬት መረጃ ለሰርቨሩ ያስተላልፋል
+    if (widget.socket != null && widget.socket!.connected) {
+      widget.socket!.emit('chair_action', {
+        'room': widget.roomId,
+        'chairNum': chairNum,
+        'userName': AppData.currentUserName,
+        'action': isMe ? 'leave' : 'join',
+      });
+    } else {
+      // ሶኬት ባይገናኝም እንኳን በራሱ ሰርቨር ላይ ይሰራል
+      widget.socket?.emit('chair_action', {
+        'room': widget.roomId,
+        'chairNum': chairNum,
+        'userName': AppData.currentUserName,
+        'action': isMe ? 'leave' : 'join',
+      });
+    }
   }
 
   @override
@@ -77,12 +92,12 @@ class _RoomChairsGridState extends State<RoomChairsGrid> with SingleTickerProvid
       child: GridView.builder(
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
-        itemCount: 20,
+        itemCount: 8, // ምርጥና ምቹ ባለ 8 ወንበር አቀማመጥ
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 5,
-          mainAxisSpacing: 12,
-          crossAxisSpacing: 10,
-          childAspectRatio: 0.8,
+          crossAxisCount: 4,
+          mainAxisSpacing: 14,
+          crossAxisSpacing: 12,
+          childAspectRatio: 0.85,
         ),
         itemBuilder: (context, index) {
           final chairNum = index + 1;
@@ -90,74 +105,80 @@ class _RoomChairsGridState extends State<RoomChairsGrid> with SingleTickerProvid
           final isOccupied = occupant != null;
           final isSpeaking = widget.speakingUsers[chairNum] ?? false;
 
-          return GestureDetector(
-            onTap: () => _handleSeatTap(chairNum),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                AnimatedBuilder(
-                  animation: _waveController,
-                  builder: (context, child) {
-                    final scale = isSpeaking ? _scaleAnimation.value : 1.0;
-                    final glow = isSpeaking ? (0.3 + (_waveController.value * 0.7)) : 0.0;
+          return Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(30),
+              onTap: () => _handleSeatTap(chairNum),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  AnimatedBuilder(
+                    animation: _waveController,
+                    builder: (context, child) {
+                      final scale = isSpeaking ? _scaleAnimation.value : 1.0;
+                      final glow = isSpeaking ? (0.3 + (_waveController.value * 0.7)) : 0.0;
 
-                    return Transform.scale(
-                      scale: scale,
-                      child: Container(
-                        width: 46,
-                        height: 46,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: isOccupied ? Colors.teal.withOpacity(0.2) : Colors.white.withOpacity(0.06),
-                          border: Border.all(
-                            color: isSpeaking
-                                ? Colors.greenAccent.withOpacity(glow)
-                                : (isOccupied ? Colors.tealAccent : Colors.white24),
-
-width: isSpeaking ? 2.5 : 1.2,
+return Transform.scale(
+                        scale: scale,
+                        child: Container(
+                          width: 52,
+                          height: 52,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: isOccupied 
+                                ? const Color(0xFF00C9A7).withOpacity(0.25) 
+                                : Colors.white.withOpacity(0.08),
+                            border: Border.all(
+                              color: isSpeaking
+                                  ? Colors.greenAccent.withOpacity(glow)
+                                  : (isOccupied ? const Color(0xFF00C9A7) : Colors.white24),
+                              width: isSpeaking ? 2.5 : 1.5,
+                            ),
+                            boxShadow: isSpeaking
+                                ? [
+                                    BoxShadow(
+                                      color: Colors.greenAccent.withOpacity(glow * 0.6),
+                                      blurRadius: 10,
+                                      spreadRadius: 2,
+                                    )
+                                  ]
+                                : [],
                           ),
-                          boxShadow: isSpeaking
-                              ? [
-                                  BoxShadow(
-                                    color: Colors.greenAccent.withOpacity(glow * 0.6),
-                                    blurRadius: 10,
-                                    spreadRadius: 2,
+                          child: Center(
+                            child: isOccupied
+                                ? Text(
+                                    occupant.isNotEmpty ? occupant[0].toUpperCase() : 'U',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 18,
+                                    ),
                                   )
-                                ]
-                              : [],
-                        ),
-                        child: Center(
-                          child: isOccupied
-                              ? Text(
-                                  occupant.isNotEmpty ? occupant[0].toUpperCase() : 'U',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16,
+                                : Icon(
+                                    Icons.chair_rounded,
+                                    size: 24,
+                                    color: Colors.white.withOpacity(0.4),
                                   ),
-                                )
-                              : Icon(
-                                  Icons.chair_rounded,
-                                  size: 20,
-                                  color: Colors.white.withOpacity(0.35),
-                                ),
+                          ),
                         ),
-                      ),
-                    );
-                  },
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  isOccupied ? occupant : '$chairNum',
-                  style: TextStyle(
-                    color: isOccupied ? Colors.tealAccent : Colors.white38,
-                    fontSize: 10,
-                    fontWeight: isOccupied ? FontWeight.bold : FontWeight.normal,
+                      );
+                    },
                   ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
+                  const SizedBox(height: 6),
+                  Text(
+                    isOccupied ? occupant : 'ወንበር $chairNum',
+                    style: TextStyle(
+                      color: isOccupied ? const Color(0xFF00C9A7) : Colors.white54,
+                      fontSize: 11,
+                      fontWeight: isOccupied ? FontWeight.bold : FontWeight.normal,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
             ),
           );
         },
