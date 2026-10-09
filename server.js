@@ -16,7 +16,7 @@ const io = new Server(server, {
 
 // 1. የሰርቨር ጤና ማረጋገጫ
 app.get('/', (req, res) => {
-  res.status(200).send('Nile Voice Server is Live & Active! 🚀');
+  res.status(200).send('Nile Voice Server is Live and Active');
 });
 
 // 2. MongoDB ግንኙነት
@@ -24,21 +24,19 @@ const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://Kedir:euyEPW1wNL1V9u8D
 
 mongoose.connect(MONGO_URI)
   .then(() => {
-    console.log('✅ MongoDB በስኬት ተገናኝቷል!');
+    console.log('MongoDB Connected Successfully');
   })
   .catch((err) => {
-    console.error('❌ MongoDB Connection Error:', err);
+    console.error('MongoDB Connection Error:', err);
   });
 
 // --- MongoDB Schemas & Models ---
-// ተከታታይ ID ቆጣሪ (Counter)
 const counterSchema = new mongoose.Schema({
   id: { type: String, required: true, default: 'user_id' },
   seq: { type: Number, default: 1000 }
 });
 const Counter = mongoose.model('Counter', counterSchema);
 
-// የተጠቃሚ ሞዴል
 const userSchema = new mongoose.Schema({
   userId: { type: String, required: true, unique: true },
   name: { type: String, default: 'User' },
@@ -48,7 +46,6 @@ const userSchema = new mongoose.Schema({
 });
 const User = mongoose.model('User', userSchema);
 
-// የቴክስት መልዕክቶች ሞዴል (Direct Messages)
 const messageSchema = new mongoose.Schema({
   senderId: { type: String, required: true },
   receiverId: { type: String, required: true },
@@ -64,28 +61,30 @@ app.post('/api/register-user', async (req, res) => {
   try {
     const { deviceId, name, isOwner } = req.body;
 
-    // ቀድሞ የተመዘገበ ከሆነ ያለውን ID መመለስ
-    let existingUser = await User.findOne({ deviceId });
+    let existingUser = await User.findOne({ deviceId: deviceId });
     if (existingUser) {
       return res.json({ success: true, user: existingUser });
     }
 
-    let assignedId;
+    let assignedId = '1000';
     if (isOwner) {
-      assignedId = '1000'; // የአንተ ስልክ ቋሚ 1000
+      assignedId = '1000';
     } else {
       let counter = await Counter.findOneAndUpdate(
         { id: 'user_id' },
         { $inc: { seq: 1 } },
         { new: true, upsert: true }
       );
-      assignedId = counter.seq.toString();
+      assignedId = String(counter.seq);
     }
+
+    const defaultName = name ? name : ('User_' + assignedId);
+    const defaultDevice = deviceId ? deviceId : ('dev_' + Date.now());
 
     const newUser = new User({
       userId: assignedId,
-      name: name || ("User_" + assignedId),
-      deviceId: deviceId || ("dev_" + Date.now())
+      name: defaultName,
+      deviceId: defaultDevice
     });
 
     await newUser.save();
@@ -98,21 +97,21 @@ app.post('/api/register-user', async (req, res) => {
 // ተጠቃሚን በአይዲ (ID) መፈለጊያ
 app.get('/api/search-user', async (req, res) => {
   try {
-    const { userId } = req.query;
+    const userId = req.query.userId;
     if (!userId) {
       return res.status(400).json({ error: 'User ID is required' });
     }
-    const user = await User.findOne({ userId: userId.trim() });
+    const user = await User.findOne({ userId: String(userId).trim() });
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
-    return res.json({ success: true, user });
+    return res.json({ success: true, user: user });
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
 });
 
-// የቀድሞ ቴክስቶችን መጫኛ (Load Chat History)
+// የቀድሞ ቴክስቶችን መጫኛ
 app.get('/api/chat-history', async (req, res) => {
   try {
     const { user1, user2 } = req.query;
@@ -122,7 +121,7 @@ app.get('/api/chat-history', async (req, res) => {
         { senderId: user2, receiverId: user1 }
       ]
     }).sort({ timestamp: 1 });
-    return res.json({ success: true, messages });
+    return res.json({ success: true, messages: messages });
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
@@ -150,7 +149,7 @@ app.get('/rtc-token', (req, res) => {
       privilegeExpireTime
     );
 
-    return res.json({ token, channelName, uid });
+    return res.json({ token: token, channelName: channelName, uid: uid });
   } catch (error) {
     return res.status(500).json({ error: error.message });
   }
@@ -158,11 +157,11 @@ app.get('/rtc-token', (req, res) => {
 
 // --- Socket.io Events ---
 io.on('connection', (socket) => {
-  // ተጠቃሚው በራሱ ID የተሰየመ የግል ቻናል ይቀላቀላል
+  // የግል ቻናል መቀላቀል
   socket.on('user_connected', (userId) => {
     if (userId) {
-      socket.join(userId.toString());
-      console.log(👤 User joined private channel: ${userId});
+      socket.join(String(userId));
+      console.log('User joined private channel: ' + userId);
     }
   });
 
@@ -171,16 +170,14 @@ io.on('connection', (socket) => {
     try {
       const { senderId, receiverId, text } = data;
       const newMsg = new Message({
-        senderId,
-        receiverId,
-        text,
+        senderId: senderId,
+        receiverId: receiverId,
+        text: text,
         timestamp: new Date()
       });
       await newMsg.save();
 
-      // ለተቀባዩ በግል ቻናሉ ይላካል
-      io.to(receiverId.toString()).emit('receive_direct_message', newMsg);
-      // ለላኪው ማረጋገጫ ይመለሳል
+      io.to(String(receiverId)).emit('receive_direct_message', newMsg);
       socket.emit('message_sent', newMsg);
     } catch (e) {
       console.error('Message error:', e);
@@ -216,5 +213,5 @@ io.on('connection', (socket) => {
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log("Server running on port " + PORT);
+  console.log('Server running on port ' + PORT);
 });
