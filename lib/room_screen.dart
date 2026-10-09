@@ -20,10 +20,10 @@ class RoomScreen extends StatefulWidget {
 
   const RoomScreen({
     Key? key,
-    this.roomId = '1001', // እውነተኛ ቋሚ የክፍል መለያ
+    this.roomId = '1001',
     this.roomTitle = 'Nile Official Voice Room',
     this.hostName = 'Mimi',
-    this.hostId = '560095', // ቋሚ የሆስቱ መታወቂያ በሁሉም ስልክ አንድ አይነት የሚታይ
+    this.hostId = '560095',
   }) : super(key: key);
 
   @override
@@ -66,7 +66,6 @@ class _RoomScreenState extends State<RoomScreen> with TickerProviderStateMixin {
       duration: const Duration(seconds: 15),
     )..repeat();
 
-    // እያንዳንዱ ስልክ የራሱ የሆነ ትክክለኛ የቁጥር UID ይኖረዋል
     final cleanId = AppData.currentUserId.replaceAll(RegExp(r'[^0-9]'), '');
     myUid = int.tryParse(cleanId) ?? 0;
     if (myUid == 0) {
@@ -99,7 +98,7 @@ class _RoomScreenState extends State<RoomScreen> with TickerProviderStateMixin {
       _engine!.registerEventHandler(
         RtcEngineEventHandler(
           onJoinChannelSuccess: (RtcConnection connection, int elapsed) {
-            debugPrint('Agora Voice Connected on Room ${widget.roomId} with UID: $myUid');
+            debugPrint('Agora Voice Joined: UID $myUid on channel room_${widget.roomId}');
             if (mounted) setState(() => isJoinedVoice = true);
           },
           onError: (ErrorCodeType err, String msg) {
@@ -123,10 +122,10 @@ class _RoomScreenState extends State<RoomScreen> with TickerProviderStateMixin {
       try {
         final client = HttpClient();
         client.connectionTimeout = const Duration(seconds: 10);
-
-final request = await client.getUrl(
+        final request = await client.getUrl(
           Uri.parse('${AppData.serverUrl}/rtc-token?channelName=$channelName&uid=$myUid'),
-        );
+
+);
         final response = await request.close();
         if (response.statusCode == 200) {
           final responseBody = await response.transform(utf8.decoder).join();
@@ -192,7 +191,6 @@ final request = await client.getUrl(
       socket?.connect();
 
       socket?.onConnect((_) {
-        // ሁለቱም ስልኮች ወደ አንድ እውነተኛ ሩም ID ይገባሉ
         socket?.emit('join_room', {
           'room': widget.roomId,
           'user': AppData.currentUserName,
@@ -313,7 +311,7 @@ final request = await client.getUrl(
           SafeArea(
             child: Column(
               children: [
-                // 1. ራስጌ - ሁለቱም ስልክ ላይ አንድ አይነት እውነተኛ ID ያሳያል
+                // 1. ራስጌ
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                   child: Row(
@@ -336,7 +334,7 @@ final request = await client.getUrl(
                               style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
                             ),
                             Text(
-                              'ID: ${widget.hostId}', // በሁለቱም ስልክ ቋሚው እውነተኛ የክፍል መለያ ይታያል
+                              'ID: ${widget.hostId}',
                               style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 11, fontWeight: FontWeight.bold),
                             ),
                           ],
@@ -360,10 +358,10 @@ final request = await client.getUrl(
                             color: Colors.white.withOpacity(0.12),
                             borderRadius: BorderRadius.circular(16),
                             border: Border.all(color: const Color(0xFFFFD700).withOpacity(0.5)),
-
-),
+                          ),
                           child: Row(
-                            children: [
+
+children: [
                               const Icon(Icons.monetization_on, color: Color(0xFFFFD700), size: 16),
                               const SizedBox(width: 4),
                               Text(
@@ -414,13 +412,14 @@ final request = await client.getUrl(
 
                 const SizedBox(height: 4),
 
-                // 3. ወንበሮች እና ቻት (በታብሌትም ሆነ በስልክ ስክሪን እንዳይቆረጥ የተስተካከለ)
+                // 3. ወንበሮች እና ቻት
                 Expanded(
                   child: Column(
                     children: [
                       Expanded(
                         child: RoomChairsGrid(
                           socket: socket,
+                          roomId: widget.roomId,
                           occupiedChairs: occupiedChairs,
                           speakingUsers: speakingChairs,
                           onChairTap: (chair) => setState(() {}),
@@ -447,7 +446,7 @@ final request = await client.getUrl(
                   ),
                 ),
 
-// 4. ታችኛው ባር (በሁሉም ስክሪን ላይ ሁልጊዜ የሚታይ)
+// 4. ታችኛው ባር
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                   color: Colors.black.withOpacity(0.65),
