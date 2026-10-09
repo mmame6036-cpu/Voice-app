@@ -1,8 +1,7 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
-import 'main.dart';
+import 'services/user_service.dart';
+import 'services/socket_service.dart';
 
 class RoomScreen extends StatefulWidget {
   final String roomId;
@@ -21,73 +20,64 @@ class RoomScreen extends StatefulWidget {
 }
 
 class _RoomScreenState extends State<RoomScreen> {
-  IO.Socket? socket;
+  final UserService _userService = UserService();
+  final SocketService _socketService = SocketService();
+  
   RtcEngine? _engine;
   bool _isMicMuted = false;
   int? _myCurrentChair;
 
-  // 8 ወንበሮች - እያንዳንዱ ወንበር የተጠቃሚውን ስም እና ID ይይዛል
+  // 8 seats/chairs
   final List<Map<String, dynamic>?> _chairs = List.generate(8, (_) => null);
   final List<String> _roomLogs = [];
   final ScrollController _logScrollController = ScrollController();
+  final TextEditingController _chatController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    _initSocket();
+    _setupSocket();
     _initAgora();
   }
 
-  // 1. የሶኬት ግንኙነት (Socket.io)
-  void _initSocket() {
-    socket = IO.io(
-      AppData.serverUrl,
-      IO.OptionBuilder().setTransports(['websocket']).disableAutoConnect().build(),
-    );
-    socket?.connect();
+  void _setupSocket() {
+    _socketService.connect();
+    _socketService.joinRoom(widget.roomId);
 
-    socket?.onConnect((_) {
-      socket?.emit('join_room', {'room': widget.roomId});
-    });
+    _socketService.onChairActionReceived = (data) {
+      if (!mounted) return;
+      final int chairIndex = data['chairIndex'] ?? 0;
+      final String action = data['action'] ?? '';
+      final String userName = data['userName'] ?? 'User';
+      final String userId = data['userId']?.toString() ?? '';
 
-    // ሌላ ሰው ወይም እኔ ወንበር ስንይዝ/ስንለቅ የሚመጣ መረጃ
-    socket?.on('chair_action', (data) {
-      if (mounted) {
-        final int chairIndex = data['chairIndex'] ?? 0;
-        final String action = data['action'] ?? '';
-        final String userName = data['userName'] ?? 'User';
-        final String userId = data['userId']?.toString() ?? '';
+      setState(() {
+        if (action == 'sit') {
+          _chairs[chairIndex] = {
+            'userName': userName,
+            'userId': userId,
+          };
+          _addLog('$userName (ID: $userId) sat on Seat #${chairIndex + 1}');
+        } else if (action == 'leave') {
+          _chairs[chairIndex] = null;
+          _addLog('$userName (ID: $userId) left Seat #${chairIndex + 1}');
+        }
+      });
+    };
 
-        setState(() {
-          if (action == 'sit') {
-            _chairs[chairIndex] = {
-              'userName': userName,
-              'userId': userId,
-            };
-            _addLog('👤 $userName (ID: $userId) ወንበር #${chairIndex + 1} ያዘ');
-          } else if (action == 'leave') {
-            _chairs[chairIndex] = null;
-            _addLog('🚪 $userName (ID: $userId) ከወንበር #${chairIndex + 1} ወረደ');
-          }
-        });
-      }
-    });
-
-    socket?.on('chat_message', (data) {
-      if (mounted) {
-        setState(() {
-          _addLog('${data['sender']} (ID: ${data['userId']}): ${data['text']}');
-        });
-      }
-    });
+    _socketService.onChatMessageReceived = (data) {
+      if (!mounted) return;
+      setState(() {
+        _addLog('${data['sender']} (ID: ${data['userId']}): ${data['text']}');
+      });
+    };
   }
 
-  // 2. የድምፅ ግንኙነት (Agora RTC Engine)
   Future<void> _initAgora() async {
     try {
       _engine = createAgoraRtcEngine();
       await _engine?.initialize(const RtcEngineContext(
-        appId: AppData.agoraAppId,
+        appId: UserService.agoraAppId,
         channelProfile: ChannelProfileType.channelProfileLiveBroadcasting,
       ));
 
@@ -96,17 +86,13 @@ class _RoomScreenState extends State<RoomScreen> {
           onJoinChannelSuccess: (RtcConnection connection, int elapsed) {
             debugPrint("Agora Channel Joined: ${connection.channelId}");
           },
-          onUserMuteAudio: (RtcConnection connection, int remoteUid, bool muted) {
-            setState(() {});
-          },
         ),
       );
 
       await _engine?.setClientRole(role: ClientRoleType.clientRoleBroadcaster);
       await _engine?.enableAudio();
 
-      // ወደ ክፍሉ መግባት
-      final uid = int.tryParse(AppData.currentUserId) ?? 0;
+      final uid = int.tryParse(_userService.userId) ?? 0;
       await _engine?.joinChannel(
         token: '',
         channelId: widget.roomId,
@@ -134,42 +120,32 @@ class _RoomScreenState extends State<RoomScreen> {
     });
   }
 
-// ወንበር ላይ መቀመጥ ወይም መልቀቅ
   void _toggleChair(int index) {
     if (_chairs[index] != null) {
-      // ወንበሩ የተያዘው በእኔ ከሆነ መልቀቅ
-      if (_chairs[index]!['userId'] == AppData.currentUserId) {
-        socket?.emit('chair_action', {
-          'room': widget.roomId,
-          'chairIndex': index,
-          'userName': AppData.currentUserName,
-          'userId': AppData.currentUserId,
-          'action': 'leave',
-        });
+      if (_chairs[index]!['userId'] == _userService.userId) {
+        _socketService.sendChairAction(
+          roomId: widget.roomId,
+          chairIndex: index,
+          action: 'leave',
+        );
         setState(() => _myCurrentChair = null);
       }
       return;
     }
 
-    // ከቀድሞ ወንበር መነሳት
     if (_myCurrentChair != null) {
-      socket?.emit('chair_action', {
-        'room': widget.roomId,
-        'chairIndex': _myCurrentChair,
-        'userName': AppData.currentUserName,
-        'userId': AppData.currentUserId,
-        'action': 'leave',
-      });
+      _socketService.sendChairAction(
+        roomId: widget.roomId,
+        chairIndex: _myCurrentChair!,
+        action: 'leave',
+      );
     }
 
-    // አዲሱን ወንበር መያዝ - ስም እና ID አብረው ይላካሉ
-    socket?.emit('chair_action', {
-      'room': widget.roomId,
-      'chairIndex': index,
-      'userName': AppData.currentUserName,
-      'userId': AppData.currentUserId,
-      'action': 'sit',
-    });
+_socketService.sendChairAction(
+      roomId: widget.roomId,
+      chairIndex: index,
+      action: 'sit',
+    );
     setState(() => _myCurrentChair = index);
   }
 
@@ -180,22 +156,26 @@ class _RoomScreenState extends State<RoomScreen> {
     _engine?.muteLocalAudioStream(_isMicMuted);
   }
 
+  void _sendMessage() {
+    final text = _chatController.text.trim();
+    if (text.isEmpty) return;
+    _socketService.sendChatMessage(roomId: widget.roomId, text: text);
+    _chatController.clear();
+  }
+
   @override
   void dispose() {
     if (_myCurrentChair != null) {
-      socket?.emit('chair_action', {
-        'room': widget.roomId,
-        'chairIndex': _myCurrentChair,
-        'userName': AppData.currentUserName,
-        'userId': AppData.currentUserId,
-        'action': 'leave',
-      });
+      _socketService.sendChairAction(
+        roomId: widget.roomId,
+        chairIndex: _myCurrentChair!,
+        action: 'leave',
+      );
     }
-    socket?.disconnect();
-    socket?.dispose();
     _engine?.leaveChannel();
     _engine?.release();
     _logScrollController.dispose();
+    _chatController.dispose();
     super.dispose();
   }
 
@@ -230,7 +210,7 @@ class _RoomScreenState extends State<RoomScreen> {
               children: [
                 const Icon(Icons.monetization_on, color: Colors.amber, size: 16),
                 const SizedBox(width: 4),
-                Text('${AppData.userCoins}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                Text('${_userService.coins}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
               ],
             ),
           ),
@@ -238,7 +218,6 @@ class _RoomScreenState extends State<RoomScreen> {
       ),
       body: Column(
         children: [
-          // Banner
           Container(
             margin: const EdgeInsets.all(12),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -256,8 +235,6 @@ class _RoomScreenState extends State<RoomScreen> {
               ],
             ),
           ),
-
-// 8 Chairs Grid (ከስሩ የተጠቃሚው ID አብሮ የሚታይበት)
           Expanded(
             flex: 6,
             child: GridView.builder(
@@ -274,7 +251,8 @@ class _RoomScreenState extends State<RoomScreen> {
                 final bool isOccupied = chair != null;
 
                 return GestureDetector(
-                  onTap: () => _toggleChair(index),
+
+onTap: () => _toggleChair(index),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -299,9 +277,8 @@ class _RoomScreenState extends State<RoomScreen> {
                         ),
                       ),
                       const SizedBox(height: 6),
-                      // ስም
                       Text(
-                        isOccupied ? chair['userName'] : 'ወንበር ${index + 1}',
+                        isOccupied ? chair['userName'] : 'Seat ${index + 1}',
                         style: TextStyle(
                           color: isOccupied ? Colors.white : Colors.white54,
                           fontSize: 11,
@@ -310,7 +287,6 @@ class _RoomScreenState extends State<RoomScreen> {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      // ከስሙ ስር የሚቀመጠው የተጠቃሚው ID
                       if (isOccupied)
                         Text(
                           'ID: ${chair['userId']}',
@@ -326,8 +302,6 @@ class _RoomScreenState extends State<RoomScreen> {
               },
             ),
           ),
-
-          // System Messages / Room Logs
           Expanded(
             flex: 3,
             child: Container(
@@ -352,8 +326,6 @@ class _RoomScreenState extends State<RoomScreen> {
               ),
             ),
           ),
-
-// Bottom Action Bar
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             color: const Color(0xFF161B26),
@@ -370,18 +342,28 @@ class _RoomScreenState extends State<RoomScreen> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                    decoration: BoxDecoration(
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+
+decoration: BoxDecoration(
                       color: Colors.white.withOpacity(0.08),
                       borderRadius: BorderRadius.circular(20),
                     ),
-                    child: const Text('Say Hello...', style: TextStyle(color: Colors.white38, fontSize: 13)),
+                    child: TextField(
+                      controller: _chatController,
+                      style: const TextStyle(color: Colors.white, fontSize: 13),
+                      decoration: const InputDecoration(
+                        hintText: 'Say Hello...',
+                        hintStyle: TextStyle(color: Colors.white38, fontSize: 13),
+                        border: InputBorder.none,
+                      ),
+                      onSubmitted: (_) => _sendMessage(),
+                    ),
                   ),
                 ),
-                const SizedBox(width: 12),
-                const Icon(Icons.sports_esports_outlined, color: Colors.amber, size: 26),
-                const SizedBox(width: 14),
-                const Icon(Icons.card_giftcard, color: Colors.amber, size: 26),
+                IconButton(
+                  icon: const Icon(Icons.send, color: Color(0xFF00C9A7), size: 22),
+                  onPressed: _sendMessage,
+                ),
               ],
             ),
           ),
