@@ -1,39 +1,9 @@
-class AmbientParticlesPainter extends CustomPainter {
-  final double progress;
-  AmbientParticlesPainter({required this.progress});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()..style = PaintingStyle.fill;
-    final random = math.Random(42);
-
-    for (int i = 0; i < 18; i++) {
-      final double baseX = random.nextDouble() * size.width;
-      final double speed = 0.3 + (random.nextDouble() * 0.7);
-      final double yOffset = (progress * size.height * speed + (i * 45)) % size.height;
-      final double currentY = size.height - yOffset;
-      final double radius = 2.0 + (random.nextDouble() * 3.5);
-      final double opacity = 0.15 + (0.35 * math.sin((progress * 2 * math.pi) + i).abs());
-
-      final colorList = [
-        const Color(0xFF00E5FF),
-        const Color(0xFFD500F9),
-        const Color(0xFFFFD700),
-      ];
-      final color = colorList[i % colorList.length].withOpacity(opacity);
-
-      paint.color = color;
-      canvas.drawCircle(Offset(baseX, currentY), radius, paint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant AmbientParticlesPainter oldDelegate) => true;
-}
-
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'main.dart';
+
+class RoomChairsGrid extends StatefulWidget {
 
 class RoomChairsGrid extends StatefulWidget {
   final IO.Socket? socket;
