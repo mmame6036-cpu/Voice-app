@@ -84,7 +84,7 @@ app.post('/api/register-user', async (req, res) => {
 
     const newUser = new User({
       userId: assignedId,
-      name: name || User_${assignedId},
+      name: name || ("User_" + assignedId),
       deviceId: deviceId || dev_${Date.now()}
     });
 
