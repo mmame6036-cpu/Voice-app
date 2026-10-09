@@ -4,8 +4,6 @@ import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'main.dart';
 
 class RoomChairsGrid extends StatefulWidget {
-
-class RoomChairsGrid extends StatefulWidget {
   final IO.Socket? socket;
   final String roomId;
   final Map<int, String> occupiedChairs;
@@ -64,7 +62,6 @@ class _RoomChairsGridState extends State<RoomChairsGrid> with SingleTickerProvid
 
     if (widget.onChairTap != null) widget.onChairTap!(chairNum);
 
-    // ክፍሉን እና የተጠቃሚውን መረጃ ሙሉ በሙሉ መላክ
     widget.socket?.emit('chair_action', {
       'room': widget.roomId,
       'chairNum': chairNum,
