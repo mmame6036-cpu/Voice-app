@@ -27,7 +27,7 @@ class _RoomScreenState extends State<RoomScreen> {
   bool _isMicMuted = false;
   int? _myCurrentChair;
 
-  // 8 seats/chairs
+  // 8 seats
   final List<Map<String, dynamic>?> _chairs = List.generate(8, (_) => null);
   final List<String> _roomLogs = [];
   final ScrollController _logScrollController = ScrollController();
@@ -121,32 +121,50 @@ class _RoomScreenState extends State<RoomScreen> {
   }
 
   void _toggleChair(int index) {
-    if (_chairs[index] != null) {
-      if (_chairs[index]!['userId'] == _userService.userId) {
+    setState(() {
+      // ተጠቃሚው ቀድሞ የተቀመጠበትን ወንበር ከነካው ይነሳል
+      if (_chairs[index] != null && _chairs[index]!['userId'] == _userService.userId) {
+        _chairs[index] = null;
+        _myCurrentChair = null;
+        _addLog('${_userService.userName} left Seat #${index + 1}');
         _socketService.sendChairAction(
           roomId: widget.roomId,
           chairIndex: index,
           action: 'leave',
         );
-        setState(() => _myCurrentChair = null);
+        return;
       }
-      return;
-    }
 
-    if (_myCurrentChair != null) {
+// ሌላ ሰው የተቀመጠበት ከሆነ ምንም አያደርግም
+      if (_chairs[index] != null) {
+        return;
+      }
+
+      // ከዚህ በፊት ሌላ ወንበር ላይ ከነበረ ነባሩን መልቀቅ
+      if (_myCurrentChair != null) {
+        _chairs[_myCurrentChair!] = null;
+        _socketService.sendChairAction(
+          roomId: widget.roomId,
+          chairIndex: _myCurrentChair!,
+          action: 'leave',
+        );
+      }
+
+      // አዲሱን ወንበር ወዲያውኑ በስክሪኑ ላይ መያዝ
+      _chairs[index] = {
+        'userName': _userService.userName,
+        'userId': _userService.userId,
+      };
+      _myCurrentChair = index;
+      _addLog('${_userService.userName} (ID: ${_userService.userId}) sat on Seat #${index + 1}');
+
+      // ለሌሎች ስልኮች ማሳወቅ
       _socketService.sendChairAction(
         roomId: widget.roomId,
-        chairIndex: _myCurrentChair!,
-        action: 'leave',
+        chairIndex: index,
+        action: 'sit',
       );
-    }
-
-_socketService.sendChairAction(
-      roomId: widget.roomId,
-      chairIndex: index,
-      action: 'sit',
-    );
-    setState(() => _myCurrentChair = index);
+    });
   }
 
   void _toggleMic() {
@@ -231,8 +249,9 @@ _socketService.sendChairAction(
               children: [
                 Icon(Icons.local_fire_department, color: Colors.amber, size: 20),
                 SizedBox(width: 8),
-                Text('Voice Room Live & Active!', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
-              ],
+                Text('Tap any seat to sit down and speak', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+
+],
             ),
           ),
           Expanded(
@@ -251,14 +270,14 @@ _socketService.sendChairAction(
                 final bool isOccupied = chair != null;
 
                 return GestureDetector(
-
-onTap: () => _toggleChair(index),
+                  onTap: () => _toggleChair(index),
+                  behavior: HitTestBehavior.opaque,
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Container(
-                        width: 54,
-                        height: 54,
+                        width: 56,
+                        height: 56,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           color: isOccupied ? const Color(0xFF00C9A7) : const Color(0xFF1E2638),
@@ -322,7 +341,8 @@ onTap: () => _toggleChair(index),
                       style: const TextStyle(color: Colors.white70, fontSize: 12),
                     ),
                   );
-                },
+
+},
               ),
             ),
           ),
@@ -343,8 +363,7 @@ onTap: () => _toggleChair(index),
                 Expanded(
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 14),
-
-decoration: BoxDecoration(
+                    decoration: BoxDecoration(
                       color: Colors.white.withOpacity(0.08),
                       borderRadius: BorderRadius.circular(20),
                     ),
