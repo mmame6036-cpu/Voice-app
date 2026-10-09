@@ -11,18 +11,20 @@ class UserService {
   static const String serverUrl = 'https://voice-app-2-jdqf.onrender.com';
   static const String agoraAppId = '21091aff01114a66b580ce15b0f1b642';
 
-  String userId = '1000';
-  String userName = 'User_1000';
+  // ነባሪው ባዶ ነው፤ በዘፈቀደ 1000 አይሆንም
+  String userId = '';
+  String userName = '';
   int coins = 50000;
   bool isOwner = false;
   bool isInitialized = false;
 
   Future<void> initializeUser() async {
-    if (isInitialized) return;
+    if (isInitialized && userId.isNotEmpty) return;
 
     try {
       final dir = Directory.systemTemp;
-      final file = File('${dir.path}/app_user_identity.json');
+      // እያንዳንዱ ስልክ የራሱ ልዩ ስቶሬጅ ፋይል
+      final file = File('${dir.path}/app_identity_v2.json');
 
       if (await file.exists()) {
         final content = await file.readAsString();
@@ -34,10 +36,13 @@ class UserService {
         return;
       }
 
-      final deviceKey = 'device_${DateTime.now().millisecondsSinceEpoch}_${Random().nextInt(999999)}';
+      // ለእያንዳንዱ ስልክ የተለየ ልዩ ቁጥር ማመንጨት
+      final randomSeed = Random().nextInt(8999) + 1001; // ከ 1001 እስከ 9999
+      final deviceKey = 'device_${Platform.operatingSystem}_${DateTime.now().millisecondsSinceEpoch}_$randomSeed';
 
+      // ሰርቨሩን መጠየቅ
       final client = HttpClient();
-      client.connectionTimeout = const Duration(seconds: 12);
+      client.connectionTimeout = const Duration(seconds: 8);
       final request = await client.postUrl(Uri.parse('$serverUrl/api/register-user'));
       request.headers.set('content-type', 'application/json');
 
@@ -67,14 +72,26 @@ class UserService {
         }
       }
     } catch (e) {
-      debugPrint('UserService Error: $e');
+      debugPrint('UserService Server Error: $e');
     }
 
-    // ሰርቨሩ በሰዓቱ ምላሽ ባይሰጥ እንኳ ባዶ እንዳይሆን የተጠቃሚውን ቁጥር ማመንጨት
-    if (userId.isEmpty || userId == '') {
-      userId = '100${Random().nextInt(90) + 10}';
+    // ሰርቨሩ ምላሽ ካልሰጠ ለእያንዳንዱ ስልክ የተለየ ልዩ ID ይሰጠዋል (1000 አይሰጠውም)
+    if (userId.isEmpty) {
+      final newRandomId = '${Random().nextInt(8999) + 1001}';
+      userId = newRandomId;
       userName = 'User_$userId';
+      isOwner = false;
+
+      try {
+        final dir = Directory.systemTemp;
+        final file = File('${dir.path}/app_identity_v2.json');
+        await file.writeAsString(jsonEncode({
+          'userId': userId,
+          'name': userName,
+        }));
+      } catch (_) {}
     }
+
     isInitialized = true;
   }
 
