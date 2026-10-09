@@ -18,7 +18,6 @@ class _MessagesScreenState extends State<MessagesScreen> {
   Map<String, dynamic>? _searchedUser;
   String _searchError = '';
 
-  // በአይዲ ሰውን ከዳታቤዝ መፈለጊያ API
   Future<void> _searchUserById(String searchId) async {
     if (searchId.trim().isEmpty) return;
     setState(() {
@@ -107,9 +106,9 @@ class _MessagesScreenState extends State<MessagesScreen> {
                               borderSide: BorderSide.none,
                             ),
                           ),
+                        ),
 
 ),
-                      ),
                       const SizedBox(width: 8),
                       ElevatedButton(
                         style: ElevatedButton.styleFrom(
@@ -257,7 +256,6 @@ void _showNoticeDialog(String title, String content, IconData icon, Color color)
         ),
         child: Column(
           children: [
-            // Filter Pills & Search Trigger
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
               child: Row(
@@ -314,10 +312,7 @@ border: Border.all(
                 ],
               ),
             ),
-
             const Divider(height: 1, color: Colors.white10),
-
-            // Message Items List
             Expanded(
               child: ListView(
                 children: [
@@ -433,9 +428,7 @@ leading: Container(
   }
 }
 
-// ============================================================================
-// 1-ON-1 DIRECT CHAT SCREEN (በሁለት ተጠቃሚዎች መሃል የሚደረግ የቀጥታ የቴክስት ውይይት)
-// ============================================================================
+// 1-ON-1 DIRECT CHAT SCREEN
 class DirectChatScreen extends StatefulWidget {
   final String targetUserId;
   final String targetUserName;
@@ -471,11 +464,9 @@ class _DirectChatScreenState extends State<DirectChatScreen> {
     socket?.connect();
 
     socket?.onConnect((_) {
-      // ተጠቃሚው በራሱ አይዲ የግል ቻናሉን ይቀላቀላል
       socket?.emit('user_connected', AppData.currentUserId);
     });
 
-    // አዲስ መልዕክት ሲመጣ ወዲያው መቀበያ
     socket?.on('receive_direct_message', (data) {
       if (mounted) {
         if (data['senderId'] == widget.targetUserId) {
@@ -491,7 +482,6 @@ class _DirectChatScreenState extends State<DirectChatScreen> {
       }
     });
 
-    // እኔ የላኩት መልዕክት ሰርቨር ላይ መድረሱን ማረጋገጫ
     socket?.on('message_sent', (data) {
       if (mounted) {
         setState(() {
@@ -536,7 +526,7 @@ class _DirectChatScreenState extends State<DirectChatScreen> {
     }
   }
 
-void _sendMessage() {
+  void _sendMessage() {
     final text = _msgController.text.trim();
     if (text.isEmpty) return;
 
@@ -549,5 +539,54 @@ void _sendMessage() {
     _msgController.clear();
   }
 
-  void _scrollToBottom() {
-    Future.delayed(
+void _scrollToBottom() {
+    Future.delayed(const Duration(milliseconds: 100), () {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    socket?.disconnect();
+    socket?.dispose();
+    _msgController.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF0B0E14),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF161B26),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(widget.targetUserName, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            Text('ID: ${widget.targetUserId}', style: const TextStyle(fontSize: 11, color: Color(0xFF00C9A7))),
+          ],
+        ),
+      ),
+      body: Column(
+        children: [
+          Expanded(
+            child: ListView.builder(
+              controller: _scrollController,
+              padding: const EdgeInsets.all(16),
+              itemCount: _messages.length,
+              itemBuilder: (context, idx) {
+                final msg = _messages[idx];
+                final isMe = msg['isMe'] == true;
+                return Align(
+                  alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(vertical: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
