@@ -5,10 +5,7 @@ import 'messages_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
-  // Initialize device user identity and retrieve permanent ID
   await UserService().initializeUser();
-  
   runApp(const NileVoiceApp());
 }
 
@@ -75,7 +72,6 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   }
 }
 
-// 1. Home Screen (Voice Rooms)
 class HomeScreen extends StatelessWidget {
   const HomeScreen({Key? key}) : super(key: key);
 
@@ -119,13 +115,13 @@ class HomeScreen extends StatelessWidget {
                     Text('Hello, ${user.userName}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                     Text('Your ID: ${user.userId}', style: const TextStyle(color: Color(0xFF00C9A7), fontSize: 13, fontWeight: FontWeight.bold)),
                   ],
-
-),
+                ),
               ],
             ),
           ),
           const SizedBox(height: 20),
-          const Text('Recommended Rooms', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+
+const Text('Recommended Rooms', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
           const SizedBox(height: 12),
           GestureDetector(
             onTap: () {
@@ -174,14 +170,28 @@ class HomeScreen extends StatelessWidget {
   }
 }
 
-// 2. Profile Screen (Me)
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({Key? key}) : super(key: key);
 
   @override
-  Widget build(BuildContext context) {
-    final user = UserService();
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
 
+class _ProfileScreenState extends State<ProfileScreen> {
+  final UserService _user = UserService();
+
+  @override
+  void initState() {
+    super.initState();
+    if (!_user.isInitialized) {
+      _user.initializeUser().then((_) {
+        if (mounted) setState(() {});
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: const Color(0xFF161B26),
@@ -197,13 +207,13 @@ class ProfileScreen extends StatelessWidget {
                 radius: 46,
                 backgroundColor: const Color(0xFF00C9A7),
                 child: Text(
-                  user.userName.isNotEmpty ? user.userName[0].toUpperCase() : 'U',
+                  _user.userName.isNotEmpty ? _user.userName[0].toUpperCase() : 'U',
                   style: const TextStyle(fontSize: 36, fontWeight: FontWeight.bold, color: Colors.black),
                 ),
               ),
               const SizedBox(height: 16),
               Text(
-                user.userName,
+                _user.userName,
                 style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
@@ -215,18 +225,18 @@ class ProfileScreen extends StatelessWidget {
                   border: Border.all(color: const Color(0xFF00C9A7)),
                 ),
                 child: Text(
-                  'User ID: ${user.userId}',
+                  'User ID: ${_user.userId}',
                   style: const TextStyle(color: Color(0xFF00C9A7), fontWeight: FontWeight.bold, fontSize: 14),
-                ),
+
+),
               ),
               const SizedBox(height: 24),
               ListTile(
                 tileColor: const Color(0xFF161B26),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-
-leading: const Icon(Icons.monetization_on, color: Colors.amber),
+                leading: const Icon(Icons.monetization_on, color: Colors.amber),
                 title: const Text('Balance Coins'),
-                trailing: Text('${user.coins}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                trailing: Text('${_user.coins}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
               ),
             ],
           ),
