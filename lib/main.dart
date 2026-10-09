@@ -1,5 +1,7 @@
 import 'dart:math';
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'store_screen.dart';
@@ -14,24 +16,58 @@ import 'support_screen.dart';
 import 'task_screen.dart';
 import 'messages_screen.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // ሰርቨሩ ላይ ተጠቃሚውን መመዝገብ ወይም 1000 ID መስጠት
+  await AppData.initUserRegistration();
   runApp(const NileVoiceApp());
 }
 
 // Global App State
 class AppData {
   static const String agoraAppId = '21091aff01114a66b580ce15b0f1b642';
-  // እያንዳንዱ ስልክ ሲከፈት የተለየ ባለ 6 ዲጅት UID ያገኛል
-  static String currentUserId = (100000 + Random().nextInt(900000)).toString();
-  static String currentUserName = "User_${currentUserId.substring(3)}";
+  
+  // ነባሪ መታወቂያ - መጀመሪያ ላይ 1000 ሆኖ ይቀመጣል
+  static String currentUserId = '1000';
+  static String currentUserName = 'Kedir';
   static int userCoins = 50000;
   static int userPoints = 0;
   static bool isSuperAdmin = true;
   static bool biometricVerified = true;
   
   // ትክክለኛው የ Render ሰርቨር አድራሻ
-  static const String serverUrl = 'https://voice-app-2-jdqf.onrender.com';
+  static const String serverUrl = 'https://voice-app-2.onrender.com';
+
+  // ሰርቨሩ ላይ ተጠቃሚውን መመዝገቢያ ወይም 1000/1001 ID መመደቢያ
+  static Future<void> initUserRegistration({bool isOwnerPhone = true}) async {
+    try {
+      final client = HttpClient();
+      client.connectionTimeout = const Duration(seconds: 8);
+      final request = await client.postUrl(
+        Uri.parse('$serverUrl/api/register-user'),
+      );
+      request.headers.set('content-type', 'application/json');
+      
+      // ይህ የአንተ ስልክ ከሆነ isOwner: true ይሆናል (ID: 1000)
+      request.add(utf8.encode(jsonEncode({
+        'name': isOwnerPhone ? 'Kedir' : 'GuestUser',
+        'isOwner': isOwnerPhone,
+      })));
+
+      final response = await request.close();
+      if (response.statusCode == 200) {
+        final responseBody = await response.transform(utf8.decoder).join();
+        final data = jsonDecode(responseBody);
+        if (data['success'] == true && data['user'] != null) {
+          currentUserId = data['user']['userId'].toString();
+          currentUserName = data['user']['name'] ?? 'User_$currentUserId';
+          isSuperAdmin = (currentUserId == '1000');
+        }
+      }
+    } catch (e) {
+      debugPrint('Registration sync error: $e');
+    }
+  }
 }
 
 class NileVoiceApp extends StatelessWidget {
@@ -84,7 +120,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         selectedItemColor: const Color(0xFF00C9A7),
         unselectedItemColor: Colors.white54,
         type: BottomNavigationBarType.fixed,
-        items: const [
+
+items: const [
           BottomNavigationBarItem(
             icon: Icon(Icons.mic),
             label: 'Home',
@@ -116,7 +153,7 @@ class RoomsHomeScreen extends StatelessWidget {
     final List<Map<String, dynamic>> rooms = [
       {
         'id': '1001',
-        'title': '🇪🇹 Ethio Nile Official Room',
+        'title': 'Ethio Nile Official Room',
         'host': 'Mimi',
         'users': 48,
         'tag': 'Chat & Music',
@@ -124,7 +161,7 @@ class RoomsHomeScreen extends StatelessWidget {
       },
       {
         'id': '1001',
-        'title': '🎤 Golden Voices Lounge',
+        'title': 'Golden Voices Lounge',
         'host': 'Yared',
         'users': 32,
         'tag': 'Live Singing',
@@ -132,7 +169,7 @@ class RoomsHomeScreen extends StatelessWidget {
       },
       {
         'id': '1001',
-        'title': '🎉 Night Party & Games',
+        'title': 'Night Party & Games',
         'host': 'Sara',
         'users': 85,
         'tag': 'Gaming',
@@ -140,11 +177,11 @@ class RoomsHomeScreen extends StatelessWidget {
       },
     ];
 
-return Scaffold(
+    return Scaffold(
       appBar: AppBar(
         backgroundColor: const Color(0xFF161B26),
         elevation: 0,
-        title: const Text('Nile Voice 🎙️', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
+        title: const Text('Nile Voice', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
         actions: [
           IconButton(icon: const Icon(Icons.search), onPressed: () {}),
           IconButton(icon: const Icon(Icons.notifications_none), onPressed: () {}),
@@ -162,7 +199,6 @@ return Scaffold(
             child: InkWell(
               borderRadius: BorderRadius.circular(16),
               onTap: () {
-                // ሁለቱም ስልኮች በቀጥታ ወደ 1001 ይገባሉ
                 Navigator.push(
                   context,
                   MaterialPageRoute(
@@ -198,7 +234,8 @@ return Scaffold(
                           const SizedBox(height: 6),
                           Row(
                             children: [
-                              Text('Host: ${r['host']}', style: const TextStyle(color: Colors.white70, fontSize: 12)),
+
+Text('Host: ${r['host']}', style: const TextStyle(color: Colors.white70, fontSize: 12)),
                               const SizedBox(width: 12),
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
@@ -232,8 +269,7 @@ return Scaffold(
         width: 56,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-
-gradient: const LinearGradient(
+          gradient: const LinearGradient(
             colors: [Color(0xFF00E5FF), Color(0xFF00B0FF)],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
@@ -311,7 +347,8 @@ class ActiveVoiceRoomScreen extends StatelessWidget {
       body: Column(
         children: [
           const SizedBox(height: 20),
-          Center(
+
+Center(
             child: Column(
               children: [
                 const CircleAvatar(
@@ -404,7 +441,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             ),
                             const SizedBox(height: 4),
                             Text('ID: ${AppData.currentUserId}', style: const TextStyle(fontSize: 13, color: Colors.white54)),
-                          ],
+
+],
                         ),
                       ),
                     ],
@@ -436,8 +474,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 onCoinsUpdated: (newCoins) {
                                   setState(() {
                                     AppData.userCoins = newCoins;
-
-});
+                                  });
                                   widget.onCoinsUpdated();
                                 },
                               ),
@@ -485,14 +522,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               setState(() {
                                 AppData.userCoins = newCoins;
                               });
-                              widget.onCoinsUpdated();
+
+widget.onCoinsUpdated();
                             },
                           ),
                         ),
                       );
                     },
                     icon: const Icon(Icons.account_balance_wallet, color: Colors.black, size: 18),
-                    label: const Text('Coin Seller 🪙', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+                    label: const Text('Coin Seller', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.amber,
                       padding: const EdgeInsets.symmetric(vertical: 12),
@@ -519,9 +557,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                       );
                     },
-
-icon: const Icon(Icons.storefront, color: Colors.white, size: 18),
-                    label: const Text('Store 🛍️', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    icon: const Icon(Icons.storefront, color: Colors.white, size: 18),
+                    label: const Text('Store', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF00C9A7),
                       padding: const EdgeInsets.symmetric(vertical: 12),
@@ -569,7 +606,8 @@ icon: const Icon(Icons.storefront, color: Colors.white, size: 18),
                 leading: Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF00E1B0).withOpacity(0.15),
+
+color: const Color(0xFF00E1B0).withOpacity(0.15),
                     shape: BoxShape.circle,
                   ),
                   child: const Icon(Icons.business_center, color: Color(0xFF00E1B0)),
@@ -602,8 +640,7 @@ icon: const Icon(Icons.storefront, color: Colors.white, size: 18),
               child: ListTile(
                 leading: Container(
                   padding: const EdgeInsets.all(8),
-
-decoration: BoxDecoration(
+                  decoration: BoxDecoration(
                     color: Colors.white.withOpacity(0.15),
                     shape: BoxShape.circle,
                   ),
@@ -652,7 +689,8 @@ decoration: BoxDecoration(
               decoration: BoxDecoration(
                 color: const Color(0xFF161B26),
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: Colors.white10),
+
+border: Border.all(color: Colors.white10),
               ),
               child: ListTile(
                 leading: Container(
@@ -686,8 +724,7 @@ decoration: BoxDecoration(
                   decoration: BoxDecoration(
                     color: Colors.purpleAccent.withOpacity(0.15),
                     shape: BoxShape.circle,
-
-),
+                  ),
                   child: const Icon(Icons.help_outline, color: Colors.purpleAccent),
                 ),
                 title: const Text('Support (Help & Feedback)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
@@ -711,7 +748,7 @@ decoration: BoxDecoration(
                 ),
                 child: ListTile(
                   leading: const Icon(Icons.admin_panel_settings, color: Colors.white, size: 24),
-                  title: const Text('Master Admin Portal 👑', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  title: const Text('Master Admin Portal', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                   trailing: const Icon(Icons.arrow_forward_ios, color: Colors.white70, size: 14),
                   onTap: () {
                     Navigator.push(
@@ -743,7 +780,8 @@ class SuperOwnerAdminPortal extends StatelessWidget {
       appBar: AppBar(
         backgroundColor: const Color(0xFF161B26),
         title: const Text('Master Admin Console', style: TextStyle(fontWeight: FontWeight.bold)),
-      ),
+
+),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -757,7 +795,7 @@ class SuperOwnerAdminPortal extends StatelessWidget {
             child: const Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('👑 Nile Voice Master Authority', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 16)),
+                Text('Nile Voice Master Authority', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 16)),
                 SizedBox(height: 6),
                 Text('Owner ID: 1000 (Full Root Access Granted)', style: TextStyle(color: Colors.white70, fontSize: 13)),
               ],
@@ -775,8 +813,7 @@ class SuperOwnerAdminPortal extends StatelessWidget {
           const SizedBox(height: 10),
           ListTile(
             tileColor: const Color(0xFF161B26),
-
-shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             leading: const Icon(Icons.monetization_on, color: Colors.amber),
             title: const Text('System Coin Minting & Audit', style: TextStyle(color: Colors.white)),
             trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.white38),
