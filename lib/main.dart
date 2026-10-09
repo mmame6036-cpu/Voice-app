@@ -12,8 +12,8 @@ import 'settings_screen.dart';
 import 'level_screen.dart';
 import 'support_screen.dart';
 import 'task_screen.dart';
-import 'room_chairs_grid.dart';
 import 'messages_screen.dart';
+
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const NileVoiceApp());
@@ -22,15 +22,16 @@ void main() {
 // Global App State
 class AppData {
   static const String agoraAppId = '21091aff01114a66b580ce15b0f1b642';
-  // እያንዳንዱ ስልክ ሲከፈት የተለየ ባለ 6 ድጅት አይዲ እንዲያገኝ
+  // እያንዳንዱ ስልክ ሲከፈት የተለየ ባለ 6 ዲጅት UID ያገኛል
   static String currentUserId = (100000 + Random().nextInt(900000)).toString();
-  // ስሙ የተጠቃሚው አይዲ መጨረሻ ቁጥር ተደርጎ በራሱ ይመረጣል (ለምሳሌ User_451)
   static String currentUserName = "User_${currentUserId.substring(3)}";
   static int userCoins = 50000;
   static int userPoints = 0;
   static bool isSuperAdmin = true;
   static bool biometricVerified = true;
-  static const String serverUrl = 'https://voice-app-2-jd95.onrender.com';
+  
+  // ትክክለኛው የ Render ሰርቨር አድራሻ
+  static const String serverUrl = 'https://voice-app-2-jdqf.onrender.com';
 }
 
 class NileVoiceApp extends StatelessWidget {
@@ -114,15 +115,15 @@ class RoomsHomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final List<Map<String, dynamic>> rooms = [
       {
-        'id': '101',
-        'title': '🇪🇹 Ethio Nile Coffee Club',
+        'id': '1001',
+        'title': '🇪🇹 Ethio Nile Official Room',
         'host': 'Mimi',
         'users': 48,
         'tag': 'Chat & Music',
         'color': const Color(0xFF1E2638),
       },
       {
-        'id': '102',
+        'id': '1001',
         'title': '🎤 Golden Voices Lounge',
         'host': 'Yared',
         'users': 32,
@@ -130,7 +131,7 @@ class RoomsHomeScreen extends StatelessWidget {
         'color': const Color(0xFF261E38),
       },
       {
-        'id': '103',
+        'id': '1001',
         'title': '🎉 Night Party & Games',
         'host': 'Sara',
         'users': 85,
@@ -139,15 +140,14 @@ class RoomsHomeScreen extends StatelessWidget {
       },
     ];
 
-    return Scaffold(
+return Scaffold(
       appBar: AppBar(
         backgroundColor: const Color(0xFF161B26),
         elevation: 0,
         title: const Text('Nile Voice 🎙️', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
         actions: [
           IconButton(icon: const Icon(Icons.search), onPressed: () {}),
-
-IconButton(icon: const Icon(Icons.notifications_none), onPressed: () {}),
+          IconButton(icon: const Icon(Icons.notifications_none), onPressed: () {}),
         ],
       ),
       body: ListView.builder(
@@ -162,16 +162,18 @@ IconButton(icon: const Icon(Icons.notifications_none), onPressed: () {}),
             child: InkWell(
               borderRadius: BorderRadius.circular(16),
               onTap: () {
-  Navigator.push(
-    context,
-  MaterialPageRoute(
-        builder: (context) => RoomScreen(
-          roomTitle: r['title'] ?? 'Live Room',
-          hostName: r['host'] ?? 'Host',
-      ),
-    ),
-  );
-},
+                // ሁለቱም ስልኮች በቀጥታ ወደ 1001 ይገባሉ
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => RoomScreen(
+                      roomId: '1001',
+                      roomTitle: r['title'] ?? 'Nile Voice Room',
+                      hostName: r['host'] ?? 'Host',
+                    ),
+                  ),
+                );
+              },
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Row(
@@ -230,7 +232,8 @@ IconButton(icon: const Icon(Icons.notifications_none), onPressed: () {}),
         width: 56,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          gradient: const LinearGradient(
+
+gradient: const LinearGradient(
             colors: [Color(0xFF00E5FF), Color(0xFF00B0FF)],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
@@ -252,8 +255,9 @@ IconButton(icon: const Icon(Icons.notifications_none), onPressed: () {}),
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (context) => RoomScreen(
-                    roomTitle: 'Ethio Nile Coffee Club',
+                  builder: (context) => const RoomScreen(
+                    roomId: '1001',
+                    roomTitle: 'Ethio Nile Official Room',
                     hostName: 'KEDIR...',
                   ),
                 ),
@@ -310,10 +314,10 @@ class ActiveVoiceRoomScreen extends StatelessWidget {
           Center(
             child: Column(
               children: [
-                CircleAvatar(
+                const CircleAvatar(
                   radius: 40,
-                  backgroundColor: const Color(0xFF00C9A7),
-                  child: const Icon(Icons.mic, size: 40, color: Colors.black),
+                  backgroundColor: Color(0xFF00C9A7),
+                  child: Icon(Icons.mic, size: 40, color: Colors.black),
                 ),
                 const SizedBox(height: 10),
                 Text(hostName, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
@@ -373,7 +377,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            // User Header
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -407,8 +410,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ],
                   ),
                   const Divider(color: Colors.white10, height: 28),
-                  
-                  // Balance Row with Recharge Button
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: [
@@ -435,7 +436,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 onCoinsUpdated: (newCoins) {
                                   setState(() {
                                     AppData.userCoins = newCoins;
-                                  });
+
+});
                                   widget.onCoinsUpdated();
                                 },
                               ),
@@ -443,8 +445,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           );
                         },
                         icon: const Icon(Icons.add_circle, color: Colors.black, size: 16),
-
-label: const Text('Recharge', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 12)),
+                        label: const Text('Recharge', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 12)),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF00C9A7),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -469,10 +470,7 @@ label: const Text('Recharge', style: TextStyle(color: Colors.black, fontWeight: 
                 ],
               ),
             ),
-
             const SizedBox(height: 16),
-
-            // Coin Seller & Store Buttons
             Row(
               children: [
                 Expanded(
@@ -521,7 +519,8 @@ label: const Text('Recharge', style: TextStyle(color: Colors.black, fontWeight: 
                         ),
                       );
                     },
-                    icon: const Icon(Icons.storefront, color: Colors.white, size: 18),
+
+icon: const Icon(Icons.storefront, color: Colors.white, size: 18),
                     label: const Text('Store 🛍️', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF00C9A7),
@@ -532,9 +531,7 @@ label: const Text('Recharge', style: TextStyle(color: Colors.black, fontWeight: 
                 ),
               ],
             ),
-
-const SizedBox(height: 14),
-// Task Center Button
+            const SizedBox(height: 14),
             Container(
               decoration: BoxDecoration(
                 color: const Color(0xFF161B26),
@@ -562,7 +559,6 @@ const SizedBox(height: 14),
               ),
             ),
             const SizedBox(height: 14),
-            // Agency Center Dashboard Button
             Container(
               decoration: BoxDecoration(
                 color: const Color(0xFF161B26),
@@ -595,119 +591,116 @@ const SizedBox(height: 14),
               ),
             ),
             const SizedBox(height: 14),
-              // 1. Host Center Button
-              Container(
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF8A2BE2), Color(0xFF4A0E4E)],
-                  ),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: Colors.white10),
+            Container(
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF8A2BE2), Color(0xFF4A0E4E)],
                 ),
-                child: ListTile(
-                  leading: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.15),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.mic_external_on, color: Colors.white),
-                  ),
-                  title: const Text('Host Center', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                  subtitle: const Text('Live duration & Host earnings', style: TextStyle(color: Colors.white54, fontSize: 12)),
-                  trailing: const Icon(Icons.arrow_forward_ios, color: Colors.white, size: 16),
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => const HostCenterScreen()),
-                    );
-                  },
-                ),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.white10),
               ),
+              child: ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+
+decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.mic_external_on, color: Colors.white),
+                ),
+                title: const Text('Host Center', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                subtitle: const Text('Live duration & Host earnings', style: TextStyle(color: Colors.white54, fontSize: 12)),
+                trailing: const Icon(Icons.arrow_forward_ios, color: Colors.white, size: 16),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const HostCenterScreen()),
+                  );
+                },
+              ),
+            ),
             const SizedBox(height: 14),
-              // Level (Wealth & Charm) Button
-              Container(
-                decoration: BoxDecoration(
-                  color: const Color(0xFF161B26),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: Colors.white10),
-                ),
-                child: ListTile(
-                  leading: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.amber.withOpacity(0.15),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.military_tech, color: Colors.amber),
-                  ),
-                  title: const Text('Level (Wealth & Charm)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                  subtitle: const Text('Badges, Medals & Upgrades', style: TextStyle(color: Colors.white54, fontSize: 12)),
-                  trailing: const Icon(Icons.arrow_forward_ios, color: Colors.white38, size: 16),
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => const LevelScreen()),
-                    );
-                  },
-                ),
+            Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFF161B26),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.white10),
               ),
-              const SizedBox(height: 14),
-              // 2. Settings Button
-              Container(
-                decoration: BoxDecoration(
-                  color: const Color(0xFF161B26),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: Colors.white10),
-                ),
-                child: ListTile(
-                  leading: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.1),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.settings, color: Colors.white70),
+              child: ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.withOpacity(0.15),
+                    shape: BoxShape.circle,
                   ),
-                  title: const Text('Settings', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                  trailing: const Icon(Icons.arrow_forward_ios, color: Colors.white38, size: 16),
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => const SettingsScreen()),
-                    );
-                  },
+                  child: const Icon(Icons.military_tech, color: Colors.amber),
                 ),
+                title: const Text('Level (Wealth & Charm)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                subtitle: const Text('Badges, Medals & Upgrades', style: TextStyle(color: Colors.white54, fontSize: 12)),
+                trailing: const Icon(Icons.arrow_forward_ios, color: Colors.white38, size: 16),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const LevelScreen()),
+                  );
+                },
               ),
-              const SizedBox(height: 14),
-              // Support (Help & Feedback) Button
-              Container(
-                decoration: BoxDecoration(
-                  color: const Color(0xFF161B26),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: Colors.white10),
-                ),
-                child: ListTile(
-                  leading: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.purpleAccent.withOpacity(0.15),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.help_outline, color: Colors.purpleAccent),
+            ),
+            const SizedBox(height: 14),
+            Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFF161B26),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.white10),
+              ),
+              child: ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.1),
+                    shape: BoxShape.circle,
                   ),
-                  title: const Text('Support (Help & Feedback)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                  subtitle: const Text('FAQs, Host rules & Ticket support', style: TextStyle(color: Colors.white54, fontSize: 12)),
-                  trailing: const Icon(Icons.arrow_forward_ios, color: Colors.white38, size: 16),
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => const SupportScreen()),
-                    );
-                  },
+                  child: const Icon(Icons.settings, color: Colors.white70),
                 ),
+                title: const Text('Settings', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                trailing: const Icon(Icons.arrow_forward_ios, color: Colors.white38, size: 16),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const SettingsScreen()),
+                  );
+                },
               ),
-            // Super Admin Portal
+            ),
+            const SizedBox(height: 14),
+            Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFF161B26),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.white10),
+              ),
+              child: ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.purpleAccent.withOpacity(0.15),
+                    shape: BoxShape.circle,
+
+),
+                  child: const Icon(Icons.help_outline, color: Colors.purpleAccent),
+                ),
+                title: const Text('Support (Help & Feedback)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                subtitle: const Text('FAQs, Host rules & Ticket support', style: TextStyle(color: Colors.white54, fontSize: 12)),
+                trailing: const Icon(Icons.arrow_forward_ios, color: Colors.white38, size: 16),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const SupportScreen()),
+                  );
+                },
+              ),
+            ),
             if (AppData.isSuperAdmin)
               Container(
                 decoration: BoxDecoration(
@@ -765,8 +758,7 @@ class SuperOwnerAdminPortal extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('👑 Nile Voice Master Authority', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 16)),
-
-SizedBox(height: 6),
+                SizedBox(height: 6),
                 Text('Owner ID: 1000 (Full Root Access Granted)', style: TextStyle(color: Colors.white70, fontSize: 13)),
               ],
             ),
@@ -783,7 +775,8 @@ SizedBox(height: 6),
           const SizedBox(height: 10),
           ListTile(
             tileColor: const Color(0xFF161B26),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+
+shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             leading: const Icon(Icons.monetization_on, color: Colors.amber),
             title: const Text('System Coin Minting & Audit', style: TextStyle(color: Colors.white)),
             trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.white38),
