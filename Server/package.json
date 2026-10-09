@@ -10,5 +10,7 @@
     "express": "^4.19.2",
     "socket.io": "^4.7.5",
     "cors": "^2.8.5"
+    "agora-access-token": "^2.0.4",
+    "mongoose": "^8.0.0"
   }
 }
