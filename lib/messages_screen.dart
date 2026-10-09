@@ -1,4 +1,8 @@
+import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:socket_io_client/socket_io_client.dart' as IO;
+import 'main.dart';
 
 class MessagesScreen extends StatefulWidget {
   const MessagesScreen({Key? key}) : super(key: key);
@@ -8,9 +12,186 @@ class MessagesScreen extends StatefulWidget {
 }
 
 class _MessagesScreenState extends State<MessagesScreen> {
-  int _selectedFilter = 0; // 0 for All, 1 for Unread
+  int _selectedFilter = 0;
+  final TextEditingController _searchController = TextEditingController();
+  bool _isSearching = false;
+  Map<String, dynamic>? _searchedUser;
+  String _searchError = '';
 
-  void _showNoticeDialog(String title, String content, IconData icon, Color color) {
+  // በአይዲ ሰውን ከዳታቤዝ መፈለጊያ API
+  Future<void> _searchUserById(String searchId) async {
+    if (searchId.trim().isEmpty) return;
+    setState(() {
+      _isSearching = true;
+      _searchError = '';
+      _searchedUser = null;
+    });
+
+    try {
+      final client = HttpClient();
+      client.connectionTimeout = const Duration(seconds: 8);
+      final request = await client.getUrl(
+        Uri.parse('${AppData.serverUrl}/api/search-user?userId=${searchId.trim()}'),
+      );
+      final response = await request.close();
+      if (response.statusCode == 200) {
+        final responseBody = await response.transform(utf8.decoder).join();
+        final data = jsonDecode(responseBody);
+        if (data['success'] == true && data['user'] != null) {
+          setState(() {
+            _searchedUser = data['user'];
+            _isSearching = false;
+          });
+          return;
+        }
+      }
+      setState(() {
+        _searchError = 'ተጠቃሚው አልተገኘም (ID: $searchId)';
+        _isSearching = false;
+      });
+    } catch (e) {
+      setState(() {
+        _searchError = 'የሰርቨር ግንኙነት ችግር አጋጥሟል';
+        _isSearching = false;
+      });
+    }
+  }
+
+  void _openSearchDialog() {
+    _searchController.clear();
+    setState(() {
+      _searchedUser = null;
+      _searchError = '';
+    });
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF161B26),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+                left: 16,
+                right: 16,
+                top: 20,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'ተጠቃሚ በአይዲ (ID) ይፈልጉ',
+                    style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _searchController,
+                          keyboardType: TextInputType.number,
+                          style: const TextStyle(color: Colors.white),
+                          decoration: InputDecoration(
+                            hintText: 'አይዲ ያስገቡ (ለምሳሌ: 1001)',
+                            hintStyle: const TextStyle(color: Colors.white38),
+                            filled: true,
+                            fillColor: Colors.white.withOpacity(0.08),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide.none,
+                            ),
+                          ),
+
+),
+                      ),
+                      const SizedBox(width: 8),
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF00C9A7),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                        ),
+                        onPressed: () async {
+                          await _searchUserById(_searchController.text);
+                          setModalState(() {});
+                        },
+                        child: _isSearching
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2),
+                              )
+                            : const Text('ፈልግ', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+                      ),
+                    ],
+                  ),
+                  if (_searchError.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Text(_searchError, style: const TextStyle(color: Colors.redAccent, fontSize: 13)),
+                  ],
+                  if (_searchedUser != null) ...[
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.05),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: const Color(0xFF00C9A7).withOpacity(0.4)),
+                      ),
+                      child: ListTile(
+                        leading: CircleAvatar(
+                          backgroundColor: const Color(0xFF00C9A7),
+                          child: Text(
+                            (_searchedUser!['name'] ?? 'U')[0].toUpperCase(),
+                            style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                        title: Text(
+                          _searchedUser!['name'] ?? 'User',
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                        ),
+                        subtitle: Text(
+                          'ID: ${_searchedUser!['userId']}',
+                          style: const TextStyle(color: Color(0xFF00C9A7), fontSize: 12),
+                        ),
+                        trailing: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF00C9A7),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                          onPressed: () {
+                            Navigator.pop(ctx);
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => DirectChatScreen(
+                                  targetUserId: _searchedUser!['userId'].toString(),
+                                  targetUserName: _searchedUser!['name'] ?? 'User',
+                                ),
+                              ),
+                            );
+                          },
+                          child: const Text('አውራ (Chat)', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+void _showNoticeDialog(String title, String content, IconData icon, Color color) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -48,9 +229,9 @@ class _MessagesScreenState extends State<MessagesScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF6F8FA),
+      backgroundColor: const Color(0xFF0B0E14),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF00C9A7),
+        backgroundColor: const Color(0xFF161B26),
         elevation: 0,
         centerTitle: true,
         title: const Text(
@@ -59,26 +240,16 @@ class _MessagesScreenState extends State<MessagesScreen> {
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.chat_bubble_outline, color: Colors.white),
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Chat messages'), duration: Duration(seconds: 1)),
-              );
-            },
+            icon: const Icon(Icons.person_search_rounded, color: Color(0xFF00C9A7), size: 26),
+            tooltip: 'በአይዲ ፈልግ',
+            onPressed: _openSearchDialog,
           ),
-          IconButton(
-            icon: const Icon(Icons.settings_outlined, color: Colors.white),
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Message Settings'), duration: Duration(seconds: 1)),
-              );
-            },
-          ),
+          const SizedBox(width: 6),
         ],
       ),
       body: Container(
         decoration: const BoxDecoration(
-          color: Colors.white,
+          color: Color(0xFF161B26),
           borderRadius: BorderRadius.only(
             topLeft: Radius.circular(24),
             topRight: Radius.circular(24),
@@ -86,7 +257,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
         ),
         child: Column(
           children: [
-            // Filter Pills & Search
+            // Filter Pills & Search Trigger
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
               child: Row(
@@ -96,18 +267,17 @@ class _MessagesScreenState extends State<MessagesScreen> {
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                       decoration: BoxDecoration(
-                        color: _selectedFilter == 0 ? const Color(0xFFE6F8F5) : Colors.transparent,
+                        color: _selectedFilter == 0 ? const Color(0xFF00C9A7).withOpacity(0.2) : Colors.transparent,
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(
-                          color: _selectedFilter == 0 ? const Color(0xFF00C9A7) : Colors.black12,
+                          color: _selectedFilter == 0 ? const Color(0xFF00C9A7) : Colors.white24,
                         ),
                       ),
                       child: Text(
                         'All',
                         style: TextStyle(
-                          color: _selectedFilter == 0 ? const Color(0xFF00C9A7) : Colors.black54,
-
-fontWeight: FontWeight.bold,
+                          color: _selectedFilter == 0 ? const Color(0xFF00C9A7) : Colors.white60,
+                          fontWeight: FontWeight.bold,
                           fontSize: 13,
                         ),
                       ),
@@ -119,16 +289,17 @@ fontWeight: FontWeight.bold,
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                       decoration: BoxDecoration(
-                        color: _selectedFilter == 1 ? const Color(0xFFE6F8F5) : Colors.transparent,
+                        color: _selectedFilter == 1 ? const Color(0xFF00C9A7).withOpacity(0.2) : Colors.transparent,
                         borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: _selectedFilter == 1 ? const Color(0xFF00C9A7) : Colors.black12,
+
+border: Border.all(
+                          color: _selectedFilter == 1 ? const Color(0xFF00C9A7) : Colors.white24,
                         ),
                       ),
                       child: Text(
                         'Unread',
                         style: TextStyle(
-                          color: _selectedFilter == 1 ? const Color(0xFF00C9A7) : Colors.black54,
+                          color: _selectedFilter == 1 ? const Color(0xFF00C9A7) : Colors.white60,
                           fontWeight: FontWeight.bold,
                           fontSize: 13,
                         ),
@@ -137,81 +308,71 @@ fontWeight: FontWeight.bold,
                   ),
                   const Spacer(),
                   IconButton(
-                    icon: const Icon(Icons.search, color: Colors.black54),
-                    onPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Search messages...'), duration: Duration(seconds: 1)),
-                      );
-                    },
+                    icon: const Icon(Icons.search, color: Colors.white70),
+                    onPressed: _openSearchDialog,
                   ),
                 ],
               ),
             ),
 
-            const Divider(height: 1, color: Colors.black12),
+            const Divider(height: 1, color: Colors.white10),
 
             // Message Items List
             Expanded(
               child: ListView(
                 children: [
-                  // 1. System Message
                   _buildMessageTile(
                     title: 'System Message',
-                    subtitle: 'Withdrawal received',
-                    time: '08-25 14:21:11',
+                    subtitle: 'የመለያዎ አይዲ: ${AppData.currentUserId}',
+                    time: 'Just now',
                     icon: Icons.markunread_mailbox_outlined,
                     iconBg: const Color(0xFF00A3FF),
                     onTap: () => _showNoticeDialog(
                       'System Message',
-                      'Your withdrawal request has been received and processed successfully.',
+                      'የመለያዎ አይዲ ${AppData.currentUserId} ነው። ሌሎች ተጠቃሚዎች በዚህ ቁጥር ሊያገኙዎት ይችላሉ።',
                       Icons.markunread_mailbox_outlined,
                       const Color(0xFF00A3FF),
                     ),
                   ),
-
-                  // 2. Official Notification
                   _buildMessageTile(
                     title: 'Official Notification',
-                    subtitle: 'Hala 1st Anniversary',
+                    subtitle: 'Nile Voice P2P Direct Messaging Live',
                     time: '',
                     icon: Icons.notifications_none,
                     iconBg: const Color(0xFF00D287),
                     onTap: () => _showNoticeDialog(
                       'Official Notification',
-                      'Welcome to our 1st Anniversary event! Join rooms, enjoy gifts, and win prizes.',
+                      'በቀጥታ በአይዲ ፈልገው ከማንኛውም ተጠቃሚ ጋር በግል መወያየት ይችላሉ።',
                       Icons.notifications_none,
                       const Color(0xFF00D287),
                     ),
                   ),
-
-                  // 3. Order Messages
-                  _buildMessageTile(
-                    title: 'Order Messages',
-                    subtitle: 'No order updates currently',
-                    time: '',
-                    icon: Icons.description_outlined,
-                    iconBg: const Color(0xFFFF9500),
-                    onTap: () => _showNoticeDialog(
-                      'Order Messages',
-                      'All your coin recharge and gift orders will appear here.',
-                      Icons.description_outlined,
-                      const Color(0xFFFF9500),
-                    ),
-                  ),
-
-// 4. Customer Service
                   _buildMessageTile(
                     title: 'Customer Service',
-                    subtitle: 'Contact support online',
+                    subtitle: 'Support Online (Owner: 1000)',
                     time: '',
                     icon: Icons.headset_mic_outlined,
                     iconBg: const Color(0xFF00C9A7),
-                    onTap: () => _showNoticeDialog(
-                      'Customer Service',
-                      'Our 24/7 support is ready to help you. Send your inquiries to the agency admin.',
-                      Icons.headset_mic_outlined,
-                      const Color(0xFF00C9A7),
-                    ),
+                    onTap: () {
+                      if (AppData.currentUserId != '1000') {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const DirectChatScreen(
+                              targetUserId: '1000',
+                              targetUserName: 'Master Admin (Kedir)',
+                            ),
+                          ),
+                        );
+                      } else {
+                        _showNoticeDialog(
+                          'Customer Service',
+                          'እርስዎ ራሶ የሲስተሙ ዋና ባለቤት (ID 1000) ነዎት።',
+                          Icons.headset_mic_outlined,
+                          const Color(0xFF00C9A7),
+                        );
+                      }
+                    },
                   ),
                 ],
               ),
@@ -232,7 +393,8 @@ fontWeight: FontWeight.bold,
   }) {
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      leading: Container(
+
+leading: Container(
         width: 48,
         height: 48,
         decoration: BoxDecoration(
@@ -245,7 +407,7 @@ fontWeight: FontWeight.bold,
         children: [
           Text(
             title,
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black87),
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white),
           ),
           const SizedBox(width: 6),
           const Icon(Icons.verified, color: Color(0xFF00C9A7), size: 16),
@@ -257,16 +419,135 @@ fontWeight: FontWeight.bold,
           subtitle,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: const TextStyle(color: Colors.black45, fontSize: 13),
+          style: const TextStyle(color: Colors.white54, fontSize: 13),
         ),
       ),
       trailing: time.isNotEmpty
           ? Text(
               time,
-              style: const TextStyle(color: Colors.black38, fontSize: 11),
+              style: const TextStyle(color: Colors.white38, fontSize: 11),
             )
           : null,
       onTap: onTap,
     );
   }
 }
+
+// ============================================================================
+// 1-ON-1 DIRECT CHAT SCREEN (በሁለት ተጠቃሚዎች መሃል የሚደረግ የቀጥታ የቴክስት ውይይት)
+// ============================================================================
+class DirectChatScreen extends StatefulWidget {
+  final String targetUserId;
+  final String targetUserName;
+
+  const DirectChatScreen({
+    Key? key,
+    required this.targetUserId,
+    required this.targetUserName,
+  }) : super(key: key);
+
+  @override
+  State<DirectChatScreen> createState() => _DirectChatScreenState();
+}
+
+class _DirectChatScreenState extends State<DirectChatScreen> {
+  IO.Socket? socket;
+  final TextEditingController _msgController = TextEditingController();
+  final List<Map<String, dynamic>> _messages = [];
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    _connectSocket();
+    _loadChatHistory();
+  }
+
+  void _connectSocket() {
+    socket = IO.io(
+      AppData.serverUrl,
+      IO.OptionBuilder().setTransports(['websocket']).disableAutoConnect().build(),
+    );
+    socket?.connect();
+
+    socket?.onConnect((_) {
+      // ተጠቃሚው በራሱ አይዲ የግል ቻናሉን ይቀላቀላል
+      socket?.emit('user_connected', AppData.currentUserId);
+    });
+
+    // አዲስ መልዕክት ሲመጣ ወዲያው መቀበያ
+    socket?.on('receive_direct_message', (data) {
+      if (mounted) {
+        if (data['senderId'] == widget.targetUserId) {
+          setState(() {
+            _messages.add({
+              'senderId': data['senderId'],
+              'text': data['text'],
+              'isMe': false,
+            });
+          });
+          _scrollToBottom();
+        }
+      }
+    });
+
+    // እኔ የላኩት መልዕክት ሰርቨር ላይ መድረሱን ማረጋገጫ
+    socket?.on('message_sent', (data) {
+      if (mounted) {
+        setState(() {
+          _messages.add({
+            'senderId': AppData.currentUserId,
+            'text': data['text'],
+            'isMe': true,
+          });
+        });
+        _scrollToBottom();
+      }
+    });
+  }
+
+  Future<void> _loadChatHistory() async {
+    try {
+      final client = HttpClient();
+      client.connectionTimeout = const Duration(seconds: 8);
+      final request = await client.getUrl(
+        Uri.parse('${AppData.serverUrl}/api/chat-history?user1=${AppData.currentUserId}&user2=${widget.targetUserId}'),
+      );
+      final response = await request.close();
+      if (response.statusCode == 200) {
+        final body = await response.transform(utf8.decoder).join();
+        final data = jsonDecode(body);
+        if (data['success'] == true && data['messages'] != null) {
+          setState(() {
+            _messages.clear();
+            for (var m in data['messages']) {
+              _messages.add({
+                'senderId': m['senderId'],
+                'text': m['text'],
+                'isMe': m['senderId'] == AppData.currentUserId,
+              });
+            }
+          });
+          _scrollToBottom();
+        }
+      }
+    } catch (e) {
+      debugPrint('History load error: $e');
+    }
+  }
+
+void _sendMessage() {
+    final text = _msgController.text.trim();
+    if (text.isEmpty) return;
+
+    socket?.emit('send_direct_message', {
+      'senderId': AppData.currentUserId,
+      'receiverId': widget.targetUserId,
+      'text': text,
+    });
+
+    _msgController.clear();
+  }
+
+  void _scrollToBottom() {
+    Future.delayed(
