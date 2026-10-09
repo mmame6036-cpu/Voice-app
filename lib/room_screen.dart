@@ -31,6 +31,9 @@ class RoomScreen extends StatefulWidget {
 }
 
 class _RoomScreenState extends State<RoomScreen> with TickerProviderStateMixin {
+  // ሁልጊዜ ክፍሉ 1001 እንዲሆን እዚህ ጋር እንቆልፈዋለን!
+  final String fixedRoomId = '1001';
+
   IO.Socket? socket;
   RtcEngine? _engine;
   bool isJoinedVoice = false;
@@ -66,9 +69,10 @@ class _RoomScreenState extends State<RoomScreen> with TickerProviderStateMixin {
       duration: const Duration(seconds: 15),
     )..repeat();
 
+    // UID ቁጥር ብቻ እንዲሆን ማረጋገጥ
     final cleanId = AppData.currentUserId.replaceAll(RegExp(r'[^0-9]'), '');
     myUid = int.tryParse(cleanId) ?? 0;
-    if (myUid == 0) {
+    if (myUid <= 0) {
       myUid = (DateTime.now().millisecondsSinceEpoch % 89999) + 10000;
     }
 
@@ -98,8 +102,16 @@ class _RoomScreenState extends State<RoomScreen> with TickerProviderStateMixin {
       _engine!.registerEventHandler(
         RtcEngineEventHandler(
           onJoinChannelSuccess: (RtcConnection connection, int elapsed) {
-            debugPrint('Agora Voice Joined: UID $myUid on channel room_${widget.roomId}');
-            if (mounted) setState(() => isJoinedVoice = true);
+            debugPrint('Agora Voice Joined: UID $myUid on channel room_$fixedRoomId');
+            if (mounted) {
+              setState(() => isJoinedVoice = true);
+            }
+          },
+          onUserJoined: (RtcConnection connection, int remoteUid, int elapsed) {
+            debugPrint('Remote user joined: $remoteUid');
+          },
+          onUserMuteAudio: (RtcConnection connection, int remoteUid, bool muted) {
+            debugPrint('Remote user $remoteUid muted: $muted');
           },
           onError: (ErrorCodeType err, String msg) {
             debugPrint('Agora Error: $err - $msg');
@@ -116,16 +128,16 @@ class _RoomScreenState extends State<RoomScreen> with TickerProviderStateMixin {
       await _engine!.adjustRecordingSignalVolume(100);
       await _engine!.adjustPlaybackSignalVolume(100);
 
-      final String channelName = 'room_${widget.roomId}';
+      final String channelName = 'room_$fixedRoomId';
       String rtcToken = '';
 
+// የቶከን ጥሪ ከ Render ሰርቨር
       try {
         final client = HttpClient();
-        client.connectionTimeout = const Duration(seconds: 10);
+        client.connectionTimeout = const Duration(seconds: 8);
         final request = await client.getUrl(
           Uri.parse('${AppData.serverUrl}/rtc-token?channelName=$channelName&uid=$myUid'),
-
-);
+        );
         final response = await request.close();
         if (response.statusCode == 200) {
           final responseBody = await response.transform(utf8.decoder).join();
@@ -133,7 +145,7 @@ class _RoomScreenState extends State<RoomScreen> with TickerProviderStateMixin {
           rtcToken = data['token'] ?? '';
         }
       } catch (tokenErr) {
-        debugPrint('Token fetch error: $tokenErr');
+        debugPrint('Token fetch error (Joining with blank token fallback): $tokenErr');
       }
 
       await _engine!.joinChannel(
@@ -164,7 +176,7 @@ class _RoomScreenState extends State<RoomScreen> with TickerProviderStateMixin {
 
     if (myChairNum != null) {
       socket?.emit('chair_speaking', {
-        'room': widget.roomId,
+        'room': fixedRoomId,
         'chairNum': myChairNum,
         'isSpeaking': !isMuted,
       });
@@ -192,7 +204,7 @@ class _RoomScreenState extends State<RoomScreen> with TickerProviderStateMixin {
 
       socket?.onConnect((_) {
         socket?.emit('join_room', {
-          'room': widget.roomId,
+          'room': fixedRoomId,
           'user': AppData.currentUserName,
         });
       });
@@ -260,7 +272,7 @@ class _RoomScreenState extends State<RoomScreen> with TickerProviderStateMixin {
     }
   }
 
-  @override
+@override
   void dispose() {
     _ambientController.dispose();
     _particlesController.dispose();
@@ -272,7 +284,7 @@ class _RoomScreenState extends State<RoomScreen> with TickerProviderStateMixin {
     super.dispose();
   }
 
-@override
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF070B18),
@@ -334,7 +346,7 @@ class _RoomScreenState extends State<RoomScreen> with TickerProviderStateMixin {
                               style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
                             ),
                             Text(
-                              'ID: ${widget.hostId}',
+                              'Room ID: $fixedRoomId',
                               style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 11, fontWeight: FontWeight.bold),
                             ),
                           ],
@@ -356,12 +368,12 @@ class _RoomScreenState extends State<RoomScreen> with TickerProviderStateMixin {
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                           decoration: BoxDecoration(
                             color: Colors.white.withOpacity(0.12),
-                            borderRadius: BorderRadius.circular(16),
+
+borderRadius: BorderRadius.circular(16),
                             border: Border.all(color: const Color(0xFFFFD700).withOpacity(0.5)),
                           ),
                           child: Row(
-
-children: [
+                            children: [
                               const Icon(Icons.monetization_on, color: Color(0xFFFFD700), size: 16),
                               const SizedBox(width: 4),
                               Text(
@@ -419,7 +431,7 @@ children: [
                       Expanded(
                         child: RoomChairsGrid(
                           socket: socket,
-                          roomId: widget.roomId,
+                          roomId: fixedRoomId,
                           occupiedChairs: occupiedChairs,
                           speakingUsers: speakingChairs,
                           onChairTap: (chair) => setState(() {}),
@@ -492,7 +504,7 @@ children: [
                             onSubmitted: (text) {
                               if (text.trim().isNotEmpty && socket != null) {
                                 socket?.emit('chat_message', {
-                                  'room': widget.roomId,
+                                  'room': fixedRoomId,
                                   'sender': AppData.currentUserName,
                                   'text': text.trim(),
                                 });
