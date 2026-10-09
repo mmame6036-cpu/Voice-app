@@ -10,11 +10,9 @@ class SocketService {
   IO.Socket? socket;
   bool isConnected = false;
 
-  // ክስተቶችን (Events) ለስክሪኖች ማስተላለፊያ ፈንክሽኖች
   Function(Map<String, dynamic>)? onChairActionReceived;
   Function(Map<String, dynamic>)? onChatMessageReceived;
 
-  // ከሶኬት ጋር መገናኘት
   void connect() {
     if (socket != null && socket!.connected) return;
 
@@ -22,7 +20,8 @@ class SocketService {
       UserService.serverUrl,
       IO.OptionBuilder()
           .setTransports(['websocket'])
-          .disableAutoConnect()
+          .enableAutoConnect()
+          .enableReconnection()
           .build(),
     );
 
@@ -30,65 +29,89 @@ class SocketService {
 
     socket?.onConnect((_) {
       isConnected = true;
-      debugPrint('Socket ተገናኝቷል');
+      debugPrint('Socket Connected Successfully');
     });
 
     socket?.onDisconnect((_) {
       isConnected = false;
-      debugPrint('Socket ተቋርጧል');
+      debugPrint('Socket Disconnected');
     });
 
-    // የወንበር ለውጥ ሲመጣ
+    // Seat events listener
     socket?.on('chair_action', (data) {
-      if (data is Map<String, dynamic> && onChairActionReceived != null) {
-        onChairActionReceived!(data);
+      if (data != null && onChairActionReceived != null) {
+        if (data is Map<String, dynamic>) {
+          onChairActionReceived!(data);
+        } else if (data is Map) {
+          onChairActionReceived!(Map<String, dynamic>.from(data));
+        }
       }
     });
 
-    // የቻት መልዕክት ሲመጣ
+    // Chat message listener
     socket?.on('chat_message', (data) {
-      if (data is Map<String, dynamic> && onChatMessageReceived != null) {
-        onChatMessageReceived!(data);
+      if (data != null && onChatMessageReceived != null) {
+        if (data is Map<String, dynamic>) {
+          onChatMessageReceived!(data);
+        } else if (data is Map) {
+          onChatMessageReceived!(Map<String, dynamic>.from(data));
+        }
+      }
+    });
+
+    // Fallback broadcast listener
+    socket?.on('message', (data) {
+      if (data != null && onChatMessageReceived != null) {
+        if (data is Map<String, dynamic>) {
+          onChatMessageReceived!(data);
+        } else if (data is Map) {
+          onChatMessageReceived!(Map<String, dynamic>.from(data));
+        }
       }
     });
   }
 
-  // ክፍል መቀላቀል
   void joinRoom(String roomId) {
-    socket?.emit('join_room', {'room': roomId});
+    if (socket == null || !socket!.connected) {
+      connect();
+    }
+    socket?.emit('join_room', roomId);
+    socket?.emit('join', roomId);
   }
 
-  // ወንበር መያዝ ወይም መልቀቅ
   void sendChairAction({
     required String roomId,
     required int chairIndex,
-    required String action, // 'sit' ወይም 'leave'
+    required String action,
   }) {
     final user = UserService();
-    socket?.emit('chair_action', {
+    final payload = {
       'room': roomId,
+      'roomId': roomId,
       'chairIndex': chairIndex,
       'userName': user.userName,
       'userId': user.userId,
       'action': action,
-    });
+    };
+    socket?.emit('chair_action', payload);
   }
 
-  // የክፍል ውስጥ መልዕክት መላክ
   void sendChatMessage({
     required String roomId,
     required String text,
   }) {
     final user = UserService();
-    socket?.emit('chat_message', {
+    final payload = {
       'room': roomId,
+      'roomId': roomId,
       'sender': user.userName,
       'userId': user.userId,
       'text': text,
-    });
+    };
+    socket?.emit('chat_message', payload);
+    socket?.emit('message', payload);
   }
 
-  // ከሶኬት መውጣት
   void disconnect() {
     socket?.disconnect();
     socket?.dispose();
