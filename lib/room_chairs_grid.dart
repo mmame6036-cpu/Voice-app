@@ -81,6 +81,7 @@ class _RoomChairsGridState extends State<RoomChairsGrid> with SingleTickerProvid
 
             // ወንበር መያዝ ወይም መልቀቅ
             widget.socket?.emit('chair_action', {
+              'room':  '1001',
               'chairNum': chairNum,
               'userName': AppData.currentUserName,
               'action': isMe ? 'leave' : 'join',
