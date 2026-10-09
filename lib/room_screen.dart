@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
@@ -12,24 +13,28 @@ import 'recharge_screen.dart';
 import 'main.dart';
 
 class RoomScreen extends StatefulWidget {
+  final String roomId;
   final String roomTitle;
   final String hostName;
+  final String hostId;
 
   const RoomScreen({
     Key? key,
-    this.roomTitle = 'Ethio Nile Coffee Club',
-    this.hostName = 'Kedir oumer',
+    this.roomId = '1001', // እውነተኛ ቋሚ የክፍል መለያ
+    this.roomTitle = 'Nile Official Voice Room',
+    this.hostName = 'Mimi',
+    this.hostId = '560095', // ቋሚ የሆስቱ መታወቂያ በሁሉም ስልክ አንድ አይነት የሚታይ
   }) : super(key: key);
 
   @override
   State<RoomScreen> createState() => _RoomScreenState();
 }
 
-class _RoomScreenState extends State<RoomScreen> {
+class _RoomScreenState extends State<RoomScreen> with TickerProviderStateMixin {
   IO.Socket? socket;
   RtcEngine? _engine;
   bool isJoinedVoice = false;
-  bool isMuted = false; // ድምፅ ወዲያውኑ ክፍት እንዲሆን
+  bool isMuted = false;
   int myUid = 0;
   int? myChairNum;
 
@@ -37,17 +42,31 @@ class _RoomScreenState extends State<RoomScreen> {
   Map<int, bool> speakingChairs = {};
 
   List<String> liveAnnouncements = [
-    '✨ Welcome to Ethio Nile Room!',
+    '✨ Welcome to Nile Voice Room!',
   ];
   List<String> chatMessages = [
     'System: Please protect your privacy and stay safe.',
   ];
   Timer? _bannerTimer;
 
+  late AnimationController _ambientController;
+  late AnimationController _particlesController;
+
   @override
   void initState() {
     super.initState();
-    // ለእያንዳንዱ ስልክ የተለየ እና ትክክለኛ የቁጥር UID ማዘጋጀት
+
+    _ambientController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 10),
+    )..repeat(reverse: true);
+
+    _particlesController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 15),
+    )..repeat();
+
+    // እያንዳንዱ ስልክ የራሱ የሆነ ትክክለኛ የቁጥር UID ይኖረዋል
     final cleanId = AppData.currentUserId.replaceAll(RegExp(r'[^0-9]'), '');
     myUid = int.tryParse(cleanId) ?? 0;
     if (myUid == 0) {
@@ -69,27 +88,19 @@ class _RoomScreenState extends State<RoomScreen> {
 
   Future<void> _initAgoraVoice() async {
     try {
-      // የማይክሮፎን ፈቃድ ማረጋገጥ
       await Permission.microphone.request();
 
       _engine = createAgoraRtcEngine();
       await _engine!.initialize(RtcEngineContext(
         appId: AppData.agoraAppId,
-        channelProfile: ChannelProfileType.channelProfileCommunication,
+        channelProfile: ChannelProfileType.channelProfileLiveBroadcasting,
       ));
 
       _engine!.registerEventHandler(
         RtcEngineEventHandler(
           onJoinChannelSuccess: (RtcConnection connection, int elapsed) {
-            debugPrint('Agora Voice Connected successfully on UID: $myUid');
-            if (mounted) {
-              setState(() {
-                isJoinedVoice = true;
-              });
-            }
-          },
-          onUserJoined: (RtcConnection connection, int remoteUid, int elapsed) {
-            debugPrint('Remote user entered audio channel: $remoteUid');
+            debugPrint('Agora Voice Connected on Room ${widget.roomId} with UID: $myUid');
+            if (mounted) setState(() => isJoinedVoice = true);
           },
           onError: (ErrorCodeType err, String msg) {
             debugPrint('Agora Error: $err - $msg');
@@ -97,7 +108,7 @@ class _RoomScreenState extends State<RoomScreen> {
         ),
       );
 
-      // ድምፅ ማሰራጫውንና መቀበያውን ሙሉ በሙሉ መክፈት
+      await _engine!.setClientRole(role: ClientRoleType.clientRoleBroadcaster);
       await _engine!.enableAudio();
       await _engine!.enableLocalAudio(true);
       await _engine!.muteLocalAudioStream(false);
@@ -106,14 +117,14 @@ class _RoomScreenState extends State<RoomScreen> {
       await _engine!.adjustRecordingSignalVolume(100);
       await _engine!.adjustPlaybackSignalVolume(100);
 
-      const String channelName = 'NileVoiceMainRoom';
+      final String channelName = 'room_${widget.roomId}';
       String rtcToken = '';
 
-      // የራሱን myUid ልኮ ለራሱ UID የሚሆን ትክክለኛ ቶከን መጠየቅ
       try {
         final client = HttpClient();
         client.connectionTimeout = const Duration(seconds: 10);
-        final request = await client.getUrl(
+
+final request = await client.getUrl(
           Uri.parse('${AppData.serverUrl}/rtc-token?channelName=$channelName&uid=$myUid'),
         );
         final response = await request.close();
@@ -121,13 +132,11 @@ class _RoomScreenState extends State<RoomScreen> {
           final responseBody = await response.transform(utf8.decoder).join();
           final data = jsonDecode(responseBody);
           rtcToken = data['token'] ?? '';
-          debugPrint('Token received for UID $myUid');
         }
       } catch (tokenErr) {
         debugPrint('Token fetch error: $tokenErr');
       }
 
-// ሁለቱም ስልኮች እርስ በእርስ እንዲደማመጡ ቻነሉን መቀላቀል
       await _engine!.joinChannel(
         token: rtcToken,
         channelId: channelName,
@@ -156,6 +165,7 @@ class _RoomScreenState extends State<RoomScreen> {
 
     if (myChairNum != null) {
       socket?.emit('chair_speaking', {
+        'room': widget.roomId,
         'chairNum': myChairNum,
         'isSpeaking': !isMuted,
       });
@@ -182,13 +192,13 @@ class _RoomScreenState extends State<RoomScreen> {
       socket?.connect();
 
       socket?.onConnect((_) {
+        // ሁለቱም ስልኮች ወደ አንድ እውነተኛ ሩም ID ይገባሉ
         socket?.emit('join_room', {
-          'room': 'NileVoiceMainRoom',
+          'room': widget.roomId,
           'user': AppData.currentUserName,
         });
       });
 
-      // ወንበር ሲያዝ ወይም ሲለቀቅ
       socket?.on('chair_action', (data) {
         if (mounted) {
           setState(() {
@@ -222,7 +232,6 @@ class _RoomScreenState extends State<RoomScreen> {
         }
       });
 
-      // የሌላው ሰው ድምፅ ሞገድ ሲበራ
       socket?.on('chair_speaking', (data) {
         if (mounted) {
           setState(() {
@@ -255,6 +264,8 @@ class _RoomScreenState extends State<RoomScreen> {
 
   @override
   void dispose() {
+    _ambientController.dispose();
+    _particlesController.dispose();
     _bannerTimer?.cancel();
     _engine?.leaveChannel();
     _engine?.release();
@@ -263,40 +274,56 @@ class _RoomScreenState extends State<RoomScreen> {
     super.dispose();
   }
 
-  @override
+@override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF070B18),
       body: Stack(
         children: [
-          Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-
-end: Alignment.bottomCenter,
-                colors: [
-                  Color(0xFF0F172A),
-                  Color(0xFF090D1C),
-                  Color(0xFF02040A),
-                ],
-              ),
-            ),
+          AnimatedBuilder(
+            animation: _ambientController,
+            builder: (context, child) {
+              final val = _ambientController.value;
+              return Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment(-1.0 + (val * 0.8), -1.0),
+                    end: Alignment(1.0 - (val * 0.8), 1.0),
+                    colors: [
+                      Color.lerp(const Color(0xFF1A0B2E), const Color(0xFF0F172A), val)!,
+                      Color.lerp(const Color(0xFF0B192C), const Color(0xFF1E1035), val)!,
+                      Color.lerp(const Color(0xFF030712), const Color(0xFF0A0F1D), val)!,
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+          AnimatedBuilder(
+            animation: _particlesController,
+            builder: (context, child) {
+              return CustomPaint(
+                painter: AmbientParticlesPainter(
+                  progress: _particlesController.value,
+                ),
+                child: const SizedBox.expand(),
+              );
+            },
           ),
           SafeArea(
             child: Column(
               children: [
-                // 1. ራስጌ
+                // 1. ራስጌ - ሁለቱም ስልክ ላይ አንድ አይነት እውነተኛ ID ያሳያል
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                   child: Row(
                     children: [
                       CircleAvatar(
                         radius: 18,
-                        backgroundColor: Colors.teal,
+                        backgroundColor: Colors.tealAccent.withOpacity(0.8),
                         child: Text(
-                          widget.hostName.isNotEmpty ? widget.hostName[0] : 'U',
-                          style: const TextStyle(color: Colors.white),
+                          widget.hostName.isNotEmpty ? widget.hostName[0] : 'M',
+                          style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -309,8 +336,8 @@ end: Alignment.bottomCenter,
                               style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
                             ),
                             Text(
-                              'ID: ${AppData.currentUserId}',
-                              style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 10),
+                              'ID: ${widget.hostId}', // በሁለቱም ስልክ ቋሚው እውነተኛ የክፍል መለያ ይታያል
+                              style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 11, fontWeight: FontWeight.bold),
                             ),
                           ],
                         ),
@@ -330,10 +357,11 @@ end: Alignment.bottomCenter,
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.1),
+                            color: Colors.white.withOpacity(0.12),
                             borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: const Color(0xFFFFD700).withOpacity(0.4)),
-                          ),
+                            border: Border.all(color: const Color(0xFFFFD700).withOpacity(0.5)),
+
+),
                           child: Row(
                             children: [
                               const Icon(Icons.monetization_on, color: Color(0xFFFFD700), size: 16),
@@ -360,8 +388,7 @@ end: Alignment.bottomCenter,
                 // 2. ባነር
                 Container(
                   margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-
-padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(
                       colors: [Color(0xFF880E4F), Color(0xFF4A148C)],
@@ -387,24 +414,26 @@ padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
 
                 const SizedBox(height: 4),
 
-                // 3. የተጣበቡ ወንበሮች እና ቻት
+                // 3. ወንበሮች እና ቻት (በታብሌትም ሆነ በስልክ ስክሪን እንዳይቆረጥ የተስተካከለ)
                 Expanded(
                   child: Column(
                     children: [
-                      RoomChairsGrid(
-                        socket: socket,
-                        occupiedChairs: occupiedChairs,
-                        speakingUsers: speakingChairs,
-                        onChairTap: (chair) => setState(() {}),
+                      Expanded(
+                        child: RoomChairsGrid(
+                          socket: socket,
+                          occupiedChairs: occupiedChairs,
+                          speakingUsers: speakingChairs,
+                          onChairTap: (chair) => setState(() {}),
+                        ),
                       ),
-                      const Spacer(),
                       Container(
-                        height: 80,
+                        height: 75,
                         margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.35),
+                          color: Colors.black.withOpacity(0.4),
                           borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.white.withOpacity(0.08)),
                         ),
                         child: ListView.builder(
                           itemCount: chatMessages.length,
@@ -418,10 +447,10 @@ padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
                   ),
                 ),
 
-                // 4. ታችኛው ባር
+// 4. ታችኛው ባር (በሁሉም ስክሪን ላይ ሁልጊዜ የሚታይ)
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                  color: Colors.black.withOpacity(0.6),
+                  color: Colors.black.withOpacity(0.65),
                   child: Row(
                     children: [
                       GestureDetector(
@@ -446,8 +475,7 @@ padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
                       Expanded(
                         child: Container(
                           height: 36,
-
-margin: const EdgeInsets.only(right: 8),
+                          margin: const EdgeInsets.only(right: 8),
                           padding: const EdgeInsets.symmetric(horizontal: 12),
                           decoration: BoxDecoration(
                             color: Colors.white12,
@@ -465,6 +493,7 @@ margin: const EdgeInsets.only(right: 8),
                             onSubmitted: (text) {
                               if (text.trim().isNotEmpty && socket != null) {
                                 socket?.emit('chat_message', {
+                                  'room': widget.roomId,
                                   'sender': AppData.currentUserName,
                                   'text': text.trim(),
                                 });
@@ -507,4 +536,37 @@ margin: const EdgeInsets.only(right: 8),
       ),
     );
   }
+}
+
+class AmbientParticlesPainter extends CustomPainter {
+  final double progress;
+  AmbientParticlesPainter({required this.progress});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()..style = PaintingStyle.fill;
+    final random = math.Random(42);
+
+    for (int i = 0; i < 18; i++) {
+      final double baseX = random.nextDouble() * size.width;
+      final double speed = 0.3 + (random.nextDouble() * 0.7);
+      final double yOffset = (progress * size.height * speed + (i * 45)) % size.height;
+      final double currentY = size.height - yOffset;
+      final double radius = 2.0 + (random.nextDouble() * 3.5);
+      final double opacity = 0.15 + (0.35 * math.sin((progress * 2 * math.pi) + i).abs());
+
+      final colorList = [
+        const Color(0xFF00E5FF),
+        const Color(0xFFD500F9),
+        const Color(0xFFFFD700),
+      ];
+      final color = colorList[i % colorList.length].withOpacity(opacity);
+
+      paint.color = color;
+      canvas.drawCircle(Offset(baseX, currentY), radius, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant AmbientParticlesPainter oldDelegate) => true;
 }
