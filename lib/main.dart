@@ -36,7 +36,7 @@ class AppData {
   static bool biometricVerified = true;
   
   // ትክክለኛው የ Render ሰርቨር አድራሻ
-  static const String serverUrl = 'https://voice-app-2.onrender.com';
+  static const String serverUrl = 'https://voice-app-2-jdqf.onrender.com';
 
   // ሰርቨሩ ላይ ተጠቃሚውን መመዝገቢያ ወይም 1000/1001 ID መመደቢያ
   static Future<void> initUserRegistration({bool isOwnerPhone = true}) async {
