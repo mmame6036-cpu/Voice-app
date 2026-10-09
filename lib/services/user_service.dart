@@ -4,23 +4,19 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 
 class UserService {
-  // ነጠላ ማዕከላዊ አሰራር (Singleton)
   static final UserService _instance = UserService._internal();
   factory UserService() => _instance;
   UserService._internal();
 
-  // የሰርቨርህ ቋሚ አድራሻ
   static const String serverUrl = 'https://voice-app-2-jdqf.onrender.com';
   static const String agoraAppId = '21091aff01114a66b580ce15b0f1b642';
 
-  // የተጠቃሚው ቋሚ መረጃዎች
-  String userId = '';
-  String userName = '';
+  String userId = '1000';
+  String userName = 'User_1000';
   int coins = 50000;
   bool isOwner = false;
   bool isInitialized = false;
 
-  // አፑ እንደተከፈተ ስልኩን ለይቶ ID የሚሰጥ ዋና ፈንክሽን
   Future<void> initializeUser() async {
     if (isInitialized) return;
 
@@ -28,7 +24,6 @@ class UserService {
       final dir = Directory.systemTemp;
       final file = File('${dir.path}/app_user_identity.json');
 
-      // 1. ስልኩ ላይ አስቀድሞ የተቀመጠ ID ካለ ማንበብ
       if (await file.exists()) {
         final content = await file.readAsString();
         final localData = jsonDecode(content);
@@ -39,19 +34,17 @@ class UserService {
         return;
       }
 
-      // 2. አዲስ ስልክ ከሆነ ለየት ያለ መለያ (Device Fingerprint) ማመንጨት
       final deviceKey = 'device_${DateTime.now().millisecondsSinceEpoch}_${Random().nextInt(999999)}';
 
-      // 3. ሰርቨሩን ጠይቆ አዲስ ተከታታይ ID መቀበል
       final client = HttpClient();
-      client.connectionTimeout = const Duration(seconds: 10);
+      client.connectionTimeout = const Duration(seconds: 12);
       final request = await client.postUrl(Uri.parse('$serverUrl/api/register-user'));
       request.headers.set('content-type', 'application/json');
 
       request.add(utf8.encode(jsonEncode({
         'deviceId': deviceKey,
         'name': 'User',
-        'isOwner': false, // ለተጠቃሚዎች ተከታታይ 1001, 1002... ይሰጣል
+        'isOwner': false,
       })));
 
       final response = await request.close();
@@ -64,21 +57,27 @@ class UserService {
           userName = resData['user']['name'] ?? 'User_$userId';
           isOwner = (userId == '1000');
 
-          // በስልኩ ቋሚ ሚሞሪ ላይ ማስቀመጥ (ዳግም እንዳይቀየር)
           await file.writeAsString(jsonEncode({
             'userId': userId,
             'name': userName,
           }));
 
           isInitialized = true;
+          return;
         }
       }
     } catch (e) {
       debugPrint('UserService Error: $e');
     }
+
+    // ሰርቨሩ በሰዓቱ ምላሽ ባይሰጥ እንኳ ባዶ እንዳይሆን የተጠቃሚውን ቁጥር ማመንጨት
+    if (userId.isEmpty || userId == '') {
+      userId = '100${Random().nextInt(90) + 10}';
+      userName = 'User_$userId';
+    }
+    isInitialized = true;
   }
 
-  // በአይዲ ሰውን ከዳታቤዝ መፈለጊያ
   Future<Map<String, dynamic>?> searchUser(String queryId) async {
     try {
       final client = HttpClient();
