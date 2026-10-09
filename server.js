@@ -2,6 +2,7 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const { RtcTokenBuilder, RtcRole } = require('agora-access-token');
+const mongoose = require('mongoose');
 
 const app = express();
 const server = http.createServer(app);
@@ -9,10 +10,21 @@ const io = new Server(server, {
   cors: { origin: '*' }
 });
 
+// 1. የ MongoDB ዳታቤዝ ግንኙነት (24 ሰዓት ነቅቶ የሚቆይ)
+const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://Kedir:euyEPW1wNL1V9u8D@cluster0.mdtjtlb.mongodb.net/nilevoice?retryWrites=true&w=majority&appName=Cluster0';
+
+mongoose.connect(MONGO_URI)
+  .then(() => {
+    console.log('✅ MongoDB በስኬት ተገናኝቷል! ዳታቤዙ 24 ሰዓት ንቁ ነው!');
+  })
+  .catch((err) => {
+    console.error('❌ MongoDB Connection Error:', err);
+  });
+
 const AGORA_APP_ID = process.env.AGORA_APP_ID || '21091aff01114a66b580ce15b0f1b642';
 const AGORA_APP_CERTIFICATE = process.env.AGORA_APP_CERTIFICATE || '150ff1ae871e4d80a9e51092d00524a5';
 
-// 1. የድምፅ ቶከን ማመንጫ (RtcRole.PUBLISHER)
+// 2. የድምፅ ቶከን ማመንጫ (RtcRole.PUBLISHER)
 app.get('/rtc-token', (req, res) => {
   try {
     const channelName = req.query.channelName || 'room_1001';
@@ -37,7 +49,7 @@ app.get('/rtc-token', (req, res) => {
   }
 });
 
-// 2. የሶኬት መረጃ ማስተላለፊያ
+// 3. የሶኬት መረጃ ማስተላለፊያ
 io.on('connection', (socket) => {
   // ክፍል መቀላቀል
   socket.on('join_room', (data) => {
