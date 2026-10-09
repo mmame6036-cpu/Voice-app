@@ -142,7 +142,7 @@ try {
           rtcToken = data['token'] ?? '';
         }
       } catch (tokenErr) {
-        debugPrint('Token fetch error (Fallback to empty token): $tokenErr');
+        debugPrint('Token fetch error (Fallback): $tokenErr');
       }
 
       await _engine!.joinChannel(
@@ -158,6 +158,32 @@ try {
     } catch (e) {
       debugPrint('Agora init error: $e');
     }
+  }
+
+  // ወንበር ሲነካ ወዲያውኑ የሚሰራ ተግባር (ቀጥታ መቀመጥ እና ማይክ መክፈት)
+  void _onChairSelected(int chairNum) {
+    final occupant = occupiedChairs[chairNum];
+    final isMe = occupant == AppData.currentUserName;
+
+    setState(() {
+      if (isMe) {
+        // ከመቀመጫ መውረድ
+        occupiedChairs.remove(chairNum);
+        speakingChairs[chairNum] = false;
+        myChairNum = null;
+        isMuted = true;
+        _engine?.muteLocalAudioStream(true);
+      } else {
+        // አዲስ ወንበር መያዝ
+        occupiedChairs.removeWhere((k, v) => v == AppData.currentUserName);
+        occupiedChairs[chairNum] = AppData.currentUserName;
+        speakingChairs[chairNum] = true;
+        myChairNum = chairNum;
+        isMuted = false;
+        _engine?.muteLocalAudioStream(false);
+        chatMessages.add('💺 ${AppData.currentUserName} ወንበር #$chairNum ያዘ');
+      }
+    });
   }
 
   void _toggleMic() async {
@@ -216,7 +242,9 @@ try {
             if (action == 'join') {
               occupiedChairs.removeWhere((k, v) => v == user);
               occupiedChairs[chair] = user;
-              chatMessages.add('💺 $user ወንበር #$chair ያዘ');
+              if (!chatMessages.contains('💺 $user ወንበር #$chair ያዘ')) {
+                chatMessages.add('💺 $user ወንበር #$chair ያዘ');
+              }
 
               if (user == AppData.currentUserName) {
                 myChairNum = chair;
@@ -239,7 +267,7 @@ try {
         }
       });
 
-      socket?.on('chair_speaking', (data) {
+socket?.on('chair_speaking', (data) {
         if (mounted) {
           setState(() {
             int chair = data['chairNum'];
@@ -269,7 +297,7 @@ try {
     }
   }
 
-@override
+  @override
   void dispose() {
     _ambientController.dispose();
     _particlesController.dispose();
@@ -349,7 +377,8 @@ try {
                         ),
                       ),
                       GestureDetector(
-                        onTap: () {
+
+onTap: () {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
@@ -364,8 +393,7 @@ try {
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                           decoration: BoxDecoration(
                             color: Colors.white.withOpacity(0.12),
-
-borderRadius: BorderRadius.circular(16),
+                            borderRadius: BorderRadius.circular(16),
                             border: Border.all(color: const Color(0xFFFFD700).withOpacity(0.5)),
                           ),
                           child: Row(
@@ -425,12 +453,13 @@ borderRadius: BorderRadius.circular(16),
                           roomId: fixedRoomId,
                           occupiedChairs: occupiedChairs,
                           speakingUsers: speakingChairs,
-                          onChairTap: (chair) => setState(() {}),
+                          onChairTap: (chairNum) => _onChairSelected(chairNum),
                         ),
                       ),
                       Container(
-                        height: 75,
-                        margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                        height: 80,
+
+margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
                           color: Colors.black.withOpacity(0.4),
@@ -442,8 +471,7 @@ borderRadius: BorderRadius.circular(16),
                           itemBuilder: (context, idx) => Text(
                             chatMessages[idx],
                             style: const TextStyle(color: Colors.white70, fontSize: 11),
-
-),
+                          ),
                         ),
                       ),
                     ],
@@ -507,7 +535,8 @@ borderRadius: BorderRadius.circular(16),
                         children: [
                           IconButton(
                             icon: const Icon(Icons.sports_esports_rounded, color: Colors.amberAccent, size: 22),
-                            onPressed: () {
+
+onPressed: () {
                               RoomGamesSheet.show(
                                 context,
                                 socket: socket,
@@ -522,8 +551,7 @@ borderRadius: BorderRadius.circular(16),
                                 context,
                                 socket: socket,
                                 onGiftSent: () => setState(() {}),
-
-);
+                              );
                             },
                           ),
                         ],
