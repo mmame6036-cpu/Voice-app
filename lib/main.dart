@@ -27,20 +27,34 @@ void main() async {
 class AppData {
   static const String agoraAppId = '21091aff01114a66b580ce15b0f1b642';
   
-  // ነባሪ መታወቂያ - መጀመሪያ ላይ 1000 ሆኖ ይቀመጣል
+  // ተጠቃሚው ከሰርቨር የሚያገኘው ቋሚ ID
   static String currentUserId = '1000';
-  static String currentUserName = 'Kedir';
+  static String currentUserName = 'User_1000';
   static int userCoins = 50000;
   static int userPoints = 0;
-  static bool isSuperAdmin = true;
+  static bool isSuperAdmin = false;
   static bool biometricVerified = true;
   
-  // ትክክለኛው የ Render ሰርቨር አድራሻ
   static const String serverUrl = 'https://voice-app-2-jdqf.onrender.com';
 
-  // ሰርቨሩ ላይ ተጠቃሚውን መመዝገቢያ ወይም 1000/1001 ID መመደቢያ
-  static Future<void> initUserRegistration({bool isOwnerPhone = true}) async {
+  // አፑ እንደተከፈተ ለእያንዳንዱ ስልክ ራሱን የቻለ ID መስጫ
+  static Future<void> initUserRegistration() async {
     try {
+      // የስልኩን ቋሚ ፋይል መፈተሻ (አንድ ጊዜ ከተመዘገበ እንዳይቀየር)
+      final dir = Directory.systemTemp;
+      final file = File('${dir.path}/user_identity.json');
+      
+      String deviceKey;
+      if (await file.exists()) {
+        final saved = jsonDecode(await file.readAsString());
+        currentUserId = saved['userId'].toString();
+        currentUserName = saved['name'] ?? 'User_$currentUserId';
+        isSuperAdmin = (currentUserId == '1000');
+        return;
+      } else {
+        deviceKey = 'phone_${DateTime.now().millisecondsSinceEpoch}_${Random().nextInt(99999)}';
+      }
+
       final client = HttpClient();
       client.connectionTimeout = const Duration(seconds: 8);
       final request = await client.postUrl(
@@ -48,10 +62,10 @@ class AppData {
       );
       request.headers.set('content-type', 'application/json');
       
-      // ይህ የአንተ ስልክ ከሆነ isOwner: true ይሆናል (ID: 1000)
       request.add(utf8.encode(jsonEncode({
-        'name': isOwnerPhone ? 'Kedir' : 'GuestUser',
-        'isOwner': isOwnerPhone,
+        'deviceId': deviceKey,
+        'name': 'User',
+        'isOwner': false, // አዲስ አውራጅ ሁሌም 1001, 1002... ይወስዳል
       })));
 
       final response = await request.close();
@@ -62,6 +76,12 @@ class AppData {
           currentUserId = data['user']['userId'].toString();
           currentUserName = data['user']['name'] ?? 'User_$currentUserId';
           isSuperAdmin = (currentUserId == '1000');
+
+          // በስልኩ ላይ በቋሚነት ማስቀመጫ
+          await file.writeAsString(jsonEncode({
+            'userId': currentUserId,
+            'name': currentUserName,
+          }));
         }
       }
     } catch (e) {
