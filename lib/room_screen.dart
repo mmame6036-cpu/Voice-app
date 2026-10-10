@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'services/user_service.dart';
-import 'services/socket_service.dart';
+import '../services/user_service.dart';
+import '../services/socket_service.dart';
 
 class RoomScreen extends StatefulWidget {
   final String roomId;
@@ -71,28 +71,26 @@ class _RoomScreenState extends State<RoomScreen> {
       final String userId = data['userId']?.toString() ?? '';
       final String text = data['text'] ?? '';
 
-      if (userId != _userService.userId) {
-        setState(() {
-          _addLog('$sender (መታወቂያ: $userId): $text');
-        });
-      }
+      setState(() {
+        _addLog('$sender (መታወቂያ: $userId): $text');
+      });
     };
   }
 
   Future<void> _initAgora() async {
     try {
-      // የማይክራፎን ፈቃድ መጠየቅ
-      final status = await Permission.microphone.request();
-      if (!status.isGranted) {
-        _addLog("ማስጠንቀቂያ: የማይክራፎን ፈቃድ አልተሰጠም!");
+      // 1. የማይክራፎን ፍቃድ መጠየቅ
+      final micStatus = await Permission.microphone.request();
+      if (!micStatus.isGranted) {
+        _addLog("ማስጠንቀቂያ: የማይክራፎን ፍቃድ አልተሰጠም!");
         return;
       }
 
-      // Agora ሞተር ማዘጋጀት
+      // 2. Agora RTC ሞተር መክፈት
       _engine = createAgoraRtcEngine();
       await _engine?.initialize(const RtcEngineContext(
         appId: UserService.agoraAppId,
-        channelProfile: ChannelProfileType.channelProfileLiveBroadcasting,
+        channelProfile: ChannelProfileType.channelProfileCommunication,
       ));
 
       _engine?.registerEventHandler(
@@ -101,38 +99,37 @@ class _RoomScreenState extends State<RoomScreen> {
             _addLog("የድምፅ መስመር ተገናኝቷል 🎙️");
           },
           onUserJoined: (RtcConnection connection, int remoteUid, int elapsed) {
-            _addLog("ተጠቃሚ መታወቂያ: $remoteUid ድምፅ ተቀላቅሏል");
+            _addLog("ተጠቃሚ ID $remoteUid ድምፅ ተቀላቅሏል");
           },
           onUserOffline: (RtcConnection connection, int remoteUid, UserOfflineReasonType reason) {
-            _addLog("ተጠቃሚ መታወቂያ: $remoteUid ወጥቷል");
+            _addLog("ተጠቃሚ ID $remoteUid ወጥቷል");
           },
           onError: (ErrorCodeType err, String msg) {
-            debugPrint("የ Agora ስህተት: $err -> $msg");
+            _addLog("የድምፅ ስህተት: $err");
           },
         ),
       );
 
-      // ድምፅ ማሰራጨት እና ስፒከር ማዘጋጀት
-      await _engine?.setClientRole(role: ClientRoleType.clientRoleBroadcaster);
+      // 3. ድምፅ ማብራትና ማስተካከል
       await _engine?.enableAudio();
+      await _engine?.enableLocalAudio(true);
       await _engine?.setDefaultAudioRouteToSpeakerphone(true);
 
-      // ክፍሉን መቀላቀል
-      final uid = int.tryParse(_userService.userId) ?? 0;
-
-await _engine?.joinChannel(
+      // 4. ወደ ድምፅ ሩም መግባት (UID ወደ int ይቀየራል)
+      final int myUid = int.tryParse(_userService.userId) ?? 1;
+      await _engine?.joinChannel(
         token: '',
-        channelId: widget.roomId,
-        uid: uid,
+
+channelId: widget.roomId,
+        uid: myUid,
         options: const ChannelMediaOptions(
           clientRoleType: ClientRoleType.clientRoleBroadcaster,
-          channelProfile: ChannelProfileType.channelProfileLiveBroadcasting,
           publishMicrophoneTrack: true,
           autoSubscribeAudio: true,
         ),
       );
     } catch (e) {
-      debugPrint("የ Agora ማስነሳት ችግር: $e");
+      _addLog("Agora Init Exception: $e");
     }
   }
 
@@ -153,45 +150,46 @@ await _engine?.joinChannel(
   }
 
   void _toggleChair(int index) {
-    setState(() {
-      if (_chairs[index] != null && _chairs[index]!['userId'] == _userService.userId) {
+    if (_chairs[index] != null && _chairs[index]!['userId'] == _userService.userId) {
+      setState(() {
         _chairs[index] = null;
         _myCurrentChair = null;
-        _addLog('${_userService.userName} ከወንበር #${index + 1} ተነሳ');
-        _socketService.sendChairAction(
-          roomId: widget.roomId,
-          chairIndex: index,
-          action: 'leave',
-        );
-        return;
-      }
+      });
+      _socketService.sendChairAction(
+        roomId: widget.roomId,
+        chairIndex: index,
+        action: 'leave',
+      );
+      return;
+    }
 
-      if (_chairs[index] != null) {
-        return;
-      }
+    if (_chairs[index] != null) return;
 
-      if (_myCurrentChair != null) {
-        _chairs[_myCurrentChair!] = null;
-        _socketService.sendChairAction(
-          roomId: widget.roomId,
-          chairIndex: _myCurrentChair!,
-          action: 'leave',
-        );
-      }
+    if (_myCurrentChair != null) {
+      final prevChair = _myCurrentChair!;
+      setState(() {
+        _chairs[prevChair] = null;
+      });
+      _socketService.sendChairAction(
+        roomId: widget.roomId,
+        chairIndex: prevChair,
+        action: 'leave',
+      );
+    }
 
+    setState(() {
       _chairs[index] = {
         'userName': _userService.userName,
         'userId': _userService.userId,
       };
       _myCurrentChair = index;
-      _addLog('${_userService.userName} (መታወቂያ: ${_userService.userId}) በወንበር #${index + 1} ላይ ተቀመጠ');
-
-      _socketService.sendChairAction(
-        roomId: widget.roomId,
-        chairIndex: index,
-        action: 'sit',
-      );
     });
+
+    _socketService.sendChairAction(
+      roomId: widget.roomId,
+      chairIndex: index,
+      action: 'sit',
+    );
   }
 
   void _toggleMic() {
@@ -199,14 +197,12 @@ await _engine?.joinChannel(
       _isMicMuted = !_isMicMuted;
     });
     _engine?.muteLocalAudioStream(_isMicMuted);
-    _addLog(_isMicMuted ? "ማይክ ተዘግቷል" : "ማይክ ክፍት ነው");
+    _addLog(_isMicMuted ? "ማይክ ተዘግቷል 🔇" : "ማይክ ክፍት ነው 🎙️");
   }
 
   void _sendMessage() {
     final text = _chatController.text.trim();
     if (text.isEmpty) return;
-
-    _addLog('${_userService.userName} (መታወቂያ: ${_userService.userId}): $text');
 
     _socketService.sendChatMessage(roomId: widget.roomId, text: text);
     _chatController.clear();
@@ -250,8 +246,7 @@ await _engine?.joinChannel(
           Container(
             margin: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-
-decoration: BoxDecoration(
+            decoration: BoxDecoration(
               color: Colors.amber.withOpacity(0.2),
               borderRadius: BorderRadius.circular(16),
               border: Border.all(color: Colors.amber.withOpacity(0.5)),
@@ -259,7 +254,8 @@ decoration: BoxDecoration(
             child: Row(
               children: [
                 const Icon(Icons.monetization_on, color: Colors.amber, size: 16),
-                const SizedBox(width: 4),
+
+const SizedBox(width: 4),
                 Text('${_userService.coins}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
               ],
             ),
@@ -320,7 +316,7 @@ decoration: BoxDecoration(
                         child: Center(
                           child: isOccupied
                               ? Text(
-                                  (chair['userName'] ?? 'ተ')[0],
+                                  (chair['userName'] ?? 'U')[0].toUpperCase(),
                                   style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black),
                                 )
                               : const Icon(Icons.chair_outlined, color: Colors.white38, size: 26),
@@ -338,8 +334,7 @@ decoration: BoxDecoration(
                         overflow: TextOverflow.ellipsis,
                       ),
                       if (isOccupied)
-
-Text(
+                        Text(
                           'መለያ: ${chair['userId']}',
                           style: const TextStyle(
                             color: Color(0xFF00C9A7),
@@ -347,7 +342,8 @@ Text(
                             fontWeight: FontWeight.bold,
                           ),
                         ),
-                    ],
+
+],
                   ),
                 );
               },
