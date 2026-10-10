@@ -48,7 +48,7 @@ class _RoomScreenState extends State<RoomScreen> {
       if (!mounted) return;
       final int chairIndex = data['chairIndex'] ?? 0;
       final String action = data['action'] ?? '';
-      final String userName = data['userName'] ?? 'User';
+      final String userName = data['userName'] ?? 'ተጠቃሚ';
       final String userId = data['userId']?.toString() ?? '';
 
       setState(() {
@@ -57,23 +57,23 @@ class _RoomScreenState extends State<RoomScreen> {
             'userName': userName,
             'userId': userId,
           };
-          _addLog('$userName (ID: $userId) sat on Seat #${chairIndex + 1}');
+          _addLog('$userName (መታወቂያ: $userId) በወንበር #${chairIndex + 1} ላይ ተቀመጠ');
         } else if (action == 'leave') {
           _chairs[chairIndex] = null;
-          _addLog('$userName (ID: $userId) left Seat #${chairIndex + 1}');
+          _addLog('$userName (መታወቂያ: $userId) ከወንበር #${chairIndex + 1} ተነሳ');
         }
       });
     };
 
     _socketService.onChatMessageReceived = (data) {
       if (!mounted) return;
-      final String sender = data['sender'] ?? 'User';
+      final String sender = data['sender'] ?? 'ተጠቃሚ';
       final String userId = data['userId']?.toString() ?? '';
       final String text = data['text'] ?? '';
 
       if (userId != _userService.userId) {
         setState(() {
-          _addLog('$sender (ID: $userId): $text');
+          _addLog('$sender (መታወቂያ: $userId): $text');
         });
       }
     };
@@ -81,15 +81,14 @@ class _RoomScreenState extends State<RoomScreen> {
 
   Future<void> _initAgora() async {
     try {
-      // 1. የማይክራፎን ፍቃድ መጠየቅ
+      // የማይክራፎን ፈቃድ መጠየቅ
       final status = await Permission.microphone.request();
       if (!status.isGranted) {
-        debugPrint("Microphone permission denied");
-        _addLog("ማስጠንቀቂያ: የማይክራፎን ፍቃድ አልተሰጠም!");
+        _addLog("ማስጠንቀቂያ: የማይክራፎን ፈቃድ አልተሰጠም!");
         return;
       }
 
-      // 2. Agora ሞተር መክፈት
+      // Agora ሞተር ማዘጋጀት
       _engine = createAgoraRtcEngine();
       await _engine?.initialize(const RtcEngineContext(
         appId: UserService.agoraAppId,
@@ -99,30 +98,29 @@ class _RoomScreenState extends State<RoomScreen> {
       _engine?.registerEventHandler(
         RtcEngineEventHandler(
           onJoinChannelSuccess: (RtcConnection connection, int elapsed) {
-            debugPrint("Agora Channel Joined: ${connection.channelId}");
-            _addLog("ድምፅ በተሳካ ሁኔታ ተገናኝቷል 🎙️");
+            _addLog("የድምፅ መስመር ተገናኝቷል 🎙️");
           },
           onUserJoined: (RtcConnection connection, int remoteUid, int elapsed) {
-            debugPrint("ተጠቃሚ ድምፅ ተቀላቅሏል: $remoteUid");
-            _addLog("ተጠቃሚ ID:$remoteUid ድምፅ ተቀላቅሏል");
+            _addLog("ተጠቃሚ መታወቂያ: $remoteUid ድምፅ ተቀላቅሏል");
           },
           onUserOffline: (RtcConnection connection, int remoteUid, UserOfflineReasonType reason) {
-            debugPrint("ተጠቃሚ ድምፅ ለቋል: $remoteUid");
+            _addLog("ተጠቃሚ መታወቂያ: $remoteUid ወጥቷል");
           },
           onError: (ErrorCodeType err, String msg) {
-            debugPrint("Agora Error: $err, $msg");
+            debugPrint("የ Agora ስህተት: $err -> $msg");
           },
         ),
       );
 
-      // 3. ድምፅ ማሰራጫን ማብራት እና ስፒከር ማዘጋጀት
+      // ድምፅ ማሰራጨት እና ስፒከር ማዘጋጀት
       await _engine?.setClientRole(role: ClientRoleType.clientRoleBroadcaster);
       await _engine?.enableAudio();
       await _engine?.setDefaultAudioRouteToSpeakerphone(true);
 
-// 4. ክፍሉን መቀላቀል
+      // ክፍሉን መቀላቀል
       final uid = int.tryParse(_userService.userId) ?? 0;
-      await _engine?.joinChannel(
+
+await _engine?.joinChannel(
         token: '',
         channelId: widget.roomId,
         uid: uid,
@@ -134,7 +132,7 @@ class _RoomScreenState extends State<RoomScreen> {
         ),
       );
     } catch (e) {
-      debugPrint("Agora Init Exception: $e");
+      debugPrint("የ Agora ማስነሳት ችግር: $e");
     }
   }
 
@@ -159,7 +157,7 @@ class _RoomScreenState extends State<RoomScreen> {
       if (_chairs[index] != null && _chairs[index]!['userId'] == _userService.userId) {
         _chairs[index] = null;
         _myCurrentChair = null;
-        _addLog('${_userService.userName} left Seat #${index + 1}');
+        _addLog('${_userService.userName} ከወንበር #${index + 1} ተነሳ');
         _socketService.sendChairAction(
           roomId: widget.roomId,
           chairIndex: index,
@@ -186,7 +184,7 @@ class _RoomScreenState extends State<RoomScreen> {
         'userId': _userService.userId,
       };
       _myCurrentChair = index;
-      _addLog('${_userService.userName} (ID: ${_userService.userId}) sat on Seat #${index + 1}');
+      _addLog('${_userService.userName} (መታወቂያ: ${_userService.userId}) በወንበር #${index + 1} ላይ ተቀመጠ');
 
       _socketService.sendChairAction(
         roomId: widget.roomId,
@@ -208,7 +206,7 @@ class _RoomScreenState extends State<RoomScreen> {
     final text = _chatController.text.trim();
     if (text.isEmpty) return;
 
-    _addLog('${_userService.userName} (ID: ${_userService.userId}): $text');
+    _addLog('${_userService.userName} (መታወቂያ: ${_userService.userId}): $text');
 
     _socketService.sendChatMessage(roomId: widget.roomId, text: text);
     _chatController.clear();
@@ -245,7 +243,7 @@ class _RoomScreenState extends State<RoomScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(widget.roomTitle, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
-            Text('Room ID: ${widget.roomId}', style: const TextStyle(fontSize: 12, color: Color(0xFF00C9A7))),
+            Text('የክፍል መለያ: ${widget.roomId}', style: const TextStyle(fontSize: 12, color: Color(0xFF00C9A7))),
           ],
         ),
         actions: [
@@ -283,7 +281,7 @@ decoration: BoxDecoration(
               children: [
                 Icon(Icons.local_fire_department, color: Colors.amber, size: 20),
                 SizedBox(width: 8),
-                Text('Tap any seat to sit down and speak', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                Text('ለማውራት ማንኛውንም ወንበር ይጫኑ', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
               ],
             ),
           ),
@@ -322,7 +320,7 @@ decoration: BoxDecoration(
                         child: Center(
                           child: isOccupied
                               ? Text(
-                                  (chair['userName'] ?? 'U')[0].toUpperCase(),
+                                  (chair['userName'] ?? 'ተ')[0],
                                   style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black),
                                 )
                               : const Icon(Icons.chair_outlined, color: Colors.white38, size: 26),
@@ -330,7 +328,7 @@ decoration: BoxDecoration(
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        isOccupied ? chair['userName'] : 'Seat ${index + 1}',
+                        isOccupied ? chair['userName'] : 'ወንበር ${index + 1}',
                         style: TextStyle(
                           color: isOccupied ? Colors.white : Colors.white54,
                           fontSize: 11,
@@ -339,10 +337,10 @@ decoration: BoxDecoration(
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
+                      if (isOccupied)
 
-if (isOccupied)
-                        Text(
-                          'ID: ${chair['userId']}',
+Text(
+                          'መለያ: ${chair['userId']}',
                           style: const TextStyle(
                             color: Color(0xFF00C9A7),
                             fontSize: 10,
@@ -404,7 +402,7 @@ if (isOccupied)
                       controller: _chatController,
                       style: const TextStyle(color: Colors.white, fontSize: 13),
                       decoration: const InputDecoration(
-                        hintText: 'Say Hello...',
+                        hintText: 'መልእክት ጻፉ...',
                         hintStyle: TextStyle(color: Colors.white38, fontSize: 13),
                         border: InputBorder.none,
                       ),
