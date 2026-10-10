@@ -19,9 +19,10 @@ const io = new Server(server, {
 app.get('/', (req, res) => {
   res.status(200).send('Nile Voice Server is Live and Active');
 });
+
 // --- Agora Dynamic Token Generator ---
 const AGORA_APP_ID = '1523b6d3b8144281a1a21f28bbbd7fef';
-const AGORA_APP_CERTIFICATE = 'A8a098e8e7bc432d8b5c57a7a4f27657';
+const AGORA_APP_CERTIFICATE = 'a8a098e8e7bc432d8b5c57a7a4f27657';
 
 const handleTokenGeneration = (req, res) => {
   try {
@@ -31,13 +32,14 @@ const handleTokenGeneration = (req, res) => {
     const currentTime = Math.floor(Date.now() / 1000);
     const privilegeExpireTime = currentTime + expireTime;
 
-    // UID ቁጥሩን 0 ስታደርገው ለማንኛውም ስልክ እና UID ያለምንም ችግር ይሰራል
+    // UID 0 ለማንኛውም ስልክ እና UID ያለምንም ችግር ይሰራል (AccessToken2 ፎርማት)
     const token = RtcTokenBuilder.buildTokenWithUid(
       AGORA_APP_ID,
       AGORA_APP_CERTIFICATE,
       channelName,
       0, 
       role,
+      privilegeExpireTime,
       privilegeExpireTime
     );
 
@@ -53,6 +55,7 @@ const handleTokenGeneration = (req, res) => {
 
 app.get('/api/get-token', handleTokenGeneration);
 app.get('/rtc-token', handleTokenGeneration);
+
 // 2. MongoDB Database Connection
 const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://Kedir:euyEPW1wNL1V9u8D@cluster0.mdtjtlb.mongodb.net/nilevoice?retryWrites=true&w=majority&appName=Cluster0';
 
