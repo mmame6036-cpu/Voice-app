@@ -117,13 +117,13 @@ class _RoomScreenState extends State<RoomScreen> {
       await _engine?.enableLocalAudio(true);
       await _engine?.setDefaultAudioRouteToSpeakerphone(true);
 
-      // 4. Fetch dynamic token from Render server
-      final int myUid = int.tryParse(_userService.userId) ?? 1;
+      // 4. Fetch dynamic token from Render server with channel and UID 0
       String token = '';
+      final cleanRoomId = widget.roomId.trim();
 
       try {
         final response = await http.get(Uri.parse(
-          'https://voice-app-2-jd95.onrender.com/api/get-token?channelName=${widget.roomId}&uid=$myUid',
+          'https://voice-app-2-jd95.onrender.com/api/get-token?channelName=$cleanRoomId&uid=0',
         ));
 
 if (response.statusCode == 200) {
@@ -137,11 +137,11 @@ if (response.statusCode == 200) {
         _addLog("Token request error: $e");
       }
 
-      // 5. Join Agora room with dynamic token
+      // 5. Join Agora room with dynamic token and UID 0
       await _engine?.joinChannel(
         token: token,
-        channelId: widget.roomId,
-        uid: myUid,
+        channelId: cleanRoomId,
+        uid: 0, // ከሰርቨሩ ጋር እኩል 0 ሲሆን አጎራ ያለምንም እክል ይቀበለዋል
         options: const ChannelMediaOptions(
           clientRoleType: ClientRoleType.clientRoleBroadcaster,
           publishMicrophoneTrack: true,
