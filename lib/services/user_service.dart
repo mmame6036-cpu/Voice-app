@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 
 class UserService {
+  static const string agoraAppId= "የአንተ_AGORA_APP_ID";
   static final UserService _instance = UserService._internal();
   factory UserService() => _instance;
   UserService._internal();
