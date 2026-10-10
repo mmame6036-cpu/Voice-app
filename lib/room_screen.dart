@@ -140,8 +140,8 @@ if (response.statusCode == 200) {
       // 5. Join Agora room with dynamic token and UID 0
       await _engine?.joinChannel(
         token: token,
-        channelId: cleanRoomId,
-        uid: 0, // ከሰርቨሩ ጋር እኩል 0 ሲሆን አጎራ ያለምንም እክል ይቀበለዋል
+        channelId: widget.roomId.trim(),
+        uid: 0, // <-- ይህ ቦታ የግድ 0 መሆን አለበት!
         options: const ChannelMediaOptions(
           clientRoleType: ClientRoleType.clientRoleBroadcaster,
           publishMicrophoneTrack: true,
