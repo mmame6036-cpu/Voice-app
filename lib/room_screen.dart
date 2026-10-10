@@ -171,10 +171,6 @@ if (response.statusCode == 200) {
 
   void _toggleChair(int index) {
     if (_chairs[index] != null && _chairs[index]!['userId'] == _userService.userId) {
-      setState(() {
-        _chairs[index] = null;
-        _myCurrentChair = null;
-      });
       _socketService.sendChairAction(
         roomId: widget.roomId,
         chairIndex: index,
@@ -186,16 +182,19 @@ if (response.statusCode == 200) {
     if (_chairs[index] != null) return;
 
     if (_myCurrentChair != null) {
-      final prevChair = _myCurrentChair!;
-      setState(() {
-        _chairs[prevChair] = null;
-      });
       _socketService.sendChairAction(
         roomId: widget.roomId,
-        chairIndex: prevChair,
+        chairIndex: _myCurrentChair!,
         action: 'leave',
       );
     }
+
+    _socketService.sendChairAction(
+      roomId: widget.roomId,
+      chairIndex: index,
+      action: 'sit',
+    );
+  }
 
     setState(() {
       _chairs[index] = {
