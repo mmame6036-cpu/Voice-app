@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'services/user_service.dart';
 import 'services/socket_service.dart';
 
@@ -22,7 +23,7 @@ class RoomScreen extends StatefulWidget {
 class _RoomScreenState extends State<RoomScreen> {
   final UserService _userService = UserService();
   final SocketService _socketService = SocketService();
-  
+
   RtcEngine? _engine;
   bool _isMicMuted = false;
   int? _myCurrentChair;
@@ -80,6 +81,15 @@ class _RoomScreenState extends State<RoomScreen> {
 
   Future<void> _initAgora() async {
     try {
+      // 1. የማይክራፎን ፍቃድ መጠየቅ
+      final status = await Permission.microphone.request();
+      if (!status.isGranted) {
+        debugPrint("Microphone permission denied");
+        _addLog("ማስጠንቀቂያ: የማይክራፎን ፍቃድ አልተሰጠም!");
+        return;
+      }
+
+      // 2. Agora ሞተር መክፈት
       _engine = createAgoraRtcEngine();
       await _engine?.initialize(const RtcEngineContext(
         appId: UserService.agoraAppId,
@@ -90,13 +100,27 @@ class _RoomScreenState extends State<RoomScreen> {
         RtcEngineEventHandler(
           onJoinChannelSuccess: (RtcConnection connection, int elapsed) {
             debugPrint("Agora Channel Joined: ${connection.channelId}");
+            _addLog("ድምፅ በተሳካ ሁኔታ ተገናኝቷል 🎙️");
+          },
+          onUserJoined: (RtcConnection connection, int remoteUid, int elapsed) {
+            debugPrint("ተጠቃሚ ድምፅ ተቀላቅሏል: $remoteUid");
+            _addLog("ተጠቃሚ ID:$remoteUid ድምፅ ተቀላቅሏል");
+          },
+          onUserOffline: (RtcConnection connection, int remoteUid, UserOfflineReasonType reason) {
+            debugPrint("ተጠቃሚ ድምፅ ለቋል: $remoteUid");
+          },
+          onError: (ErrorCodeType err, String msg) {
+            debugPrint("Agora Error: $err, $msg");
           },
         ),
       );
 
+      // 3. ድምፅ ማሰራጫን ማብራት እና ስፒከር ማዘጋጀት
       await _engine?.setClientRole(role: ClientRoleType.clientRoleBroadcaster);
       await _engine?.enableAudio();
+      await _engine?.setDefaultAudioRouteToSpeakerphone(true);
 
+// 4. ክፍሉን መቀላቀል
       final uid = int.tryParse(_userService.userId) ?? 0;
       await _engine?.joinChannel(
         token: '',
@@ -104,15 +128,18 @@ class _RoomScreenState extends State<RoomScreen> {
         uid: uid,
         options: const ChannelMediaOptions(
           clientRoleType: ClientRoleType.clientRoleBroadcaster,
+          channelProfile: ChannelProfileType.channelProfileLiveBroadcasting,
+          publishMicrophoneTrack: true,
           autoSubscribeAudio: true,
         ),
       );
     } catch (e) {
-      debugPrint("Agora Error: $e");
+      debugPrint("Agora Init Exception: $e");
     }
   }
 
   void _addLog(String text) {
+    if (!mounted) return;
     setState(() {
       _roomLogs.add(text);
     });
@@ -130,8 +157,7 @@ class _RoomScreenState extends State<RoomScreen> {
   void _toggleChair(int index) {
     setState(() {
       if (_chairs[index] != null && _chairs[index]!['userId'] == _userService.userId) {
-
-_chairs[index] = null;
+        _chairs[index] = null;
         _myCurrentChair = null;
         _addLog('${_userService.userName} left Seat #${index + 1}');
         _socketService.sendChairAction(
@@ -175,6 +201,7 @@ _chairs[index] = null;
       _isMicMuted = !_isMicMuted;
     });
     _engine?.muteLocalAudioStream(_isMicMuted);
+    _addLog(_isMicMuted ? "ማይክ ተዘግቷል" : "ማይክ ክፍት ነው");
   }
 
   void _sendMessage() {
@@ -225,7 +252,8 @@ _chairs[index] = null;
           Container(
             margin: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
+
+decoration: BoxDecoration(
               color: Colors.amber.withOpacity(0.2),
               borderRadius: BorderRadius.circular(16),
               border: Border.all(color: Colors.amber.withOpacity(0.5)),
@@ -254,8 +282,7 @@ _chairs[index] = null;
             child: const Row(
               children: [
                 Icon(Icons.local_fire_department, color: Colors.amber, size: 20),
-
-SizedBox(width: 8),
+                SizedBox(width: 8),
                 Text('Tap any seat to sit down and speak', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
               ],
             ),
@@ -312,7 +339,8 @@ SizedBox(width: 8),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      if (isOccupied)
+
+if (isOccupied)
                         Text(
                           'ID: ${chair['userId']}',
                           style: const TextStyle(
@@ -343,8 +371,7 @@ SizedBox(width: 8),
                   return Padding(
                     padding: const EdgeInsets.symmetric(vertical: 3),
                     child: Text(
-
-_roomLogs[idx],
+                      _roomLogs[idx],
                       style: const TextStyle(color: Colors.white70, fontSize: 12),
                     ),
                   );
