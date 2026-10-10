@@ -2,7 +2,8 @@ const express = require('express');
 const http = require('http');
 const cors = require('cors');
 const { Server } = require('socket.io');
-const { RtcTokenBuilder, RtcRole } = require('agora-access-token');
+// አዲሱን እና ትክክለኛውን RtcTokenBuilder ከ agora-token መጥራት
+const { RtcTokenBuilder, RtcRole } = require('agora-token');
 const mongoose = require('mongoose');
 
 const app = express();
