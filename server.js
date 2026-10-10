@@ -18,7 +18,40 @@ const io = new Server(server, {
 app.get('/', (req, res) => {
   res.status(200).send('Nile Voice Server is Live and Active');
 });
+// --- Agora Dynamic Token Generator ---
+const AGORA_APP_ID = '1523b6d3b8144281a1a21f28bbbd7fef';
+const AGORA_APP_CERTIFICATE = 'A8a098e8e7bc432d8b5c57a7a4f27657';
 
+const handleTokenGeneration = (req, res) => {
+  try {
+    const channelName = String(req.query.channelName || '1001').trim();
+    const role = RtcRole.PUBLISHER;
+    const expireTime = 3600 * 24 * 30; // ለ30 ቀናት የሚሰራ
+    const currentTime = Math.floor(Date.now() / 1000);
+    const privilegeExpireTime = currentTime + expireTime;
+
+    // UID ቁጥሩን 0 ስታደርገው ለማንኛውም ስልክ እና UID ያለምንም ችግር ይሰራል
+    const token = RtcTokenBuilder.buildTokenWithUid(
+      AGORA_APP_ID,
+      AGORA_APP_CERTIFICATE,
+      channelName,
+      0, 
+      role,
+      privilegeExpireTime
+    );
+
+    return res.json({ 
+      success: true, 
+      token: token, 
+      channelName: channelName 
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+app.get('/api/get-token', handleTokenGeneration);
+app.get('/rtc-token', handleTokenGeneration);
 // 2. MongoDB Database Connection
 const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://Kedir:euyEPW1wNL1V9u8D@cluster0.mdtjtlb.mongodb.net/nilevoice?retryWrites=true&w=majority&appName=Cluster0';
 
@@ -126,43 +159,6 @@ app.get('/api/chat-history', async (req, res) => {
     return res.status(500).json({ error: err.message });
   }
 });
-
-// --- Agora Dynamic Token Generator ---
-const AGORA_APP_ID = process.env.AGORA_APP_ID || '1523b6d3b8144281a1a21f28bbbd7fef';
-const AGORA_APP_CERTIFICATE = process.env.AGORA_APP_CERTIFICATE || 'A8a098e8e7bc432d8b5c57a7a4f27657';
-
-const handleTokenGeneration = (req, res) => {
-  try {
-    const channelName = req.query.channelName || '1001';
-    const uid = req.query.uid ? parseInt(req.query.uid) : 0;
-    const role = RtcRole.PUBLISHER;
-    const expireTime = 3600 * 24; // Valid for 24 hours
-    const currentTime = Math.floor(Date.now() / 1000);
-    const privilegeExpireTime = currentTime + expireTime;
-
-    const token = RtcTokenBuilder.buildTokenWithUid(
-      AGORA_APP_ID,
-      AGORA_APP_CERTIFICATE,
-      channelName,
-      uid,
-      role,
-      privilegeExpireTime
-    );
-
-    return res.json({ 
-      success: true, 
-      token: token, 
-      channelName: channelName, 
-      uid: uid 
-    });
-  } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
-  }
-};
-
-// Supports both routes for client requests
-app.get('/api/get-token', handleTokenGeneration);
-app.get('/rtc-token', handleTokenGeneration);
 
 // --- Socket.io Real-time Communication ---
 io.on('connection', (socket) => {
