@@ -9,7 +9,7 @@ class UserService {
   UserService._internal();
 
   static const String serverUrl = 'https://voice-app-2-jd95.onrender.com';
-  static const String agoraAppId = '21091aff01114a66b580ce15b0f1b642';
+  static const String agoraAppId = '1523b6d3b8144281a1a21f28bbbd7fef';
 
   // ነባሪው ባዶ ነው፤ በዘፈቀደ 1000 አይሆንም
   String userId = '';
