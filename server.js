@@ -14,12 +14,12 @@ const io = new Server(server, {
   cors: { origin: '*' }
 });
 
-// 1. የሰርቨር ጤና ማረጋገጫ
+// 1. Health check route
 app.get('/', (req, res) => {
   res.status(200).send('Nile Voice Server is Live and Active');
 });
 
-// 2. MongoDB ግንኙነት
+// 2. MongoDB Database Connection
 const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://Kedir:euyEPW1wNL1V9u8D@cluster0.mdtjtlb.mongodb.net/nilevoice?retryWrites=true&w=majority&appName=Cluster0';
 
 mongoose.connect(MONGO_URI)
@@ -56,7 +56,7 @@ const Message = mongoose.model('Message', messageSchema);
 
 // --- REST APIs ---
 
-// አዲስ ተጠቃሚ ሲመጣ ID መስጫ (1000 የባለቤቱ፣ ከዛ 1001, 1002...)
+// User registration (Assigns ID starting from 1000)
 app.post('/api/register-user', async (req, res) => {
   try {
     const { deviceId, name, isOwner } = req.body;
@@ -94,7 +94,7 @@ app.post('/api/register-user', async (req, res) => {
   }
 });
 
-// ተጠቃሚን በአይዲ (ID) መፈለጊያ
+// Search user by ID
 app.get('/api/search-user', async (req, res) => {
   try {
     const userId = req.query.userId;
@@ -111,7 +111,7 @@ app.get('/api/search-user', async (req, res) => {
   }
 });
 
-// የቀድሞ ቴክስቶችን መጫኛ
+// Fetch direct messaging chat history
 app.get('/api/chat-history', async (req, res) => {
   try {
     const { user1, user2 } = req.query;
@@ -127,16 +127,16 @@ app.get('/api/chat-history', async (req, res) => {
   }
 });
 
-// --- Agora Token ---
-const AGORA_APP_ID = process.env.AGORA_APP_ID || '21091aff01114a66b580ce15b0f1b642';
-const AGORA_APP_CERTIFICATE = process.env.AGORA_APP_CERTIFICATE || '150ff1ae871e4d80a9e51092d00524a5';
+// --- Agora Dynamic Token Generator ---
+const AGORA_APP_ID = process.env.AGORA_APP_ID || '1523b6d3b8144281a1a21f28bbbd7fef';
+const AGORA_APP_CERTIFICATE = process.env.AGORA_APP_CERTIFICATE || 'A8a098e8e7bc432d8b5c57a7a4f27657';
 
-app.get('/rtc-token', (req, res) => {
+const handleTokenGeneration = (req, res) => {
   try {
-    const channelName = req.query.channelName || 'room_1001';
+    const channelName = req.query.channelName || '1001';
     const uid = req.query.uid ? parseInt(req.query.uid) : 0;
     const role = RtcRole.PUBLISHER;
-    const expireTime = 3600 * 24;
+    const expireTime = 3600 * 24; // Valid for 24 hours
     const currentTime = Math.floor(Date.now() / 1000);
     const privilegeExpireTime = currentTime + expireTime;
 
@@ -149,15 +149,24 @@ app.get('/rtc-token', (req, res) => {
       privilegeExpireTime
     );
 
-    return res.json({ token: token, channelName: channelName, uid: uid });
+    return res.json({ 
+      success: true, 
+      token: token, 
+      channelName: channelName, 
+      uid: uid 
+    });
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({ success: false, error: error.message });
   }
-});
+};
 
-// --- Socket.io Events ---
+// Supports both routes for client requests
+app.get('/api/get-token', handleTokenGeneration);
+app.get('/rtc-token', handleTokenGeneration);
+
+// --- Socket.io Real-time Communication ---
 io.on('connection', (socket) => {
-  // የግል ቻናል መቀላቀል
+  // Join private communication channel
   socket.on('user_connected', (userId) => {
     if (userId) {
       socket.join(String(userId));
@@ -165,7 +174,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  // የግል ቴክስት መላላኪያ (P2P Direct Message)
+  // Peer-to-peer direct text messaging
   socket.on('send_direct_message', async (data) => {
     try {
       const { senderId, receiverId, text } = data;
@@ -184,7 +193,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  // የድምፅ ክፍል ሶኬቶች (Room 1001)
+  // Voice room events
   socket.on('join_room', (data) => {
     const roomId = data.room || '1001';
     socket.join(roomId);
