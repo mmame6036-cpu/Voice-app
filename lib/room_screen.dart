@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../services/user_service.dart';
@@ -48,7 +50,7 @@ class _RoomScreenState extends State<RoomScreen> {
       if (!mounted) return;
       final int chairIndex = data['chairIndex'] ?? 0;
       final String action = data['action'] ?? '';
-      final String userName = data['userName'] ?? 'ተጠቃሚ';
+      final String userName = data['userName'] ?? 'User';
       final String userId = data['userId']?.toString() ?? '';
 
       setState(() {
@@ -57,36 +59,36 @@ class _RoomScreenState extends State<RoomScreen> {
             'userName': userName,
             'userId': userId,
           };
-          _addLog('$userName (መታወቂያ: $userId) በወንበር #${chairIndex + 1} ላይ ተቀመጠ');
+          _addLog('$userName (ID: $userId) sat on chair #${chairIndex + 1}');
         } else if (action == 'leave') {
           _chairs[chairIndex] = null;
-          _addLog('$userName (መታወቂያ: $userId) ከወንበር #${chairIndex + 1} ተነሳ');
+          _addLog('$userName (ID: $userId) left chair #${chairIndex + 1}');
         }
       });
     };
 
     _socketService.onChatMessageReceived = (data) {
       if (!mounted) return;
-      final String sender = data['sender'] ?? 'ተጠቃሚ';
+      final String sender = data['sender'] ?? 'User';
       final String userId = data['userId']?.toString() ?? '';
       final String text = data['text'] ?? '';
 
       setState(() {
-        _addLog('$sender (መታወቂያ: $userId): $text');
+        _addLog('$sender (ID: $userId): $text');
       });
     };
   }
 
   Future<void> _initAgora() async {
     try {
-      // 1. የማይክራፎን ፍቃድ መጠየቅ
+      // 1. Request microphone permission
       final micStatus = await Permission.microphone.request();
       if (!micStatus.isGranted) {
-        _addLog("ማስጠንቀቂያ: የማይክራፎን ፍቃድ አልተሰጠም!");
+        _addLog("Warning: Microphone permission denied");
         return;
       }
 
-      // 2. Agora RTC ሞተር መክፈት
+      // 2. Initialize Agora RTC engine
       _engine = createAgoraRtcEngine();
       await _engine?.initialize(const RtcEngineContext(
         appId: UserService.agoraAppId,
@@ -96,31 +98,49 @@ class _RoomScreenState extends State<RoomScreen> {
       _engine?.registerEventHandler(
         RtcEngineEventHandler(
           onJoinChannelSuccess: (RtcConnection connection, int elapsed) {
-            _addLog("የድምፅ መስመር ተገናኝቷል 🎙️");
+            _addLog("Audio connected successfully 🎙️");
           },
           onUserJoined: (RtcConnection connection, int remoteUid, int elapsed) {
-            _addLog("ተጠቃሚ ID $remoteUid ድምፅ ተቀላቅሏል");
+            _addLog("User ID $remoteUid joined voice chat");
           },
           onUserOffline: (RtcConnection connection, int remoteUid, UserOfflineReasonType reason) {
-            _addLog("ተጠቃሚ ID $remoteUid ወጥቷል");
+            _addLog("User ID $remoteUid disconnected");
           },
           onError: (ErrorCodeType err, String msg) {
-            _addLog("የድምፅ ስህተት: $err");
+            _addLog("Voice error: $err");
           },
         ),
       );
 
-      // 3. ድምፅ ማብራትና ማስተካከል
+      // 3. Audio setup
       await _engine?.enableAudio();
       await _engine?.enableLocalAudio(true);
       await _engine?.setDefaultAudioRouteToSpeakerphone(true);
 
-      // 4. ወደ ድምፅ ሩም መግባት (UID ወደ int ይቀየራል)
+      // 4. Fetch dynamic token from Render server
       final int myUid = int.tryParse(_userService.userId) ?? 1;
-      await _engine?.joinChannel(
-        token: '',
+      String token = '';
 
-channelId: widget.roomId,
+      try {
+        final response = await http.get(Uri.parse(
+          'https://voice-app-2-jd95.onrender.com/api/get-token?channelName=${widget.roomId}&uid=$myUid',
+        ));
+
+if (response.statusCode == 200) {
+          final data = jsonDecode(response.body);
+          token = data['token'] ?? '';
+          _addLog("Token acquired successfully");
+        } else {
+          _addLog("Token request failed: ${response.statusCode}");
+        }
+      } catch (e) {
+        _addLog("Token request error: $e");
+      }
+
+      // 5. Join Agora room with dynamic token
+      await _engine?.joinChannel(
+        token: token,
+        channelId: widget.roomId,
         uid: myUid,
         options: const ChannelMediaOptions(
           clientRoleType: ClientRoleType.clientRoleBroadcaster,
@@ -197,7 +217,7 @@ channelId: widget.roomId,
       _isMicMuted = !_isMicMuted;
     });
     _engine?.muteLocalAudioStream(_isMicMuted);
-    _addLog(_isMicMuted ? "ማይክ ተዘግቷል 🔇" : "ማይክ ክፍት ነው 🎙️");
+    _addLog(_isMicMuted ? "Mic muted 🔇" : "Mic unmuted 🎙️");
   }
 
   void _sendMessage() {
@@ -239,13 +259,14 @@ channelId: widget.roomId,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(widget.roomTitle, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
-            Text('የክፍል መለያ: ${widget.roomId}', style: const TextStyle(fontSize: 12, color: Color(0xFF00C9A7))),
+            Text('Room ID: ${widget.roomId}', style: const TextStyle(fontSize: 12, color: Color(0xFF00C9A7))),
           ],
         ),
         actions: [
           Container(
             margin: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+
+padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
               color: Colors.amber.withOpacity(0.2),
               borderRadius: BorderRadius.circular(16),
@@ -254,8 +275,7 @@ channelId: widget.roomId,
             child: Row(
               children: [
                 const Icon(Icons.monetization_on, color: Colors.amber, size: 16),
-
-const SizedBox(width: 4),
+                const SizedBox(width: 4),
                 Text('${_userService.coins}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
               ],
             ),
@@ -277,7 +297,7 @@ const SizedBox(width: 4),
               children: [
                 Icon(Icons.local_fire_department, color: Colors.amber, size: 20),
                 SizedBox(width: 8),
-                Text('ለማውራት ማንኛውንም ወንበር ይጫኑ', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                Text('Tap any chair to speak', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
               ],
             ),
           ),
@@ -324,26 +344,26 @@ const SizedBox(width: 4),
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        isOccupied ? chair['userName'] : 'ወንበር ${index + 1}',
+                        isOccupied ? chair['userName'] : 'Chair ${index + 1}',
                         style: TextStyle(
                           color: isOccupied ? Colors.white : Colors.white54,
                           fontSize: 11,
                           fontWeight: isOccupied ? FontWeight.bold : FontWeight.normal,
                         ),
                         maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+
+overflow: TextOverflow.ellipsis,
                       ),
                       if (isOccupied)
                         Text(
-                          'መለያ: ${chair['userId']}',
+                          'ID: ${chair['userId']}',
                           style: const TextStyle(
                             color: Color(0xFF00C9A7),
                             fontSize: 10,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
-
-],
+                    ],
                   ),
                 );
               },
@@ -398,7 +418,7 @@ const SizedBox(width: 4),
                       controller: _chatController,
                       style: const TextStyle(color: Colors.white, fontSize: 13),
                       decoration: const InputDecoration(
-                        hintText: 'መልእክት ጻፉ...',
+                        hintText: 'Type a message...',
                         hintStyle: TextStyle(color: Colors.white38, fontSize: 13),
                         border: InputBorder.none,
                       ),
