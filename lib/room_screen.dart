@@ -140,8 +140,8 @@ if (response.statusCode == 200) {
       // 5. Join Agora room with dynamic token and UID 0
       await _engine?.joinChannel(
         token: token,
-        channelId: widget.roomId.trim(),
-        uid: 0, // <-- ይህ ቦታ የግድ 0 መሆን አለበት!
+        channelId: cleanRoomId,
+        uid: 0,
         options: const ChannelMediaOptions(
           clientRoleType: ClientRoleType.clientRoleBroadcaster,
           publishMicrophoneTrack: true,
@@ -188,21 +188,6 @@ if (response.statusCode == 200) {
         action: 'leave',
       );
     }
-
-    _socketService.sendChairAction(
-      roomId: widget.roomId,
-      chairIndex: index,
-      action: 'sit',
-    );
-  }
-
-    setState(() {
-      _chairs[index] = {
-        'userName': _userService.userName,
-        'userId': _userService.userId,
-      };
-      _myCurrentChair = index;
-    });
 
     _socketService.sendChairAction(
       roomId: widget.roomId,
@@ -264,15 +249,15 @@ if (response.statusCode == 200) {
         actions: [
           Container(
             margin: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-
-padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
               color: Colors.amber.withOpacity(0.2),
               borderRadius: BorderRadius.circular(16),
               border: Border.all(color: Colors.amber.withOpacity(0.5)),
             ),
             child: Row(
-              children: [
+
+children: [
                 const Icon(Icons.monetization_on, color: Colors.amber, size: 16),
                 const SizedBox(width: 4),
                 Text('${_userService.coins}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
@@ -350,8 +335,7 @@ padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                           fontWeight: isOccupied ? FontWeight.bold : FontWeight.normal,
                         ),
                         maxLines: 1,
-
-overflow: TextOverflow.ellipsis,
+                        overflow: TextOverflow.ellipsis,
                       ),
                       if (isOccupied)
                         Text(
@@ -359,7 +343,8 @@ overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             color: Color(0xFF00C9A7),
                             fontSize: 10,
-                            fontWeight: FontWeight.bold,
+
+fontWeight: FontWeight.bold,
                           ),
                         ),
                     ],
