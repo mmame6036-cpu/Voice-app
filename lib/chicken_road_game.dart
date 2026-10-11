@@ -1,13 +1,17 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
-import 'main.dart';
+import 'services/user_service.dart';
 
 class ChickenRoadGameView extends StatefulWidget {
   final dynamic socket;
   final VoidCallback onCoinsChanged;
 
-  const ChickenRoadGameView({Key? key, this.socket, required this.onCoinsChanged}) : super(key: key);
+  const ChickenRoadGameView({
+    Key? key,
+    this.socket,
+    required this.onCoinsChanged,
+  }) : super(key: key);
 
   @override
   State<ChickenRoadGameView> createState() => _ChickenRoadGameViewState();
@@ -18,23 +22,28 @@ class _Car {
   double y;
   final double speed;
   final String emoji;
-  _Car({required this.laneIndex, required this.y, required this.speed, required this.emoji});
+  _Car({
+    required this.laneIndex,
+    required this.y,
+    required this.speed,
+    required this.emoji,
+  });
 }
 
 class _ChickenRoadGameViewState extends State<ChickenRoadGameView> {
   final ScrollController _scrollController = ScrollController();
-  Timer? _gameLoopTimer;
+  final UserService _userService = UserService();
   final Random _rnd = Random();
+  Timer? _gameLoopTimer;
 
   String selectedDifficulty = 'MEDIUM';
   int betAmount = 100;
   bool isPlaying = false;
   int currentLane = 0;
-  String statusMsg = 'ውርርድ ይምረጡና PLAY ይጫኑ!';
+  String statusMsg = 'Select your bet and tap PLAY!';
 
   List<_Car> cars = [];
 
-  // 30ዎቹ ደረጃዎች ለእያንዳንዱ ሞድ
   final Map<String, List<double>> difficultyMultipliers = {
     'EASY': [
       1.03, 1.06, 1.10, 1.15, 1.21, 1.28, 1.36, 1.45, 1.56, 1.68,
@@ -108,16 +117,16 @@ class _ChickenRoadGameViewState extends State<ChickenRoadGameView> {
 
   void _onPlayOrCashOut() {
     if (!isPlaying) {
-      if (AppData.userCoins < betAmount) {
+      if (_userService.coins < betAmount) {
         _showInsufficientBalance();
         return;
       }
 
       setState(() {
-        AppData.userCoins -= betAmount;
+        _userService.coins -= betAmount;
         isPlaying = true;
         currentLane = 0;
-        statusMsg = 'ዶሮዋን ለማሻገር መስመሩን ይንኩ!';
+        statusMsg = 'Tap next lane to cross the chicken!';
       });
       widget.onCoinsChanged();
       if (_scrollController.hasClients) {
@@ -129,16 +138,16 @@ class _ChickenRoadGameViewState extends State<ChickenRoadGameView> {
       final win = (betAmount * mult).round();
 
 setState(() {
-        AppData.userCoins += win;
+        _userService.coins += win;
         isPlaying = false;
         currentLane = 0;
-        statusMsg = '🎉 አሸነፉ! +$win ሳንቲም ተሰብስቧል!';
+        statusMsg = 'You won +$win Coins!';
       });
       widget.onCoinsChanged();
 
       if (win >= 500 && widget.socket != null) {
         widget.socket.emit('game_win', {
-          'winner': AppData.currentUserName,
+          'winner': _userService.userName,
           'game': 'Chicken Road',
           'amount': win,
         });
@@ -161,7 +170,7 @@ setState(() {
       setState(() {
         isPlaying = false;
         currentLane = 0;
-        statusMsg = '💥 መኪና ገጨዎት! ውርርዱ ተበልቷል!';
+        statusMsg = 'Car crash! Bet lost!';
       });
       return;
     }
@@ -170,7 +179,7 @@ setState(() {
       currentLane = targetLane;
       final mult = difficultyMultipliers[selectedDifficulty]![currentLane - 1];
       final currentWin = (betAmount * mult).round();
-      statusMsg = 'ደረጃ $currentLane ተሻገሩ! እጥፍ: ${mult}x (+$currentWin)';
+      statusMsg = 'Lane $currentLane cleared! Multiplier: ${mult}x (+$currentWin)';
     });
 
     final scrollTarget = (currentLane * 74.0) - 120.0;
@@ -186,10 +195,10 @@ setState(() {
       final mult = difficultyMultipliers[selectedDifficulty]![29];
       final jackpot = (betAmount * mult).round();
       setState(() {
-        AppData.userCoins += jackpot;
+        _userService.coins += jackpot;
         isPlaying = false;
         currentLane = 0;
-        statusMsg = '🏆 ጃክፖት! 30ኛውን ደረጃ ጨርሰው +$jackpot አሸነፉ!';
+        statusMsg = 'JACKPOT! Level 30 completed! Won +$jackpot!';
       });
       widget.onCoinsChanged();
     }
@@ -201,13 +210,16 @@ setState(() {
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF1E143E),
         title: const Text('Insufficient Balance', style: TextStyle(color: Colors.white, fontSize: 15)),
-        content: const Text('Insufficient account balance go to recharge?', style: TextStyle(color: Colors.white70, fontSize: 13)),
+        content: const Text('Insufficient account balance. Please recharge coins.', style: TextStyle(color: Colors.white70, fontSize: 13)),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('No', style: TextStyle(color: Colors.white54))),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
+          ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFFD700)),
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Yes', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+            child: const Text('OK', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -221,16 +233,18 @@ setState(() {
     final int currentWin = (betAmount * currentMult).round();
 
     return Container(
+      height: 380,
       decoration: const BoxDecoration(
         color: Color(0xFF1E2430),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       child: Column(
         children: [
-          // የቀጥታ ሩጫ ባነር
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
             decoration: const BoxDecoration(
               gradient: LinearGradient(colors: [Color(0xFF2E7D32), Color(0xFF1B5E20)]),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -238,18 +252,17 @@ setState(() {
                 Expanded(
                   child: Text(
                     statusMsg,
-                    style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
-                    maxLines: 1,
+                    style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+
+maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
                 if (isPlaying && currentLane > 0)
-                  Text('+$currentWin 🪙', style: const TextStyle(color: Color(0xFFFFD700), fontSize: 12, fontWeight: FontWeight.bold)),
+                  Text('+$currentWin 🪙', style: const TextStyle(color: Color(0xFFFFD700), fontSize: 13, fontWeight: FontWeight.bold)),
               ],
             ),
           ),
-
-// የ 30 መንገዶች ሰሌዳ
           Expanded(
             child: SingleChildScrollView(
               controller: _scrollController,
@@ -267,9 +280,9 @@ setState(() {
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           if (currentLane == 0)
-                            const Text('🐔', style: TextStyle(fontSize: 36))
+                            const Text('🐔', style: TextStyle(fontSize: 34))
                           else
-                            const Text('🏁', style: TextStyle(fontSize: 28)),
+                            const Text('🏁', style: TextStyle(fontSize: 26)),
                           const SizedBox(height: 4),
                           const Text('START', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
                         ],
@@ -305,26 +318,26 @@ setState(() {
                               ),
                               ...cars.where((c) => c.laneIndex == laneNum).map((c) {
                                 return Positioned(
-                                  top: c.y * 180,
-                                  child: Text(c.emoji, style: const TextStyle(fontSize: 26)),
+                                  top: c.y * 150,
+                                  child: Text(c.emoji, style: const TextStyle(fontSize: 24)),
                                 );
                               }).toList(),
                               if (isCurrent)
                                 const Positioned(
-                                  bottom: 48,
-                                  child: Text('🐔', style: TextStyle(fontSize: 32)),
+                                  bottom: 46,
+                                  child: Text('🐔', style: TextStyle(fontSize: 30)),
                                 ),
                               Positioned(
                                 bottom: 6,
                                 child: Column(
                                   children: [
                                     Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+
+padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
                                       decoration: BoxDecoration(
                                         color: isCurrent ? const Color(0xFFFFD700) : Colors.black87,
                                         borderRadius: BorderRadius.circular(10),
-
-border: Border.all(color: isCurrent ? Colors.amber : Colors.white24),
+                                        border: Border.all(color: isCurrent ? Colors.amber : Colors.white24),
                                       ),
                                       child: Text(
                                         '${mult}x',
@@ -353,10 +366,8 @@ border: Border.all(color: isCurrent ? Colors.amber : Colors.white24),
               ),
             ),
           ),
-
-          // የታችኛው መቆጣጠሪያ ክፍል
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
             color: const Color(0xFF10141D),
             child: Column(
               children: [
@@ -391,7 +402,7 @@ border: Border.all(color: isCurrent ? Colors.amber : Colors.white24),
                     );
                   }).toList(),
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 8),
                 Row(
                   children: [
                     IconButton(
@@ -402,12 +413,12 @@ border: Border.all(color: isCurrent ? Colors.amber : Colors.white24),
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                       decoration: BoxDecoration(
                         color: Colors.black45,
-                        borderRadius: BorderRadius.circular(12),
+
+borderRadius: BorderRadius.circular(12),
                         border: Border.all(color: const Color(0xFFFFD700).withOpacity(0.5)),
                       ),
                       child: Text('BET $betAmount', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
-
-),
+                    ),
                     IconButton(
                       icon: const Icon(Icons.add_circle, color: Colors.blueAccent, size: 26),
                       onPressed: isPlaying ? null : () => setState(() => betAmount += 50),
@@ -422,7 +433,7 @@ border: Border.all(color: isCurrent ? Colors.amber : Colors.white24),
                       onPressed: _onPlayOrCashOut,
                       child: Text(
                         isPlaying ? (currentLane > 0 ? 'CASH OUT' : 'WAIT') : 'PLAY',
-                        style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 14),
+                        style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 13),
                       ),
                     ),
                   ],
