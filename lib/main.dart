@@ -57,7 +57,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         unselectedItemColor: Colors.white54,
         items: const [
           BottomNavigationBarItem(
-            icon: Icon(Icons.mic),
+            icon: Icon(Icons.headset),
             label: 'Rooms',
           ),
           BottomNavigationBarItem(
@@ -92,7 +92,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _fetchRooms();
   }
 
-  // ከሰርቨሩ ዳታቤዝ ላይ ንቁ ክፍሎችን ማምጣት
+  // ንቁ የሆኑ ክፍሎችን ከሰርቨር ማምጣት
   Future<void> _fetchRooms() async {
     try {
       final response = await http.get(
@@ -119,96 +119,39 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // አዲስ ክፍል መፍጠሪያ ፖፕአፕ
-  void _showCreateRoomDialog() {
-    final titleController = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          backgroundColor: const Color(0xFF161B26),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Text('Create Voice Room', style: TextStyle(fontWeight: FontWeight.bold)),
-          content: TextField(
-            controller: titleController,
-            style: const TextStyle(color: Colors.white),
-            decoration: InputDecoration(
-              hintText: 'Enter Room Title',
-              hintStyle: const TextStyle(color: Colors.white38),
-
-filled: true,
-              fillColor: Colors.white.withOpacity(0.05),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide.none,
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF00C9A7),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              ),
-              onPressed: () async {
-                final title = titleController.text.trim();
-                Navigator.pop(context);
-                if (title.isNotEmpty) {
-                  await _createNewRoom(title);
-                }
-              },
-              child: const Text('Create', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  // አዲሱን ክፍል ወደ ሰርቨር መላክና በቀጥታ መግባት
-  Future<void> _createNewRoom(String title) async {
+  // ተጠቃሚው የማይክ ምልክቷን ሲነካ በቀጥታ ወደ ራሱ የግል ሩም መግባት
+  Future<void> _openMyPersonalRoom() async {
+    // ክፍሉ በሰርቨሩ ዳታቤዝ ላይ እንዲመዘገብ መላክ
     try {
-      final response = await http.post(
+      await http.post(
         Uri.parse('https://voice-app-2-jd95.onrender.com/api/rooms/create'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
-          'title': title,
-          'category': 'General',
+          'roomId': _user.userId,
+          'title': "${_user.userName}'s Room",
+          'category': 'Party',
           'hostId': _user.userId,
           'hostName': _user.userName,
         }),
       );
+    } catch (_) {}
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        if (data['success'] == true) {
-          final room = data['room'];
-          _fetchRooms(); // ዝርዝሩን ማደስ
+    if (!mounted) return;
 
-          if (!mounted) return;
-          // በቀጥታ ወደ አዲሱ ክፍል መግባት
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => RoomScreen(
-                roomId: room['roomId'].toString(),
-                roomTitle: room['title'].toString(),
-                hostName: room['hostName'].toString(),
-              ),
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      debugPrint("Create room error: $e");
-    }
+    // በቀጥታ በራሱ መለያ ወደ ሩሙ መግባት
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => RoomScreen(
+          roomId: _user.userId,
+          roomTitle: "${_user.userName}'s Room",
+          hostName: _user.userName,
+        ),
+      ),
+    ).then((_) => _fetchRooms());
   }
 
-  @override
+@override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
@@ -235,23 +178,26 @@ filled: true,
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
+
+      // ልክ እንደ Hala: የማይክ ምልክቷን ሲነኩ በቀጥታ ወደ ራሳቸው ሩም ያስገባቸዋል
+      floatingActionButton: FloatingActionButton(
         backgroundColor: const Color(0xFF00C9A7),
-        icon: const Icon(Icons.add, color: Colors.black),
-        label: const Text('Create Room', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
-        onPressed: _showCreateRoomDialog,
+        elevation: 6,
+        onPressed: _openMyPersonalRoom,
+        child: const Icon(Icons.mic, color: Colors.black, size: 30),
       ),
+
       body: RefreshIndicator(
         onRefresh: _fetchRooms,
         color: const Color(0xFF00C9A7),
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
+            // የተጠቃሚው ፕሮፋይል ባነር
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-
-gradient: const LinearGradient(colors: [Color(0xFF5C248B), Color(0xFF1F104F)]),
+                gradient: const LinearGradient(colors: [Color(0xFF5C248B), Color(0xFF1F104F)]),
                 borderRadius: BorderRadius.circular(16),
               ),
               child: Row(
@@ -269,10 +215,47 @@ gradient: const LinearGradient(colors: [Color(0xFF5C248B), Color(0xFF1F104F)]),
               ),
             ),
             const SizedBox(height: 20),
-            const Text('Available Rooms', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+
+            // የራሴ ክፍል መግቢያ ካርድ (My Personal Room Quick Card)
+            GestureDetector(
+              onTap: _openMyPersonalRoom,
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [const Color(0xFF00C9A7).withOpacity(0.18), const Color(0xFF161B26)],
+                  ),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFF00C9A7).withOpacity(0.4)),
+                ),
+                child: Row(
+                  children: [
+                    const CircleAvatar(
+                      backgroundColor: Color(0xFF00C9A7),
+                      child: Icon(Icons.mic, color: Colors.black),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Enter My Room', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF00C9A7))),
+                          const SizedBox(height: 4),
+                          Text('Room ID: ${_user.userId} • Tap to open', style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                        ],
+                      ),
+                    ),
+                    const Icon(Icons.arrow_forward_ios, color: Color(0xFF00C9A7), size: 16),
+                  ],
+                ),
+              ),
+            ),
+
+const SizedBox(height: 24),
+            const Text('Explore Rooms', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             const SizedBox(height: 12),
 
-            // ነባሪው ቋሚ ክፍል (Global Room)
+            // ነባሪው ቋሚ ክፍል (Global Chat Lounge)
             _buildRoomCard(
               roomId: '1001',
               title: 'Global Chat Lounge',
@@ -281,7 +264,7 @@ gradient: const LinearGradient(colors: [Color(0xFF5C248B), Color(0xFF1F104F)]),
 
             const SizedBox(height: 10),
 
-            // በዳታቤዝ የተመዘገቡ አዳዲስ ክፍሎች
+            // በሌሎች ሰዎች የተከፈቱ ክፍሎች
             if (_isLoading)
               const Center(
                 child: Padding(
@@ -293,23 +276,25 @@ gradient: const LinearGradient(colors: [Color(0xFF5C248B), Color(0xFF1F104F)]),
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 20),
                 child: Center(
-                  child: Text('No custom rooms yet. Tap "Create Room" to start one!', style: TextStyle(color: Colors.white38, fontSize: 13)),
+                  child: Text('No active rooms found. Tap the mic to open yours!', style: TextStyle(color: Colors.white38, fontSize: 13)),
                 ),
               )
             else
               ..._rooms.map((room) {
-                // 1001 አስቀድሞ ስላለ እንዳይደገም
-                if (room['roomId'].toString() == '1001') return const SizedBox.shrink();
+                final rId = room['roomId'].toString();
+                // የራስ ክፍሌ እና 1001 ከላይ ስላሉ እንዳይደገሙ
+                if (rId == '1001' || rId == _user.userId) return const SizedBox.shrink();
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 10),
                   child: _buildRoomCard(
-                    roomId: room['roomId'].toString(),
-                    title: room['title'] ?? 'Voice Lounge',
+                    roomId: rId,
+                    title: room['title'] ?? 'Party Room',
                     host: room['hostName'] ?? 'Host',
                   ),
                 );
               }).toList(),
-            const SizedBox(height: 80), // ለFloating Button ክፍተት
+
+            const SizedBox(height: 80),
           ],
         ),
       ),
@@ -386,7 +371,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: const Color(0xFF161B26),
+
+backgroundColor: const Color(0xFF161B26),
         title: const Text('My Profile', style: TextStyle(fontWeight: FontWeight.bold)),
       ),
       body: Center(
