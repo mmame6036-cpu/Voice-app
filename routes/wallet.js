@@ -2,22 +2,27 @@ const express = require('express');
 const router = express.Router();
 const mongoose = require('mongoose');
 const Transaction = require('../models/Transaction');
+const verifyToken = require('../middleware/auth');
 
-// 1. Bet Endpoint (ነጥብ 1 እና ነጥብ 4 - Atomic Deduction)
+// Apply JWT authentication to all wallet endpoints
+router.use(verifyToken);
+
+// 1. Bet Endpoint (Protected & Atomic)
 router.post('/bet', async (req, res) => {
   try {
-    const { userId, betAmount, gameName } = req.body;
+    const { betAmount, gameName } = req.body;
+    const userId = req.user.userId;
     const amount = Number(betAmount);
 
-    if (!userId  isNaN(amount)  amount <= 0) {
+    if (isNaN(amount) || amount <= 0) {
       return res.status(400).json({ success: false, error: 'Invalid bet parameters' });
     }
 
     const User = mongoose.model('User');
 
-    // Atomic Operation ($inc) - በተመሳሳይ ሰከንድ ሁለት ጊዜ እንዳይቆረጥ ያደርጋል
+    // Check account status and deduct balance atomically
     const user = await User.findOneAndUpdate(
-      { userId: String(userId), coins: { $gte: amount } },
+      { userId: String(userId), isFrozen: { $ne: true }, coins: {$gte: amount } },
       { $inc: { coins: -amount } },
       { new: true }
     );
@@ -25,11 +30,11 @@ router.post('/bet', async (req, res) => {
     if (!user) {
       return res.status(400).json({ 
         success: false, 
-        error: 'Insufficient coins balance or user not found' 
+        error: 'Insufficient coins balance, account frozen, or user not found' 
       });
     }
 
-    // Ledger Record (ነጥብ 2)
+    // Ledger record
     await Transaction.create({
       userId: String(userId),
       type: 'game_bet',
@@ -53,26 +58,27 @@ router.post('/bet', async (req, res) => {
   }
 });
 
-// 2. Win Endpoint
+// 2. Win Endpoint (Protected)
 router.post('/win', async (req, res) => {
   try {
-    const { userId, winAmount, gameName } = req.body;
+    const { winAmount, gameName } = req.body;
+    const userId = req.user.userId;
     const amount = Number(winAmount);
 
-    if (!userId  isNaN(amount)  amount <= 0) {
+    if (isNaN(amount) || amount <= 0) {
       return res.status(400).json({ success: false, error: 'Invalid win amount' });
     }
 
     const User = mongoose.model('User');
 
     const user = await User.findOneAndUpdate(
-      { userId: String(userId) },
+      { userId: String(userId), isFrozen: { $ne: true } },
       { $inc: { coins: amount } },
       { new: true }
     );
 
     if (!user) {
-      return res.status(404).json({ success: false, error: 'User not found' });
+      return res.status(404).json({ success: false, error: 'User not found or account is frozen' });
     }
 
     await Transaction.create({
@@ -98,19 +104,19 @@ router.post('/win', async (req, res) => {
   }
 });
 
-// 3. Auto-refund Endpoint (ነጥብ 4 - ኔትወርክ ሲቋረጥ ወይም ጨዋታ ሳይጀመር ሲቀር ሳንቲም መመለሻ)
+// 3. Auto-refund Endpoint (Protected & Atomic)
 router.post('/refund', async (req, res) => {
   try {
-    const { userId, refundAmount, reason } = req.body;
+    const { refundAmount, reason } = req.body;
+    const userId = req.user.userId;
     const amount = Number(refundAmount);
 
-    if (!userId  isNaN(amount)  amount <= 0) {
+    if (isNaN(amount) || amount <= 0) {
       return res.status(400).json({ success: false, error: 'Invalid refund parameters' });
     }
 
     const User = mongoose.model('User');
 
-    // ሳንቲሙን በ Atomic ኦፕሬሽን ወዲያውኑ መመለስ
     const user = await User.findOneAndUpdate(
       { userId: String(userId) },
       { $inc: { coins: amount } },
@@ -121,7 +127,6 @@ router.post('/refund', async (req, res) => {
       return res.status(404).json({ success: false, error: 'User not found' });
     }
 
-    // በታሪክ መዝገብ ላይ ማስፈር
     await Transaction.create({
       userId: String(userId),
       type: 'recharge',
@@ -135,7 +140,7 @@ router.post('/refund', async (req, res) => {
       io.to(String(userId)).emit('wallet_updated', { coins: user.coins });
     }
 
-    return res.json({
+return res.json({
       success: true,
       message: 'Coins refunded successfully',
       newBalance: user.coins
@@ -145,13 +150,10 @@ router.post('/refund', async (req, res) => {
   }
 });
 
-// 4. Ledger History Endpoint
+// 4. Ledger History Endpoint (Protected)
 router.get('/history', async (req, res) => {
   try {
-    const { userId } = req.query;
-    if (!userId) {
-      return res.status(400).json({ success: false, error: 'User ID is required' });
-    }
+    const userId = req.user.userId;
 
     const history = await Transaction.find({ userId: String(userId) })
       .sort({ createdAt: -1 })
