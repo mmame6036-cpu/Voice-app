@@ -6,6 +6,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'services/user_service.dart';
 import 'services/socket_service.dart';
 import 'chairs_management_screen.dart';
+import 'chicken_road_game.dart';
 
 class RoomScreen extends StatefulWidget {
   final String roomId;
@@ -31,10 +32,7 @@ class _RoomScreenState extends State<RoomScreen> {
   bool _isMicMuted = false;
   int? _myCurrentChair;
 
-  // የሆስት ወንበር (Host Seat)
   Map<String, dynamic>? _hostSeat;
-
-  // ከ1 እስከ 9 የተቆጠሩ ወንበሮች (Guest Chairs)
   final List<Map<String, dynamic>?> _chairs = List.generate(9, (_) => null);
   final List<String> _roomLogs = [];
   final ScrollController _logScrollController = ScrollController();
@@ -45,7 +43,6 @@ class _RoomScreenState extends State<RoomScreen> {
   @override
   void initState() {
     super.initState();
-    // የክፍሉ ባለቤት ከሆነ በቀጥታ ዋናው የሆስት ወንበር ላይ ይቀመጣል
     if (_isHost) {
       _hostSeat = {
         'userName': _userService.userName,
@@ -69,16 +66,14 @@ class _RoomScreenState extends State<RoomScreen> {
 
       setState(() {
         if (chairIndex == -1) {
-          // የሆስት ወንበር እርምጃ
           if (action == 'sit') {
             _hostSeat = {'userName': userName, 'userId': userId};
-            _addLog('👑 $userName sat on Host Seat');
+            _addLog('$userName sat on Host Seat');
           } else if (action == 'leave') {
             _hostSeat = null;
-            _addLog('👑 $userName left Host Seat');
+            _addLog('$userName left Host Seat');
           }
         } else if (chairIndex >= 0 && chairIndex < 9) {
-          // የእንግዶች ወንበር እርምጃ
           if (action == 'sit') {
             _chairs[chairIndex] = {'userName': userName, 'userId': userId};
             _addLog('$userName sat on chair #${chairIndex + 1}');
@@ -117,11 +112,10 @@ class _RoomScreenState extends State<RoomScreen> {
       _engine?.registerEventHandler(
         RtcEngineEventHandler(
           onJoinChannelSuccess: (RtcConnection connection, int elapsed) {
-            _addLog("Audio connected successfully 🎙️");
+            _addLog("Audio connected successfully");
           },
           onUserJoined: (RtcConnection connection, int remoteUid, int elapsed) {
-
-_addLog("User $remoteUid joined voice chat");
+            _addLog("User $remoteUid joined voice chat");
           },
           onUserOffline: (RtcConnection connection, int remoteUid, UserOfflineReasonType reason) {
             _addLog("User $remoteUid left");
@@ -132,7 +126,7 @@ _addLog("User $remoteUid joined voice chat");
         ),
       );
 
-      await _engine?.enableAudio();
+await _engine?.enableAudio();
       await _engine?.enableLocalAudio(true);
       await _engine?.setDefaultAudioRouteToSpeakerphone(true);
 
@@ -183,7 +177,6 @@ _addLog("User $remoteUid joined voice chat");
     });
   }
 
-  // የሆስት ወንበርን መንካት
   void _toggleHostChair() {
     if (!_isHost) return;
     if (_hostSeat != null) {
@@ -197,7 +190,6 @@ _addLog("User $remoteUid joined voice chat");
     }
   }
 
-  // የእንግዳ ወንበሮችን መንካት
   void _toggleChair(int index) {
     if (_chairs[index] != null && _chairs[index]!['userId'] == _userService.userId) {
       _socketService.sendChairAction(roomId: widget.roomId, chairIndex: index, action: 'leave');
@@ -222,7 +214,7 @@ _addLog("User $remoteUid joined voice chat");
   void _toggleMic() {
     setState(() => _isMicMuted = !_isMicMuted);
     _engine?.muteLocalAudioStream(_isMicMuted);
-    _addLog(_isMicMuted ? "Mic muted 🔇" : "Mic unmuted 🎙️");
+    _addLog(_isMicMuted ? "Mic muted" : "Mic unmuted");
   }
 
   void _sendMessage() {
@@ -230,6 +222,22 @@ _addLog("User $remoteUid joined voice chat");
     if (text.isEmpty) return;
     _socketService.sendChatMessage(roomId: widget.roomId, text: text);
     _chatController.clear();
+  }
+
+  void _openGameBottomSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return ChickenRoadGameView(
+          socket: _socketService.socket,
+          onCoinsChanged: () {
+            if (mounted) setState(() {});
+          },
+        );
+      },
+    );
   }
 
   @override
@@ -248,10 +256,10 @@ _addLog("User $remoteUid joined voice chat");
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF0D0B18),
-
-appBar: AppBar(
+      appBar: AppBar(
         backgroundColor: const Color(0xFF131124),
-        elevation: 0,
+
+elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20),
           onPressed: () => Navigator.pop(context),
@@ -264,7 +272,6 @@ appBar: AppBar(
           ],
         ),
         actions: [
-          // ባለቤቱ ወንበሮችን የሚያስተዳድርበት ቁልፍ
           IconButton(
             icon: const Icon(Icons.dashboard_customize, color: Colors.amber),
             tooltip: 'Chairs Management',
@@ -296,8 +303,6 @@ appBar: AppBar(
       body: Column(
         children: [
           const SizedBox(height: 12),
-
-          // 1. የክፍሉ ባለቤት ዋና ወንበር (Host Golden Crown Seat)
           GestureDetector(
             onTap: _toggleHostChair,
             child: Column(
@@ -344,13 +349,11 @@ appBar: AppBar(
                   'Host • ID: ${widget.roomId}',
                   style: const TextStyle(color: Colors.white54, fontSize: 11),
                 ),
-              ],
+
+],
             ),
           ),
-
           const SizedBox(height: 16),
-
-// 2. ከ1 እስከ 9 የተቆጠሩ የእንግዶች ወንበሮች (9 Guest Chairs Layout)
           Expanded(
             flex: 6,
             child: GridView.builder(
@@ -409,8 +412,6 @@ appBar: AppBar(
               },
             ),
           ),
-
-          // 3. የክፍሉ መልእክቶች እና ማስታወቂያ (Chat Logs)
           Expanded(
             flex: 3,
             child: Container(
@@ -436,23 +437,26 @@ appBar: AppBar(
               ),
             ),
           ),
-
-          // 4. የታችኛው ማይክ እና ቻት ባር (Bottom Mic & Input Bar)
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             color: const Color(0xFF131124),
-
-child: Row(
+            child: Row(
               children: [
                 IconButton(
-                  icon: Icon(
+
+icon: Icon(
                     _isMicMuted ? Icons.mic_off : Icons.mic,
                     color: _isMicMuted ? Colors.redAccent : const Color(0xFF00C9A7),
-                    size: 28,
+                    size: 26,
                   ),
                   onPressed: _toggleMic,
                 ),
-                const SizedBox(width: 8),
+                IconButton(
+                  icon: const Icon(Icons.sports_esports, color: Colors.amber, size: 28),
+                  tooltip: 'Play Games',
+                  onPressed: _openGameBottomSheet,
+                ),
+                const SizedBox(width: 4),
                 Expanded(
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 14),
