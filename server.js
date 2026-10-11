@@ -2,6 +2,7 @@ const express = require('express');
 const http = require('http');
 const cors = require('cors');
 const { Server } = require('socket.io');
+const Room = require('./models/Room');
 // አዲሱን እና ትክክለኛውን RtcTokenBuilder ከ agora-token መጥራት
 const { RtcTokenBuilder, RtcRole } = require('agora-token');
 const mongoose = require('mongoose');
@@ -64,6 +65,35 @@ mongoose.connect(MONGO_URI)
     console.log('MongoDB Connected Successfully');
   })
   .catch((err) => {
+    // --- Room Management Endpoints ---
+app.post('/api/rooms/create', async (req, res) => {
+  try {
+    const { title, category, hostId, hostName } = req.body;
+    const roomId = Math.floor(1000 + Math.random() * 9000).toString();
+
+    const newRoom = new Room({
+      roomId,
+      title: title || ${hostName}'s Room,
+      category: category || 'Chat',
+      hostId,
+      hostName,
+    });
+
+    await newRoom.save();
+    res.json({ success: true, room: newRoom });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.get('/api/rooms', async (req, res) => {
+  try {
+    const rooms = await Room.find().sort({ createdAt: -1 });
+    res.json({ success: true, rooms });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
     console.error('MongoDB Connection Error:', err);
   });
 
