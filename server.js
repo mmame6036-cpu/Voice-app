@@ -3,6 +3,7 @@ const http = require('http');
 const cors = require('cors');
 const { Server } = require('socket.io');
 const Room = require('./models/Room');
+// አዲሱን እና ትክክለኛውን RtcTokenBuilder ከ agora-token መጥራት
 const { RtcTokenBuilder, RtcRole } = require('agora-token');
 const mongoose = require('mongoose');
 
@@ -28,10 +29,11 @@ const handleTokenGeneration = (req, res) => {
   try {
     const channelName = String(req.query.channelName || '1001').trim();
     const role = RtcRole.PUBLISHER;
-    const expireTime = 3600 * 24 * 30; // 30 Days expiration
+    const expireTime = 3600 * 24 * 30; // ለ30 ቀናት የሚሰራ
     const currentTime = Math.floor(Date.now() / 1000);
     const privilegeExpireTime = currentTime + expireTime;
 
+    // UID 0 ለማንኛውም ስልክ እና UID ያለምንም ችግር ይሰራል (AccessToken2 ፎርማት)
     const token = RtcTokenBuilder.buildTokenWithUid(
       AGORA_APP_ID,
       AGORA_APP_CERTIFICATE,
@@ -55,31 +57,6 @@ const handleTokenGeneration = (req, res) => {
 app.get('/api/get-token', handleTokenGeneration);
 app.get('/rtc-token', handleTokenGeneration);
 
-// --- MongoDB Schemas & Models ---
-const counterSchema = new mongoose.Schema({
-  id: { type: String, required: true, default: 'user_id' },
-  seq: { type: Number, default: 1000 }
-});
-const Counter = mongoose.model('Counter', counterSchema);
-
-const userSchema = new mongoose.Schema({
-  userId: { type: String, required: true, unique: true },
-  name: { type: String, default: 'User' },
-  deviceId: { type: String, unique: true },
-  avatar: { type: String, default: '' },
-  coins: { type: Number, default: 1000 }, // መነሻ ሳንቲም
-  createdAt: { type: Date, default: Date.now }
-});
-const User = mongoose.model('User', userSchema);
-
-const messageSchema = new mongoose.Schema({
-  senderId: { type: String, required: true },
-  receiverId: { type: String, required: true },
-  text: { type: String, required: true },
-  timestamp: { type: Date, default: Date.now }
-});
-const Message = mongoose.model('Message', messageSchema);
-
 // 2. MongoDB Database Connection
 const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://Kedir:euyEPW1wNL1V9u8D@cluster0.mdtjtlb.mongodb.net/nilevoice?retryWrites=true&w=majority&appName=Cluster0';
 
@@ -88,27 +65,22 @@ mongoose.connect(MONGO_URI)
     console.log('MongoDB Connected Successfully');
   })
   .catch((err) => {
-    console.error('MongoDB Connection Error:', err);
-  });
-
-// --- Room Management Endpoints ---
+    // --- Room Management Endpoints ---
 app.post('/api/rooms/create', async (req, res) => {
   try {
     const { title, category, hostId, hostName } = req.body;
-    const roomId = req.body.roomId || Math.floor(1000 + Math.random() * 9000).toString();
+    const roomId = Math.floor(1000 + Math.random() * 9000).toString();
 
-    let room = await Room.findOne({ roomId: String(roomId) });
-    if (!room) {
-      room = new Room({
-        roomId: String(roomId),
-        title: title || ${hostName}'s Room,
-        category: category || 'Chat',
-        hostId,
-        hostName,
-      });
-      await room.save();
-    }
-    res.json({ success: true, room });
+    const newRoom = new Room({
+      roomId,
+      title: title || ${hostName}'s Room,
+      category: category || 'Chat',
+      hostId,
+      hostName,
+    });
+
+    await newRoom.save();
+    res.json({ success: true, room: newRoom });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -122,15 +94,41 @@ app.get('/api/rooms', async (req, res) => {
     res.status(500).json({ success: false, error: err.message });
   }
 });
+    console.error('MongoDB Connection Error:', err);
+  });
 
-// --- REST APIs: User & Wallet Management ---
+// --- MongoDB Schemas & Models ---
+const counterSchema = new mongoose.Schema({
+  id: { type: String, required: true, default: 'user_id' },
+  seq: { type: Number, default: 1000 }
+});
+const Counter = mongoose.model('Counter', counterSchema);
 
-// User registration
+const userSchema = new mongoose.Schema({
+  userId: { type: String, required: true, unique: true },
+  name: { type: String, default: 'User' },
+  deviceId: { type: String, unique: true },
+  avatar: { type: String, default: '' },
+  createdAt: { type: Date, default: Date.now }
+});
+const User = mongoose.model('User', userSchema);
+
+const messageSchema = new mongoose.Schema({
+  senderId: { type: String, required: true },
+  receiverId: { type: String, required: true },
+  text: { type: String, required: true },
+  timestamp: { type: Date, default: Date.now }
+});
+const Message = mongoose.model('Message', messageSchema);
+
+// --- REST APIs ---
+
+// User registration (Assigns ID starting from 1000)
 app.post('/api/register-user', async (req, res) => {
   try {
     const { deviceId, name, isOwner } = req.body;
 
-let existingUser = await User.findOne({ deviceId: deviceId });
+    let existingUser = await User.findOne({ deviceId: deviceId });
     if (existingUser) {
       return res.json({ success: true, user: existingUser });
     }
@@ -153,8 +151,7 @@ let existingUser = await User.findOne({ deviceId: deviceId });
     const newUser = new User({
       userId: assignedId,
       name: defaultName,
-      deviceId: defaultDevice,
-      coins: 1000 // ለጀማሪ የሚሰጥ ቦነስ
+      deviceId: defaultDevice
     });
 
     await newUser.save();
@@ -181,76 +178,6 @@ app.get('/api/search-user', async (req, res) => {
   }
 });
 
-// --- ህግ 1፡ ደህንነቱ የተጠበቀ የሳንቲም መቁረጫ API (Secure Wallet Bet) ---
-app.post('/api/wallet/bet', async (req, res) => {
-  try {
-    const { userId, betAmount } = req.body;
-    const amount = Number(betAmount);
-
-    if (!userId  isNaN(amount)  amount <= 0) {
-      return res.status(400).json({ success: false, error: 'Invalid bet parameters' });
-    }
-
-    // በቂ ሳንቲም መኖሩን በዳታቤዝ ደረጃ ማረጋገጥና ወዲያውኑ መቀነስ
-    const user = await User.findOneAndUpdate(
-      { userId: String(userId), coins: { $gte: amount } },
-      { $inc: { coins: -amount } },
-      { new: true }
-    );
-
-    if (!user) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Insufficient coins balance or user not found' 
-      });
-    }
-
-    // ለስልኩ አዲሱን የሳንቲም መጠን በ Socket ማሳወቅ
-    io.to(String(userId)).emit('wallet_updated', { coins: user.coins });
-
-    return res.json({
-      success: true,
-      message: 'Bet deducted securely',
-      remainingCoins: user.coins
-    });
-  } catch (err) {
-    return res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-// --- ህግ 1፡ ደህንነቱ የተጠበቀ የድል ሳንቲም መጨመሪያ API (Secure Wallet Win) ---
-app.post('/api/wallet/win', async (req, res) => {
-  try {
-    const { userId, winAmount } = req.body;
-    const amount = Number(winAmount);
-
-    if (!userId  isNaN(amount)  amount <= 0) {
-      return res.status(400).json({ success: false, error: 'Invalid win amount' });
-    }
-
-    // በዳታቤዝ ውስጥ ያሸነፈውን ሳንቲም መጨመር
-    const user = await User.findOneAndUpdate(
-      { userId: String(userId) },
-      { $inc: { coins: amount } },
-      { new: true }
-    );
-
-    if (!user) {
-      return res.status(404).json({ success: false, error: 'User not found' });
-    }
-
-    io.to(String(userId)).emit('wallet_updated', { coins: user.coins });
-
-    return res.json({
-      success: true,
-      message: 'Winning coins credited securely',
-      newBalance: user.coins
-    });
-  } catch (err) {
-    return res.status(500).json({ success: false, error: err.message });
-  }
-});
-
 // Fetch direct messaging chat history
 app.get('/api/chat-history', async (req, res) => {
   try {
@@ -269,6 +196,7 @@ app.get('/api/chat-history', async (req, res) => {
 
 // --- Socket.io Real-time Communication ---
 io.on('connection', (socket) => {
+  // Join private communication channel
   socket.on('user_connected', (userId) => {
     if (userId) {
       socket.join(String(userId));
@@ -276,6 +204,7 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Peer-to-peer direct text messaging
   socket.on('send_direct_message', async (data) => {
     try {
       const { senderId, receiverId, text } = data;
@@ -294,6 +223,7 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Voice room events
   socket.on('join_room', (data) => {
     const roomId = data.room || '1001';
     socket.join(roomId);
@@ -317,10 +247,6 @@ io.on('connection', (socket) => {
   socket.on('gift_sent', (data) => {
     const roomId = data.room || '1001';
     io.to(roomId).emit('gift_sent', data);
-  });
-
-  socket.on('game_win', (data) => {
-    io.emit('game_win_broadcast', data);
   });
 });
 
