@@ -5,7 +5,6 @@ import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'services/user_service.dart';
 import 'services/socket_service.dart';
-import 'chairs_management_screen.dart';
 import 'chicken_road_game.dart';
 
 class RoomScreen extends StatefulWidget {
@@ -32,8 +31,11 @@ class _RoomScreenState extends State<RoomScreen> {
   bool _isMicMuted = false;
   int? _myCurrentChair;
 
+  // Total chairs capacity: 10, 20, or 30 (excluding host seat: 9, 19, or 29)
+  int _totalCapacity = 10;
   Map<String, dynamic>? _hostSeat;
-  final List<Map<String, dynamic>?> _chairs = List.generate(9, (_) => null);
+  List<Map<String, dynamic>?> _chairs = List.generate(9, (_) => null);
+
   final List<String> _roomLogs = [];
   final ScrollController _logScrollController = ScrollController();
   final TextEditingController _chatController = TextEditingController();
@@ -51,6 +53,23 @@ class _RoomScreenState extends State<RoomScreen> {
     }
     _setupSocket();
     _initAgora();
+  }
+
+  void _updateCapacity(int capacity) {
+    setState(() {
+      _totalCapacity = capacity;
+      final int regularSeats = capacity - 1;
+      if (regularSeats > _chairs.length) {
+        _chairs.addAll(List.generate(regularSeats - _chairs.length, (_) => null));
+      } else if (regularSeats < _chairs.length) {
+        if (_myCurrentChair != null && _myCurrentChair! >= regularSeats) {
+          _socketService.sendChairAction(roomId: widget.roomId, chairIndex: _myCurrentChair!, action: 'leave');
+          _myCurrentChair = null;
+        }
+        _chairs = _chairs.sublist(0, regularSeats);
+      }
+      _addLog('Room seat capacity set to $_totalCapacity');
+    });
   }
 
   void _setupSocket() {
@@ -73,7 +92,7 @@ class _RoomScreenState extends State<RoomScreen> {
             _hostSeat = null;
             _addLog('$userName left Host Seat');
           }
-        } else if (chairIndex >= 0 && chairIndex < 9) {
+        } else if (chairIndex >= 0 && chairIndex < _chairs.length) {
           if (action == 'sit') {
             _chairs[chairIndex] = {'userName': userName, 'userId': userId};
             _addLog('$userName sat on chair #${chairIndex + 1}');
@@ -103,7 +122,7 @@ class _RoomScreenState extends State<RoomScreen> {
         return;
       }
 
-      _engine = createAgoraRtcEngine();
+_engine = createAgoraRtcEngine();
       await _engine?.initialize(const RtcEngineContext(
         appId: UserService.agoraAppId,
         channelProfile: ChannelProfileType.channelProfileCommunication,
@@ -126,7 +145,7 @@ class _RoomScreenState extends State<RoomScreen> {
         ),
       );
 
-await _engine?.enableAudio();
+      await _engine?.enableAudio();
       await _engine?.enableLocalAudio(true);
       await _engine?.setDefaultAudioRouteToSpeakerphone(true);
 
@@ -224,7 +243,7 @@ await _engine?.enableAudio();
     _chatController.clear();
   }
 
-  void _openGameBottomSheet() {
+void _openGameBottomSheet() {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -237,6 +256,85 @@ await _engine?.enableAudio();
           },
         );
       },
+    );
+  }
+
+  void _showSeatCapacitySelector() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF131124),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Select Seats Mode',
+                style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Choose the total seat capacity for your room',
+                style: TextStyle(color: Colors.white54, fontSize: 13),
+              ),
+              const SizedBox(height: 24),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  _buildCapacityButton(10),
+                  _buildCapacityButton(20),
+                  _buildCapacityButton(30),
+                ],
+              ),
+              const SizedBox(height: 16),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildCapacityButton(int count) {
+    final bool isSelected = _totalCapacity == count;
+    return GestureDetector(
+      onTap: () {
+        Navigator.pop(context);
+        _updateCapacity(count);
+      },
+      child: Container(
+        width: 90,
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFF00C9A7) : const Color(0xFF1E1B38),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isSelected ? const Color(0xFF00C9A7) : Colors.white12,
+            width: 1.5,
+          ),
+        ),
+        child: Column(
+          children: [
+            Icon(
+              Icons.event_seat,
+              color: isSelected ? Colors.black : Colors.white70,
+              size: 26,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              '$count Seats',
+              style: TextStyle(
+                color: isSelected ? Colors.black : Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 13,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -258,8 +356,7 @@ await _engine?.enableAudio();
       backgroundColor: const Color(0xFF0D0B18),
       appBar: AppBar(
         backgroundColor: const Color(0xFF131124),
-
-elevation: 0,
+        elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20),
           onPressed: () => Navigator.pop(context),
@@ -268,19 +365,15 @@ elevation: 0,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(widget.roomTitle, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
-            Text('ID: ${widget.roomId}', style: const TextStyle(fontSize: 12, color: Colors.amber)),
-          ],
+            Text('ID: ${widget.roomId} • $_totalCapacity Seats', style: const TextStyle(fontSize: 12, color: Colors.amber)),
+
+],
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.dashboard_customize, color: Colors.amber),
-            tooltip: 'Chairs Management',
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const ChairsManagementScreen()),
-              );
-            },
+            icon: const Icon(Icons.tune, color: Color(0xFF00C9A7)),
+            tooltip: 'Seats Layout',
+            onPressed: _showSeatCapacitySelector,
           ),
           Container(
             margin: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
@@ -302,7 +395,7 @@ elevation: 0,
       ),
       body: Column(
         children: [
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
           GestureDetector(
             onTap: _toggleHostChair,
             child: Column(
@@ -311,8 +404,8 @@ elevation: 0,
                   alignment: Alignment.center,
                   children: [
                     Container(
-                      width: 68,
-                      height: 68,
+                      width: 64,
+                      height: 64,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         border: Border.all(color: Colors.amber, width: 2.5),
@@ -329,9 +422,9 @@ elevation: 0,
                         child: _hostSeat != null
                             ? Text(
                                 (_hostSeat!['userName'] ?? 'H')[0].toUpperCase(),
-                                style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Colors.black),
+                                style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.black),
                               )
-                            : const Icon(Icons.chair, color: Colors.amber, size: 30),
+                            : const Icon(Icons.chair, color: Colors.amber, size: 28),
                       ),
                     ),
                     const Positioned(
@@ -340,44 +433,43 @@ elevation: 0,
                     ),
                   ],
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 4),
                 Text(
                   _hostSeat != null ? _hostSeat!['userName'] : widget.hostName,
-                  style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: 13),
+                  style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: 12),
                 ),
                 Text(
                   'Host • ID: ${widget.roomId}',
-                  style: const TextStyle(color: Colors.white54, fontSize: 11),
+                  style: const TextStyle(color: Colors.white54, fontSize: 10),
                 ),
-
-],
+              ],
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 10),
           Expanded(
             flex: 6,
             child: GridView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              itemCount: 9,
-              physics: const NeverScrollableScrollPhysics(),
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              itemCount: _chairs.length,
+              physics: const BouncingScrollPhysics(),
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 5,
-                mainAxisSpacing: 14,
-                crossAxisSpacing: 14,
+                mainAxisSpacing: 10,
+                crossAxisSpacing: 10,
                 childAspectRatio: 0.72,
               ),
               itemBuilder: (context, index) {
                 final chair = _chairs[index];
                 final bool isOccupied = chair != null;
 
-                return GestureDetector(
+return GestureDetector(
                   onTap: () => _toggleChair(index),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Container(
-                        width: 50,
-                        height: 50,
+                        width: 46,
+                        height: 46,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           color: isOccupied ? const Color(0xFF00C9A7) : const Color(0xFF1B1833),
@@ -390,9 +482,9 @@ elevation: 0,
                           child: isOccupied
                               ? Text(
                                   (chair['userName'] ?? 'U')[0].toUpperCase(),
-                                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black),
+                                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black),
                                 )
-                              : const Icon(Icons.chair_outlined, color: Colors.white54, size: 22),
+                              : const Icon(Icons.chair_outlined, color: Colors.white54, size: 20),
                         ),
                       ),
                       const SizedBox(height: 4),
@@ -400,7 +492,7 @@ elevation: 0,
                         isOccupied ? chair['userName'] : '${index + 1}',
                         style: TextStyle(
                           color: isOccupied ? Colors.white : Colors.amber.withOpacity(0.8),
-                          fontSize: 11,
+                          fontSize: 10,
                           fontWeight: FontWeight.bold,
                         ),
                         maxLines: 1,
@@ -443,8 +535,7 @@ elevation: 0,
             child: Row(
               children: [
                 IconButton(
-
-icon: Icon(
+                  icon: Icon(
                     _isMicMuted ? Icons.mic_off : Icons.mic,
                     color: _isMicMuted ? Colors.redAccent : const Color(0xFF00C9A7),
                     size: 26,
@@ -461,7 +552,8 @@ icon: Icon(
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 14),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.08),
+
+color: Colors.white.withOpacity(0.08),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: TextField(
