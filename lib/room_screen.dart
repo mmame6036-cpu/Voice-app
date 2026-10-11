@@ -3,8 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:permission_handler/permission_handler.dart';
-import '../services/user_service.dart';
-import '../services/socket_service.dart';
+import 'services/user_service.dart';
+import 'services/socket_service.dart';
+import 'chairs_management_screen.dart';
 
 class RoomScreen extends StatefulWidget {
   final String roomId;
@@ -30,14 +31,27 @@ class _RoomScreenState extends State<RoomScreen> {
   bool _isMicMuted = false;
   int? _myCurrentChair;
 
-  final List<Map<String, dynamic>?> _chairs = List.generate(8, (_) => null);
+  // የሆስት ወንበር (Host Seat)
+  Map<String, dynamic>? _hostSeat;
+
+  // ከ1 እስከ 9 የተቆጠሩ ወንበሮች (Guest Chairs)
+  final List<Map<String, dynamic>?> _chairs = List.generate(9, (_) => null);
   final List<String> _roomLogs = [];
   final ScrollController _logScrollController = ScrollController();
   final TextEditingController _chatController = TextEditingController();
 
+  bool get _isHost => widget.roomId == _userService.userId;
+
   @override
   void initState() {
     super.initState();
+    // የክፍሉ ባለቤት ከሆነ በቀጥታ ዋናው የሆስት ወንበር ላይ ይቀመጣል
+    if (_isHost) {
+      _hostSeat = {
+        'userName': _userService.userName,
+        'userId': _userService.userId,
+      };
+    }
     _setupSocket();
     _initAgora();
   }
@@ -54,15 +68,24 @@ class _RoomScreenState extends State<RoomScreen> {
       final String userId = data['userId']?.toString() ?? '';
 
       setState(() {
-        if (action == 'sit') {
-          _chairs[chairIndex] = {
-            'userName': userName,
-            'userId': userId,
-          };
-          _addLog('$userName (ID: $userId) sat on chair #${chairIndex + 1}');
-        } else if (action == 'leave') {
-          _chairs[chairIndex] = null;
-          _addLog('$userName (ID: $userId) left chair #${chairIndex + 1}');
+        if (chairIndex == -1) {
+          // የሆስት ወንበር እርምጃ
+          if (action == 'sit') {
+            _hostSeat = {'userName': userName, 'userId': userId};
+            _addLog('👑 $userName sat on Host Seat');
+          } else if (action == 'leave') {
+            _hostSeat = null;
+            _addLog('👑 $userName left Host Seat');
+          }
+        } else if (chairIndex >= 0 && chairIndex < 9) {
+          // የእንግዶች ወንበር እርምጃ
+          if (action == 'sit') {
+            _chairs[chairIndex] = {'userName': userName, 'userId': userId};
+            _addLog('$userName sat on chair #${chairIndex + 1}');
+          } else if (action == 'leave') {
+            _chairs[chairIndex] = null;
+            _addLog('$userName left chair #${chairIndex + 1}');
+          }
         }
       });
     };
@@ -70,25 +93,21 @@ class _RoomScreenState extends State<RoomScreen> {
     _socketService.onChatMessageReceived = (data) {
       if (!mounted) return;
       final String sender = data['sender'] ?? 'User';
-      final String userId = data['userId']?.toString() ?? '';
       final String text = data['text'] ?? '';
-
       setState(() {
-        _addLog('$sender (ID: $userId): $text');
+        _addLog('$sender: $text');
       });
     };
   }
 
   Future<void> _initAgora() async {
     try {
-      // 1. Request microphone permission
       final micStatus = await Permission.microphone.request();
       if (!micStatus.isGranted) {
         _addLog("Warning: Microphone permission denied");
         return;
       }
 
-      // 2. Initialize Agora RTC engine
       _engine = createAgoraRtcEngine();
       await _engine?.initialize(const RtcEngineContext(
         appId: UserService.agoraAppId,
@@ -101,10 +120,11 @@ class _RoomScreenState extends State<RoomScreen> {
             _addLog("Audio connected successfully 🎙️");
           },
           onUserJoined: (RtcConnection connection, int remoteUid, int elapsed) {
-            _addLog("User ID $remoteUid joined voice chat");
+
+_addLog("User $remoteUid joined voice chat");
           },
           onUserOffline: (RtcConnection connection, int remoteUid, UserOfflineReasonType reason) {
-            _addLog("User ID $remoteUid disconnected");
+            _addLog("User $remoteUid left");
           },
           onError: (ErrorCodeType err, String msg) {
             _addLog("Voice error: $err");
@@ -112,12 +132,10 @@ class _RoomScreenState extends State<RoomScreen> {
         ),
       );
 
-      // 3. Audio setup
       await _engine?.enableAudio();
       await _engine?.enableLocalAudio(true);
       await _engine?.setDefaultAudioRouteToSpeakerphone(true);
 
-      // 4. Fetch dynamic token from Render server with channel and UID 0
       String token = '';
       final cleanRoomId = widget.roomId.trim();
 
@@ -125,19 +143,15 @@ class _RoomScreenState extends State<RoomScreen> {
         final response = await http.get(Uri.parse(
           'https://voice-app-2-jd95.onrender.com/api/get-token?channelName=$cleanRoomId&uid=0',
         ));
-
-if (response.statusCode == 200) {
+        if (response.statusCode == 200) {
           final data = jsonDecode(response.body);
           token = data['token'] ?? '';
           _addLog("Token acquired successfully");
-        } else {
-          _addLog("Token request failed: ${response.statusCode}");
         }
       } catch (e) {
         _addLog("Token request error: $e");
       }
 
-      // 5. Join Agora room with dynamic token and UID 0
       await _engine?.joinChannel(
         token: token,
         channelId: cleanRoomId,
@@ -169,37 +183,44 @@ if (response.statusCode == 200) {
     });
   }
 
+  // የሆስት ወንበርን መንካት
+  void _toggleHostChair() {
+    if (!_isHost) return;
+    if (_hostSeat != null) {
+      _socketService.sendChairAction(roomId: widget.roomId, chairIndex: -1, action: 'leave');
+      setState(() => _hostSeat = null);
+    } else {
+      _socketService.sendChairAction(roomId: widget.roomId, chairIndex: -1, action: 'sit');
+      setState(() {
+        _hostSeat = {'userName': _userService.userName, 'userId': _userService.userId};
+      });
+    }
+  }
+
+  // የእንግዳ ወንበሮችን መንካት
   void _toggleChair(int index) {
     if (_chairs[index] != null && _chairs[index]!['userId'] == _userService.userId) {
-      _socketService.sendChairAction(
-        roomId: widget.roomId,
-        chairIndex: index,
-        action: 'leave',
-      );
+      _socketService.sendChairAction(roomId: widget.roomId, chairIndex: index, action: 'leave');
+      setState(() {
+        _myCurrentChair = null;
+      });
       return;
     }
 
     if (_chairs[index] != null) return;
 
     if (_myCurrentChair != null) {
-      _socketService.sendChairAction(
-        roomId: widget.roomId,
-        chairIndex: _myCurrentChair!,
-        action: 'leave',
-      );
+      _socketService.sendChairAction(roomId: widget.roomId, chairIndex: _myCurrentChair!, action: 'leave');
     }
 
-    _socketService.sendChairAction(
-      roomId: widget.roomId,
-      chairIndex: index,
-      action: 'sit',
-    );
+    _socketService.sendChairAction(roomId: widget.roomId, chairIndex: index, action: 'sit');
+    setState(() {
+      _myCurrentChair = index;
+    });
   }
 
   void _toggleMic() {
-    setState(() {
-      _isMicMuted = !_isMicMuted;
-    });
+    setState(() => _isMicMuted = !_isMicMuted);
     _engine?.muteLocalAudioStream(_isMicMuted);
     _addLog(_isMicMuted ? "Mic muted 🔇" : "Mic unmuted 🎙️");
   }
@@ -207,7 +228,6 @@ if (response.statusCode == 200) {
   void _sendMessage() {
     final text = _chatController.text.trim();
     if (text.isEmpty) return;
-
     _socketService.sendChatMessage(roomId: widget.roomId, text: text);
     _chatController.clear();
   }
@@ -215,11 +235,7 @@ if (response.statusCode == 200) {
   @override
   void dispose() {
     if (_myCurrentChair != null) {
-      _socketService.sendChairAction(
-        roomId: widget.roomId,
-        chairIndex: _myCurrentChair!,
-        action: 'leave',
-      );
+      _socketService.sendChairAction(roomId: widget.roomId, chairIndex: _myCurrentChair!, action: 'leave');
     }
     _engine?.leaveChannel();
     _engine?.release();
@@ -231,9 +247,10 @@ if (response.statusCode == 200) {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0F141C),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF161B26),
+      backgroundColor: const Color(0xFF0D0B18),
+
+appBar: AppBar(
+        backgroundColor: const Color(0xFF131124),
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20),
@@ -243,10 +260,21 @@ if (response.statusCode == 200) {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(widget.roomTitle, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
-            Text('Room ID: ${widget.roomId}', style: const TextStyle(fontSize: 12, color: Color(0xFF00C9A7))),
+            Text('ID: ${widget.roomId}', style: const TextStyle(fontSize: 12, color: Colors.amber)),
           ],
         ),
         actions: [
+          // ባለቤቱ ወንበሮችን የሚያስተዳድርበት ቁልፍ
+          IconButton(
+            icon: const Icon(Icons.dashboard_customize, color: Colors.amber),
+            tooltip: 'Chairs Management',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const ChairsManagementScreen()),
+              );
+            },
+          ),
           Container(
             margin: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -256,8 +284,7 @@ if (response.statusCode == 200) {
               border: Border.all(color: Colors.amber.withOpacity(0.5)),
             ),
             child: Row(
-
-children: [
+              children: [
                 const Icon(Icons.monetization_on, color: Colors.amber, size: 16),
                 const SizedBox(width: 4),
                 Text('${_userService.coins}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
@@ -268,32 +295,72 @@ children: [
       ),
       body: Column(
         children: [
-          Container(
-            margin: const EdgeInsets.all(12),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF5C248B), Color(0xFF28114B)],
-              ),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: const Row(
+          const SizedBox(height: 12),
+
+          // 1. የክፍሉ ባለቤት ዋና ወንበር (Host Golden Crown Seat)
+          GestureDetector(
+            onTap: _toggleHostChair,
+            child: Column(
               children: [
-                Icon(Icons.local_fire_department, color: Colors.amber, size: 20),
-                SizedBox(width: 8),
-                Text('Tap any chair to speak', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Container(
+                      width: 68,
+                      height: 68,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.amber, width: 2.5),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.amber.withOpacity(0.3),
+                            blurRadius: 10,
+                            spreadRadius: 2,
+                          ),
+                        ],
+                        color: _hostSeat != null ? Colors.amber : const Color(0xFF1E1B38),
+                      ),
+                      child: Center(
+                        child: _hostSeat != null
+                            ? Text(
+                                (_hostSeat!['userName'] ?? 'H')[0].toUpperCase(),
+                                style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Colors.black),
+                              )
+                            : const Icon(Icons.chair, color: Colors.amber, size: 30),
+                      ),
+                    ),
+                    const Positioned(
+                      top: -2,
+                      child: Icon(Icons.star, color: Colors.amber, size: 16),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  _hostSeat != null ? _hostSeat!['userName'] : widget.hostName,
+                  style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: 13),
+                ),
+                Text(
+                  'Host • ID: ${widget.roomId}',
+                  style: const TextStyle(color: Colors.white54, fontSize: 11),
+                ),
               ],
             ),
           ),
+
+          const SizedBox(height: 16),
+
+// 2. ከ1 እስከ 9 የተቆጠሩ የእንግዶች ወንበሮች (9 Guest Chairs Layout)
           Expanded(
             flex: 6,
             child: GridView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-              itemCount: 8,
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              itemCount: 9,
+              physics: const NeverScrollableScrollPhysics(),
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 4,
-                mainAxisSpacing: 16,
-                crossAxisSpacing: 16,
+                crossAxisCount: 5,
+                mainAxisSpacing: 14,
+                crossAxisSpacing: 14,
                 childAspectRatio: 0.72,
               ),
               itemBuilder: (context, index) {
@@ -302,72 +369,64 @@ children: [
 
                 return GestureDetector(
                   onTap: () => _toggleChair(index),
-                  behavior: HitTestBehavior.opaque,
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Container(
-                        width: 56,
-                        height: 56,
+                        width: 50,
+                        height: 50,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: isOccupied ? const Color(0xFF00C9A7) : const Color(0xFF1E2638),
+                          color: isOccupied ? const Color(0xFF00C9A7) : const Color(0xFF1B1833),
                           border: Border.all(
-                            color: isOccupied ? Colors.white : Colors.white24,
-                            width: 2,
+                            color: isOccupied ? Colors.white : Colors.amber.withOpacity(0.4),
+                            width: 1.5,
                           ),
                         ),
                         child: Center(
                           child: isOccupied
                               ? Text(
                                   (chair['userName'] ?? 'U')[0].toUpperCase(),
-                                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black),
+                                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black),
                                 )
-                              : const Icon(Icons.chair_outlined, color: Colors.white38, size: 26),
+                              : const Icon(Icons.chair_outlined, color: Colors.white54, size: 22),
                         ),
                       ),
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 4),
                       Text(
-                        isOccupied ? chair['userName'] : 'Chair ${index + 1}',
+                        isOccupied ? chair['userName'] : '${index + 1}',
                         style: TextStyle(
-                          color: isOccupied ? Colors.white : Colors.white54,
+                          color: isOccupied ? Colors.white : Colors.amber.withOpacity(0.8),
                           fontSize: 11,
-                          fontWeight: isOccupied ? FontWeight.bold : FontWeight.normal,
+                          fontWeight: FontWeight.bold,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      if (isOccupied)
-                        Text(
-                          'ID: ${chair['userId']}',
-                          style: const TextStyle(
-                            color: Color(0xFF00C9A7),
-                            fontSize: 10,
-
-fontWeight: FontWeight.bold,
-                          ),
-                        ),
                     ],
                   ),
                 );
               },
             ),
           ),
+
+          // 3. የክፍሉ መልእክቶች እና ማስታወቂያ (Chat Logs)
           Expanded(
             flex: 3,
             child: Container(
               margin: const EdgeInsets.symmetric(horizontal: 14),
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: const Color(0xFF161B26).withOpacity(0.8),
+                color: const Color(0xFF131124).withOpacity(0.9),
                 borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.white10),
               ),
               child: ListView.builder(
                 controller: _logScrollController,
                 itemCount: _roomLogs.length,
                 itemBuilder: (context, idx) {
                   return Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 3),
+                    padding: const EdgeInsets.symmetric(vertical: 2.5),
                     child: Text(
                       _roomLogs[idx],
                       style: const TextStyle(color: Colors.white70, fontSize: 12),
@@ -377,10 +436,13 @@ fontWeight: FontWeight.bold,
               ),
             ),
           ),
+
+          // 4. የታችኛው ማይክ እና ቻት ባር (Bottom Mic & Input Bar)
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            color: const Color(0xFF161B26),
-            child: Row(
+            color: const Color(0xFF131124),
+
+child: Row(
               children: [
                 IconButton(
                   icon: Icon(
