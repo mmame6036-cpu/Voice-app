@@ -271,281 +271,6 @@ child: ListView(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text('Hello, ${_user.userName}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                      Text('Your ID: ${_user
-
-import 'dart:convert';
-import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'services/user_service.dart';
-import 'room_screen.dart';
-import 'messages_screen.dart';
-
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  await UserService().initializeUser();
-  runApp(const NileVoiceApp());
-}
-
-class NileVoiceApp extends StatelessWidget {
-  const NileVoiceApp({Key? key}) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Nile Voice',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        brightness: Brightness.dark,
-        scaffoldBackgroundColor: const Color(0xFF0F141C),
-        primaryColor: const Color(0xFF00C9A7),
-      ),
-      home: const MainNavigationScreen(),
-    );
-  }
-}
-
-class MainNavigationScreen extends StatefulWidget {
-  const MainNavigationScreen({Key? key}) : super(key: key);
-
-  @override
-  State<MainNavigationScreen> createState() => _MainNavigationScreenState();
-}
-
-class _MainNavigationScreenState extends State<MainNavigationScreen> {
-  int _currentIndex = 0;
-
-  final List<Widget> _screens = [
-    const HomeScreen(),
-    const MessagesScreen(),
-    const ProfileScreen(),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: _screens[_currentIndex],
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _currentIndex,
-        onTap: (index) => setState(() => _currentIndex = index),
-        backgroundColor: const Color(0xFF161B26),
-        selectedItemColor: const Color(0xFF00C9A7),
-        unselectedItemColor: Colors.white54,
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.headset),
-            label: 'Rooms',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.chat_bubble_outline),
-            label: 'Messages',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.person_outline),
-            label: 'Me',
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class HomeScreen extends StatefulWidget {
-  const HomeScreen({Key? key}) : super(key: key);
-
-  @override
-  State<HomeScreen> createState() => _HomeScreenState();
-}
-
-class _HomeScreenState extends State<HomeScreen> {
-  final UserService _user = UserService();
-  List<dynamic> _rooms = [];
-  bool _isLoading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _fetchRooms();
-  }
-
-  Future<void> _fetchRooms() async {
-    try {
-      final response = await http.get(
-        Uri.parse('https://voice-app-2-jd95.onrender.com/api/rooms'),
-      );
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        if (data['success'] == true && mounted) {
-          setState(() {
-            _rooms = data['rooms'] ?? [];
-            _isLoading = false;
-          });
-          return;
-        }
-      }
-    } catch (e) {
-      debugPrint("Fetch rooms error: $e");
-    }
-
-    if (mounted) {
-      setState(() {
-        _isLoading = false;
-      });
-    }
-  }
-
-  void _showSearchRoomDialog() {
-    final searchController = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          backgroundColor: const Color(0xFF161B26),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Row(
-            children: [
-              Icon(Icons.search, color: Color(0xFF00C9A7)),
-              SizedBox(width: 8),
-              Text('Search Room by ID', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-            ],
-          ),
-          content: TextField(
-            controller: searchController,
-            keyboardType: TextInputType.text,
-            style: const TextStyle(color: Colors.white),
-
-decoration: InputDecoration(
-              hintText: 'Enter Room ID (e.g. 1001)',
-              hintStyle: const TextStyle(color: Colors.white38),
-              filled: true,
-              fillColor: Colors.white.withOpacity(0.05),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide.none,
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF00C9A7),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              ),
-              onPressed: () {
-                final targetId = searchController.text.trim();
-                Navigator.pop(context);
-                if (targetId.isNotEmpty) {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => RoomScreen(
-                        roomId: targetId,
-                        roomTitle: "Room $targetId",
-                        hostName: "Host",
-                      ),
-                    ),
-                  );
-                }
-              },
-              child: const Text('Join Room', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Future<void> _openMyPersonalRoom() async {
-    try {
-      await http.post(
-        Uri.parse('https://voice-app-2-jd95.onrender.com/api/rooms/create'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'roomId': _user.userId,
-          'title': "${_user.userName}'s Room",
-          'category': 'Party',
-          'hostId': _user.userId,
-          'hostName': _user.userName,
-        }),
-      );
-    } catch (_) {}
-
-    if (!mounted) return;
-
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => RoomScreen(
-          roomId: _user.userId,
-          roomTitle: "${_user.userName}'s Room",
-          hostName: _user.userName,
-        ),
-      ),
-    ).then((_) => _fetchRooms());
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF161B26),
-        elevation: 0,
-        title: const Text('Live Audio Rooms', style: TextStyle(fontWeight: FontWeight.bold)),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.search, color: Color(0xFF00C9A7), size: 26),
-            tooltip: 'Search Room by ID',
-            onPressed: _showSearchRoomDialog,
-          ),
-          IconButton(
-            icon: const Icon(Icons.refresh, color: Colors.white70),
-            onPressed: () {
-              setState(() => _isLoading = true);
-              _fetchRooms();
-            },
-          ),
-          Padding(
-            padding: const EdgeInsets.only(right: 16),
-            child: Row(
-              children: [
-                const Icon(Icons.monetization_on, color: Colors.amber, size: 18),
-                const SizedBox(width: 4),
-                Text('${_user.coins}', style: const TextStyle(fontWeight: FontWeight.bold)),
-              ],
-            ),
-          ),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: const Color(0xFF00C9A7),
-        elevation: 6,
-        onPressed: _openMyPersonalRoom,
-        child: const Icon(Icons.mic, color: Colors.black, size: 30),
-      ),
-      body: RefreshIndicator(
-        onRefresh: _fetchRooms,
-        color: const Color(0xFF00C9A7),
-
-child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(colors: [Color(0xFF5C248B), Color(0xFF1F104F)]),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.bolt, color: Colors.amber, size: 36),
-                  const SizedBox(width: 12),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Hello, ${_user.userName}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                       Text('Your ID: ${_user.userId}', style: const TextStyle(color: Color(0xFF00C9A7), fontSize: 13, fontWeight: FontWeight.bold)),
                     ],
                   ),
@@ -579,9 +304,7 @@ child: ListView(
               child: Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [const Color(0xFF00C9A7).withOpacity(0.18), const Color(0xFF161B26)],
-                  ),
+                  gradient: borderGradient(),
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(color: const Color(0xFF00C9A7).withOpacity(0.4)),
                 ),
@@ -611,11 +334,11 @@ child: ListView(
             const Text('Explore Rooms', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             const SizedBox(height: 12),
             _buildRoomCard(
-
-roomId: '1001',
+              roomId: '1001',
               title: 'Global Chat Lounge',
               host: 'Master Host',
-            ),
+
+),
             const SizedBox(height: 10),
             if (_isLoading)
               const Center(
@@ -648,6 +371,12 @@ roomId: '1001',
           ],
         ),
       ),
+    );
+  }
+
+  LinearGradient borderGradient() {
+    return LinearGradient(
+      colors: [const Color(0xFF00C9A7).withOpacity(0.18), const Color(0xFF161B26)],
     );
   }
 
@@ -729,11 +458,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
           child: SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
 
-children: [
-                // Top User Header
+child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
                 Row(
                   children: [
                     CircleAvatar(
@@ -778,8 +506,6 @@ children: [
                   ],
                 ),
                 const SizedBox(height: 20),
-
-                // VIP Club Banner
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   decoration: BoxDecoration(
@@ -808,17 +534,15 @@ children: [
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                           minimumSize: Size.zero,
-                        ),
 
-onPressed: () {},
+),
+                        onPressed: () {},
                         child: const Text('Get VIP', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 11)),
                       ),
                     ],
                   ),
                 ),
                 const SizedBox(height: 16),
-
-                // Coins and Points Row
                 Row(
                   children: [
                     Expanded(
@@ -889,13 +613,11 @@ onPressed: () {},
                   ],
                 ),
                 const SizedBox(height: 20),
-
-                // Management Grid Items
                 Container(
                   padding: const EdgeInsets.symmetric(vertical: 16),
+                  decoration: BoxDecoration(
 
-decoration: BoxDecoration(
-                    color: const Color(0xFF161B26),
+color: const Color(0xFF161B26),
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(color: Colors.white10),
                   ),
@@ -909,8 +631,6 @@ decoration: BoxDecoration(
                   ),
                 ),
                 const SizedBox(height: 16),
-
-                // Grid Menu Actions
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
