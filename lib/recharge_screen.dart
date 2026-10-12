@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 import 'services/user_service.dart';
-import 'services/wallet_service.dart';
 
 class RechargeScreen extends StatefulWidget {
   const RechargeScreen({Key? key}) : super(key: key);
@@ -17,14 +16,12 @@ class _RechargeScreenState extends State<RechargeScreen> {
   int _selectedPackageIndex = 0;
   bool _isProcessing = false;
 
-  // Binance USDT tiers
   final List<Map<String, dynamic>> _rechargeTiers = [
     {'coins': 7000, 'price': 0.99, 'displayPrice': '\$0.99'},
     {'coins': 21000, 'price': 2.99, 'displayPrice': '\$2.99'},
     {'coins': 70000, 'price': 9.99, 'displayPrice': '\$9.99'},
   ];
 
-  // Dynamic sellers list
   final List<Map<String, dynamic>> _recommendedSellers = [];
 
   void _openDetails() {
@@ -57,14 +54,18 @@ class _RechargeScreenState extends State<RechargeScreen> {
           }
         }
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Payment initiation failed')),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Payment initiation failed')),
+          );
+        }
       }
     } catch (_) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Network error. Try again later.')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Network error. Try again later.')),
+        );
+      }
     } finally {
       if (mounted) setState(() => _isProcessing = false);
     }
@@ -98,7 +99,6 @@ class _RechargeScreenState extends State<RechargeScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Current Coins Card
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               decoration: BoxDecoration(
@@ -111,9 +111,9 @@ class _RechargeScreenState extends State<RechargeScreen> {
               child: Row(
                 children: [
                   const Icon(Icons.monetization_on, color: Colors.amber, size: 28),
+                  const SizedBox(width: 8),
 
-const SizedBox(width: 8),
-                  const Text('Coins', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: Colors.black87)),
+const Text('Coins', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: Colors.black87)),
                   const SizedBox(width: 12),
                   Text(
                     '${_user.coins}',
@@ -133,8 +133,6 @@ const SizedBox(width: 8),
               ),
             ),
             const SizedBox(height: 16),
-
-            // New User Mega Pack Banner
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -189,13 +187,12 @@ const SizedBox(width: 8),
                       onPressed: () => _payWithBinance(0.99, 9000),
                       child: const Text('\$0.99 Buy Now (Binance Pay)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white)),
                     ),
-                  ),
+
+),
                 ],
               ),
             ),
             const SizedBox(height: 20),
-
-// Coins Recharge Section
             const Text(
               'Coins Recharge (Binance Pay / USDT)',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87),
@@ -242,8 +239,6 @@ const SizedBox(width: 8),
               }),
             ),
             const SizedBox(height: 16),
-
-            // Pay with Binance Button
             SizedBox(
               width: double.infinity,
               height: 46,
@@ -269,8 +264,6 @@ const SizedBox(width: 8),
               ),
             ),
             const SizedBox(height: 24),
-
-            // Recommended Sellers Section (Where Telebirr is used manually)
             Row(
               children: [
                 const Text(
@@ -279,11 +272,10 @@ const SizedBox(width: 8),
                 ),
                 const Spacer(),
                 Text('Ethiopia (Telebirr)', style: TextStyle(fontSize: 12, color: Colors.grey[600], fontWeight: FontWeight.w500)),
-              ],
+
+],
             ),
             const SizedBox(height: 12),
-
-// Sellers System View (Dynamic)
             if (_recommendedSellers.isEmpty)
               Container(
                 width: double.infinity,
@@ -312,7 +304,7 @@ const SizedBox(width: 8),
             else
               ListView.builder(
                 shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
+                physics: const NeverScrollableScrollPhysics),
                 itemCount: _recommendedSellers.length,
                 itemBuilder: (context, i) {
                   final seller = _recommendedSellers[i];
@@ -348,7 +340,6 @@ const SizedBox(width: 8),
                   );
                 },
               ),
-
             const SizedBox(height: 24),
             Center(
               child: Text(
@@ -389,33 +380,8 @@ const SizedBox(width: 8),
 // ---------------------------------------------------------------------------
 // Coins Details Screen
 // ---------------------------------------------------------------------------
-class CoinsDetailsScreen extends StatefulWidget {
+class CoinsDetailsScreen extends StatelessWidget {
   const CoinsDetailsScreen({Key? key}) : super(key: key);
-
-  @override
-  State<CoinsDetailsScreen> createState() => _CoinsDetailsScreenState();
-}
-
-class _CoinsDetailsScreenState extends State<CoinsDetailsScreen> {
-  final UserService _user = UserService();
-  List<dynamic> _history = [];
-  bool _isLoading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _fetchHistory();
-  }
-
-  Future<void> _fetchHistory() async {
-    final res = await WalletService.fetchHistory(token: _user.token);
-    if (mounted) {
-      setState(() {
-        _history = (res['success'] == true) ? (res['transactions'] ?? []) : [];
-        _isLoading = false;
-      });
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -430,44 +396,18 @@ class _CoinsDetailsScreenState extends State<CoinsDetailsScreen> {
         ),
         title: const Text('Coins Details', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 18)),
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: Colors.amber))
-          : _history.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.receipt_long_outlined, size: 54, color: Colors.grey[400]),
-                      const SizedBox(height: 12),
-                      Text('No transactions yet', style: TextStyle(color: Colors.grey[600], fontSize: 14)),
-                      const SizedBox(height: 4),
-                      Text('No more data', style: TextStyle(color: Colors.grey[400], fontSize: 12)),
-                    ],
-                  ),
-                )
-              : ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: _history.length,
-                  itemBuilder: (context, idx) {
-                    final item = _history[idx];
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 10),
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: ListTile(
-                        title: Text(item['title'] ?? 'Transaction'),
-                        subtitle: Text(item['date'] ?? ''),
-                        trailing: Text(
-                          '${item['amount']}',
-                          style: const TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                    );
-                  },
-                ),
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.receipt_long_outlined, size: 54, color: Colors.grey[400]),
+            const SizedBox(height: 12),
+            Text('No transactions yet', style: TextStyle(color: Colors.grey[600], fontSize: 14)),
+            const SizedBox(height: 4),
+            Text('No more data', style: TextStyle(color: Colors.grey[400], fontSize: 12)),
+          ],
+        ),
+      ),
     );
   }
 }
