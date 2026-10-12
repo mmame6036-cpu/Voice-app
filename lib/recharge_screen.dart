@@ -1,4 +1,7 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:url_launcher/url_launcher.dart';
 import 'services/user_service.dart';
 import 'services/wallet_service.dart';
 
@@ -12,15 +15,16 @@ class RechargeScreen extends StatefulWidget {
 class _RechargeScreenState extends State<RechargeScreen> {
   final UserService _user = UserService();
   int _selectedPackageIndex = 0;
+  bool _isProcessing = false;
 
-  // Recharge tiers
+  // Binance USDT tiers
   final List<Map<String, dynamic>> _rechargeTiers = [
-    {'coins': 7000, 'price': '\$0.99'},
-    {'coins': 21000, 'price': '\$2.99'},
-    {'coins': 70000, 'price': '\$9.99'},
+    {'coins': 7000, 'price': 0.99, 'displayPrice': '\$0.99'},
+    {'coins': 21000, 'price': 2.99, 'displayPrice': '\$2.99'},
+    {'coins': 70000, 'price': 9.99, 'displayPrice': '\$9.99'},
   ];
 
-  // Dynamic sellers list (fetched from server or empty if no seller)
+  // Dynamic sellers list
   final List<Map<String, dynamic>> _recommendedSellers = [];
 
   void _openDetails() {
@@ -30,18 +34,40 @@ class _RechargeScreenState extends State<RechargeScreen> {
     );
   }
 
-  void _onRechargeSelected(int index) {
-    setState(() {
-      _selectedPackageIndex = index;
-    });
+  Future<void> _payWithBinance(double amount, int coins) async {
+    setState(() => _isProcessing = true);
+    try {
+      final response = await http.post(
+        Uri.parse('https://voice-app-2-jd95.onrender.com/api/binance/create-order'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'userId': _user.userId,
+          'amount': amount,
+          'coins': coins,
+        }),
+      );
 
-    final pkg = _rechargeTiers[index];
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Selected ${pkg['coins']} coins for ${pkg['price']}'),
-        duration: const Duration(seconds: 1),
-      ),
-    );
+      if (response.statusCode == 200) {
+        final resData = jsonDecode(response.body);
+        if (resData['success'] == true) {
+          final String urlStr = resData['checkoutUrl'] ?? '';
+          final Uri url = Uri.parse(urlStr);
+          if (await canLaunchUrl(url)) {
+            await launchUrl(url, mode: LaunchMode.externalApplication);
+          }
+        }
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Payment initiation failed')),
+        );
+      }
+    } catch (_) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Network error. Try again later.')),
+      );
+    } finally {
+      if (mounted) setState(() => _isProcessing = false);
+    }
   }
 
   @override
@@ -85,7 +111,8 @@ class _RechargeScreenState extends State<RechargeScreen> {
               child: Row(
                 children: [
                   const Icon(Icons.monetization_on, color: Colors.amber, size: 28),
-                  const SizedBox(width: 8),
+
+const SizedBox(width: 8),
                   const Text('Coins', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: Colors.black87)),
                   const SizedBox(width: 12),
                   Text(
@@ -107,7 +134,7 @@ class _RechargeScreenState extends State<RechargeScreen> {
             ),
             const SizedBox(height: 16),
 
-// New User Mega Pack Banner
+            // New User Mega Pack Banner
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -159,8 +186,8 @@ class _RechargeScreenState extends State<RechargeScreen> {
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
                         elevation: 0,
                       ),
-                      onPressed: () {},
-                      child: const Text('\$0.99 Buy Now', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white)),
+                      onPressed: () => _payWithBinance(0.99, 9000),
+                      child: const Text('\$0.99 Buy Now (Binance Pay)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white)),
                     ),
                   ),
                 ],
@@ -168,9 +195,9 @@ class _RechargeScreenState extends State<RechargeScreen> {
             ),
             const SizedBox(height: 20),
 
-            // Coins Recharge Section
+// Coins Recharge Section
             const Text(
-              'Coins Recharge',
+              'Coins Recharge (Binance Pay / USDT)',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87),
             ),
             const SizedBox(height: 12),
@@ -181,16 +208,15 @@ class _RechargeScreenState extends State<RechargeScreen> {
 
                 return Expanded(
                   child: GestureDetector(
-                    onTap: () => _onRechargeSelected(idx),
+                    onTap: () => setState(() => _selectedPackageIndex = idx),
                     child: Container(
                       margin: EdgeInsets.only(left: idx == 0 ? 0 : 5, right: idx == _rechargeTiers.length - 1 ? 0 : 5),
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(14),
-
-border: Border.all(
-                          color: isSelected ? Colors.orange : Colors.grey.withOpacity(0.2),
+                        border: Border.all(
+                          color: isSelected ? const Color(0xFFF0B90B) : Colors.grey.withOpacity(0.2),
                           width: isSelected ? 2 : 1,
                         ),
                         boxShadow: [
@@ -205,7 +231,7 @@ border: Border.all(
                           ),
                           const SizedBox(height: 6),
                           Text(
-                            tier['price'],
+                            tier['displayPrice'],
                             style: TextStyle(fontSize: 13, color: Colors.grey[700], fontWeight: FontWeight.w600),
                           ),
                         ],
@@ -215,9 +241,36 @@ border: Border.all(
                 );
               }),
             ),
+            const SizedBox(height: 16),
+
+            // Pay with Binance Button
+            SizedBox(
+              width: double.infinity,
+              height: 46,
+              child: ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFF0B90B),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(23)),
+                  elevation: 0,
+                ),
+                onPressed: _isProcessing
+                    ? null
+                    : () {
+                        final selected = _rechargeTiers[_selectedPackageIndex];
+                        _payWithBinance(selected['price'], selected['coins']);
+                      },
+                icon: _isProcessing
+                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
+                    : const Icon(Icons.account_balance_wallet, color: Colors.black),
+                label: Text(
+                  _isProcessing ? 'Processing...' : 'Pay with Binance Pay',
+                  style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 14),
+                ),
+              ),
+            ),
             const SizedBox(height: 24),
 
-            // Recommended Sellers Section
+            // Recommended Sellers Section (Where Telebirr is used manually)
             Row(
               children: [
                 const Text(
@@ -225,12 +278,12 @@ border: Border.all(
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87),
                 ),
                 const Spacer(),
-                Text('Ethiopia', style: TextStyle(fontSize: 12, color: Colors.grey[600], fontWeight: FontWeight.w500)),
+                Text('Ethiopia (Telebirr)', style: TextStyle(fontSize: 12, color: Colors.grey[600], fontWeight: FontWeight.w500)),
               ],
             ),
             const SizedBox(height: 12),
 
-            // Sellers System View (Dynamic)
+// Sellers System View (Dynamic)
             if (_recommendedSellers.isEmpty)
               Container(
                 width: double.infinity,
@@ -250,7 +303,7 @@ border: Border.all(
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Become a verified seller through Agency.',
+                      'Contact agency to pay locally with Telebirr.',
                       style: TextStyle(fontSize: 11, color: Colors.grey[400]),
                     ),
                   ],
@@ -278,8 +331,7 @@ border: Border.all(
                         ),
                         const SizedBox(width: 10),
                         Column(
-
-crossAxisAlignment: CrossAxisAlignment.start,
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(seller['name'], style: const TextStyle(fontWeight: FontWeight.bold)),
                             Text('Seller Level: ${seller['level']}', style: const TextStyle(fontSize: 11, color: Colors.grey)),
@@ -335,7 +387,7 @@ crossAxisAlignment: CrossAxisAlignment.start,
 }
 
 // ---------------------------------------------------------------------------
-// Coins Details (Ledger History) Screen
+// Coins Details Screen
 // ---------------------------------------------------------------------------
 class CoinsDetailsScreen extends StatefulWidget {
   const CoinsDetailsScreen({Key? key}) : super(key: key);
@@ -388,8 +440,7 @@ class _CoinsDetailsScreenState extends State<CoinsDetailsScreen> {
                       Icon(Icons.receipt_long_outlined, size: 54, color: Colors.grey[400]),
                       const SizedBox(height: 12),
                       Text('No transactions yet', style: TextStyle(color: Colors.grey[600], fontSize: 14)),
-
-const SizedBox(height: 4),
+                      const SizedBox(height: 4),
                       Text('No more data', style: TextStyle(color: Colors.grey[400], fontSize: 12)),
                     ],
                   ),
