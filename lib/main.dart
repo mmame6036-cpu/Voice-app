@@ -552,7 +552,6 @@ ElevatedButton(
                 const SizedBox(height: 16),
                 Row(
                   children: [
-                    // Coins Card (Navigates to RechargeScreen)
                     Expanded(
                       child: GestureDetector(
                         onTap: () async {
@@ -595,8 +594,6 @@ ElevatedButton(
                       ),
                     ),
                     const SizedBox(width: 12),
-
-                    // Points Card (Navigates to PointsScreen)
                     Expanded(
                       child: GestureDetector(
                         onTap: () async {
@@ -614,11 +611,11 @@ ElevatedButton(
                             border: Border.all(color: Colors.white10),
                           ),
                           child: const Row(
-
-children: [
+                            children: [
                               Expanded(
                                 child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
+
+crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text('Points', style: TextStyle(color: Colors.white60, fontSize: 12)),
                                     SizedBox(height: 6),
@@ -643,33 +640,66 @@ children: [
                 ),
                 const SizedBox(height: 20),
 
-                // Main Centers Row (Host Center | Agency | Coin Seller)
+                // Main Centers Row (ከነ ሙሉ ንክኪ ምላሽ ጋር)
                 Container(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
                   decoration: BoxDecoration(
                     color: const Color(0xFF161B26),
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(color: Colors.white10),
                   ),
                   child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: [
-                      GestureDetector(
-                        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const HostCenterScreen())),
-                        child: _buildActionItem(icon: Icons.mic_external_on, label: 'Host Center'),
+                      Expanded(
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(12),
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (_) => const HostCenterScreen()),
+                            );
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            child: _buildActionItem(icon: Icons.mic_external_on, label: 'Host Center'),
+                          ),
+                        ),
                       ),
-                      GestureDetector(
-                        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AgencyScreen())),
-                        child: _buildActionItem(icon: Icons.groups_outlined, label: 'Agency'),
+                      Expanded(
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(12),
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (_) => const AgencyScreen()),
+                            );
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            child: _buildActionItem(icon: Icons.groups_outlined, label: 'Agency'),
+                          ),
+                        ),
                       ),
-                      GestureDetector(
-                        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CoinSellerScreen())),
-                        child: _buildActionItem(icon: Icons.storefront_outlined, label: 'Coin Seller'),
+                      Expanded(
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(12),
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (_) => const CoinSellerScreen()),
+                            );
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            child: _buildActionItem(icon: Icons.storefront_outlined, label: 'Coin Seller'),
+                          ),
+                        ),
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 16),
+
+const SizedBox(height: 16),
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
@@ -689,8 +719,7 @@ children: [
                       _buildGridMenuItem(icon: Icons.shopping_bag_outlined, label: 'Store'),
                       _buildGridMenuItem(icon: Icons.backpack_outlined, label: 'Backpack'),
                       _buildGridMenuItem(icon: Icons.military_tech_outlined, label: 'Level'),
-
-_buildGridMenuItem(icon: Icons.shield_outlined, label: 'Medal Wall'),
+                      _buildGridMenuItem(icon: Icons.shield_outlined, label: 'Medal Wall'),
                       _buildGridMenuItem(icon: Icons.headset_mic_outlined, label: 'Support'),
                       _buildGridMenuItem(icon: Icons.tune, label: 'Settings'),
                     ],
@@ -707,6 +736,7 @@ _buildGridMenuItem(icon: Icons.shield_outlined, label: 'Medal Wall'),
 
   Widget _buildActionItem({required IconData icon, required String label}) {
     return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
         Icon(icon, color: const Color(0xFF00C9A7), size: 26),
         const SizedBox(height: 6),
