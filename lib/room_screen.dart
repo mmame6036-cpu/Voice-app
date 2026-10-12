@@ -31,12 +31,12 @@ class _RoomScreenState extends State<RoomScreen> {
   bool _isMicMuted = false;
   int? _myCurrentChair;
 
-  // Total chairs capacity: 10, 20, or 30 (excluding host seat: 9, 19, or 29)
   int _totalCapacity = 10;
   Map<String, dynamic>? _hostSeat;
   List<Map<String, dynamic>?> _chairs = List.generate(9, (_) => null);
 
-  final List<String> _roomLogs = [];
+  // User chat messages list
+  final List<Map<String, String>> _chatMessages = [];
   final ScrollController _logScrollController = ScrollController();
   final TextEditingController _chatController = TextEditingController();
 
@@ -68,7 +68,6 @@ class _RoomScreenState extends State<RoomScreen> {
         }
         _chairs = _chairs.sublist(0, regularSeats);
       }
-      _addLog('Room seat capacity set to $_totalCapacity');
     });
   }
 
@@ -87,18 +86,14 @@ class _RoomScreenState extends State<RoomScreen> {
         if (chairIndex == -1) {
           if (action == 'sit') {
             _hostSeat = {'userName': userName, 'userId': userId};
-            _addLog('$userName sat on Host Seat');
           } else if (action == 'leave') {
             _hostSeat = null;
-            _addLog('$userName left Host Seat');
           }
         } else if (chairIndex >= 0 && chairIndex < _chairs.length) {
           if (action == 'sit') {
             _chairs[chairIndex] = {'userName': userName, 'userId': userId};
-            _addLog('$userName sat on chair #${chairIndex + 1}');
           } else if (action == 'leave') {
             _chairs[chairIndex] = null;
-            _addLog('$userName left chair #${chairIndex + 1}');
           }
         }
       });
@@ -109,41 +104,22 @@ class _RoomScreenState extends State<RoomScreen> {
       final String sender = data['sender'] ?? 'User';
       final String text = data['text'] ?? '';
       setState(() {
-        _addLog('$sender: $text');
+        _chatMessages.add({'sender': sender, 'text': text});
       });
+      _scrollToBottom();
     };
   }
 
   Future<void> _initAgora() async {
     try {
       final micStatus = await Permission.microphone.request();
-      if (!micStatus.isGranted) {
-        _addLog("Warning: Microphone permission denied");
-        return;
-      }
+      if (!micStatus.isGranted) return;
 
-_engine = createAgoraRtcEngine();
+      _engine = createAgoraRtcEngine();
       await _engine?.initialize(const RtcEngineContext(
         appId: UserService.agoraAppId,
         channelProfile: ChannelProfileType.channelProfileCommunication,
       ));
-
-      _engine?.registerEventHandler(
-        RtcEngineEventHandler(
-          onJoinChannelSuccess: (RtcConnection connection, int elapsed) {
-            _addLog("Audio connected successfully");
-          },
-          onUserJoined: (RtcConnection connection, int remoteUid, int elapsed) {
-            _addLog("User $remoteUid joined voice chat");
-          },
-          onUserOffline: (RtcConnection connection, int remoteUid, UserOfflineReasonType reason) {
-            _addLog("User $remoteUid left");
-          },
-          onError: (ErrorCodeType err, String msg) {
-            _addLog("Voice error: $err");
-          },
-        ),
-      );
 
       await _engine?.enableAudio();
       await _engine?.enableLocalAudio(true);
@@ -152,18 +128,15 @@ _engine = createAgoraRtcEngine();
       String token = '';
       final cleanRoomId = widget.roomId.trim();
 
-      try {
+try {
         final response = await http.get(Uri.parse(
           'https://voice-app-2-jd95.onrender.com/api/get-token?channelName=$cleanRoomId&uid=0',
         ));
         if (response.statusCode == 200) {
           final data = jsonDecode(response.body);
           token = data['token'] ?? '';
-          _addLog("Token acquired successfully");
         }
-      } catch (e) {
-        _addLog("Token request error: $e");
-      }
+      } catch (_) {}
 
       await _engine?.joinChannel(
         token: token,
@@ -175,16 +148,10 @@ _engine = createAgoraRtcEngine();
           autoSubscribeAudio: true,
         ),
       );
-    } catch (e) {
-      _addLog("Agora Init Exception: $e");
-    }
+    } catch (_) {}
   }
 
-  void _addLog(String text) {
-    if (!mounted) return;
-    setState(() {
-      _roomLogs.add(text);
-    });
+  void _scrollToBottom() {
     Future.delayed(const Duration(milliseconds: 100), () {
       if (_logScrollController.hasClients) {
         _logScrollController.animateTo(
@@ -233,17 +200,20 @@ _engine = createAgoraRtcEngine();
   void _toggleMic() {
     setState(() => _isMicMuted = !_isMicMuted);
     _engine?.muteLocalAudioStream(_isMicMuted);
-    _addLog(_isMicMuted ? "Mic muted" : "Mic unmuted");
   }
 
   void _sendMessage() {
     final text = _chatController.text.trim();
     if (text.isEmpty) return;
     _socketService.sendChatMessage(roomId: widget.roomId, text: text);
+    setState(() {
+      _chatMessages.add({'sender': _userService.userName, 'text': text});
+    });
     _chatController.clear();
+    _scrollToBottom();
   }
 
-void _openGameBottomSheet() {
+  void _openGameBottomSheet() {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -278,10 +248,11 @@ void _openGameBottomSheet() {
               ),
               const SizedBox(height: 8),
               const Text(
-                'Choose the total seat capacity for your room',
+                'Choose seat capacity for your room',
                 style: TextStyle(color: Colors.white54, fontSize: 13),
               ),
-              const SizedBox(height: 24),
+
+const SizedBox(height: 24),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
@@ -366,8 +337,7 @@ void _openGameBottomSheet() {
           children: [
             Text(widget.roomTitle, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
             Text('ID: ${widget.roomId} • $_totalCapacity Seats', style: const TextStyle(fontSize: 12, color: Colors.amber)),
-
-],
+          ],
         ),
         actions: [
           IconButton(
@@ -395,25 +365,28 @@ void _openGameBottomSheet() {
       ),
       body: Column(
         children: [
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
+
+          // Host Seat
           GestureDetector(
-            onTap: _toggleHostChair,
+
+onTap: _toggleHostChair,
             child: Column(
               children: [
                 Stack(
                   alignment: Alignment.center,
                   children: [
                     Container(
-                      width: 64,
-                      height: 64,
+                      width: 58,
+                      height: 58,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        border: Border.all(color: Colors.amber, width: 2.5),
+                        border: Border.all(color: Colors.amber, width: 2),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.amber.withOpacity(0.3),
-                            blurRadius: 10,
-                            spreadRadius: 2,
+                            color: Colors.amber.withOpacity(0.25),
+                            blurRadius: 8,
+                            spreadRadius: 1,
                           ),
                         ],
                         color: _hostSeat != null ? Colors.amber : const Color(0xFF1E1B38),
@@ -422,59 +395,57 @@ void _openGameBottomSheet() {
                         child: _hostSeat != null
                             ? Text(
                                 (_hostSeat!['userName'] ?? 'H')[0].toUpperCase(),
-                                style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.black),
+                                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.black),
                               )
-                            : const Icon(Icons.chair, color: Colors.amber, size: 28),
+                            : const Icon(Icons.chair, color: Colors.amber, size: 26),
                       ),
                     ),
                     const Positioned(
                       top: -2,
-                      child: Icon(Icons.star, color: Colors.amber, size: 16),
+                      child: Icon(Icons.star, color: Colors.amber, size: 14),
                     ),
                   ],
                 ),
                 const SizedBox(height: 4),
                 Text(
                   _hostSeat != null ? _hostSeat!['userName'] : widget.hostName,
-                  style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: 12),
-                ),
-                Text(
-                  'Host • ID: ${widget.roomId}',
-                  style: const TextStyle(color: Colors.white54, fontSize: 10),
+                  style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: 11),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
+
+          // Chairs Grid (Takes dominant screen space)
           Expanded(
-            flex: 6,
+            flex: 8,
             child: GridView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
+              padding: const EdgeInsets.symmetric(horizontal: 14),
               itemCount: _chairs.length,
               physics: const BouncingScrollPhysics(),
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 5,
                 mainAxisSpacing: 10,
-                crossAxisSpacing: 10,
-                childAspectRatio: 0.72,
+                crossAxisSpacing: 8,
+                childAspectRatio: 0.78,
               ),
               itemBuilder: (context, index) {
                 final chair = _chairs[index];
                 final bool isOccupied = chair != null;
 
-return GestureDetector(
+                return GestureDetector(
                   onTap: () => _toggleChair(index),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Container(
-                        width: 46,
-                        height: 46,
+                        width: 44,
+                        height: 44,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           color: isOccupied ? const Color(0xFF00C9A7) : const Color(0xFF1B1833),
                           border: Border.all(
-                            color: isOccupied ? Colors.white : Colors.amber.withOpacity(0.4),
+                            color: isOccupied ? Colors.white : Colors.amber.withOpacity(0.35),
                             width: 1.5,
                           ),
                         ),
@@ -482,12 +453,13 @@ return GestureDetector(
                           child: isOccupied
                               ? Text(
                                   (chair['userName'] ?? 'U')[0].toUpperCase(),
-                                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black),
+                                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.black),
                                 )
-                              : const Icon(Icons.chair_outlined, color: Colors.white54, size: 20),
-                        ),
+                              : const Icon(Icons.chair_outlined, color: Colors.white54, size: 18),
+
+),
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 3),
                       Text(
                         isOccupied ? chair['userName'] : '${index + 1}',
                         style: TextStyle(
@@ -504,75 +476,100 @@ return GestureDetector(
               },
             ),
           ),
-          Expanded(
-            flex: 3,
-            child: Container(
-              margin: const EdgeInsets.symmetric(horizontal: 14),
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: const Color(0xFF131124).withOpacity(0.9),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: Colors.white10),
-              ),
-              child: ListView.builder(
-                controller: _logScrollController,
-                itemCount: _roomLogs.length,
-                itemBuilder: (context, idx) {
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 2.5),
-                    child: Text(
-                      _roomLogs[idx],
-                      style: const TextStyle(color: Colors.white70, fontSize: 12),
-                    ),
-                  );
-                },
-              ),
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            color: const Color(0xFF131124),
-            child: Row(
-              children: [
-                IconButton(
-                  icon: Icon(
-                    _isMicMuted ? Icons.mic_off : Icons.mic,
-                    color: _isMicMuted ? Colors.redAccent : const Color(0xFF00C9A7),
-                    size: 26,
-                  ),
-                  onPressed: _toggleMic,
-                ),
-                IconButton(
-                  icon: const Icon(Icons.sports_esports, color: Colors.amber, size: 28),
-                  tooltip: 'Play Games',
-                  onPressed: _openGameBottomSheet,
-                ),
-                const SizedBox(width: 4),
-                Expanded(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14),
-                    decoration: BoxDecoration(
 
-color: Colors.white.withOpacity(0.08),
-                      borderRadius: BorderRadius.circular(20),
+          // Compact Transparent Chat Messages
+          Container(
+            height: 90,
+            margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.3),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: _chatMessages.isEmpty
+                ? const Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'Welcome to the room! Send messages below.',
+                      style: TextStyle(color: Colors.white30, fontSize: 11),
                     ),
-                    child: TextField(
-                      controller: _chatController,
-                      style: const TextStyle(color: Colors.white, fontSize: 13),
-                      decoration: const InputDecoration(
-                        hintText: 'Type a message...',
-                        hintStyle: TextStyle(color: Colors.white38, fontSize: 13),
-                        border: InputBorder.none,
+                  )
+                : ListView.builder(
+                    controller: _logScrollController,
+                    itemCount: _chatMessages.length,
+                    itemBuilder: (context, idx) {
+                      final item = _chatMessages[idx];
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 2),
+                        child: RichText(
+                          text: TextSpan(
+                            children: [
+                              TextSpan(
+                                text: '${item['sender']}: ',
+                                style: const TextStyle(color: Color(0xFF00C9A7), fontWeight: FontWeight.bold, fontSize: 12),
+                              ),
+                              TextSpan(
+                                text: item['text'] ?? '',
+                                style: const TextStyle(color: Colors.white, fontSize: 12),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+
+          // Bottom Bar (Mic, Game, Chat Input)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            color: const Color(0xFF131124),
+            child: SafeArea(
+              child: Row(
+                children: [
+                  IconButton(
+                    icon: Icon(
+                      _isMicMuted ? Icons.mic_off : Icons.mic,
+                      color: _isMicMuted ? Colors.redAccent : const Color(0xFF00C9A7),
+                      size: 24,
+                    ),
+                    onPressed: _toggleMic,
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.sports_esports, color: Colors.amber, size: 26),
+                    tooltip: 'Play Games',
+                    onPressed: _openGameBottomSheet,
+                  ),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Container(
+                      height: 38,
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(20),
+
+),
+                      child: TextField(
+                        controller: _chatController,
+                        style: const TextStyle(color: Colors.white, fontSize: 12),
+                        decoration: const InputDecoration(
+                          hintText: 'Type a message...',
+                          hintStyle: TextStyle(color: Colors.white38, fontSize: 12),
+                          border: InputBorder.none,
+                          isDense: true,
+                          contentPadding: EdgeInsets.symmetric(vertical: 10),
+                        ),
+                        onSubmitted: (_) => _sendMessage(),
                       ),
-                      onSubmitted: (_) => _sendMessage(),
                     ),
                   ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.send, color: Color(0xFF00C9A7), size: 22),
-                  onPressed: _sendMessage,
-                ),
-              ],
+                  IconButton(
+                    icon: const Icon(Icons.send, color: Color(0xFF00C9A7), size: 20),
+                    onPressed: _sendMessage,
+                  ),
+                ],
+              ),
             ),
           ),
         ],
