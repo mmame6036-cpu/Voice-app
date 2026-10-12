@@ -1,209 +1,422 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'main.dart';
+import 'services/user_service.dart';
+import 'services/wallet_service.dart';
 
 class RechargeScreen extends StatefulWidget {
-  final dynamic socket;
-  final VoidCallback? onCoinsUpdated;
-
-  const RechargeScreen({
-    Key? key,
-    this.socket,
-    this.onCoinsUpdated,
-  }) : super(key: key);
+  const RechargeScreen({Key? key}) : super(key: key);
 
   @override
   State<RechargeScreen> createState() => _RechargeScreenState();
 }
 
-class _RechargeScreenState extends State<RechargeScreen> with SingleTickerProviderStateMixin {
-  late TabController _tabController;
+class _RechargeScreenState extends State<RechargeScreen> {
+  final UserService _user = UserService();
+  int _selectedPackageIndex = 0;
 
-  final List<Map<String, dynamic>> packages = [
-    {'coins': 1000, 'price': '50 ETB', 'bonus': 0},
-    {'coins': 2500, 'price': '120 ETB', 'bonus': 100},
-    {'coins': 5000, 'price': '240 ETB', 'bonus': 300},
-    {'coins': 10000, 'price': '480 ETB', 'bonus': 800},
-    {'coins': 25000, 'price': '1,150 ETB', 'bonus': 2500},
-    {'coins': 50000, 'price': '2,200 ETB', 'bonus': 6000},
+  // Recharge tiers
+  final List<Map<String, dynamic>> _rechargeTiers = [
+    {'coins': 7000, 'price': '\$0.99'},
+    {'coins': 21000, 'price': '\$2.99'},
+    {'coins': 70000, 'price': '\$9.99'},
   ];
 
-  final TextEditingController _targetIdController = TextEditingController();
-  final TextEditingController _amountController = TextEditingController();
-  String _transferStatus = '';
+  // Dynamic sellers list (fetched from server or empty if no seller)
+  final List<Map<String, dynamic>> _recommendedSellers = [];
 
-  @override
-  void initState() {
-    super.initState();
-    _tabController = TabController(length: 2, vsync: this);
-  }
-
-  @override
-  void dispose() {
-    _tabController.dispose();
-    _targetIdController.dispose();
-    _amountController.dispose();
-    super.dispose();
-  }
-
-  void _buyCoins(int coins) {
-    setState(() {
-      AppData.userCoins += coins;
-    });
-    widget.onCoinsUpdated?.call();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('🎉 $coins ሳንቲም በተሳካ ሁኔታ ተሞልቷል!'),
-        backgroundColor: Colors.green,
-      ),
+  void _openDetails() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const CoinsDetailsScreen()),
     );
   }
 
-  void _transferCoins() {
-    final targetId = _targetIdController.text.trim();
-    final amount = int.tryParse(_amountController.text.trim()) ?? 0;
-
-    if (targetId.isEmpty) {
-      setState(() => _transferStatus = 'እባክዎ የተጠቃሚውን መለያ (ID) ያስገቡ');
-      return;
-    }
-    if (amount <= 0) {
-      setState(() => _transferStatus = 'ትክክለኛ የሳንቲም መጠን ያስገቡ');
-      return;
-    }
-    if (amount > AppData.userCoins) {
-      setState(() => _transferStatus = 'በቂ ሳንቲም የለዎትም!');
-      return;
-    }
-
+  void _onRechargeSelected(int index) {
     setState(() {
-      AppData.userCoins -= amount;
-      _transferStatus = '✅ $amount ሳንቲም ወደ ID: $targetId ተላልፏል!';
-      _amountController.clear();
-      _targetIdController.clear();
+      _selectedPackageIndex = index;
     });
-    widget.onCoinsUpdated?.call();
+
+    final pkg = _rechargeTiers[index];
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Selected ${pkg['coins']} coins for ${pkg['price']}'),
+        duration: const Duration(seconds: 1),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: const Color(0xFFF8F9FA),
       appBar: AppBar(
-        title: const Text('የሳንቲም ማዕከል (Wallet)', style: TextStyle(color: Colors.white, fontSize: 16)),
-        backgroundColor: const Color(0xFF1E293B),
+        backgroundColor: Colors.white,
         elevation: 0,
-        bottom: TabBar(
-          controller: _tabController,
-          indicatorColor: Colors.amber,
-          tabs: const [
-            Tab(text: 'ሳንቲም ሙላ (Recharge)'),
-            Tab(text: 'ሳንቲም አስተላልፍ (Transfer)'),
-          ],
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.black, size: 20),
+          onPressed: () => Navigator.pop(context),
         ),
+        title: const Text(
+          'Add Coins',
+          style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 18),
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.history, color: Colors.black87),
+            tooltip: 'Coins Details',
+            onPressed: _openDetails,
+          ),
+        ],
       ),
-      body: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(16),
-            margin: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(colors: [Color(0xFF880E4F), Color(0xFF4A148C)]),
-              borderRadius: BorderRadius.circular(16),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Current Coins Card
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4)),
+                ],
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.monetization_on, color: Colors.amber, size: 28),
+                  const SizedBox(width: 8),
+                  const Text('Coins', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: Colors.black87)),
+                  const SizedBox(width: 12),
+                  Text(
+                    '${_user.coins}',
+                    style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.black),
+                  ),
+                  const Spacer(),
+                  TextButton(
+                    onPressed: _openDetails,
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      backgroundColor: Colors.amber.withOpacity(0.12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    ),
+                    child: const Text('Details', style: TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: 12)),
+                  ),
+                ],
+              ),
             ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text('የእርስዎ ቀሪ ሳንቲም፦', style: TextStyle(color: Colors.white70, fontSize: 13)),
-                Row(
-                  children: [
-                    const Icon(Icons.monetization_on, color: Colors.amber, size: 20),
-                    const SizedBox(width: 6),
-                    Text(
-                      '${AppData.userCoins}',
+            const SizedBox(height: 16),
 
-style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+// New User Mega Pack Banner
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFFFFF3E0), Color(0xFFFFE0B2)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.orange.withOpacity(0.3)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Text(
+                        'New User Mega Pack',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFFE65100)),
+                      ),
+                      const Spacer(),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE65100),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Text('Special', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: [
+                      _buildPackItem(Icons.monetization_on, Colors.amber, 'x9,000', 'Coins'),
+                      _buildPackItem(Icons.diamond, Colors.purpleAccent, 'x3,000', 'Points'),
+                      _buildPackItem(Icons.crop_original, Colors.blueAccent, 'Frame*1', '15 Days'),
+                      _buildPackItem(Icons.military_tech, Colors.amber, 'Medal*1', 'Permanent'),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 42,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFFF5722),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+                        elevation: 0,
+                      ),
+                      onPressed: () {},
+                      child: const Text('\$0.99 Buy Now', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            // Coins Recharge Section
+            const Text(
+              'Coins Recharge',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: List.generate(_rechargeTiers.length, (idx) {
+                final tier = _rechargeTiers[idx];
+                final isSelected = _selectedPackageIndex == idx;
+
+                return Expanded(
+                  child: GestureDetector(
+                    onTap: () => _onRechargeSelected(idx),
+                    child: Container(
+                      margin: EdgeInsets.only(left: idx == 0 ? 0 : 5, right: idx == _rechargeTiers.length - 1 ? 0 : 5),
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(14),
+
+border: Border.all(
+                          color: isSelected ? Colors.orange : Colors.grey.withOpacity(0.2),
+                          width: isSelected ? 2 : 1,
+                        ),
+                        boxShadow: [
+                          BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 6, offset: const Offset(0, 2)),
+                        ],
+                      ),
+                      child: Column(
+                        children: [
+                          Text(
+                            '${tier['coins']}',
+                            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.black),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            tier['price'],
+                            style: TextStyle(fontSize: 13, color: Colors.grey[700], fontWeight: FontWeight.w600),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              }),
+            ),
+            const SizedBox(height: 24),
+
+            // Recommended Sellers Section
+            Row(
+              children: [
+                const Text(
+                  'Recommended Sellers',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87),
+                ),
+                const Spacer(),
+                Text('Ethiopia', style: TextStyle(fontSize: 12, color: Colors.grey[600], fontWeight: FontWeight.w500)),
+              ],
+            ),
+            const SizedBox(height: 12),
+
+            // Sellers System View (Dynamic)
+            if (_recommendedSellers.isEmpty)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: Colors.black.withOpacity(0.05)),
+                ),
+                child: Column(
+                  children: [
+                    Icon(Icons.storefront_outlined, size: 44, color: Colors.grey[400]),
+                    const SizedBox(height: 10),
+                    Text(
+                      'No authorized sellers active right now.',
+                      style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Become a verified seller through Agency.',
+                      style: TextStyle(fontSize: 11, color: Colors.grey[400]),
                     ),
                   ],
                 ),
-              ],
+              )
+            else
+              ListView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: _recommendedSellers.length,
+                itemBuilder: (context, i) {
+                  final seller = _recommendedSellers[i];
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Row(
+                      children: [
+                        CircleAvatar(
+                          backgroundColor: Colors.amber,
+                          child: Text(seller['name'][0]),
+                        ),
+                        const SizedBox(width: 10),
+                        Column(
+
+crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(seller['name'], style: const TextStyle(fontWeight: FontWeight.bold)),
+                            Text('Seller Level: ${seller['level']}', style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                          ],
+                        ),
+                        const Spacer(),
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00C9A7)),
+                          onPressed: () {},
+                          child: const Text('Contact', style: TextStyle(color: Colors.black)),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+
+            const SizedBox(height: 24),
+            Center(
+              child: Text(
+                'By recharging you agree to the Recharge Agreement',
+                style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+              ),
             ),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPackItem(IconData icon, Color color, String value, String title) {
+    return Column(
+      children: [
+        Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4),
+            ],
           ),
-          Expanded(
-            child: TabBarView(
-              controller: _tabController,
-              children: [
-                ListView.builder(
-                  padding: const EdgeInsets.all(12),
-                  itemCount: packages.length,
+          child: Icon(icon, color: color, size: 22),
+        ),
+        const SizedBox(height: 6),
+        Text(value, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.black87)),
+        Text(title, style: TextStyle(fontSize: 10, color: Colors.grey[600])),
+      ],
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Coins Details (Ledger History) Screen
+// ---------------------------------------------------------------------------
+class CoinsDetailsScreen extends StatefulWidget {
+  const CoinsDetailsScreen({Key? key}) : super(key: key);
+
+  @override
+  State<CoinsDetailsScreen> createState() => _CoinsDetailsScreenState();
+}
+
+class _CoinsDetailsScreenState extends State<CoinsDetailsScreen> {
+  final UserService _user = UserService();
+  List<dynamic> _history = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchHistory();
+  }
+
+  Future<void> _fetchHistory() async {
+    final res = await WalletService.fetchHistory(token: _user.token);
+    if (mounted) {
+      setState(() {
+        _history = (res['success'] == true) ? (res['transactions'] ?? []) : [];
+        _isLoading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8F9FA),
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.black, size: 20),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: const Text('Coins Details', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 18)),
+      ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator(color: Colors.amber))
+          : _history.isEmpty
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.receipt_long_outlined, size: 54, color: Colors.grey[400]),
+                      const SizedBox(height: 12),
+                      Text('No transactions yet', style: TextStyle(color: Colors.grey[600], fontSize: 14)),
+
+const SizedBox(height: 4),
+                      Text('No more data', style: TextStyle(color: Colors.grey[400], fontSize: 12)),
+                    ],
+                  ),
+                )
+              : ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: _history.length,
                   itemBuilder: (context, idx) {
-                    final p = packages[idx];
-                    return Card(
-                      color: const Color(0xFF1E293B),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      margin: const EdgeInsets.only(bottom: 8),
+                    final item = _history[idx];
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 10),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                       child: ListTile(
-                        leading: const Icon(Icons.monetization_on, color: Colors.amber, size: 28),
-                        title: Text('${p['coins']} ሳንቲም', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                        subtitle: p['bonus'] > 0 ? Text('+${p['bonus']} ቦነስ', style: const TextStyle(color: Colors.greenAccent, fontSize: 11)) : null,
-                        trailing: ElevatedButton(
-                          style: ElevatedButton.styleFrom(backgroundColor: Colors.amber),
-                          onPressed: () => _buyCoins(p['coins']),
-                          child: Text(p['price'], style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+                        title: Text(item['title'] ?? 'Transaction'),
+                        subtitle: Text(item['date'] ?? ''),
+                        trailing: Text(
+                          '${item['amount']}',
+                          style: const TextStyle(fontWeight: FontWeight.bold),
                         ),
                       ),
                     );
                   },
                 ),
-                SingleChildScrollView(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    children: [
-                      TextField(
-                        controller: _targetIdController,
-                        style: const TextStyle(color: Colors.white),
-                        decoration: InputDecoration(
-                          labelText: 'የተቀባይ መለያ (User ID)',
-                          labelStyle: const TextStyle(color: Colors.white70),
-                          filled: true,
-                          fillColor: const Color(0xFF1E293B),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: _amountController,
-                        keyboardType: TextInputType.number,
-                        style: const TextStyle(color: Colors.white),
-                        decoration: InputDecoration(
-                          labelText: 'የሳንቲም መጠን',
-                          labelStyle: const TextStyle(color: Colors.white70),
-                          filled: true,
-                          fillColor: const Color(0xFF1E293B),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      if (_transferStatus.isNotEmpty)
-                        Text(_transferStatus, style: const TextStyle(color: Colors.amberAccent, fontSize: 12)),
-                      const SizedBox(height: 16),
-                      ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.teal,
-                          minimumSize: const Size(double.infinity, 45),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
-                        onPressed: _transferCoins,
-                        child: const Text('አስተላልፍ', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
