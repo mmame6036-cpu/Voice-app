@@ -1,11 +1,5 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'package:agora_rtc_engine/agora_rtc_engine.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'services/user_service.dart';
-import 'services/socket_service.dart';
-import 'chicken_road_game.dart';
 
 class RoomScreen extends StatefulWidget {
   final String roomId;
@@ -24,244 +18,120 @@ class RoomScreen extends StatefulWidget {
 }
 
 class _RoomScreenState extends State<RoomScreen> {
-  final UserService _userService = UserService();
-  final SocketService _socketService = SocketService();
-
-  RtcEngine? _engine;
+  final UserService _user = UserService();
   bool _isMicMuted = false;
-  int? _myCurrentChair;
+  final TextEditingController _msgController = TextEditingController();
 
-  int _totalCapacity = 10;
-  Map<String, dynamic>? _hostSeat;
-  List<Map<String, dynamic>?> _chairs = List.generate(9, (_) => null);
+  // የቻት መልዕክቶች ናሙና
+  final List<Map<String, String>> _messages = [
+    {'user': 'System', 'text': 'Welcome to the live room! Please follow community rules.'},
+  ];
 
-  // User chat messages list
-  final List<Map<String, String>> _chatMessages = [];
-  final ScrollController _logScrollController = ScrollController();
-  final TextEditingController _chatController = TextEditingController();
-
-  bool get _isHost => widget.roomId == _userService.userId;
-
-  @override
-  void initState() {
-    super.initState();
-    if (_isHost) {
-      _hostSeat = {
-        'userName': _userService.userName,
-        'userId': _userService.userId,
-      };
-    }
-    _setupSocket();
-    _initAgora();
-  }
-
-  void _updateCapacity(int capacity) {
-    setState(() {
-      _totalCapacity = capacity;
-      final int regularSeats = capacity - 1;
-      if (regularSeats > _chairs.length) {
-        _chairs.addAll(List.generate(regularSeats - _chairs.length, (_) => null));
-      } else if (regularSeats < _chairs.length) {
-        if (_myCurrentChair != null && _myCurrentChair! >= regularSeats) {
-          _socketService.sendChairAction(roomId: widget.roomId, chairIndex: _myCurrentChair!, action: 'leave');
-          _myCurrentChair = null;
-        }
-        _chairs = _chairs.sublist(0, regularSeats);
-      }
-    });
-  }
-
-  void _setupSocket() {
-    _socketService.connect();
-    _socketService.joinRoom(widget.roomId);
-
-    _socketService.onChairActionReceived = (data) {
-      if (!mounted) return;
-      final int chairIndex = data['chairIndex'] ?? 0;
-      final String action = data['action'] ?? '';
-      final String userName = data['userName'] ?? 'User';
-      final String userId = data['userId']?.toString() ?? '';
-
-      setState(() {
-        if (chairIndex == -1) {
-          if (action == 'sit') {
-            _hostSeat = {'userName': userName, 'userId': userId};
-          } else if (action == 'leave') {
-            _hostSeat = null;
-          }
-        } else if (chairIndex >= 0 && chairIndex < _chairs.length) {
-          if (action == 'sit') {
-            _chairs[chairIndex] = {'userName': userName, 'userId': userId};
-          } else if (action == 'leave') {
-            _chairs[chairIndex] = null;
-          }
-        }
-      });
-    };
-
-    _socketService.onChatMessageReceived = (data) {
-      if (!mounted) return;
-      final String sender = data['sender'] ?? 'User';
-      final String text = data['text'] ?? '';
-      setState(() {
-        _chatMessages.add({'sender': sender, 'text': text});
-      });
-      _scrollToBottom();
-    };
-  }
-
-  Future<void> _initAgora() async {
-    try {
-      final micStatus = await Permission.microphone.request();
-      if (!micStatus.isGranted) return;
-
-      _engine = createAgoraRtcEngine();
-      await _engine?.initialize(const RtcEngineContext(
-        appId: UserService.agoraAppId,
-        channelProfile: ChannelProfileType.channelProfileCommunication,
-      ));
-
-      await _engine?.enableAudio();
-      await _engine?.enableLocalAudio(true);
-      await _engine?.setDefaultAudioRouteToSpeakerphone(true);
-
-      String token = '';
-      final cleanRoomId = widget.roomId.trim();
-
-try {
-        final response = await http.get(Uri.parse(
-          'https://voice-app-2-jd95.onrender.com/api/get-token?channelName=$cleanRoomId&uid=0',
-        ));
-        if (response.statusCode == 200) {
-          final data = jsonDecode(response.body);
-          token = data['token'] ?? '';
-        }
-      } catch (_) {}
-
-      await _engine?.joinChannel(
-        token: token,
-        channelId: cleanRoomId,
-        uid: 0,
-        options: const ChannelMediaOptions(
-          clientRoleType: ClientRoleType.clientRoleBroadcaster,
-          publishMicrophoneTrack: true,
-          autoSubscribeAudio: true,
-        ),
-      );
-    } catch (_) {}
-  }
-
-  void _scrollToBottom() {
-    Future.delayed(const Duration(milliseconds: 100), () {
-      if (_logScrollController.hasClients) {
-        _logScrollController.animateTo(
-          _logScrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 200),
-          curve: Curves.easeOut,
-        );
-      }
-    });
-  }
-
-  void _toggleHostChair() {
-    if (!_isHost) return;
-    if (_hostSeat != null) {
-      _socketService.sendChairAction(roomId: widget.roomId, chairIndex: -1, action: 'leave');
-      setState(() => _hostSeat = null);
-    } else {
-      _socketService.sendChairAction(roomId: widget.roomId, chairIndex: -1, action: 'sit');
-      setState(() {
-        _hostSeat = {'userName': _userService.userName, 'userId': _userService.userId};
-      });
-    }
-  }
-
-  void _toggleChair(int index) {
-    if (_chairs[index] != null && _chairs[index]!['userId'] == _userService.userId) {
-      _socketService.sendChairAction(roomId: widget.roomId, chairIndex: index, action: 'leave');
-      setState(() {
-        _myCurrentChair = null;
-      });
-      return;
-    }
-
-    if (_chairs[index] != null) return;
-
-    if (_myCurrentChair != null) {
-      _socketService.sendChairAction(roomId: widget.roomId, chairIndex: _myCurrentChair!, action: 'leave');
-    }
-
-    _socketService.sendChairAction(roomId: widget.roomId, chairIndex: index, action: 'sit');
-    setState(() {
-      _myCurrentChair = index;
-    });
-  }
-
-  void _toggleMic() {
-    setState(() => _isMicMuted = !_isMicMuted);
-    _engine?.muteLocalAudioStream(_isMicMuted);
-  }
+  // 8 የማይክ መቀመጫዎች ሁኔታ
+  final List<Map<String, dynamic>> _seats = List.generate(
+    8,
+    (index) => {
+      'index': index + 1,
+      'user': index == 0 ? 'Host' : null,
+      'isSpeaking': index == 0,
+      'isMuted': false,
+    },
+  );
 
   void _sendMessage() {
-    final text = _chatController.text.trim();
+    final text = _msgController.text.trim();
     if (text.isEmpty) return;
-    _socketService.sendChatMessage(roomId: widget.roomId, text: text);
     setState(() {
-      _chatMessages.add({'sender': _userService.userName, 'text': text});
+      _messages.add({'user': _user.userName, 'text': text});
+      _msgController.clear();
     });
-    _chatController.clear();
-    _scrollToBottom();
   }
 
-  void _openGameBottomSheet() {
+  void _openGiftSheet() {
     showModalBottomSheet(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) {
-        return ChickenRoadGameView(
-          socket: _socketService.socket,
-          onCoinsChanged: () {
-            if (mounted) setState(() {});
-          },
-        );
-      },
-    );
-  }
-
-  void _showSeatCapacitySelector() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: const Color(0xFF131124),
+      backgroundColor: const Color(0xFF161B26),
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (context) {
-        return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'Select Seats Mode',
-                style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Choose seat capacity for your room',
-                style: TextStyle(color: Colors.white54, fontSize: 13),
-              ),
+        final gifts = [
+          {'name': 'Rose', 'price': 10, 'icon': Icons.local_florist, 'color': Colors.pinkAccent},
+          {'name': 'Heart', 'price': 50, 'icon': Icons.favorite, 'color': Colors.redAccent},
+          {'name': 'Crown', 'price': 500, 'icon': Icons.military_tech, 'color': Colors.amber},
+          {'name': 'Rocket', 'price': 2000, 'icon': Icons.rocket_launch, 'color': Colors.purpleAccent},
+          {'name': 'Diamond', 'price': 5000, 'icon': Icons.diamond, 'color': Colors.cyanAccent},
+          {'name': 'Super Car', 'price': 10000, 'icon': Icons.directions_car, 'color': Colors.orangeAccent},
+        ];
 
-const SizedBox(height: 24),
+        return Container(
+          padding: const EdgeInsets.all(20),
+          height: 380,
+          child: Column(
+            children: [
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  _buildCapacityButton(10),
-                  _buildCapacityButton(20),
-                  _buildCapacityButton(30),
+                  const Text(
+                    'Send Gift',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+                  ),
+                  Row(
+                    children: [
+                      const Icon(Icons.monetization_on, color: Colors.amber, size: 18),
+                      const SizedBox(width: 4),
+                      Text(
+                        '${_user.coins}',
+                        style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.amber),
+                      ),
+                    ],
+                  ),
                 ],
               ),
               const SizedBox(height: 16),
+              Expanded(
+                child: GridView.builder(
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 3,
+                    childAspectRatio: 0.95,
+                    crossAxisSpacing: 12,
+                    mainAxisSpacing: 12,
+                  ),
+                  itemCount: gifts.length,
+                  itemBuilder: (context, index) {
+                    final gift = gifts[index];
+                    return GestureDetector(
+                      onTap: () {
+                        Navigator.pop(context);
+                        setState(() {
+                          _messages.add({
+                            'user': 'Announcement',
+
+'text': '${_user.userName} sent a ${gift['name']}! 🎉',
+                          });
+                        });
+                      },
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0F141C),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: Colors.white10),
+                        ),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(gift['icon'] as IconData, size: 36, color: gift['color'] as Color),
+                            const SizedBox(height: 6),
+                            Text(gift['name'] as String, style: const TextStyle(color: Colors.white, fontSize: 13)),
+                            const SizedBox(height: 4),
+                            Text('${gift['price']} Coins', style: const TextStyle(color: Colors.white54, fontSize: 11)),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
             ],
           ),
         );
@@ -269,310 +139,240 @@ const SizedBox(height: 24),
     );
   }
 
-  Widget _buildCapacityButton(int count) {
-    final bool isSelected = _totalCapacity == count;
-    return GestureDetector(
-      onTap: () {
-        Navigator.pop(context);
-        _updateCapacity(count);
-      },
-      child: Container(
-        width: 90,
-        padding: const EdgeInsets.symmetric(vertical: 14),
-        decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF00C9A7) : const Color(0xFF1E1B38),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: isSelected ? const Color(0xFF00C9A7) : Colors.white12,
-            width: 1.5,
-          ),
-        ),
-        child: Column(
-          children: [
-            Icon(
-              Icons.event_seat,
-              color: isSelected ? Colors.black : Colors.white70,
-              size: 26,
-            ),
-            const SizedBox(height: 6),
-            Text(
-              '$count Seats',
-              style: TextStyle(
-                color: isSelected ? Colors.black : Colors.white,
-                fontWeight: FontWeight.bold,
-                fontSize: 13,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  @override
-  void dispose() {
-    if (_myCurrentChair != null) {
-      _socketService.sendChairAction(roomId: widget.roomId, chairIndex: _myCurrentChair!, action: 'leave');
-    }
-    _engine?.leaveChannel();
-    _engine?.release();
-    _logScrollController.dispose();
-    _chatController.dispose();
-    super.dispose();
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0D0B18),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF131124),
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+      backgroundColor: const Color(0xFF0A0E17),
+      body: SafeArea(
+        child: Column(
           children: [
-            Text(widget.roomTitle, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
-            Text('ID: ${widget.roomId} • $_totalCapacity Seats', style: const TextStyle(fontSize: 12, color: Colors.amber)),
-          ],
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.tune, color: Color(0xFF00C9A7)),
-            tooltip: 'Seats Layout',
-            onPressed: _showSeatCapacitySelector,
-          ),
-          Container(
-            margin: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: Colors.amber.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.amber.withOpacity(0.5)),
+            // 1. Room Header (የክፍሉ ራስጌ)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 20,
+                    backgroundColor: const Color(0xFF00C9A7),
+                    child: Text(
+                      widget.hostName.isNotEmpty ? widget.hostName[0].toUpperCase() : 'H',
+                      style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          widget.roomTitle,
+                          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        Text(
+                          'ID: ${widget.roomId} • Host: ${widget.hostName}',
+                          style: const TextStyle(fontSize: 11, color: Colors.white54),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, color: Colors.white70),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
             ),
-            child: Row(
-              children: [
-                const Icon(Icons.monetization_on, color: Colors.amber, size: 16),
-                const SizedBox(width: 4),
-                Text('${_userService.coins}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
-              ],
-            ),
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          const SizedBox(height: 8),
 
-          // Host Seat
-          GestureDetector(
+            const Divider(color: Colors.white10, height: 1),
 
-onTap: _toggleHostChair,
-            child: Column(
-              children: [
-                Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    Container(
-                      width: 58,
-                      height: 58,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.amber, width: 2),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.amber.withOpacity(0.25),
-                            blurRadius: 8,
-                            spreadRadius: 1,
+            // 2. 8 Mic Seats Grid (መቀመጫዎች)
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 4,
+                  mainAxisSpacing: 14,
+                  crossAxisSpacing: 14,
+                  childAspectRatio: 0.8,
+                ),
+                itemCount: _seats.length,
+                itemBuilder: (context, index) {
+                  final seat = _seats[index];
+                  final hasUser = seat['user'] != null;
+                  final isSpeaking = seat['isSpeaking'] == true;
+
+return Column(
+                    children: [
+                      Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          if (isSpeaking)
+                            Container(
+                              width: 58,
+                              height: 58,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(color: const Color(0xFF00C9A7), width: 2.5),
+                              ),
+                            ),
+                          CircleAvatar(
+                            radius: 24,
+                            backgroundColor: hasUser ? const Color(0xFF1F2937) : Colors.white10,
+                            child: hasUser
+                                ? const Icon(Icons.person, color: Color(0xFF00C9A7), size: 28)
+                                : const Icon(Icons.mic_none, color: Colors.white38, size: 22),
+                          ),
+                          Positioned(
+                            bottom: 0,
+                            right: 0,
+                            child: Container(
+                              padding: const EdgeInsets.all(2),
+                              decoration: const BoxDecoration(
+                                color: Color(0xFF161B26),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Text(
+                                '${seat['index']}',
+                                style: const TextStyle(fontSize: 9, color: Colors.white70, fontWeight: FontWeight.bold),
+                              ),
+                            ),
                           ),
                         ],
-                        color: _hostSeat != null ? Colors.amber : const Color(0xFF1E1B38),
                       ),
-                      child: Center(
-                        child: _hostSeat != null
-                            ? Text(
-                                (_hostSeat!['userName'] ?? 'H')[0].toUpperCase(),
-                                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.black),
-                              )
-                            : const Icon(Icons.chair, color: Colors.amber, size: 26),
-                      ),
-                    ),
-                    const Positioned(
-                      top: -2,
-                      child: Icon(Icons.star, color: Colors.amber, size: 14),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  _hostSeat != null ? _hostSeat!['userName'] : widget.hostName,
-                  style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: 11),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 8),
-
-          // Chairs Grid (Takes dominant screen space)
-          Expanded(
-            flex: 8,
-            child: GridView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              itemCount: _chairs.length,
-              physics: const BouncingScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 5,
-                mainAxisSpacing: 10,
-                crossAxisSpacing: 8,
-                childAspectRatio: 0.78,
-              ),
-              itemBuilder: (context, index) {
-                final chair = _chairs[index];
-                final bool isOccupied = chair != null;
-
-                return GestureDetector(
-                  onTap: () => _toggleChair(index),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Container(
-                        width: 44,
-                        height: 44,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: isOccupied ? const Color(0xFF00C9A7) : const Color(0xFF1B1833),
-                          border: Border.all(
-                            color: isOccupied ? Colors.white : Colors.amber.withOpacity(0.35),
-                            width: 1.5,
-                          ),
-                        ),
-                        child: Center(
-                          child: isOccupied
-                              ? Text(
-                                  (chair['userName'] ?? 'U')[0].toUpperCase(),
-                                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.black),
-                                )
-                              : const Icon(Icons.chair_outlined, color: Colors.white54, size: 18),
-
-),
-                      ),
-                      const SizedBox(height: 3),
+                      const SizedBox(height: 6),
                       Text(
-                        isOccupied ? chair['userName'] : '${index + 1}',
+                        hasUser ? seat['user'] : 'Empty',
                         style: TextStyle(
-                          color: isOccupied ? Colors.white : Colors.amber.withOpacity(0.8),
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
+                          fontSize: 11,
+                          color: hasUser ? Colors.white : Colors.white38,
+                          fontWeight: hasUser ? FontWeight.w600 : FontWeight.normal,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
                     ],
-                  ),
-                );
-              },
+                  );
+                },
+              ),
             ),
-          ),
 
-          // Compact Transparent Chat Messages
-          Container(
-            height: 90,
-            margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.3),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: _chatMessages.isEmpty
-                ? const Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      'Welcome to the room! Send messages below.',
-                      style: TextStyle(color: Colors.white30, fontSize: 11),
-                    ),
-                  )
-                : ListView.builder(
-                    controller: _logScrollController,
-                    itemCount: _chatMessages.length,
-                    itemBuilder: (context, idx) {
-                      final item = _chatMessages[idx];
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 2),
-                        child: RichText(
-                          text: TextSpan(
-                            children: [
-                              TextSpan(
-                                text: '${item['sender']}: ',
-                                style: const TextStyle(color: Color(0xFF00C9A7), fontWeight: FontWeight.bold, fontSize: 12),
-                              ),
-                              TextSpan(
-                                text: item['text'] ?? '',
-                                style: const TextStyle(color: Colors.white, fontSize: 12),
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-          ),
+            // 3. Real-time Messages & Activity Feed (የቻትና እንቅስቃሴ ቦታ)
+            Expanded(
+              child: Container(
+                margin: const EdgeInsets.symmetric(horizontal: 16),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF161B26).withOpacity(0.6),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: ListView.builder(
+                  reverse: true,
+                  itemCount: _messages.length,
+                  itemBuilder: (context, index) {
+                    final msg = _messages[_messages.length - 1 - index];
+                    final isSystem = msg['user'] == 'System' || msg['user'] == 'Announcement';
 
-          // Bottom Bar (Mic, Game, Chat Input)
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            color: const Color(0xFF131124),
-            child: SafeArea(
-              child: Row(
-                children: [
-                  IconButton(
-                    icon: Icon(
-                      _isMicMuted ? Icons.mic_off : Icons.mic,
-                      color: _isMicMuted ? Colors.redAccent : const Color(0xFF00C9A7),
-                      size: 24,
-                    ),
-                    onPressed: _toggleMic,
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.sports_esports, color: Colors.amber, size: 26),
-                    tooltip: 'Play Games',
-                    onPressed: _openGameBottomSheet,
-                  ),
-                  const SizedBox(width: 4),
-                  Expanded(
-                    child: Container(
-                      height: 38,
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.08),
-                        borderRadius: BorderRadius.circular(20),
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: RichText(
+                        text: TextSpan(
+                          children: [
+                            TextSpan(
+                              text: '${msg['user']}: ',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: isSystem ? const Color(0xFF00C9A7) : Colors.amber,
+                                fontSize: 13,
 
 ),
-                      child: TextField(
-                        controller: _chatController,
-                        style: const TextStyle(color: Colors.white, fontSize: 12),
-                        decoration: const InputDecoration(
-                          hintText: 'Type a message...',
-                          hintStyle: TextStyle(color: Colors.white38, fontSize: 12),
-                          border: InputBorder.none,
-                          isDense: true,
-                          contentPadding: EdgeInsets.symmetric(vertical: 10),
+                            ),
+                            TextSpan(
+                              text: msg['text'],
+                              style: TextStyle(
+                                color: isSystem ? Colors.white70 : Colors.white,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
                         ),
-                        onSubmitted: (_) => _sendMessage(),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 10),
+
+            // 4. Bottom Controls (ታችኛው የትዕዛዝ ማዕከል)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Container(
+                      height: 44,
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF161B26),
+                        borderRadius: BorderRadius.circular(22),
+                        border: Border.all(color: Colors.white12),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _msgController,
+                              style: const TextStyle(color: Colors.white, fontSize: 13),
+                              decoration: const InputDecoration(
+                                hintText: 'Type message...',
+                                hintStyle: TextStyle(color: Colors.white38, fontSize: 13),
+                                border: InputBorder.none,
+                              ),
+                              onSubmitted: (_) => _sendMessage(),
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.send, color: Color(0xFF00C9A7), size: 18),
+                            onPressed: _sendMessage,
+                          ),
+                        ],
                       ),
                     ),
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.send, color: Color(0xFF00C9A7), size: 20),
-                    onPressed: _sendMessage,
+                  const SizedBox(width: 8),
+                  // Mic Mute Button
+                  CircleAvatar(
+                    radius: 22,
+                    backgroundColor: const Color(0xFF161B26),
+                    child: IconButton(
+                      icon: Icon(
+                        _isMicMuted ? Icons.mic_off : Icons.mic,
+                        color: _isMicMuted ? Colors.redAccent : const Color(0xFF00C9A7),
+                        size: 20,
+                      ),
+                      onPressed: () => setState(() => _isMicMuted = !_isMicMuted),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  // Gift Button
+                  CircleAvatar(
+                    radius: 22,
+                    backgroundColor: Colors.amber,
+                    child: IconButton(
+                      icon: const Icon(Icons.card_giftcard, color: Colors.black, size: 20),
+                      onPressed: _openGiftSheet,
+                    ),
                   ),
                 ],
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
