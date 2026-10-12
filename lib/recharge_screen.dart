@@ -304,7 +304,7 @@ const Text('Coins', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500, 
             else
               ListView.builder(
                 shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics),
+                physics: const NeverScrollableScrollPhysics(),
                 itemCount: _recommendedSellers.length,
                 itemBuilder: (context, i) {
                   final seller = _recommendedSellers[i];
