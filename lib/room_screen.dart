@@ -1,3 +1,4 @@
+KEDER:
 import 'package:flutter/material.dart';
 import 'services/user_service.dart';
 
@@ -22,21 +23,98 @@ class _RoomScreenState extends State<RoomScreen> {
   bool _isMicMuted = false;
   final TextEditingController _msgController = TextEditingController();
 
-  // የቻት መልዕክቶች ናሙና
   final List<Map<String, String>> _messages = [
     {'user': 'System', 'text': 'Welcome to the live room! Please follow community rules.'},
   ];
 
-  // 8 የማይክ መቀመጫዎች ሁኔታ
-  final List<Map<String, dynamic>> _seats = List.generate(
-    8,
-    (index) => {
-      'index': index + 1,
-      'user': index == 0 ? 'Host' : null,
-      'isSpeaking': index == 0,
-      'isMuted': false,
-    },
-  );
+  late List<Map<String, dynamic>> _seats;
+
+  @override
+  void initState() {
+    super.initState();
+    // 8 የማይክ መቀመጫዎች
+    _seats = List.generate(
+      8,
+      (index) => {
+        'index': index + 1,
+        'user': index == 0 ? widget.hostName : null,
+        'userId': index == 0 ? widget.roomId : null,
+        'isSpeaking': false,
+        'isMuted': false,
+      },
+    );
+  }
+
+  // ወንበር ላይ የመቀመጥ ወይም የመውረድ ተግባር
+  void _handleSeatTap(int index) {
+    final seat = _seats[index];
+    final currentUser = _user.userName;
+    final currentUserId = _user.userId;
+
+    // ተጠቃሚው አስቀድሞ በዚህ ወንበር ላይ ተቀምጦ ከሆነ
+    if (seat['user'] == currentUser) {
+      showModalBottomSheet(
+        context: context,
+        backgroundColor: const Color(0xFF161B26),
+        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+        builder: (ctx) => Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.exit_to_app, color: Colors.redAccent),
+                title: const Text('Leave Mic Seat', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  setState(() {
+                    seat['user'] = null;
+                    seat['userId'] = null;
+                    seat['isSpeaking'] = false;
+                    _messages.add({'user': 'System', 'text': '$currentUser left seat ${index + 1}'});
+                  });
+                },
+              ),
+            ],
+          ),
+        ),
+      );
+      return;
+    }
+
+    // ወንበሩ በሌላ ሰው ተይዞ ከሆነ
+    if (seat['user'] != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Seat ${index + 1} is occupied by ${seat['user']}'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return;
+    }
+
+    // ወንበሩ ባዶ ከሆነ፦ ተጠቃሚውን ከሌላ ወንበር አውርዶ እዚህ ያስቀምጠዋል
+    setState(() {
+      for (var s in _seats) {
+        if (s['user'] == currentUser) {
+          s['user'] = null;
+          s['userId'] = null;
+          s['isSpeaking'] = false;
+        }
+      }
+      seat['user'] = currentUser;
+      seat['userId'] = currentUserId;
+      seat['isSpeaking'] = true;
+      _messages.add({'user': 'System', 'text': '$currentUser joined seat ${index + 1}'});
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('You took seat ${index + 1} 🎤'),
+        backgroundColor: const Color(0xFF00C9A7),
+      ),
+    );
+  }
 
   void _sendMessage() {
     final text = _msgController.text.trim();
@@ -53,7 +131,8 @@ class _RoomScreenState extends State<RoomScreen> {
       backgroundColor: const Color(0xFF161B26),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
+
+),
       builder: (context) {
         final gifts = [
           {'name': 'Rose', 'price': 10, 'icon': Icons.local_florist, 'color': Colors.pinkAccent},
@@ -72,18 +151,12 @@ class _RoomScreenState extends State<RoomScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text(
-                    'Send Gift',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
-                  ),
+                  const Text('Send Gift', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
                   Row(
                     children: [
                       const Icon(Icons.monetization_on, color: Colors.amber, size: 18),
                       const SizedBox(width: 4),
-                      Text(
-                        '${_user.coins}',
-                        style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.amber),
-                      ),
+                      Text('${_user.coins}', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.amber)),
                     ],
                   ),
                 ],
@@ -106,8 +179,7 @@ class _RoomScreenState extends State<RoomScreen> {
                         setState(() {
                           _messages.add({
                             'user': 'Announcement',
-
-'text': '${_user.userName} sent a ${gift['name']}! 🎉',
+                            'text': '${_user.userName} sent a ${gift['name']}! 🎉',
                           });
                         });
                       },
@@ -146,10 +218,11 @@ class _RoomScreenState extends State<RoomScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // 1. Room Header (የክፍሉ ራስጌ)
+            // 1. Header
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              child: Row(
+
+child: Row(
                 children: [
                   CircleAvatar(
                     radius: 20,
@@ -187,7 +260,7 @@ class _RoomScreenState extends State<RoomScreen> {
 
             const Divider(color: Colors.white10, height: 1),
 
-            // 2. 8 Mic Seats Grid (መቀመጫዎች)
+            // 2. 8 Mic Seats (ሙሉ ንክኪ ያለው)
             Padding(
               padding: const EdgeInsets.all(16),
               child: GridView.builder(
@@ -205,62 +278,67 @@ class _RoomScreenState extends State<RoomScreen> {
                   final hasUser = seat['user'] != null;
                   final isSpeaking = seat['isSpeaking'] == true;
 
-return Column(
-                    children: [
-                      Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          if (isSpeaking)
-                            Container(
-                              width: 58,
-                              height: 58,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                border: Border.all(color: const Color(0xFF00C9A7), width: 2.5),
+                  return GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => _handleSeatTap(index),
+                    child: Column(
+                      children: [
+                        Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            if (isSpeaking)
+                              Container(
+                                width: 58,
+                                height: 58,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: const Color(0xFF00C9A7), width: 2.5),
+                                ),
+                              ),
+                            CircleAvatar(
+                              radius: 24,
+                              backgroundColor: hasUser ? const Color(0xFF1F2937) : Colors.white10,
+                              child: hasUser
+                                  ? const Icon(Icons.person, color: Color(0xFF00C9A7), size: 28)
+                                  : const Icon(Icons.mic_none, color: Colors.white38, size: 22),
+                            ),
+                            Positioned(
+                              bottom: 0,
+                              right: 0,
+                              child: Container(
+                                padding: const EdgeInsets.all(3),
+
+decoration: const BoxDecoration(
+                                  color: Color(0xFF161B26),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Text(
+                                  '${seat['index']}',
+                                  style: const TextStyle(fontSize: 9, color: Colors.white70, fontWeight: FontWeight.bold),
+                                ),
                               ),
                             ),
-                          CircleAvatar(
-                            radius: 24,
-                            backgroundColor: hasUser ? const Color(0xFF1F2937) : Colors.white10,
-                            child: hasUser
-                                ? const Icon(Icons.person, color: Color(0xFF00C9A7), size: 28)
-                                : const Icon(Icons.mic_none, color: Colors.white38, size: 22),
-                          ),
-                          Positioned(
-                            bottom: 0,
-                            right: 0,
-                            child: Container(
-                              padding: const EdgeInsets.all(2),
-                              decoration: const BoxDecoration(
-                                color: Color(0xFF161B26),
-                                shape: BoxShape.circle,
-                              ),
-                              child: Text(
-                                '${seat['index']}',
-                                style: const TextStyle(fontSize: 9, color: Colors.white70, fontWeight: FontWeight.bold),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        hasUser ? seat['user'] : 'Empty',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: hasUser ? Colors.white : Colors.white38,
-                          fontWeight: hasUser ? FontWeight.w600 : FontWeight.normal,
+                          ],
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
+                        const SizedBox(height: 6),
+                        Text(
+                          hasUser ? seat['user'] : 'Empty',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: hasUser ? Colors.white : Colors.white38,
+                            fontWeight: hasUser ? FontWeight.w600 : FontWeight.normal,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
                   );
                 },
               ),
             ),
 
-            // 3. Real-time Messages & Activity Feed (የቻትና እንቅስቃሴ ቦታ)
+            // 3. Real-time Messages Feed
             Expanded(
               child: Container(
                 margin: const EdgeInsets.symmetric(horizontal: 16),
@@ -287,8 +365,7 @@ return Column(
                                 fontWeight: FontWeight.bold,
                                 color: isSystem ? const Color(0xFF00C9A7) : Colors.amber,
                                 fontSize: 13,
-
-),
+                              ),
                             ),
                             TextSpan(
                               text: msg['text'],
@@ -308,7 +385,7 @@ return Column(
 
             const SizedBox(height: 10),
 
-            // 4. Bottom Controls (ታችኛው የትዕዛዝ ማዕከል)
+            // 4. Bottom Controls
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: Row(
@@ -322,7 +399,8 @@ return Column(
                         borderRadius: BorderRadius.circular(22),
                         border: Border.all(color: Colors.white12),
                       ),
-                      child: Row(
+
+child: Row(
                         children: [
                           Expanded(
                             child: TextField(
@@ -345,7 +423,6 @@ return Column(
                     ),
                   ),
                   const SizedBox(width: 8),
-                  // Mic Mute Button
                   CircleAvatar(
                     radius: 22,
                     backgroundColor: const Color(0xFF161B26),
@@ -359,7 +436,6 @@ return Column(
                     ),
                   ),
                   const SizedBox(width: 8),
-                  // Gift Button
                   CircleAvatar(
                     radius: 22,
                     backgroundColor: Colors.amber,
