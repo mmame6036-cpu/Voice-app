@@ -1,258 +1,210 @@
 import 'package:flutter/material.dart';
+import 'services/user_service.dart';
 
-// ============================================================================
-// 🪙 NILE VOICE - OFFICIAL COIN SELLER DASHBOARD
-// ============================================================================
 class CoinSellerScreen extends StatefulWidget {
-  final int initialCoins;
-  final Function(int) onCoinsUpdated;
-
-  const CoinSellerScreen({
-    Key? key,
-    required this.initialCoins,
-    required this.onCoinsUpdated,
-  }) : super(key: key);
+  const CoinSellerScreen({Key? key}) : super(key: key);
 
   @override
   State<CoinSellerScreen> createState() => _CoinSellerScreenState();
 }
 
-class _CoinSellerScreenState extends State<CoinSellerScreen> with SingleTickerProviderStateMixin {
-  late TabController _tabController;
-  late int _sellerBalance;
-  double _sellerPoints = 45200.0;
-  String _sellerLevel = "Senior Seller 🔰";
+class _CoinSellerScreenState extends State<CoinSellerScreen> {
+  final UserService _user = UserService();
+  String _sellerLevel = 'Beginner Seller';
+  String _selectedPaymentMethod = 'Telebirr';
 
-  bool _isTransferToUser = true;
-  final TextEditingController _targetIdController = TextEditingController();
-  final TextEditingController _coinAmountController = TextEditingController();
-  String? _verifiedUserName;
-  bool _isCheckingUser = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _tabController = TabController(length: 3, vsync: this);
-    _sellerBalance = widget.initialCoins;
-  }
-
-  @override
-  void dispose() {
-    _tabController.dispose();
-    _targetIdController.dispose();
-    _coinAmountController.dispose();
-    super.dispose();
-  }
-
-  void _checkUserId() {
-    String id = _targetIdController.text.trim();
-    if (id.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('እባክዎ የተጠቃሚውን መለያ (ID) ያስገቡ')),
-      );
-      return;
-    }
-
-    setState(() {
-      _isCheckingUser = true;
-      _verifiedUserName = null;
-    });
-
-    Future.delayed(const Duration(milliseconds: 600), () {
-      setState(() {
-        _isCheckingUser = false;
-        if (id == "1000") {
-          _verifiedUserName = "KEDIR (Master Admin)";
-        } else if (id == "1001") {
-          _verifiedUserName = "Abebe Bekele";
-        } else if (id == "1002") {
-          _verifiedUserName = "Fatima Mohammed";
-        } else {
-          _verifiedUserName = "Nile Member #$id";
-        }
-      });
-    });
-  }
-
-  void _executeTransfer() {
-    String id = _targetIdController.text.trim();
-    if (id.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('እባክዎ የተጠቃሚ መለያ ያስገቡ')),
-      );
-      return;
-    }
-
-    int? parsedCoins = int.tryParse(_coinAmountController.text.trim());
-    if (parsedCoins == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('እባክዎ ትክክለኛ የኮይን መጠን ያስገቡ')),
-      );
-      return;
-    }
-
-    if (parsedCoins <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('የኮይን መጠን ከ 0 በላይ መሆን አለበት')),
-      );
-      return;
-    }
-
-    int transferAmount = parsedCoins;
-
-    if (transferAmount > _sellerBalance) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('በቂ የኮይን ቀሪ ሂሳብ የለዎትም!'), backgroundColor: Colors.red),
-      );
-      return;
-    }
-
-    showDialog(
+  void _openTransferSheet() {
+    showModalBottomSheet(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF161B26),
-        title: const Text('የኮይን ማስተላለፊያ ማረጋገጫ', style: TextStyle(color: Colors.white, fontSize: 16)),
-        content: Text(
-          'ለተጠቃሚ፦ ${_verifiedUserName ?? id}\nየኮይን መጠን፦ $transferAmount ኮይን\n\nማስተላለፍ ይፈልጋሉ?',
-          style: const TextStyle(color: Colors.white70, fontSize: 14),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('ይቅር', style: TextStyle(color: Colors.white54)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00C9A7)),
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const SellerTransferSheet(),
+    );
+  }
 
-onPressed: () {
-              Navigator.pop(context);
-              setState(() {
-                _sellerBalance = _sellerBalance - transferAmount;
-              });
-              widget.onCoinsUpdated(_sellerBalance);
-              _coinAmountController.clear();
+  void _openRechargeSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const SellerRechargeSheet(),
+    );
+  }
 
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('ለ ${_verifiedUserName ?? id} $transferAmount ኮይን በተሳካ ሁኔታ ተላልፏል!'),
-                  backgroundColor: const Color(0xFF00C9A7),
-                ),
-              );
-            },
-            child: const Text('አረጋግጥ', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+  void _openExchangeSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const SellerExchangeSheet(),
+    );
+  }
+
+  void _selectPaymentMethodDialog() {
+    final methods = ['Telebirr', 'Binance', 'USDT', 'CBE', 'VISA'];
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) {
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Select Payment Method', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 14),
+              ...methods.map((m) => ListTile(
+                title: Text(m, style: const TextStyle(fontWeight: FontWeight.w500)),
+                trailing: _selectedPaymentMethod == m ? const Icon(Icons.check_circle, color: Color(0xFF00C9A7)) : null,
+                onTap: () {
+                  setState(() => _selectedPaymentMethod = m);
+                  Navigator.pop(ctx);
+                },
+              )),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0F141C),
+      backgroundColor: const Color(0xFFF8F9FA),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF161B26),
+        backgroundColor: Colors.white,
         elevation: 0,
-        title: const Text('Coin Seller Center', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
+          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.black, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
+        title: const Text('Coin Seller', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 18)),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.help_outline, color: Colors.black87),
+            onPressed: () {},
+          ),
+        ],
       ),
       body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Top Seller Profile
+            Row(
+              children: [
+                CircleAvatar(
+                  radius: 28,
+                  backgroundColor: Colors.amber,
+                  child: Text(
+                    _user.userName.isNotEmpty ? _user.userName[0].toUpperCase() : 'S',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 22, color: Colors.black),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(_user.userName, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black)),
+
+const SizedBox(height: 3),
+                      Text('ID: ${_user.userId}', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                    ],
+                  ),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF00C9A7),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    elevation: 0,
+                  ),
+                  onPressed: () {},
+                  child: const Text('Level Up', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 12)),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text('Current level: $_sellerLevel', style: const TextStyle(fontSize: 12, color: Colors.black54)),
+            const SizedBox(height: 16),
+
+            // Balance Card
             Container(
-              margin: const EdgeInsets.all(14),
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: const Color(0xFF161B26),
+                color: const Color(0xFFFFF9E6),
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.white10),
+                border: Border.all(color: Colors.amber.withOpacity(0.3)),
               ),
               child: Column(
                 children: [
                   Row(
                     children: [
-                      const CircleAvatar(
-                        radius: 28,
-                        backgroundColor: Color(0xFF00C9A7),
-                        child: Icon(Icons.storefront, color: Colors.black, size: 30),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'NILE OFFICIAL SELLER',
-                              style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
-                            ),
-                            const SizedBox(height: 3),
-                            const Text('Merchant ID: 1000', style: TextStyle(color: Colors.white54, fontSize: 12)),
-                            const SizedBox(height: 3),
-                            Text(
-                              'Current level: $_sellerLevel',
-                              style: const TextStyle(color: Color(0xFF00C9A7), fontSize: 12, fontWeight: FontWeight.bold),
-                            ),
-                          ],
+                      const Icon(Icons.monetization_on, color: Colors.amber, size: 24),
+                      const SizedBox(width: 8),
+                      const Text('Balance', style: TextStyle(fontSize: 14, color: Colors.black54)),
+                      const Spacer(),
+                      OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: Colors.amber),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                         ),
+                        onPressed: () {},
+                        child: const Text('Details', style: TextStyle(color: Colors.amber, fontSize: 11, fontWeight: FontWeight.bold)),
                       ),
                     ],
                   ),
-                  const Divider(color: Colors.white10, height: 24),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('Balance', style: TextStyle(color: Colors.white54, fontSize: 12)),
-                          const SizedBox(height: 4),
-                          Row(
-                            children: [
-                              const Icon(Icons.monetization_on, color: Colors.amber, size: 20),
-                              const SizedBox(width: 6),
-                              Text(
-                                '$_sellerBalance',
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text('${_user.coins}', style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Colors.black)),
+                  ),
+                  const Divider(color: Colors.black12, height: 24),
+                  GestureDetector(
+                    onTap: _selectPaymentMethodDialog,
+                    child: Row(
+                      children: [
+                        const Icon(Icons.account_balance_wallet, color: Colors.orange, size: 20),
+                        const SizedBox(width: 8),
+                        const Text('Payment Method', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                        const Spacer(),
+                        Text(_selectedPaymentMethod, style: const TextStyle(fontSize: 12, color: Colors.black54)),
+                        const Icon(Icons.arrow_forward_ios, size: 12, color: Colors.black38),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 18),
 
-style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ],
-              ),
+            // Three Main Action Buttons (Transfer, Recharge, Exchange)
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _buildActionButton(icon: Icons.send_to_mobile, label: 'Transfer', onTap: _openTransferSheet),
+                _buildActionButton(icon: Icons.add_card, label: 'Recharge', onTap: _openRechargeSheet),
+                _buildActionButton(icon: Icons.currency_exchange, label: 'Exchange', onTap: _openExchangeSheet),
+              ],
             ),
+            const SizedBox(height: 24),
+
+// Greeting Message Settings Row
             Container(
-              margin: const EdgeInsets.symmetric(horizontal: 14),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               decoration: BoxDecoration(
-                color: const Color(0xFF161B26),
-                borderRadius: BorderRadius.circular(12),
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(14),
               ),
-              child: TabBar(
-                controller: _tabController,
-                indicatorColor: const Color(0xFF00C9A7),
-                labelColor: const Color(0xFF00C9A7),
-                unselectedLabelColor: Colors.white54,
-                tabs: const [
-                  Tab(text: 'Transfer'),
-                  Tab(text: 'Recharge'),
-                  Tab(text: 'Exchange'),
-                ],
-              ),
-            ),
-            SizedBox(
-              height: 520,
-              child: TabBarView(
-                controller: _tabController,
+              child: const Row(
                 children: [
-                  _buildTransferTab(),
-                  _buildRechargeTab(),
-                  _buildExchangeTab(),
+                  Text('Greeting Message Settings', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+                  Spacer(),
+                  Icon(Icons.arrow_forward_ios, size: 14, color: Colors.black38),
                 ],
               ),
             ),
@@ -262,223 +214,284 @@ style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight
     );
   }
 
-  Widget _buildTransferTab() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
+  Widget _buildActionButton({required IconData icon, required String label, required VoidCallback onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        children: [
+          Container(
+            width: 54,
+            height: 54,
+            decoration: BoxDecoration(
+              color: const Color(0xFFE0F7F4),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: const Color(0xFF00C9A7), size: 26),
+          ),
+          const SizedBox(height: 6),
+          Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black87)),
+        ],
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 1. TRANSFER SHEET (TRANSFER TO USER / COINSELLER)
+// ---------------------------------------------------------------------------
+class SellerTransferSheet extends StatefulWidget {
+  const SellerTransferSheet({Key? key}) : super(key: key);
+
+  @override
+  State<SellerTransferSheet> createState() => _SellerTransferSheetState();
+}
+
+class _SellerTransferSheetState extends State<SellerTransferSheet> {
+  bool _isTransferToUser = true;
+  final TextEditingController _idController = TextEditingController();
+  final TextEditingController _amountController = TextEditingController();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.75,
+      padding: const EdgeInsets.all(20),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Text('Sales Method:', style: TextStyle(color: Colors.white70, fontSize: 13)),
-              const SizedBox(width: 14),
-              Row(
-                children: [
-                  Radio<bool>(
-                    value: true,
-                    groupValue: _isTransferToUser,
-                    activeColor: const Color(0xFF00C9A7),
-                    onChanged: (val) => setState(() => _isTransferToUser = val!),
-                  ),
-                  const Text('User', style: TextStyle(color: Colors.white, fontSize: 13)),
-                ],
-              ),
-              Row(
-                children: [
-                  Radio<bool>(
-                    value: false,
-                    groupValue: _isTransferToUser,
-                    activeColor: const Color(0xFF00C9A7),
-                    onChanged: (val) => setState(() => _isTransferToUser = val!),
-                  ),
-                  const Text('Coinseller', style: TextStyle(color: Colors.white, fontSize: 13)),
-                ],
-              ),
+              const Text('Transfer Coins', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const Spacer(),
+              IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
           Row(
             children: [
-              Expanded(
-                child: TextField(
-                  controller: _targetIdController,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: InputDecoration(
-                    hintText: _isTransferToUser ? 'Enter User ID' : 'Enter Coinseller ID',
-                    filled: true,
-                    fillColor: const Color(0xFF161B26),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-                  ),
-                ),
+              const Text('Sales Method: ', style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(width: 8),
+              ChoiceChip(
+                label: const Text('User'),
+                selected: _isTransferToUser,
+                selectedColor: const Color(0xFF00C9A7),
+                onSelected: (val) => setState(() => _isTransferToUser = true),
               ),
-              const SizedBox(width: 10),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF1F2838),
-                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                ),
-                onPressed: _isCheckingUser ? null : _checkUserId,
-
-child: _isCheckingUser
-                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF00C9A7)))
-                    : const Text('Check', style: TextStyle(color: Color(0xFF00C9A7), fontWeight: FontWeight.bold)),
+              const SizedBox(width: 8),
+              ChoiceChip(
+                label: const Text('Coinseller'),
+                selected: !_isTransferToUser,
+                selectedColor: const Color(0xFF00C9A7),
+                onSelected: (val) => setState(() => _isTransferToUser = false),
               ),
             ],
           ),
-          if (_verifiedUserName != null) ...[
-            const SizedBox(height: 6),
-            Text('✔ Verified: $_verifiedUserName', style: const TextStyle(color: Colors.greenAccent, fontSize: 12)),
-          ],
           const SizedBox(height: 16),
-          const Text('Coin Amount:', style: TextStyle(color: Colors.white70, fontSize: 13)),
-          const SizedBox(height: 8),
           TextField(
-            controller: _coinAmountController,
+            controller: _idController,
             keyboardType: TextInputType.number,
-            style: const TextStyle(color: Colors.white),
             decoration: InputDecoration(
-              hintText: 'Enter amount (e.g. 10000)',
-              prefixIcon: const Icon(Icons.monetization_on, color: Colors.amber),
-              filled: true,
-              fillColor: const Color(0xFF161B26),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+              labelText: _isTransferToUser ? 'User ID' : 'Coinseller ID',
+
+suffixIcon: TextButton(onPressed: () {}, child: const Text('Check', style: TextStyle(color: Color(0xFF00C9A7)))),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
             ),
           ),
-          const SizedBox(height: 20),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF00C9A7),
-              minimumSize: const Size(double.infinity, 48),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          const SizedBox(height: 14),
+          TextField(
+            controller: _amountController,
+            keyboardType: TextInputType.number,
+            decoration: InputDecoration(
+              labelText: 'Coin Amount (x1,000)',
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
             ),
-            onPressed: _executeTransfer,
-            child: const Text('Transfer', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 15)),
+          ),
+          const SizedBox(height: 6),
+          const Text('Please enter a multiple of 1,000', style: TextStyle(color: Colors.redAccent, fontSize: 11)),
+          const Spacer(),
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF00C9A7),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+              ),
+              onPressed: () {},
+              child: const Text('Transfer', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 16)),
+            ),
           ),
         ],
       ),
     );
   }
+}
 
-  Widget _buildRechargeTab() {
-    final bundles = [
-      {'coins': '1,980,000', 'price': '\$200 (Standard)'},
-      {'coins': '9,900,000', 'price': '\$1,000 (Standard)'},
-      {'coins': '14,850,000', 'price': '\$1,500 (Standard)'},
-      {'coins': '30,000,000', 'price': '\$3,000 (Senior)'},
-    ];
+// ---------------------------------------------------------------------------
+// 2. RECHARGE SHEET (WHOLESALE COINS FOR SELLERS)
+// ---------------------------------------------------------------------------
+class SellerRechargeSheet extends StatelessWidget {
+  const SellerRechargeSheet({Key? key}) : super(key: key);
 
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        const Text('Official Recharge Bundles', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
-        const SizedBox(height: 10),
-        GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: bundles.length,
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
-            crossAxisSpacing: 10,
-            mainAxisSpacing: 10,
-            childAspectRatio: 1.4,
-          ),
-          itemBuilder: (context, index) {
-            final b = bundles[index];
-            return Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: const Color(0xFF161B26),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.white10),
-              ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.monetization_on, color: Colors.amber, size: 16),
-                      const SizedBox(width: 4),
-                      Text(b['coins']!, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  Text(b['price']!, style: const TextStyle(color: Color(0xFF00C9A7), fontSize: 11)),
-                ],
-              ),
-            );
-          },
-        ),
-      ],
-    );
-  }
+  final List<Map<String, dynamic>> _wholesaleTiers = const [
+    {'coins': '1,980,000', 'price': '\$200', 'badge': 'Standard Seller'},
+    {'coins': '9,900,000', 'price': '\$1000', 'badge': 'Standard Seller'},
+    {'coins': '14,850,000', 'price': '\$1500', 'badge': 'Senior Seller'},
+    {'coins': '30,000,000', 'price': '\$3000', 'badge': 'Senior Seller'},
+  ];
 
-Widget _buildExchangeTab() {
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: const Color(0xFF161B26),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text('My Points Balance:', style: TextStyle(color: Colors.white70, fontSize: 13)),
-              Row(
-                children: [
-                  const Icon(Icons.diamond, color: Colors.cyanAccent, size: 18),
-                  const SizedBox(width: 6),
-                  Text('$_sellerPoints', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
-                ],
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
-        const Text('Exchange to Coins', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
-        const SizedBox(height: 10),
-        _buildExchangeOption('960,000 Coins', '1,000,000 Points'),
-        _buildExchangeOption('1,960,000 Coins', '2,000,000 Points'),
-        _buildExchangeOption('9,800,000 Coins', '10,000,000 Points'),
-        _buildExchangeOption('30,000,000 Coins', '30,000,000 Points (Full Rate)'),
-      ],
-    );
-  }
-
-  Widget _buildExchangeOption(String coins, String points) {
+  @override
+  Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: const Color(0xFF161B26),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white10),
+      height: MediaQuery.of(context).size.height * 0.75,
+      padding: const EdgeInsets.all(20),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Icon(Icons.monetization_on, color: Colors.amber, size: 18),
-              const SizedBox(width: 8),
-              Text(coins, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+              const Text('Wholesale Recharge', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const Spacer(),
+              IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
             ],
           ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF00C9A7),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          const SizedBox(height: 12),
+          Expanded(
+            child: GridView.builder(
+              itemCount: _wholesaleTiers.length,
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
+                childAspectRatio: 1.25,
+              ),
+              itemBuilder: (ctx, idx) {
+                final item = _wholesaleTiers[idx];
+                return Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF7F8FA),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.black12),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(item['badge'], style: const TextStyle(fontSize: 10, color: Colors.orange, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 6),
+
+Text(item['coins'], style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 4),
+                      Text(item['price'], style: const TextStyle(fontSize: 12, color: Colors.black54)),
+                    ],
+                  ),
+                );
+              },
             ),
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Exchange request submitted for $coins!')),
-              );
-            },
-            child: Text(points, style: const TextStyle(color: Colors.black, fontSize: 11, fontWeight: FontWeight.bold)),
+          ),
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF00C9A7),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+              ),
+              onPressed: () {},
+              child: const Text('Recharge Now', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 16)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 3. EXCHANGE SHEET (POINTS TO COINS)
+// ---------------------------------------------------------------------------
+class SellerExchangeSheet extends StatelessWidget {
+  const SellerExchangeSheet({Key? key}) : super(key: key);
+
+  final List<Map<String, dynamic>> _exchangeTiers = const [
+    {'coins': '960,000', 'points': '1,000,000', 'level': 'Standard Seller'},
+    {'coins': '1,960,000', 'points': '2,000,000', 'level': 'Standard Seller'},
+    {'coins': '9,800,000', 'points': '10,000,000', 'level': 'Standard Seller'},
+    {'coins': '30,000,000', 'points': '30,000,000', 'level': 'Senior Seller'},
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.75,
+      padding: const EdgeInsets.all(20),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Text('Exchange Points to Coins', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const Spacer(),
+              IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Expanded(
+            child: GridView.builder(
+              itemCount: _exchangeTiers.length,
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
+                childAspectRatio: 1.25,
+              ),
+              itemBuilder: (ctx, idx) {
+                final item = _exchangeTiers[idx];
+                return Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF7F8FA),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.black12),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(item['level'], style: const TextStyle(fontSize: 10, color: Colors.orange, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 6),
+                      Text('${item['coins']} Coins', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 4),
+                      Text('${item['points']} Pts', style: const TextStyle(fontSize: 11, color: Colors.black54)),
+                    ],
+                  ),
+                );
+
+},
+            ),
+          ),
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF00C9A7),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+              ),
+              onPressed: () {},
+              child: const Text('Exchange', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 16)),
+            ),
           ),
         ],
       ),
