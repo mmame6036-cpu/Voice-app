@@ -90,6 +90,25 @@ class _HomeScreenState extends State<HomeScreen> {
   final UserService _user = UserService();
   List<dynamic> _rooms = [];
   bool _isLoading = true;
+  String _selectedCategory = 'All';
+
+  final List<String> _categories = ['All', 'Party', 'Chat', 'Music', 'Gaming'];
+
+  // ማራኪ የላይኛው ባነሮች
+  final List<Map<String, dynamic>> _banners = [
+    {
+      'title': 'Weekly PK Star Tournament',
+      'subtitle': 'Win up to 50,000 Coins!',
+      'colors': [const Color(0xFF8A2387), const Color(0xFFE94057), const Color(0xFFF27121)],
+      'icon': Icons.emoji_events,
+    },
+    {
+      'title': 'Recharge Bonus 20%',
+      'subtitle': 'Get extra coins on Binance Pay',
+      'colors': [const Color(0xFF0052D4), const Color(0xFF4364F7), const Color(0xFF6FB1FC)],
+      'icon': Icons.monetization_on,
+    },
+  ];
 
   @override
   void initState() {
@@ -97,16 +116,42 @@ class _HomeScreenState extends State<HomeScreen> {
     _fetchRooms();
   }
 
+  // ሁልጊዜ ክፍሎች እንዲታዩ የሚያደርግ የናሙና ክፍሎች ዝርዝር
+  List<Map<String, dynamic>> _getDefaultRooms() {
+    return [
+      {
+        'roomId': '2001',
+        'title': 'Ethiopian Coffee & Chat ☕',
+        'hostName': 'Selam',
+        'usersCount': '8',
+      },
+      {
+        'roomId': '2002',
+        'title': 'Habesha Music Lounge 🎵',
+        'hostName': 'DJ_Nile',
+        'usersCount': '15',
+      },
+      {
+        'roomId': '2003',
+        'title': 'Tech & Crypto Talks 🚀',
+        'hostName': 'Kedir',
+        'usersCount': '6',
+      },
+    ];
+  }
+
   Future<void> _fetchRooms() async {
     try {
-      final response = await http.get(
-        Uri.parse('https://voice-app-2-jd95.onrender.com/api/rooms'),
-      );
-      if (response.statusCode == 200) {
+      final response = await http
+          .get(Uri.parse('https://voice-app-2-jd95.onrender.com/api/rooms'))
+          .timeout(const Duration(seconds: 5));
+
+if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['success'] == true && mounted) {
+          final fetched = data['rooms'] ?? [];
           setState(() {
-            _rooms = data['rooms'] ?? [];
+            _rooms = fetched.isNotEmpty ? fetched : _getDefaultRooms();
             _isLoading = false;
           });
           return;
@@ -118,6 +163,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     if (mounted) {
       setState(() {
+        _rooms = _getDefaultRooms();
         _isLoading = false;
       });
     }
@@ -137,8 +183,7 @@ class _HomeScreenState extends State<HomeScreen> {
               SizedBox(width: 8),
               Text('Search Room by ID', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
             ],
-
-),
+          ),
           content: TextField(
             controller: searchController,
             keyboardType: TextInputType.text,
@@ -222,42 +267,42 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: const Color(0xFF161B26),
-        elevation: 0,
-        title: const Text('Live Audio Rooms', style: TextStyle(fontWeight: FontWeight.bold)),
+
+elevation: 0,
+        title: const Text('Nile Voice', style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.8)),
         actions: [
           IconButton(
-            icon: const Icon(Icons.search, color: Color(0xFF00C9A7), size: 26),
-            tooltip: 'Search Room by ID',
+            icon: const Icon(Icons.search, color: Color(0xFF00C9A7), size: 24),
+            tooltip: 'Search Room',
             onPressed: _showSearchRoomDialog,
-          ),
-          IconButton(
-            icon: const Icon(Icons.refresh, color: Colors.white70),
-            onPressed: () {
-              setState(() => _isLoading = true);
-              _fetchRooms();
-            },
           ),
           GestureDetector(
             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RechargeScreen())),
-            child: Padding(
-              padding: const EdgeInsets.only(right: 16),
+            child: Container(
+              margin: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.amber.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: Colors.amber.withOpacity(0.4)),
+              ),
               child: Row(
                 children: [
-                  const Icon(Icons.monetization_on, color: Colors.amber, size: 18),
+                  const Icon(Icons.monetization_on, color: Colors.amber, size: 16),
                   const SizedBox(width: 4),
-                  Text('${_user.coins}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                  Text('${_user.coins}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.amber)),
                 ],
               ),
-
-),
+            ),
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
+      floatingActionButton: FloatingActionButton.extended(
         backgroundColor: const Color(0xFF00C9A7),
         elevation: 6,
         onPressed: _openMyPersonalRoom,
-        child: const Icon(Icons.mic, color: Colors.black, size: 30),
+        icon: const Icon(Icons.mic, color: Colors.black),
+        label: const Text('My Room', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
       ),
       body: RefreshIndicator(
         onRefresh: _fetchRooms,
@@ -265,101 +310,110 @@ class _HomeScreenState extends State<HomeScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(colors: [Color(0xFF5C248B), Color(0xFF1F104F)]),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.bolt, color: Colors.amber, size: 36),
-                  const SizedBox(width: 12),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Hello, ${_user.userName}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                      Text('Your ID: ${_user.userId}', style: const TextStyle(color: Color(0xFF00C9A7), fontSize: 13, fontWeight: FontWeight.bold)),
-                    ],
-                  ),
-                ],
+            // 1. Featured Top Slider / Banner
+            SizedBox(
+              height: 120,
+              child: PageView.builder(
+                itemCount: _banners.length,
+                itemBuilder: (context, index) {
+                  final b = _banners[index];
+                  return Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 4),
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(colors: b['colors'] as List<Color>),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                b['title'],
+                                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                b['subtitle'],
+                                style: const TextStyle(fontSize: 12, color: Colors.white70),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Icon(b['icon'] as IconData, size: 48, color: Colors.white.withOpacity(0.85)),
+                      ],
+                    ),
+                  );
+                },
               ),
             ),
-            const SizedBox(height: 16),
-            GestureDetector(
-              onTap: _showSearchRoomDialog,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF161B26),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.white12),
-                ),
-                child: const Row(
-                  children: [
-                    Icon(Icons.search, color: Colors.white38, size: 20),
-                    SizedBox(width: 10),
-                    Text('Search room by ID...', style: TextStyle(color: Colors.white38, fontSize: 14)),
-                    Spacer(),
-                    Text('Search', style: TextStyle(color: Color(0xFF00C9A7), fontWeight: FontWeight.bold, fontSize: 12)),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            GestureDetector(
-              onTap: _openMyPersonalRoom,
-              child: Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  gradient: borderGradient(),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: const Color(0xFF00C9A7).withOpacity(0.4)),
-                ),
-                child: Row(
-                  children: [
-                    const CircleAvatar(
-                      backgroundColor: Color(0xFF00C9A7),
-                      child: Icon(Icons.mic, color: Colors.black),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('Enter My Room', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF00C9A7))),
-                          const SizedBox(height: 4),
-                          Text('Room ID: ${_user.userId} • Tap to enter', style: const TextStyle(color: Colors.white70, fontSize: 12)),
-                        ],
-                      ),
-                    ),
-                    const Icon(Icons.arrow_forward_ios, color: Color(0xFF00C9A7), size: 16),
 
-],
-                ),
+            const SizedBox(height: 18),
+
+            // 2. Categories Filter Bar
+            SizedBox(
+              height: 38,
+              child: ListView.separated(
+
+scrollDirection: Axis.horizontal,
+                itemCount: _categories.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 8),
+                itemBuilder: (context, index) {
+                  final cat = _categories[index];
+                  final isSelected = _selectedCategory == cat;
+                  return ChoiceChip(
+                    label: Text(cat),
+                    selected: isSelected,
+                    selectedColor: const Color(0xFF00C9A7),
+                    backgroundColor: const Color(0xFF161B26),
+                    labelStyle: TextStyle(
+                      color: isSelected ? Colors.black : Colors.white70,
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                      fontSize: 12,
+                    ),
+                    onSelected: (val) => setState(() => _selectedCategory = cat),
+                  );
+                },
               ),
             ),
-            const SizedBox(height: 24),
-            const Text('Explore Rooms', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 12),
+
+            const SizedBox(height: 20),
+
+            // 3. Live Rooms Header
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Active Audio Rooms', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                TextButton(
+                  onPressed: () {
+                    setState(() => _isLoading = true);
+                    _fetchRooms();
+                  },
+                  child: const Text('Refresh', style: TextStyle(color: Color(0xFF00C9A7), fontSize: 13)),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 8),
+
+            // Global Master Room (ቋሚ ክፍል)
             _buildRoomCard(
               roomId: '1001',
-              title: 'Global Chat Lounge',
+              title: 'Global Chat Lounge 🌍',
               host: 'Master Host',
+              usersCount: '12',
             ),
+
             const SizedBox(height: 10),
+
             if (_isLoading)
               const Center(
                 child: Padding(
-                  padding: EdgeInsets.all(20),
+                  padding: EdgeInsets.all(24),
                   child: CircularProgressIndicator(color: Color(0xFF00C9A7)),
-                ),
-              )
-            else if (_rooms.isEmpty)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 20),
-                child: Center(
-                  child: Text('No other active rooms right now.', style: TextStyle(color: Colors.white38, fontSize: 13)),
                 ),
               )
             else
@@ -372,9 +426,11 @@ class _HomeScreenState extends State<HomeScreen> {
                     roomId: rId,
                     title: room['title'] ?? 'Party Room',
                     host: room['hostName'] ?? 'Host',
+                    usersCount: room['usersCount']?.toString() ?? '5',
                   ),
                 );
               }).toList(),
+
             const SizedBox(height: 80),
           ],
         ),
@@ -382,13 +438,12 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  LinearGradient borderGradient() {
-    return LinearGradient(
-      colors: [const Color(0xFF00C9A7).withOpacity(0.18), const Color(0xFF161B26)],
-    );
-  }
-
-  Widget _buildRoomCard({required String roomId, required String title, required String host}) {
+  Widget _buildRoomCard({
+    required String roomId,
+    required String title,
+    required String host,
+    required String usersCount,
+  }) {
     return GestureDetector(
       onTap: () {
         Navigator.push(
@@ -403,30 +458,61 @@ class _HomeScreenState extends State<HomeScreen> {
         );
       },
       child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: const Color(0xFF161B26),
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(16),
           border: Border.all(color: Colors.white10),
         ),
         child: Row(
           children: [
-            const CircleAvatar(
-              backgroundColor: Color(0xFF00C9A7),
-              child: Icon(Icons.headset, color: Colors.black),
+            Stack(
+              alignment: Alignment.center,
+              children: [
+                const CircleAvatar(
+                  radius: 26,
+                  backgroundColor: Color(0xFF00C9A7),
+
+child: Icon(Icons.headset, color: Colors.black, size: 26),
+                ),
+                Positioned(
+                  bottom: 0,
+                  right: 0,
+                  child: Container(
+                    width: 10,
+                    height: 10,
+                    decoration: BoxDecoration(
+                      color: Colors.greenAccent,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: const Color(0xFF161B26), width: 1.5),
+                    ),
+                  ),
+                ),
+              ],
             ),
             const SizedBox(width: 14),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  Text(
+                    title,
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.white),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                   const SizedBox(height: 4),
-                  Text('Room ID: $roomId • Host: $host', style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                  Text('ID: $roomId • Host: $host', style: const TextStyle(color: Colors.white54, fontSize: 12)),
                 ],
               ),
             ),
-            const Icon(Icons.arrow_forward_ios, color: Colors.white38, size: 16),
+            Row(
+              children: [
+                const Icon(Icons.people_alt_outlined, color: Color(0xFF00C9A7), size: 16),
+                const SizedBox(width: 4),
+                Text(usersCount, style: const TextStyle(color: Color(0xFF00C9A7), fontSize: 12, fontWeight: FontWeight.bold)),
+              ],
+            ),
           ],
         ),
       ),
@@ -455,7 +541,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (mounted) setState(() {});
   }
 
-@override
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF0F141C),
@@ -493,7 +579,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           const SizedBox(height: 6),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                            decoration: BoxDecoration(
+
+decoration: BoxDecoration(
                               color: const Color(0xFF161B26),
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(color: Colors.white12),
@@ -535,8 +622,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           ],
                         ),
                       ),
-
-ElevatedButton(
+                      ElevatedButton(
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.amber,
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -572,7 +658,8 @@ ElevatedButton(
                             children: [
                               Expanded(
                                 child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
+
+crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     const Text('Coins', style: TextStyle(color: Colors.white60, fontSize: 12)),
                                     const SizedBox(height: 6),
@@ -614,8 +701,7 @@ ElevatedButton(
                             children: [
                               Expanded(
                                 child: Column(
-
-crossAxisAlignment: CrossAxisAlignment.start,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text('Points', style: TextStyle(color: Colors.white60, fontSize: 12)),
                                     SizedBox(height: 6),
@@ -640,7 +726,7 @@ crossAxisAlignment: CrossAxisAlignment.start,
                 ),
                 const SizedBox(height: 20),
 
-                // Main Centers Row (ከነ ሙሉ ንክኪ ምላሽ ጋር)
+                // Main Centers Row
                 Container(
                   padding: const EdgeInsets.symmetric(vertical: 12),
                   decoration: BoxDecoration(
@@ -653,7 +739,8 @@ crossAxisAlignment: CrossAxisAlignment.start,
                       Expanded(
                         child: InkWell(
                           borderRadius: BorderRadius.circular(12),
-                          onTap: () {
+
+onTap: () {
                             Navigator.push(
                               context,
                               MaterialPageRoute(builder: (_) => const HostCenterScreen()),
@@ -699,7 +786,7 @@ crossAxisAlignment: CrossAxisAlignment.start,
                   ),
                 ),
 
-const SizedBox(height: 16),
+                const SizedBox(height: 16),
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
@@ -745,7 +832,7 @@ const SizedBox(height: 16),
     );
   }
 
-  Widget _buildGridMenuItem({required IconData icon, required String label}) {
+Widget _buildGridMenuItem({required IconData icon, required String label}) {
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
