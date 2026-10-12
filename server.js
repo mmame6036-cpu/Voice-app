@@ -31,8 +31,8 @@ app.get('/', (req, res) => {
 });
 
 // --- Agora Dynamic Token Generator ---
-const AGORA_APP_ID = '1523b6d3b8144281a1a21f28bbbd7fef';
-const AGORA_APP_CERTIFICATE = 'a8a098e8e7bc432d8b5c57a7a4f27657';
+const AGORA_APP_ID = process.env.AGORA_APP_ID || '1523b6d3b8144281a1a21f28bbbd7fef';
+const AGORA_APP_CERTIFICATE = process.env.AGORA_APP_CERTIFICATE || 'a8a098e8e7bc432d8b5c57a7a4f27657';
 
 const handleTokenGeneration = (req, res) => {
   try {
@@ -89,6 +89,7 @@ const userSchema = new mongoose.Schema({
   deviceId: { type: String, unique: true },
   avatar: { type: String, default: '' },
   coins: { type: Number, default: 1000 },
+  points: { type: Number, default: 0 },
   isFrozen: { type: Boolean, default: false },
   createdAt: { type: Date, default: Date.now }
 });
@@ -168,6 +169,7 @@ app.post('/api/register-user', async (req, res) => {
       name: defaultName,
       deviceId: defaultDevice,
       coins: 1000,
+      points: 0,
       isFrozen: false
     });
 
@@ -223,6 +225,7 @@ app.get('/api/chat-history', async (req, res) => {
 io.on('connection', (socket) => {
   socket.on('user_connected', (userId) => {
     if (userId) {
+      socket.userId = String(userId);
       socket.join(String(userId));
       console.log('User joined private channel: ' + userId);
     }
@@ -247,32 +250,79 @@ io.on('connection', (socket) => {
   });
 
   socket.on('join_room', (data) => {
-    const roomId = data.room || '1001';
+    const roomId = String(data.room || '1001');
+    socket.currentRoom = roomId;
     socket.join(roomId);
   });
 
   socket.on('chair_action', (data) => {
-    const roomId = data.room || '1001';
+    const roomId = String(data.room || '1001');
     io.to(roomId).emit('chair_action', data);
   });
 
   socket.on('chair_speaking', (data) => {
-    const roomId = data.room || '1001';
+    const roomId = String(data.room || '1001');
     io.to(roomId).emit('chair_speaking', data);
   });
 
   socket.on('chat_message', (data) => {
-    const roomId = data.room || '1001';
+    const roomId = String(data.room || '1001');
     io.to(roomId).emit('chat_message', data);
   });
 
-  socket.on('gift_sent', (data) => {
-    const roomId = data.room || '1001';
-    io.to(roomId).emit('gift_sent', data);
+  // ስጦታ ሲላክ ሳንቲም መቀነስ እና ነጥብ መስጠት
+  socket.on('gift_sent', async (data) => {
+    try {
+      const { senderId, receiverId, giftPrice, room, giftName } = data;
+      const roomId = String(room || '1001');
+      const cost = Number(giftPrice) || 0;
+
+const sender = await User.findOne({ userId: String(senderId) });
+      if (!sender || sender.coins < cost) {
+        socket.emit('gift_error', { message: 'Insufficient coins balance' });
+        return;
+      }
+
+      sender.coins -= cost;
+      await sender.save();
+
+      if (receiverId) {
+        await User.findOneAndUpdate(
+          { userId: String(receiverId) },
+          { $inc: { points: cost } }
+        );
+      }
+
+      await Transaction.create({
+        userId: String(senderId),
+        type: 'gift_sent',
+        amount: cost,
+        balanceAfter: sender.coins,
+        description: Sent ${giftName || 'Gift'} to ${receiverId || 'Room'}
+      });
+
+      io.to(roomId).emit('gift_sent', {
+        ...data,
+        senderCoins: sender.coins
+      });
+    } catch (e) {
+      console.error('Gift transaction error:', e);
+    }
   });
 
   socket.on('game_win', (data) => {
     io.emit('game_win_broadcast', data);
+  });
+
+  // ተጠቃሚ ሲወጣ ወይም ኢንተርኔት ሲያቋርጥ
+  socket.on('disconnect', () => {
+    if (socket.currentRoom && socket.userId) {
+      io.to(socket.currentRoom).emit('chair_action', {
+        action: 'leave',
+        userId: socket.userId,
+        room: socket.currentRoom
+      });
+    }
   });
 });
 
