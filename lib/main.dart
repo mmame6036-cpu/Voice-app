@@ -4,6 +4,11 @@ import 'package:http/http.dart' as http;
 import 'services/user_service.dart';
 import 'room_screen.dart';
 import 'messages_screen.dart';
+import 'recharge_screen.dart';
+import 'points_screen.dart';
+import 'host_center_screen.dart';
+import 'agency_screen.dart';
+import 'coin_seller_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -132,13 +137,13 @@ class _HomeScreenState extends State<HomeScreen> {
               SizedBox(width: 8),
               Text('Search Room by ID', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
             ],
-          ),
+
+),
           content: TextField(
             controller: searchController,
             keyboardType: TextInputType.text,
             style: const TextStyle(color: Colors.white),
-
-decoration: InputDecoration(
+            decoration: InputDecoration(
               hintText: 'Enter Room ID (e.g. 1001)',
               hintStyle: const TextStyle(color: Colors.white38),
               filled: true,
@@ -232,15 +237,19 @@ decoration: InputDecoration(
               _fetchRooms();
             },
           ),
-          Padding(
-            padding: const EdgeInsets.only(right: 16),
-            child: Row(
-              children: [
-                const Icon(Icons.monetization_on, color: Colors.amber, size: 18),
-                const SizedBox(width: 4),
-                Text('${_user.coins}', style: const TextStyle(fontWeight: FontWeight.bold)),
-              ],
-            ),
+          GestureDetector(
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RechargeScreen())),
+            child: Padding(
+              padding: const EdgeInsets.only(right: 16),
+              child: Row(
+                children: [
+                  const Icon(Icons.monetization_on, color: Colors.amber, size: 18),
+                  const SizedBox(width: 4),
+                  Text('${_user.coins}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                ],
+              ),
+
+),
           ),
         ],
       ),
@@ -253,8 +262,7 @@ decoration: InputDecoration(
       body: RefreshIndicator(
         onRefresh: _fetchRooms,
         color: const Color(0xFF00C9A7),
-
-child: ListView(
+        child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
             Container(
@@ -326,7 +334,8 @@ child: ListView(
                       ),
                     ),
                     const Icon(Icons.arrow_forward_ios, color: Color(0xFF00C9A7), size: 16),
-                  ],
+
+],
                 ),
               ),
             ),
@@ -337,8 +346,7 @@ child: ListView(
               roomId: '1001',
               title: 'Global Chat Lounge',
               host: 'Master Host',
-
-),
+            ),
             const SizedBox(height: 10),
             if (_isLoading)
               const Center(
@@ -447,7 +455,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (mounted) setState(() {});
   }
 
-  @override
+@override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF0F141C),
@@ -458,8 +466,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           child: SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.all(16),
-
-child: Column(
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
@@ -528,14 +535,14 @@ child: Column(
                           ],
                         ),
                       ),
-                      ElevatedButton(
+
+ElevatedButton(
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.amber,
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                           minimumSize: Size.zero,
-
-),
+                        ),
                         onPressed: () {},
                         child: const Text('Get VIP', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 11)),
                       ),
@@ -545,88 +552,120 @@ child: Column(
                 const SizedBox(height: 16),
                 Row(
                   children: [
+                    // Coins Card (Navigates to RechargeScreen)
                     Expanded(
-                      child: Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF161B26),
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: Colors.white10),
-                        ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text('Coins', style: TextStyle(color: Colors.white60, fontSize: 12)),
-                                  const SizedBox(height: 6),
-                                  Text(
-                                    '${_user.coins}',
-                                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
-                                  ),
-                                ],
+                      child: GestureDetector(
+                        onTap: () async {
+                          await Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const RechargeScreen()),
+                          );
+                          _refreshProfile();
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF161B26),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: Colors.white10),
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text('Coins', style: TextStyle(color: Colors.white60, fontSize: 12)),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      '${_user.coins}',
+                                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+                                    ),
+                                  ],
+                                ),
                               ),
-                            ),
-                            const CircleAvatar(
-                              radius: 16,
-                              backgroundColor: Colors.amber,
-                              child: Icon(Icons.monetization_on, color: Colors.black, size: 20),
-                            ),
-                          ],
+                              const CircleAvatar(
+                                radius: 16,
+                                backgroundColor: Colors.amber,
+                                child: Icon(Icons.monetization_on, color: Colors.black, size: 20),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
                     const SizedBox(width: 12),
+
+                    // Points Card (Navigates to PointsScreen)
                     Expanded(
-                      child: Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF161B26),
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: Colors.white10),
-                        ),
-                        child: const Row(
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text('Points', style: TextStyle(color: Colors.white60, fontSize: 12)),
-                                  SizedBox(height: 6),
-                                  Text(
-                                    '0',
-                                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
-                                  ),
-                                ],
+                      child: GestureDetector(
+                        onTap: () async {
+                          await Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const PointsScreen()),
+                          );
+                          _refreshProfile();
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF161B26),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: Colors.white10),
+                          ),
+                          child: const Row(
+
+children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('Points', style: TextStyle(color: Colors.white60, fontSize: 12)),
+                                    SizedBox(height: 6),
+                                    Text(
+                                      '0',
+                                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+                                    ),
+                                  ],
+                                ),
                               ),
-                            ),
-                            CircleAvatar(
-                              radius: 16,
-                              backgroundColor: Color(0xFF9C27B0),
-                              child: Icon(Icons.diamond, color: Colors.white, size: 18),
-                            ),
-                          ],
+                              CircleAvatar(
+                                radius: 16,
+                                backgroundColor: Color(0xFF38B29C),
+                                child: Icon(Icons.diamond, color: Colors.white, size: 18),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 20),
+
+                // Main Centers Row (Host Center | Agency | Coin Seller)
                 Container(
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   decoration: BoxDecoration(
-
-color: const Color(0xFF161B26),
+                    color: const Color(0xFF161B26),
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(color: Colors.white10),
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: [
-                      _buildActionItem(icon: Icons.mic_external_on, label: 'Host Center'),
-                      _buildActionItem(icon: Icons.groups_outlined, label: 'Agency'),
-                      _buildActionItem(icon: Icons.storefront_outlined, label: 'Coin Seller'),
+                      GestureDetector(
+                        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const HostCenterScreen())),
+                        child: _buildActionItem(icon: Icons.mic_external_on, label: 'Host Center'),
+                      ),
+                      GestureDetector(
+                        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AgencyScreen())),
+                        child: _buildActionItem(icon: Icons.groups_outlined, label: 'Agency'),
+                      ),
+                      GestureDetector(
+                        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CoinSellerScreen())),
+                        child: _buildActionItem(icon: Icons.storefront_outlined, label: 'Coin Seller'),
+                      ),
                     ],
                   ),
                 ),
@@ -650,7 +689,8 @@ color: const Color(0xFF161B26),
                       _buildGridMenuItem(icon: Icons.shopping_bag_outlined, label: 'Store'),
                       _buildGridMenuItem(icon: Icons.backpack_outlined, label: 'Backpack'),
                       _buildGridMenuItem(icon: Icons.military_tech_outlined, label: 'Level'),
-                      _buildGridMenuItem(icon: Icons.shield_outlined, label: 'Medal Wall'),
+
+_buildGridMenuItem(icon: Icons.shield_outlined, label: 'Medal Wall'),
                       _buildGridMenuItem(icon: Icons.headset_mic_outlined, label: 'Support'),
                       _buildGridMenuItem(icon: Icons.tune, label: 'Settings'),
                     ],
