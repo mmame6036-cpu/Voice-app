@@ -23,7 +23,7 @@ class RoomScreen extends StatefulWidget {
     required this.roomTitle,
     required this.hostName,
   }) : super(key: key);
-
+}
   @override
   State<RoomScreen> createState() => _RoomScreenState();
 }""
