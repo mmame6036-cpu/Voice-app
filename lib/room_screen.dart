@@ -11,7 +11,7 @@ import 'widgets/room/room_bottom_bar.dart';
 import 'widgets/room/gift_panel.dart';
 import 'widgets/room/basic_tools_sheet.dart';
 
-cosnt String agoraAppId = "1523b6d3b8144281a1a21f28bbbd7fef";
+const String agoraAppId = "1523b6d3b8144281a1a21f28bbbd7fef";
 class RoomScreen extends StatefulWidget {
   final String roomId;
   final String roomTitle;
