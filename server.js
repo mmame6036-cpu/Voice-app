@@ -81,7 +81,7 @@ const counterSchema = new mongoose.Schema({
   id: { type: String, required: true, default: 'user_id' },
   seq: { type: Number, default: 1000 }
 });
-const Counter = mongoose.model('Counter', counterSchema);
+const Counter = mongoose.models.Counter || mongoose.model('Counter', counterSchema);
 
 const userSchema = new mongoose.Schema({
   userId: { type: String, required: true, unique: true },
@@ -93,7 +93,7 @@ const userSchema = new mongoose.Schema({
   isFrozen: { type: Boolean, default: false },
   createdAt: { type: Date, default: Date.now }
 });
-const User = mongoose.model('User', userSchema);
+const User = mongoose.models.User || mongoose.model('User', userSchema);
 
 const messageSchema = new mongoose.Schema({
   senderId: { type: String, required: true },
@@ -101,11 +101,11 @@ const messageSchema = new mongoose.Schema({
   text: { type: String, required: true },
   timestamp: { type: Date, default: Date.now }
 });
-const Message = mongoose.model('Message', messageSchema);
+const Message = mongoose.models.Message || mongoose.model('Message', messageSchema);
 
 // --- Modular Routes ---
-app.use('/api/wallet', walletRoutes);
-app.use('/api/admin', adminRoutes);
+if (walletRoutes) app.use('/api/wallet', walletRoutes);
+if (adminRoutes) app.use('/api/admin', adminRoutes);
 
 // --- Room Management Endpoints ---
 app.post('/api/rooms/create', async (req, res) => {
@@ -116,7 +116,8 @@ app.post('/api/rooms/create', async (req, res) => {
     let room = await Room.findOne({ roomId: String(roomId) });
     if (!room) {
       room = new Room({
-        roomId: String(roomId),
+
+roomId: String(roomId),
         title: title || ${hostName}'s Room,
         category: category || 'Chat',
         hostId,
@@ -223,6 +224,8 @@ app.get('/api/chat-history', async (req, res) => {
 
 // --- Socket.io Real-time Communication ---
 io.on('connection', (socket) => {
+  console.log('Socket ተገናኝቷል: ' + socket.id);
+
   socket.on('user_connected', (userId) => {
     if (userId) {
       socket.userId = String(userId);
@@ -249,35 +252,38 @@ io.on('connection', (socket) => {
     }
   });
 
+  // ሩም መግባት (data.room ወይም data.roomId ሁለቱንም ይቀበላል)
   socket.on('join_room', (data) => {
-    const roomId = String(data.room || '1001');
+    const roomId = typeof data === 'object' ? String(data.room  data.roomId  '1001') : String(data);
     socket.currentRoom = roomId;
     socket.join(roomId);
+    console.log(Socket ${socket.id} joined room: ${roomId});
   });
 
+// ወንበር መያዝ / መልቀቅ
   socket.on('chair_action', (data) => {
-    const roomId = String(data.room || '1001');
+    const roomId = String(data.room  data.roomId  '1001');
     io.to(roomId).emit('chair_action', data);
   });
 
   socket.on('chair_speaking', (data) => {
-    const roomId = String(data.room || '1001');
+    const roomId = String(data.room  data.roomId  '1001');
     io.to(roomId).emit('chair_speaking', data);
   });
 
   socket.on('chat_message', (data) => {
-    const roomId = String(data.room || '1001');
+    const roomId = String(data.room  data.roomId  '1001');
     io.to(roomId).emit('chat_message', data);
   });
 
-  // ስጦታ ሲላክ ሳንቲም መቀነስ እና ነጥብ መስጠት
+  // ስጦታ መላላክ
   socket.on('gift_sent', async (data) => {
     try {
       const { senderId, receiverId, giftPrice, room, giftName } = data;
-      const roomId = String(room || '1001');
+      const roomId = String(room  data.roomId  '1001');
       const cost = Number(giftPrice) || 0;
 
-const sender = await User.findOne({ userId: String(senderId) });
+      const sender = await User.findOne({ userId: String(senderId) });
       if (!sender || sender.coins < cost) {
         socket.emit('gift_error', { message: 'Insufficient coins balance' });
         return;
@@ -314,7 +320,6 @@ const sender = await User.findOne({ userId: String(senderId) });
     io.emit('game_win_broadcast', data);
   });
 
-  // ተጠቃሚ ሲወጣ ወይም ኢንተርኔት ሲያቋርጥ
   socket.on('disconnect', () => {
     if (socket.currentRoom && socket.userId) {
       io.to(socket.currentRoom).emit('chair_action', {
