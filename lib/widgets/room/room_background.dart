@@ -119,4 +119,9 @@ class _Room3dCurvedPainter extends CustomPainter {
       ..strokeWidth = strokeWidth
       ..strokeCap = StrokeCap.round;
 
-    canvas.drawArc(rect, 3.14 * 0.85, 3.1
+    canvas.drawArc(rect, 3.14 * 0.85, 3.14 * 0.8, false, linePaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
