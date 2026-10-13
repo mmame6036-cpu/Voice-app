@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:voice_app/services/user_service.dart';
-import 'package:voice_app/services/agora_service.dart';
+import 'package:nile_voice/services/user_service.dart';
+import 'package:nile_voice/services/agora_service.dart';
 import 'widgets/room/room_background.dart';
 import 'widgets/room/room_header.dart';
 import 'widgets/room/room_seats_grid.dart';
