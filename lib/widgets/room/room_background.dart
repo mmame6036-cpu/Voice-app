@@ -50,7 +50,7 @@ class _Room3dCurvedPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width * 1.05, size.height * 0.72);
 
-    _drawCurvedRibbon(
+    _drawRibbon(
       canvas: canvas,
       center: center,
       radius: size.width * 0.95,
@@ -62,7 +62,7 @@ class _Room3dCurvedPainter extends CustomPainter {
       hasShadow: true,
     );
 
-    _drawCurvedRibbon(
+    _drawRibbon(
       canvas: canvas,
       center: center,
       radius: size.width * 0.76,
@@ -74,7 +74,7 @@ class _Room3dCurvedPainter extends CustomPainter {
       hasShadow: true,
     );
 
-    _drawCurvedRibbon(
+    _drawRibbon(
       canvas: canvas,
       center: center,
       radius: size.width * 0.57,
@@ -87,7 +87,7 @@ class _Room3dCurvedPainter extends CustomPainter {
     );
   }
 
-  void _drawCurvedRibbon({
+  void _drawRibbon({
     required Canvas canvas,
     required Offset center,
     required double radius,
@@ -98,13 +98,13 @@ class _Room3dCurvedPainter extends CustomPainter {
     final rect = Rect.fromCircle(center: center, radius: radius);
 
     if (hasShadow) {
-      final shadowPainter = Paint()
+      final shadowPaint = Paint()
         ..color = Colors.black.withOpacity(0.18)
         ..style = PaintingStyle.stroke
         ..strokeWidth = strokeWidth
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12);
 
-      canvas.drawArc(rect.shift(const Offset(-6, -6)), 3.14 * 0.85, 3.14 * 0.8, false, shadowPainter);
+      canvas.drawArc(rect.shift(const Offset(-6, -6)), 3.14 * 0.85, 3.14 * 0.8, false, shadowPaint);
     }
 
     final gradient = LinearGradient(
@@ -113,13 +113,13 @@ class _Room3dCurvedPainter extends CustomPainter {
       colors: gradientColors,
     );
 
-    final linePainter = Paint()
+    final linePaint = Paint()
       ..shader = gradient.createShader(rect)
       ..style = PaintingStyle.stroke
       ..strokeWidth = strokeWidth
       ..strokeCap = StrokeCap.round;
 
-    canvas.drawArc(rect, 3.14 * 0.85, 3.14 * 0.8, false, linePainter);
+    canvas.drawArc(rect, 3.14 * 0.85, 3.14 * 0.8, false, linePaint);
   }
 
   @override
