@@ -19,7 +19,7 @@ app.use(express.json());
 
 const server = http.createServer(app);
 const io = new Server(server, {
-  cors: { origin: '*' }
+  cors: { origin: '*' }
 });
 
 // Pass Socket.io instance to routes
@@ -27,7 +27,7 @@ app.set('io', io);
 
 // 1. Health check route
 app.get('/', (req, res) => {
-  res.status(200).send('Nile Voice Server is Live and Active');
+  res.status(200).send('Nile Voice Server is Live and Active');
 });
 
 // --- Agora Dynamic Token Generator ---
@@ -35,31 +35,31 @@ const AGORA_APP_ID = process.env.AGORA_APP_ID || '1523b6d3b8144281a1a21f28bbbd7f
 const AGORA_APP_CERTIFICATE = process.env.AGORA_APP_CERTIFICATE || 'a8a098e8e7bc432d8b5c57a7a4f27657';
 
 const handleTokenGeneration = (req, res) => {
-  try {
-    const channelName = String(req.query.channelName || '1001').trim();
-    const role = RtcRole.PUBLISHER;
-    const expireTime = 3600 * 24 * 30; // 30 days validity
-    const currentTime = Math.floor(Date.now() / 1000);
-    const privilegeExpireTime = currentTime + expireTime;
+  try {
+    const channelName = String(req.query.channelName || '1001').trim();
+    const role = RtcRole.PUBLISHER;
+    const expireTime = 3600 * 24 * 30; // 30 days validity
+    const currentTime = Math.floor(Date.now() / 1000);
+    const privilegeExpireTime = currentTime + expireTime;
 
-    const token = RtcTokenBuilder.buildTokenWithUid(
-      AGORA_APP_ID,
-      AGORA_APP_CERTIFICATE,
-      channelName,
-      0, 
-      role,
-      privilegeExpireTime,
-      privilegeExpireTime
-    );
+    const token = RtcTokenBuilder.buildTokenWithUid(
+      AGORA_APP_ID,
+      AGORA_APP_CERTIFICATE,
+      channelName,
+      0, 
+      role,
+      privilegeExpireTime,
+      privilegeExpireTime
+    );
 
-    return res.json({ 
-      success: true, 
-      token: token, 
-      channelName: channelName 
-    });
-  } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
-  }
+    return res.json({ 
+      success: true, 
+      token: token, 
+      channelName: channelName 
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
 };
 
 app.get('/api/get-token', handleTokenGeneration);
@@ -69,269 +69,264 @@ app.get('/rtc-token', handleTokenGeneration);
 const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://Kedir:euyEPW1wNL1V9u8D@cluster0.mdtjtlb.mongodb.net/nilevoice?retryWrites=true&w=majority&appName=Cluster0';
 
 mongoose.connect(MONGO_URI)
-  .then(() => {
-    console.log('MongoDB Connected Successfully');
-  })
-  .catch((err) => {
-    console.error('MongoDB Connection Error:', err);
-  });
+  .then(() => {
+    console.log('MongoDB Connected Successfully');
+  })
+  .catch((err) => {
+    console.error('MongoDB Connection Error:', err);
+  });
 
 // --- MongoDB Schemas & Models ---
 const counterSchema = new mongoose.Schema({
-  id: { type: String, required: true, default: 'user_id' },
-  seq: { type: Number, default: 1000 }
+  id: { type: String, required: true, default: 'user_id' },
+  seq: { type: Number, default: 1000 }
 });
-const Counter = mongoose.models.Counter || mongoose.model('Counter', counterSchema);
+const Counter = mongoose.model('Counter', counterSchema);
 
 const userSchema = new mongoose.Schema({
-  userId: { type: String, required: true, unique: true },
-  name: { type: String, default: 'User' },
-  deviceId: { type: String, unique: true },
-  avatar: { type: String, default: '' },
-  coins: { type: Number, default: 1000 },
-  points: { type: Number, default: 0 },
-  isFrozen: { type: Boolean, default: false },
-  createdAt: { type: Date, default: Date.now }
+  userId: { type: String, required: true, unique: true },
+  name: { type: String, default: 'User' },
+  deviceId: { type: String, unique: true },
+  avatar: { type: String, default: '' },
+  coins: { type: Number, default: 1000 },
+  points: { type: Number, default: 0 },
+  isFrozen: { type: Boolean, default: false },
+  createdAt: { type: Date, default: Date.now }
 });
-const User = mongoose.models.User || mongoose.model('User', userSchema);
+const User = mongoose.model('User', userSchema);
 
 const messageSchema = new mongoose.Schema({
-  senderId: { type: String, required: true },
-  receiverId: { type: String, required: true },
-  text: { type: String, required: true },
-  timestamp: { type: Date, default: Date.now }
+  senderId: { type: String, required: true },
+  receiverId: { type: String, required: true },
+  text: { type: String, required: true },
+  timestamp: { type: Date, default: Date.now }
 });
-const Message = mongoose.models.Message || mongoose.model('Message', messageSchema);
+const Message = mongoose.model('Message', messageSchema);
 
 // --- Modular Routes ---
-if (walletRoutes) app.use('/api/wallet', walletRoutes);
-if (adminRoutes) app.use('/api/admin', adminRoutes);
+app.use('/api/wallet', walletRoutes);
+app.use('/api/admin', adminRoutes);
 
 // --- Room Management Endpoints ---
 app.post('/api/rooms/create', async (req, res) => {
-  try {
-    const { title, category, hostId, hostName } = req.body;
-    const roomId = req.body.roomId || Math.floor(1000 + Math.random() * 9000).toString();
+  try {
+    const { title, category, hostId, hostName } = req.body;
+    const roomId = req.body.roomId || Math.floor(1000 + Math.random() * 9000).toString();
 
-    let room = await Room.findOne({ roomId: String(roomId) });
-    if (!room) {
-      room = new Room({
-
-roomId: String(roomId),
-        title: title || ${hostName}'s Room,
-        category: category || 'Chat',
-        hostId,
-        hostName,
-      });
-      await room.save();
-    }
-    res.json({ success: true, room });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
+    let room = await Room.findOne({ roomId: String(roomId) });
+    if (!room) {
+      room = new Room({
+        roomId: String(roomId),
+        title: title || ${hostName}'s Room,
+        category: category || 'Chat',
+        hostId,
+        hostName,
+      });
+      await room.save();
+    }
+    res.json({ success: true, room });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 app.get('/api/rooms', async (req, res) => {
-  try {
-    const rooms = await Room.find().sort({ createdAt: -1 });
-    res.json({ success: true, rooms });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
+  try {
+    const rooms = await Room.find().sort({ createdAt: -1 });
+    res.json({ success: true, rooms });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 // --- User Registration & Search Endpoints ---
 app.post('/api/register-user', async (req, res) => {
-  try {
-    const { deviceId, name, isOwner } = req.body;
+  try {
+    const { deviceId, name, isOwner } = req.body;
 
-    let existingUser = await User.findOne({ deviceId: deviceId });
-    if (existingUser) {
-      return res.json({ success: true, user: existingUser });
-    }
+    let existingUser = await User.findOne({ deviceId: deviceId });
+    if (existingUser) {
+      return res.json({ success: true, user: existingUser });
+    }
 
-    let assignedId = '1000';
-    if (isOwner) {
-      assignedId = '1000';
-    } else {
-      let counter = await Counter.findOneAndUpdate(
-        { id: 'user_id' },
-        { $inc: { seq: 1 } },
-        { new: true, upsert: true }
-      );
-      assignedId = String(counter.seq);
-    }
+    let assignedId = '1000';
+    if (isOwner) {
+      assignedId = '1000';
+    } else {
+      let counter = await Counter.findOneAndUpdate(
+        { id: 'user_id' },
+        { $inc: { seq: 1 } },
+        { new: true, upsert: true }
+      );
+      assignedId = String(counter.seq);
+    }
 
-    const defaultName = name ? name : ('User_' + assignedId);
-    const defaultDevice = deviceId ? deviceId : ('dev_' + Date.now());
+    const defaultName = name ? name : ('User_' + assignedId);
+    const defaultDevice = deviceId ? deviceId : ('dev_' + Date.now());
 
-    const newUser = new User({
-      userId: assignedId,
-      name: defaultName,
-      deviceId: defaultDevice,
-      coins: 1000,
-      points: 0,
-      isFrozen: false
-    });
+    const newUser = new User({
+      userId: assignedId,
+      name: defaultName,
+      deviceId: defaultDevice,
+      coins: 1000,
+      points: 0,
+      isFrozen: false
+    });
 
-    await newUser.save();
+    await newUser.save();
 
-    await Transaction.create({
-      userId: assignedId,
-      type: 'recharge',
-      amount: 1000,
-      balanceAfter: 1000,
-      description: 'Welcome Bonus'
-    });
+    await Transaction.create({
+      userId: assignedId,
+      type: 'recharge',
+      amount: 1000,
+      balanceAfter: 1000,
+      description: 'Welcome Bonus'
+    });
 
-    return res.json({ success: true, user: newUser });
-  } catch (err) {
-    return res.status(500).json({ success: false, error: err.message });
-  }
+    return res.json({ success: true, user: newUser });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 app.get('/api/search-user', async (req, res) => {
-  try {
-    const userId = req.query.userId;
-    if (!userId) {
-      return res.status(400).json({ error: 'User ID is required' });
-    }
-    const user = await User.findOne({ userId: String(userId).trim() });
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-    return res.json({ success: true, user: user });
-  } catch (err) {
-    return res.status(500).json({ error: err.message });
-  }
+  try {
+    const userId = req.query.userId;
+    if (!userId) {
+      return res.status(400).json({ error: 'User ID is required' });
+    }
+    const user = await User.findOne({ userId: String(userId).trim() });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    return res.json({ success: true, user: user });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
 });
 
 // Fetch direct messaging chat history
 app.get('/api/chat-history', async (req, res) => {
-  try {
-    const { user1, user2 } = req.query;
-    const messages = await Message.find({
-      $or: [
-        { senderId: user1, receiverId: user2 },
-        { senderId: user2, receiverId: user1 }
-      ]
-    }).sort({ timestamp: 1 });
-    return res.json({ success: true, messages: messages });
-  } catch (err) {
-    return res.status(500).json({ error: err.message });
-  }
+  try {
+    const { user1, user2 } = req.query;
+    const messages = await Message.find({
+      $or: [
+        { senderId: user1, receiverId: user2 },
+        { senderId: user2, receiverId: user1 }
+      ]
+    }).sort({ timestamp: 1 });
+    return res.json({ success: true, messages: messages });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
 });
 
 // --- Socket.io Real-time Communication ---
 io.on('connection', (socket) => {
-  console.log('Socket ተገናኝቷል: ' + socket.id);
+  socket.on('user_connected', (userId) => {
+    if (userId) {
+      socket.userId = String(userId);
+      socket.join(String(userId));
+      console.log('User joined private channel: ' + userId);
+    }
+  });
 
-  socket.on('user_connected', (userId) => {
-    if (userId) {
-      socket.userId = String(userId);
-      socket.join(String(userId));
-      console.log('User joined private channel: ' + userId);
-    }
-  });
+  socket.on('send_direct_message', async (data) => {
+    try {
+      const { senderId, receiverId, text } = data;
+      const newMsg = new Message({
+        senderId: senderId,
+        receiverId: receiverId,
+        text: text,
+        timestamp: new Date()
+      });
+      await newMsg.save();
 
-  socket.on('send_direct_message', async (data) => {
-    try {
-      const { senderId, receiverId, text } = data;
-      const newMsg = new Message({
-        senderId: senderId,
-        receiverId: receiverId,
-        text: text,
-        timestamp: new Date()
-      });
-      await newMsg.save();
+      io.to(String(receiverId)).emit('receive_direct_message', newMsg);
+      socket.emit('message_sent', newMsg);
+    } catch (e) {
+      console.error('Message error:', e);
+    }
+  });
 
-      io.to(String(receiverId)).emit('receive_direct_message', newMsg);
-      socket.emit('message_sent', newMsg);
-    } catch (e) {
-      console.error('Message error:', e);
-    }
-  });
+  socket.on('join_room', (data) => {
+    const roomId = String(data.room || '1001');
+    socket.currentRoom = roomId;
+    socket.join(roomId);
+  });
 
-  // ሩም መግባት (data.room ወይም data.roomId ሁለቱንም ይቀበላል)
-  socket.on('join_room', (data) => {
-    const roomId = typeof data === 'object' ? String(data.room  data.roomId  '1001') : String(data);
-    socket.currentRoom = roomId;
-    socket.join(roomId);
-    console.log(Socket ${socket.id} joined room: ${roomId});
-  });
+  socket.on('chair_action', (data) => {
+    const roomId = String(data.room || '1001');
+    io.to(roomId).emit('chair_action', data);
+  });
 
-// ወንበር መያዝ / መልቀቅ
-  socket.on('chair_action', (data) => {
-    const roomId = String(data.room  data.roomId  '1001');
-    io.to(roomId).emit('chair_action', data);
-  });
+  socket.on('chair_speaking', (data) => {
+    const roomId = String(data.room || '1001');
+    io.to(roomId).emit('chair_speaking', data);
+  });
 
-  socket.on('chair_speaking', (data) => {
-    const roomId = String(data.room  data.roomId  '1001');
-    io.to(roomId).emit('chair_speaking', data);
-  });
+  socket.on('chat_message', (data) => {
+    const roomId = String(data.room || '1001');
+    io.to(roomId).emit('chat_message', data);
+  });
 
-  socket.on('chat_message', (data) => {
-    const roomId = String(data.room  data.roomId  '1001');
-    io.to(roomId).emit('chat_message', data);
-  });
+  // ስጦታ ሲላክ ሳንቲም መቀነስ እና ነጥብ መስጠት
+  socket.on('gift_sent', async (data) => {
+    try {
+      const { senderId, receiverId, giftPrice, room, giftName } = data;
+      const roomId = String(room || '1001');
+      const cost = Number(giftPrice) || 0;
 
-  // ስጦታ መላላክ
-  socket.on('gift_sent', async (data) => {
-    try {
-      const { senderId, receiverId, giftPrice, room, giftName } = data;
-      const roomId = String(room  data.roomId  '1001');
-      const cost = Number(giftPrice) || 0;
+const sender = await User.findOne({ userId: String(senderId) });
+      if (!sender || sender.coins < cost) {
+        socket.emit('gift_error', { message: 'Insufficient coins balance' });
+        return;
+      }
 
-      const sender = await User.findOne({ userId: String(senderId) });
-      if (!sender || sender.coins < cost) {
-        socket.emit('gift_error', { message: 'Insufficient coins balance' });
-        return;
-      }
+      sender.coins -= cost;
+      await sender.save();
 
-      sender.coins -= cost;
-      await sender.save();
+      if (receiverId) {
+        await User.findOneAndUpdate(
+          { userId: String(receiverId) },
+          { $inc: { points: cost } }
+        );
+      }
 
-      if (receiverId) {
-        await User.findOneAndUpdate(
-          { userId: String(receiverId) },
-          { $inc: { points: cost } }
-        );
-      }
+      await Transaction.create({
+        userId: String(senderId),
+        type: 'gift_sent',
+        amount: cost,
+        balanceAfter: sender.coins,
+        description: Sent ${giftName  'Gift'} to ${receiverId  'Room'}
+      });
 
-      await Transaction.create({
-        userId: String(senderId),
-        type: 'gift_sent',
-        amount: cost,
-        balanceAfter: sender.coins,
-        description: Sent ${giftName || 'Gift'} to ${receiverId || 'Room'}
-      });
+      io.to(roomId).emit('gift_sent', {
+        ...data,
+        senderCoins: sender.coins
+      });
+    } catch (e) {
+      console.error('Gift transaction error:', e);
+    }
+  });
 
-      io.to(roomId).emit('gift_sent', {
-        ...data,
-        senderCoins: sender.coins
-      });
-    } catch (e) {
-      console.error('Gift transaction error:', e);
-    }
-  });
+  socket.on('game_win', (data) => {
+    io.emit('game_win_broadcast', data);
+  });
 
-  socket.on('game_win', (data) => {
-    io.emit('game_win_broadcast', data);
-  });
-
-  socket.on('disconnect', () => {
-    if (socket.currentRoom && socket.userId) {
-      io.to(socket.currentRoom).emit('chair_action', {
-        action: 'leave',
-        userId: socket.userId,
-        room: socket.currentRoom
-      });
-    }
-  });
+  // ተጠቃሚ ሲወጣ ወይም ኢንተርኔት ሲያቋርጥ
+  socket.on('disconnect', () => {
+    if (socket.currentRoom && socket.userId) {
+      io.to(socket.currentRoom).emit('chair_action', {
+        action: 'leave',
+        userId: socket.userId,
+        room: socket.currentRoom
+      });
+    }
+  });
 });
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log('Server running on port ' + PORT);
+  console.log('Server running on port ' + PORT);
 });
