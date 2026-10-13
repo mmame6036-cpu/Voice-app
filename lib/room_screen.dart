@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'services/user_service.dart';
-import 'services/agora_service.dart';
+import 'package:voice_app/services/user_service.dart';
+import 'package:voice_app/services/agora_service.dart';
 import 'widgets/room/room_background.dart';
 import 'widgets/room/room_header.dart';
 import 'widgets/room/room_seats_grid.dart';
@@ -29,7 +29,7 @@ class RoomScreen extends StatefulWidget {
 
 class _RoomScreenState extends State<RoomScreen> {
   final UserService _user = UserService();
-  final AgoraService _agora = AgoraService();
+  late final AgoraService _agora;
   bool _isMicMuted = false;
   int _currentSeatCount = 30;
   final TextEditingController _msgController = TextEditingController();
@@ -40,6 +40,7 @@ class _RoomScreenState extends State<RoomScreen> {
   @override
   void initState() {
     super.initState();
+    _agora = AgoraService();
     _seats = List.generate(
       30,
       (index) => {
@@ -155,9 +156,9 @@ class _RoomScreenState extends State<RoomScreen> {
         child: Column(
           children: [
             RoomHeader(
-              roomTitle: widget.roomTitle,
 
-roomId: widget.roomId,
+roomTitle: widget.roomTitle,
+              roomId: widget.roomId,
               hostName: widget.hostName,
               onClose: () => Navigator.pop(context),
             ),
