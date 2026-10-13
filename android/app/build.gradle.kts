@@ -19,18 +19,25 @@ android {
         jvmTarget = JavaVersion.VERSION_11.toString()
     }
 
-defaultConfig {
-    applicationId = "com.halavoice.globalapp"
-    minSdk = 21
-    targetSdk = flutter.targetSdkVersion
-    versionCode = flutter.versionCode
-    versionName = flutter.versionName
-}
+    defaultConfig {
+        applicationId = "com.halavoice.globalapp"
+        minSdk = 21
+        targetSdk = flutter.targetSdkVersion
+        versionCode = flutter.versionCode
+        versionName = flutter.versionName
+    }
 
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
+            // የማያስፈልጉ ፋይሎችንና ኮዶችን በማጽዳት መጠኑን ይቀንሳል
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+
+            // Signing with the debug keys for now, so flutter run --release works.
             signingConfig = signingConfigs.getByName("debug")
         }
     }
