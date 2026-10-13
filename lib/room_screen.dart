@@ -87,7 +87,7 @@ class _RoomScreenState extends State<RoomScreen> {
       final String? uName = data['userName'];
       final String? uId = data['userId'];
 
-      if (chairIndex == null  chairIndex < 0  chairIndex >= _seats.length) {
+    if (chairIndex == null  chairIndex < 0  chairIndex >= _seats.length) {
         return;
       }
 
