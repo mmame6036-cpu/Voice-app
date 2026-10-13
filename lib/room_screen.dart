@@ -23,7 +23,8 @@ class _RoomScreenState extends State<RoomScreen> {
   final TextEditingController _msgController = TextEditingController();
 
   final List<Map<String, String>> _messages = [
-    {'user': 'System', 'text': 'Welcome to the live room! Please follow community rules.'},
+    {'user': 'System', 'text': 'Please protect your privacy and stay safe.'},
+    {'user': 'Announcement', 'text': 'Welcome to Nile Voice live party room!'},
   ];
 
   late List<Map<String, dynamic>> _seats;
@@ -31,6 +32,7 @@ class _RoomScreenState extends State<RoomScreen> {
   @override
   void initState() {
     super.initState();
+    // 8 የማይክ መቀመጫዎች
     _seats = List.generate(
       8,
       (index) => {
@@ -51,9 +53,9 @@ class _RoomScreenState extends State<RoomScreen> {
     if (seat['user'] == currentUser) {
       showModalBottomSheet(
         context: context,
-        backgroundColor: const Color(0xFF131926),
+        backgroundColor: const Color(0xFF1E2536),
         shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         ),
         builder: (ctx) => Padding(
           padding: const EdgeInsets.all(20),
@@ -62,14 +64,20 @@ class _RoomScreenState extends State<RoomScreen> {
             children: [
               ListTile(
                 leading: const Icon(Icons.exit_to_app, color: Colors.redAccent),
-                title: const Text('Leave Mic Seat', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                title: const Text(
+                  'Leave Mic Seat',
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                ),
                 onTap: () {
                   Navigator.pop(ctx);
                   setState(() {
                     seat['user'] = null;
                     seat['userId'] = null;
                     seat['isSpeaking'] = false;
-                    _messages.add({'user': 'System', 'text': '$currentUser left seat ${index + 1}'});
+                    _messages.add({
+                      'user': 'System',
+                      'text': '$currentUser left seat ${index + 1}',
+                    });
                   });
                 },
               ),
@@ -101,15 +109,11 @@ class _RoomScreenState extends State<RoomScreen> {
       seat['user'] = currentUser;
       seat['userId'] = currentUserId;
       seat['isSpeaking'] = true;
-      _messages.add({'user': 'System', 'text': '$currentUser joined seat ${index + 1}'});
+      _messages.add({
+        'user': 'System',
+        'text': '$currentUser took seat ${index + 1}',
+      });
     });
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('You took seat ${index + 1} 🎤'),
-        backgroundColor: const Color(0xFF00C9A7),
-      ),
-    );
   }
 
   void _sendMessage() {
@@ -124,15 +128,15 @@ class _RoomScreenState extends State<RoomScreen> {
   void _openGiftSheet() {
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF0F1420),
+      backgroundColor: const Color(0xFF161C2B),
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (context) {
         final gifts = [
-          {'name': 'Rose', 'price': 10, 'icon': Icons.local_florist, 'color': Colors.pinkAccent},
 
-{'name': 'Heart', 'price': 50, 'icon': Icons.favorite, 'color': Colors.redAccent},
+{'name': 'Rose', 'price': 10, 'icon': Icons.local_florist, 'color': Colors.pinkAccent},
+          {'name': 'Heart', 'price': 50, 'icon': Icons.favorite, 'color': Colors.redAccent},
           {'name': 'Crown', 'price': 500, 'icon': Icons.military_tech, 'color': Colors.amber},
           {'name': 'Rocket', 'price': 2000, 'icon': Icons.rocket_launch, 'color': Colors.purpleAccent},
           {'name': 'Diamond', 'price': 5000, 'icon': Icons.diamond, 'color': Colors.cyanAccent},
@@ -147,12 +151,18 @@ class _RoomScreenState extends State<RoomScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text('Send Gift', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
+                  const Text(
+                    'Send Gift',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+                  ),
                   Row(
                     children: [
-                      const Icon(Icons.monetization_on, color: Colors.amber, size: 18),
+                      const Icon(Icons.monetization_on, color: Colors.amber, size: 20),
                       const SizedBox(width: 4),
-                      Text('${_user.coins}', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.amber)),
+                      Text(
+                        '${_user.coins}',
+                        style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.amber, fontSize: 16),
+                      ),
                     ],
                   ),
                 ],
@@ -175,39 +185,30 @@ class _RoomScreenState extends State<RoomScreen> {
                         setState(() {
                           _messages.add({
                             'user': 'Announcement',
-                            'text': '${_user.userName} sent a ${gift['name']}! 🎉',
+                            'text': '${_user.userName} sent a ${gift['name']}! 🎁',
                           });
                         });
                       },
                       child: Container(
                         decoration: BoxDecoration(
+                          color: const Color(0xFF222C3D),
                           borderRadius: BorderRadius.circular(16),
-                          gradient: const LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [Color(0xFF1E283C), Color(0xFF0C101A)],
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.55),
-                              offset: const Offset(3, 4),
-                              blurRadius: 6,
-                            ),
-                            BoxShadow(
-                              color: Colors.white.withOpacity(0.06),
-                              offset: const Offset(-2, -2),
-                              blurRadius: 4,
-                            ),
-                          ],
+                          border: Border.all(color: Colors.white12),
                         ),
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Icon(gift['icon'] as IconData, size: 36, color: gift['color'] as Color),
                             const SizedBox(height: 6),
-                            Text(gift['name'] as String, style: const TextStyle(color: Colors.white, fontSize: 13)),
+                            Text(
+                              gift['name'] as String,
+                              style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                            ),
                             const SizedBox(height: 4),
-                            Text('${gift['price']} Coins', style: const TextStyle(color: Colors.white54, fontSize: 11)),
+                            Text(
+                              '${gift['price']} Coins',
+                              style: const TextStyle(color: Colors.amber, fontSize: 11),
+                            ),
                           ],
                         ),
                       ),
@@ -225,214 +226,182 @@ class _RoomScreenState extends State<RoomScreen> {
 @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: RadialGradient(
-            center: Alignment(0, -0.4),
-            radius: 1.25,
-            colors: [
-              Color(0xFF1C2438),
-              Color(0xFF0C101A),
-              Color(0xFF05070B),
-            ],
+      body: Stack(
+        children: [
+          // 1. የጀርባ ገጽታ
+          Positioned.fill(
+            child: Image.network(
+              'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=1000&auto=format&fit=crop',
+              fit: BoxFit.cover,
+            ),
           ),
-        ),
-        child: SafeArea(
-          child: Column(
-            children: [
-              Container(
-                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(20),
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF1E283C), Color(0xFF121724)],
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.55),
-                      offset: const Offset(0, 4),
-                      blurRadius: 8,
-                    ),
-                    BoxShadow(
-                      color: Colors.white.withOpacity(0.08),
-                      offset: const Offset(0, -1),
-                      blurRadius: 2,
-                    ),
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    CircleAvatar(
-                      radius: 20,
-                      backgroundColor: const Color(0xFF00C9A7),
-                      child: Text(
-                        widget.hostName.isNotEmpty ? widget.hostName[0].toUpperCase() : 'H',
-                        style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            widget.roomTitle,
-                            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          Text(
-                            'ID: ${widget.roomId} • Host: ${widget.hostName}',
-                            style: const TextStyle(fontSize: 11, color: Colors.white54),
-                          ),
-                        ],
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.close, color: Colors.white70),
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                  ],
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 4,
-                    mainAxisSpacing: 16,
-                    crossAxisSpacing: 14,
-                    childAspectRatio: 0.8,
-                  ),
-                  itemCount: _seats.length,
-                  itemBuilder: (context, index) {
-                    final seat = _seats[index];
-                    final hasUser = seat['user'] != null;
-                    final isSpeaking = seat['isSpeaking'] == true;
+          Positioned.fill(
+            child: Container(
+              color: Colors.black.withOpacity(0.4),
+            ),
+          ),
 
-                    return GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: () => _handleSeatTap(index),
-
-child: Column(
-                        children: [
-                          Container(
-                            width: 60,
-                            height: 60,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              gradient: RadialGradient(
-                                center: const Alignment(-0.35, -0.35),
-                                radius: 0.85,
-                                colors: hasUser
-                                    ? [
-                                        const Color(0xFF00FFD5),
-                                        const Color(0xFF00C9A7),
-                                        const Color(0xFF005445),
-                                      ]
-                                    : [
-                                        const Color(0xFF2C3549),
-                                        const Color(0xFF181F2E),
-                                        const Color(0xFF0B0E17),
-                                      ],
+          SafeArea(
+            child: Column(
+              children: [
+                // 2. የክፍሉ አናት (Header)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(2),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.amber, width: 2),
+                        ),
+                        child: CircleAvatar(
+                          radius: 18,
+                          backgroundColor: const Color(0xFF6C5CE7),
+                          child: Text(
+                            widget.hostName.isNotEmpty ? widget.hostName[0].toUpperCase() : 'H',
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              widget.roomTitle,
+                              style: const TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                                shadows: [Shadow(color: Colors.black, blurRadius: 4)],
                               ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.white.withOpacity(hasUser ? 0.35 : 0.08),
-                                  offset: const Offset(-3, -3),
-                                  blurRadius: 5,
-                                ),
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(0.85),
-                                  offset: const Offset(4, 6),
-                                  blurRadius: 8,
-                                ),
-                                if (isSpeaking)
-                                  BoxShadow(
-                                    color: const Color(0xFF00FFD5).withOpacity(0.7),
-                                    offset: const Offset(0, 0),
-                                    blurRadius: 16,
-                                    spreadRadius: 2,
-                                  ),
-                              ],
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
-                            child: Stack(
-                              alignment: Alignment.center,
-                              children: [
-                                Icon(
-                                  hasUser ? Icons.person : Icons.mic_none,
-                                  color: hasUser ? Colors.black87 : Colors.white30,
-                                  size: 26,
-                                ),
-                                Positioned(
-                                  bottom: 2,
-                                  right: 2,
-                                  child: Container(
-                                    padding: const EdgeInsets.all(3),
-                                    decoration: const BoxDecoration(
-                                      color: Color(0xFF101420),
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: Text(
-                                      '${seat['index']}',
-                                      style: const TextStyle(fontSize: 9, color: Colors.white70, fontWeight: FontWeight.bold),
-                                    ),
-                                  ),
-                                ),
-                              ],
+                            Text(
+                              'ID: ${widget.roomId}',
+                              style: const TextStyle(fontSize: 11, color: Colors.white70),
                             ),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            hasUser ? seat['user'] : 'Empty',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: hasUser ? Colors.white : Colors.white38,
-
-fontWeight: hasUser ? FontWeight.w600 : FontWeight.normal,
-                              shadows: hasUser
-                                  ? const [Shadow(color: Colors.black, blurRadius: 4, offset: Offset(1, 1))]
-                                  : null,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    );
-                  },
-                ),
-              ),
-              Expanded(
-                child: Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(20),
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        const Color(0xFF161E2E).withOpacity(0.85),
-                        const Color(0xFF0C101A).withOpacity(0.85),
-                      ],
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.6),
-                        offset: const Offset(0, 6),
-                        blurRadius: 10,
-                      ),
-                      BoxShadow(
-                        color: Colors.white.withOpacity(0.04),
-                        offset: const Offset(0, -1),
-                        blurRadius: 2,
+                      IconButton(
+                        icon: const Icon(Icons.close, color: Colors.white),
+                        onPressed: () => Navigator.pop(context),
                       ),
                     ],
                   ),
+                ),
+
+                // 3. የወንበሮች ዝርዝር (8 Mic Seats)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: GridView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 4,
+                      mainAxisSpacing: 14,
+                      crossAxisSpacing: 12,
+                      childAspectRatio: 0.8,
+                    ),
+                    itemCount: _seats.length,
+                    itemBuilder: (context, index) {
+                      final seat = _seats[index];
+                      final hasUser = seat['user'] != null;
+                      final isSpeaking = seat['isSpeaking'] == true;
+                      final userName = seat['user'] ?? '';
+
+return GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () => _handleSeatTap(index),
+                        child: Column(
+                          children: [
+                            Stack(
+                              alignment: Alignment.center,
+                              children: [
+                                if (isSpeaking)
+                                  Container(
+                                    width: 58,
+                                    height: 58,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      border: Border.all(color: const Color(0xFF00FFD5), width: 2.5),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: const Color(0xFF00FFD5).withOpacity(0.5),
+                                          blurRadius: 8,
+                                          spreadRadius: 1,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                CircleAvatar(
+                                  radius: 24,
+                                  backgroundColor: hasUser
+                                      ? const Color(0xFF6C5CE7)
+                                      : Colors.black.withOpacity(0.45),
+                                  child: hasUser
+                                      ? Text(
+                                          userName.isNotEmpty ? userName[0].toUpperCase() : 'U',
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 16,
+                                          ),
+                                        )
+                                      : const Icon(Icons.mic_none, color: Colors.white54, size: 22),
+                                ),
+                                Positioned(
+                                  bottom: 0,
+                                  right: 0,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                    decoration: BoxDecoration(
+                                      color: Colors.black.withOpacity(0.7),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Text(
+                                      '${seat['index']}',
+                                      style: const TextStyle(
+                                        fontSize: 9,
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              hasUser ? userName : '${seat['index']}',
+                              style: const TextStyle(
+                                fontSize: 11,
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                shadows: [Shadow(color: Colors.black, blurRadius: 4)],
+                              ),
+
+maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ),
+
+                const Spacer(),
+
+                // 4. የቻት መስኮት (Chat Feed)
+                Container(
+                  height: 160,
+                  margin: const EdgeInsets.symmetric(horizontal: 14),
+                  padding: const EdgeInsets.all(8),
                   child: ListView.builder(
                     reverse: true,
                     itemCount: _messages.length,
@@ -441,139 +410,106 @@ fontWeight: hasUser ? FontWeight.w600 : FontWeight.normal,
                       final isSystem = msg['user'] == 'System' || msg['user'] == 'Announcement';
 
                       return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 4),
-                        child: RichText(
-                          text: TextSpan(
-                            children: [
-                              TextSpan(
-                                text: '${msg['user']}: ',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: isSystem ? const Color(0xFF00FFD5) : Colors.amber,
-                                  fontSize: 13,
-                                ),
+                        padding: const EdgeInsets.symmetric(vertical: 2),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withOpacity(0.4),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: RichText(
+                              text: TextSpan(
+                                children: [
+                                  TextSpan(
+                                    text: '${msg['user']}: ',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: isSystem ? const Color(0xFF00FFD5) : Colors.amber,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                  TextSpan(
+                                    text: msg['text'],
+                                    style: const TextStyle(color: Colors.white, fontSize: 12),
+                                  ),
+                                ],
                               ),
-                              TextSpan(
-                                text: msg['text'],
-                                style: TextStyle(
-                                  color: isSystem ? Colors.white70 : Colors.white,
-                                  fontSize: 13,
-                                ),
-                              ),
-                            ],
+                            ),
                           ),
                         ),
                       );
                     },
                   ),
                 ),
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Container(
-                        height: 48,
-                        padding: const EdgeInsets.symmetric(horizontal: 14),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(24),
-                          color: const Color(0xFF101522),
 
-boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.6),
-                              offset: const Offset(2, 2),
-                              blurRadius: 5,
-                            ),
-                            BoxShadow(
-                              color: Colors.white.withOpacity(0.05),
-                              offset: const Offset(-1, -1),
-                              blurRadius: 3,
-                            ),
-                          ],
-                        ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: TextField(
-                                controller: _msgController,
-                                style: const TextStyle(color: Colors.white, fontSize: 13),
-                                decoration: const InputDecoration(
-                                  hintText: 'Type message...',
-                                  hintStyle: TextStyle(color: Colors.white38, fontSize: 13),
-                                  border: InputBorder.none,
-                                ),
-                                onSubmitted: (_) => _sendMessage(),
-                              ),
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.send, color: Color(0xFF00FFD5), size: 18),
-                              onPressed: _sendMessage,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    GestureDetector(
-                      onTap: () => setState(() => _isMicMuted = !_isMicMuted),
-                      child: Container(
-                        width: 44,
-                        height: 44,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: RadialGradient(
-                            center: const Alignment(-0.35, -0.35),
-                            colors: _isMicMuted
-                                ? [const Color(0xFFFF5252), const Color(0xFFB71C1C)]
-                                : [const Color(0xFF00FFD5), const Color(0xFF007A65)],
+                // 5. የታችኛው መቆጣጠሪያ
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Container(
+                          height: 42,
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.5),
+                            borderRadius: BorderRadius.circular(21),
+                            border: Border.all(color: Colors.white24),
                           ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.6),
-                              offset: const Offset(2, 3),
-                              blurRadius: 5,
-                            ),
-                          ],
-                        ),
-                        child: Icon(
-                          _isMicMuted ? Icons.mic_off : Icons.mic,
-                          color: Colors.black87,
-                          size: 20,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    GestureDetector(
-                      onTap: _openGiftSheet,
-                      child: Container(
-                        width: 44,
-                        height: 44,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: const RadialGradient(
-                            center: Alignment(-0.35, -0.35),
-                            colors: [Color(0xFFFFD54F), Color(0xFFFF8F00)],
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.6),
-                              offset: const Offset(2, 3),
-                              blurRadius: 5,
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: TextField(
+                                  controller: _msgController,
+                                  style: const TextStyle(color: Colors.white, fontSize: 13),
+                                  decoration: const InputDecoration(
+                                    hintText: 'Say Hello...',
+                                    hintStyle: TextStyle(color: Colors.white54, fontSize: 13),
+                                    border: InputBorder.none,
 
 ),
-                          ],
+                                  onSubmitted: (_) => _sendMessage(),
+                                ),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.send, color: Color(0xFF00FFD5), size: 18),
+                                onPressed: _sendMessage,
+                              ),
+                            ],
+                          ),
                         ),
-                        child: const Icon(Icons.card_giftcard, color: Colors.black87, size: 20),
                       ),
-                    ),
-                  ],
+                      const SizedBox(width: 8),
+                      CircleAvatar(
+                        radius: 20,
+                        backgroundColor: Colors.black.withOpacity(0.5),
+                        child: IconButton(
+                          icon: Icon(
+                            _isMicMuted ? Icons.mic_off : Icons.mic,
+                            color: _isMicMuted ? Colors.redAccent : Colors.white,
+                            size: 18,
+                          ),
+                          onPressed: () => setState(() => _isMicMuted = !_isMicMuted),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      CircleAvatar(
+                        radius: 20,
+                        backgroundColor: Colors.amber,
+                        child: IconButton(
+                          icon: const Icon(Icons.card_giftcard, color: Colors.black, size: 18),
+                          onPressed: _openGiftSheet,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
