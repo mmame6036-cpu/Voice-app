@@ -13,7 +13,7 @@ class AgoraService {
   Future<void> initAgora({
     required String appId,
     required String channelId,
-    required Function(List<AudioVolumeInfo> speakers) onVolumeChanged,
+    required Function(List<dynamic> speakers) onVolumeChanged,
   }) async {
     await [Permission.microphone].request();
 
@@ -25,7 +25,7 @@ class AgoraService {
 
     _engine!.registerEventHandler(
       RtcEngineEventHandler(
-        onAudioVolumeIndication: (RtcConnection connection, List<AudioVolumeInfo> speakers, int totalVolume) {
+        onAudioVolumeIndication: (connection, speakers, totalVolume) {
           onVolumeChanged(speakers);
         },
       ),
