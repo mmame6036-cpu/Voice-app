@@ -3,7 +3,11 @@ import 'package:permission_handler/permission_handler.dart';
 
 class AgoraService {
   static final AgoraService _instance = AgoraService._internal();
-  factory AgoraService() => _instance;
+
+  factory AgoraService() {
+    return _instance;
+  }
+
   AgoraService._internal();
 
   RtcEngine? _engine;
