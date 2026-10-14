@@ -222,6 +222,9 @@ app.get('/api/chat-history', async (req, res) => {
 });
 
 // --- Socket.io Real-time Communication ---
+// ክፍሎች ውስጥ ያሉትን ወንበሮች በሜሞሪ መያዣ (Room Seat State)
+const roomSeatsState = {};
+
 io.on('connection', (socket) => {
   socket.on('user_connected', (userId) => {
     if (userId) {
@@ -249,24 +252,58 @@ io.on('connection', (socket) => {
     }
   });
 
+  // ተጠቃሚ ክፍል ሲቀላቀል
   socket.on('join_room', (data) => {
-    const roomId = String(data.room || '1001');
+    const roomId = String(data.room  data.roomId  '1001');
     socket.currentRoom = roomId;
     socket.join(roomId);
+
+    // ቀድመው የተያዙ ወንበሮች ካሉ ለአዲሱ ተጠቃሚ ወዲያው መላክ
+    if (roomSeatsState[roomId]) {
+      socket.emit('sync_room_seats', roomSeatsState[roomId]);
+    }
   });
 
+  // ወንበር ሲያዝ ወይም ሲለቀቅ
   socket.on('chair_action', (data) => {
-    const roomId = String(data.room || '1001');
-    io.to(roomId).emit('chair_action', data);
+    const roomId = String(data.room  data.roomId  '1001');
+    const chairIndex = data.chairIndex;
+    const action = data.action;
+
+    if (!roomSeatsState[roomId]) {
+      roomSeatsState[roomId] = {};
+    }
+
+if (action === 'take') {
+      // ተጠቃሚው ቀድሞ ሌላ ወንበር ላይ ከነበረ ነፃ ማድረግ
+      for (const idx in roomSeatsState[roomId]) {
+        if (roomSeatsState[roomId][idx].userId === data.userId) {
+          delete roomSeatsState[roomId][idx];
+        }
+      }
+      roomSeatsState[roomId][chairIndex] = {
+        userName: data.userName,
+        userId: data.userId
+      };
+    } else if (action === 'leave') {
+      delete roomSeatsState[roomId][chairIndex];
+    }
+
+    // ለሁሉም የክፍሉ ተጠቃሚዎች ወዲያው ማሰራጨት
+    io.to(roomId).emit('chair_action', {
+      ...data,
+      room: roomId,
+      roomId: roomId
+    });
   });
 
   socket.on('chair_speaking', (data) => {
-    const roomId = String(data.room || '1001');
+    const roomId = String(data.room  data.roomId  '1001');
     io.to(roomId).emit('chair_speaking', data);
   });
 
   socket.on('chat_message', (data) => {
-    const roomId = String(data.room || '1001');
+    const roomId = String(data.room  data.roomId  '1001');
     io.to(roomId).emit('chat_message', data);
   });
 
@@ -274,10 +311,10 @@ io.on('connection', (socket) => {
   socket.on('gift_sent', async (data) => {
     try {
       const { senderId, receiverId, giftPrice, room, giftName } = data;
-      const roomId = String(room || '1001');
+      const roomId = String(room  data.roomId  '1001');
       const cost = Number(giftPrice) || 0;
 
-const sender = await User.findOne({ userId: String(senderId) });
+      const sender = await User.findOne({ userId: String(senderId) });
       if (!sender || sender.coins < cost) {
         socket.emit('gift_error', { message: 'Insufficient coins balance' });
         return;
@@ -317,11 +354,22 @@ const sender = await User.findOne({ userId: String(senderId) });
   // ተጠቃሚ ሲወጣ ወይም ኢንተርኔት ሲያቋርጥ
   socket.on('disconnect', () => {
     if (socket.currentRoom && socket.userId) {
-      io.to(socket.currentRoom).emit('chair_action', {
-        action: 'leave',
-        userId: socket.userId,
-        room: socket.currentRoom
-      });
+      const roomId = socket.currentRoom;
+      if (roomSeatsState[roomId]) {
+        for (const idx in roomSeatsState[roomId]) {
+          if (roomSeatsState[roomId][idx].userId === socket.userId) {
+            delete roomSeatsState[roomId][idx];
+            io.to(roomId).emit('chair_action', {
+              action: 'leave',
+              chairIndex: parseInt(idx),
+              userId: socket.userId,
+              userName: socket.userName || 'User',
+              room: roomId,
+              roomId: roomId
+            });
+          }
+        }
+      }
     }
   });
 });
