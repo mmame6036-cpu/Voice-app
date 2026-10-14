@@ -11,7 +11,8 @@ import 'widgets/room/room_bottom_bar.dart';
 import 'widgets/room/gift_panel.dart';
 import 'widgets/room/basic_tools_sheet.dart';
 
-const String agoraAppId = "1523b6d3b8144281a1a21f28bbbd7fef";
+const String agoraAppId = "YOUR_AGORA_APP_ID";
+
 class RoomScreen extends StatefulWidget {
   final String roomId;
   final String roomTitle;
@@ -23,10 +24,10 @@ class RoomScreen extends StatefulWidget {
     required this.roomTitle,
     required this.hostName,
   }) : super(key: key);
-}
+
   @override
   State<RoomScreen> createState() => _RoomScreenState();
-}""
+}
 
 class _RoomScreenState extends State<RoomScreen> {
   final UserService _user = UserService();
