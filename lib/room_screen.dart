@@ -79,6 +79,21 @@ class _RoomScreenState extends State<RoomScreen> {
     _socket.connect();
     _socket.joinRoom(widget.roomId);
 
+    // ቀድመው የተያዙ ወንበሮችን ከሰርቨር ተቀብሎ በአንድ ጊዜ በስክሪኑ ላይ ማመሳሰል
+    _socket.socket?.on('sync_room_seats', (data) {
+      if (!mounted || data == null) return;
+      setState(() {
+        final Map<String, dynamic> seatsMap = Map<String, dynamic>.from(data);
+        seatsMap.forEach((seatIdxStr, seatInfo) {
+          final idx = int.tryParse(seatIdxStr);
+          if (idx != null && idx >= 0 && idx < _seats.length) {
+            _seats[idx]['user'] = seatInfo['userName'];
+            _seats[idx]['userId'] = seatInfo['userId'];
+          }
+        });
+      });
+    });
+
     // ሌሎች ስልኮች ወንበር ሲይዙ ወይም ሲለቁ በቅጽበት ይቀበላል
     _socket.onChairActionReceived = (data) {
       if (!mounted) return;
@@ -89,18 +104,18 @@ class _RoomScreenState extends State<RoomScreen> {
       final String? uName = data['userName'];
       final String? uId = data['userId'];
 
-      if (chairIndex == null ||  chairIndex < 0 || chairIndex >= _seats.length) {
+      if (chairIndex == null  chairIndex < 0  chairIndex >= _seats.length) {
         return;
       }
 
       setState(() {
         if (action == 'take') {
           // ተጠቃሚው ሌላ ወንበር ላይ ከነበረ ነፃ ማድረግ
-          for (var s in _seats) {
-            if (s['userId'] == uId) {
-              s['user'] = null;
-              s['userId'] = null;
-              s['isSpeaking'] = false;
+          for (int i = 0; i < _seats.length; i++) {
+            if (_seats[i]['userId'] == uId && i != chairIndex) {
+              _seats[i]['user'] = null;
+              _seats[i]['userId'] = null;
+              _seats[i]['isSpeaking'] = false;
             }
           }
           _seats[chairIndex]['user'] = uName;
@@ -112,7 +127,8 @@ class _RoomScreenState extends State<RoomScreen> {
         } else if (action == 'leave') {
           if (_seats[chairIndex]['userId'] == uId) {
             _seats[chairIndex]['user'] = null;
-            _seats[chairIndex]['userId'] = null;
+
+_seats[chairIndex]['userId'] = null;
             _seats[chairIndex]['isSpeaking'] = false;
             _messages.add({
               'user': 'System',
@@ -137,7 +153,6 @@ class _RoomScreenState extends State<RoomScreen> {
     };
   }
 
-// ከሰርቨርህ Token አምጥቶ ድምፅን የሚያስጀምር ፈንክሽን
   Future<void> _initAudio() async {
     String token = '';
     try {
@@ -180,7 +195,7 @@ class _RoomScreenState extends State<RoomScreen> {
     final currentUserId = _user.userId;
 
     // ወንበር ላይ የተቀመጠው ራሱ ከሆነ ለመልቀቅ
-    if (seat['user'] == currentUser) {
+    if (seat['userId'] == currentUserId || seat['user'] == currentUser) {
       showModalBottomSheet(
         context: context,
         backgroundColor: const Color(0xFF131926),
@@ -225,7 +240,7 @@ class _RoomScreenState extends State<RoomScreen> {
     }
 
     // ወንበሩ በሌላ ሰው ከተያዘ
-    if (seat['user'] != null) {
+    if (seat['user'] != null && seat['user'].toString().isNotEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Seat ${index + 1} is occupied by ${seat['user']}'),
@@ -235,25 +250,26 @@ class _RoomScreenState extends State<RoomScreen> {
       return;
     }
 
-    // ወንበሩን ለመያዝ ወደ ሰርቨር መላክ
-    _socket.sendChairAction(
-      roomId: widget.roomId,
-      chairIndex: index,
-      action: 'take',
-    );
-
+    // ተጠቃሚው ሌላ ወንበር ላይ ከነበረ ነፃ ማድረግ
     for (var s in _seats) {
-      if (s['user'] == currentUser) {
+      if (s['userId'] == currentUserId) {
         s['user'] = null;
         s['userId'] = null;
         s['isSpeaking'] = false;
       }
     }
 
+// አዲሱን ወንበር ለመያዝ ወደ ሰርቨር መላክ
+    _socket.sendChairAction(
+      roomId: widget.roomId,
+      chairIndex: index,
+      action: 'take',
+    );
+
     setState(() {
       seat['user'] = currentUser;
       seat['userId'] = currentUserId;
-      seat['isSpeaking'] = true;
+      seat['isSpeaking'] = false;
       _messages.add({
         'user': 'System',
         'text': '$currentUser joined seat ${index + 1}',
@@ -274,10 +290,9 @@ class _RoomScreenState extends State<RoomScreen> {
     final text = _msgController.text.trim();
     if (text.isEmpty) return;
 
-    // መልእክቱን ወደ ሰርቨር መላክ
     _socket.sendChatMessage(roomId: widget.roomId, text: text);
 
-setState(() {
+    setState(() {
       _messages.add({'user': _user.userName, 'text': text});
       _msgController.clear();
     });
