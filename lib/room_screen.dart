@@ -105,7 +105,7 @@ class _RoomScreenState extends State<RoomScreen> {
       final String? uId = data['userId'];
 
       // የተስተካከለው የመስመር ማረጋገጫ (|| ገብቶበታል)
-      if (chairIndex == null  chairIndex < 0  chairIndex >= _seats.length) {
+      if (chairIndex == null || chairIndex < 0 || chairIndex >= _seats.length) {
         return;
       }
 
