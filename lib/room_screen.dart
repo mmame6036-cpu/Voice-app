@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'services/user_service.dart';
 import 'services/agora_service.dart';
 import 'services/socket_service.dart';
@@ -11,7 +13,7 @@ import 'widgets/room/room_bottom_bar.dart';
 import 'widgets/room/gift_panel.dart';
 import 'widgets/room/basic_tools_sheet.dart';
 
-const String agoraAppId = "YOUR_AGORA_APP_ID";
+const String agoraAppId = "1523b6d3b8144281a1a21f28bbbd7fef";
 
 class RoomScreen extends StatefulWidget {
   final String roomId;
@@ -87,7 +89,7 @@ class _RoomScreenState extends State<RoomScreen> {
       final String? uName = data['userName'];
       final String? uId = data['userId'];
 
-    if (chairIndex == null || chairIndex < 0  || chairIndex >= _seats.length) {
+      if (chairIndex == null  chairIndex < 0  chairIndex >= _seats.length) {
         return;
       }
 
@@ -135,9 +137,21 @@ class _RoomScreenState extends State<RoomScreen> {
     };
   }
 
+// ከሰርቨርህ Token አምጥቶ ድምፅን የሚያስጀምር ፈንክሽን
   Future<void> _initAudio() async {
+    String token = '';
+    try {
+      final url = Uri.parse('${UserService.serverUrl}/api/get-token?channelName=${widget.roomId}');
+      final res = await http.get(url).timeout(const Duration(seconds: 4));
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        if (data['success'] == true && data['token'] != null) {
+          token = data['token'];
+        }
+      }
+    } catch (_) {}
 
-await _agora.initAgora(
+    await _agora.initAgora(
       appId: agoraAppId,
       channelId: widget.roomId,
       onVolumeChanged: (speakers) {
@@ -263,7 +277,7 @@ await _agora.initAgora(
     // መልእክቱን ወደ ሰርቨር መላክ
     _socket.sendChatMessage(roomId: widget.roomId, text: text);
 
-    setState(() {
+setState(() {
       _messages.add({'user': _user.userName, 'text': text});
       _msgController.clear();
     });
@@ -286,7 +300,7 @@ await _agora.initAgora(
     );
   }
 
-void _openBasicTools() {
+  void _openBasicTools() {
     BasicToolsSheet.show(context);
   }
 
