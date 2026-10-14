@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'services/user_service.dart';
 
 class CoinSellerScreen extends StatefulWidget {
@@ -10,8 +11,12 @@ class CoinSellerScreen extends StatefulWidget {
 
 class _CoinSellerScreenState extends State<CoinSellerScreen> {
   final UserService _user = UserService();
-  String _sellerLevel = 'Beginner Seller';
+  final String _sellerLevel = 'Standard Seller';
   String _selectedPaymentMethod = 'Telebirr';
+
+  // የክፍያ መረጃዎች
+  final String _telebirrPhone = '0943724560';
+  final String _binanceUid = '1059643208';
 
   void _openTransferSheet() {
     showModalBottomSheet(
@@ -27,7 +32,10 @@ class _CoinSellerScreenState extends State<CoinSellerScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => const SellerRechargeSheet(),
+      builder: (_) => SellerRechargeSheet(
+        telebirrPhone: _telebirrPhone,
+        binanceUid: _binanceUid,
+      ),
     );
   }
 
@@ -41,27 +49,48 @@ class _CoinSellerScreenState extends State<CoinSellerScreen> {
   }
 
   void _selectPaymentMethodDialog() {
-    final methods = ['Telebirr', 'Binance', 'USDT', 'CBE', 'VISA'];
     showModalBottomSheet(
       context: context,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      backgroundColor: Colors.transparent,
       builder: (ctx) {
-        return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
+        return Container(
+          padding: const EdgeInsets.symmetric(vertical: 22, horizontal: 18),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+            boxShadow: [
+              BoxShadow(color: Colors.black26, blurRadius: 20, offset: Offset(0, -6)),
+            ],
+          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Select Payment Method', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 14),
-              ...methods.map((m) => ListTile(
-                title: Text(m, style: const TextStyle(fontWeight: FontWeight.w500)),
-                trailing: _selectedPaymentMethod == m ? const Icon(Icons.check_circle, color: Color(0xFF00C9A7)) : null,
+              const Text('የመክፈያ መንገድ ይምረጡ', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.black87)),
+              const SizedBox(height: 16),
+              _buildPaymentOptionTile(
+                icon: Icons.phone_android,
+                iconColor: Colors.blueAccent,
+                title: 'Telebirr (ቴሌብር)',
+                subtitle: 'ስልክ: $_telebirrPhone',
+                isSelected: _selectedPaymentMethod == 'Telebirr',
                 onTap: () {
-                  setState(() => _selectedPaymentMethod = m);
+                  setState(() => _selectedPaymentMethod = 'Telebirr');
                   Navigator.pop(ctx);
                 },
-              )),
+              ),
+              const SizedBox(height: 10),
+              _buildPaymentOptionTile(
+                icon: Icons.currency_bitcoin,
+                iconColor: Colors.amber[700]!,
+                title: 'Binance Pay',
+                subtitle: 'UID: $_binanceUid',
+                isSelected: _selectedPaymentMethod == 'Binance Pay',
+                onTap: () {
+                  setState(() => _selectedPaymentMethod = 'Binance Pay');
+                  Navigator.pop(ctx);
+                },
+              ),
             ],
           ),
         );
@@ -69,18 +98,58 @@ class _CoinSellerScreenState extends State<CoinSellerScreen> {
     );
   }
 
+  Widget _buildPaymentOptionTile({
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required String subtitle,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: isSelected ? const Color(0xFFF0FAF8) : const Color(0xFFF9FAFC),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isSelected ? const Color(0xFF00C9A7) : Colors.black12,
+          width: isSelected ? 1.8 : 1.0,
+        ),
+        boxShadow: [
+
+BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 6,
+            offset: const Offset(0, 3),
+          )
+        ],
+      ),
+      child: ListTile(
+        leading: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(color: iconColor.withOpacity(0.12), shape: BoxShape.circle),
+          child: Icon(icon, color: iconColor, size: 24),
+        ),
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+        subtitle: Text(subtitle, style: const TextStyle(fontSize: 12, color: Colors.black54)),
+        trailing: isSelected ? const Icon(Icons.check_circle, color: Color(0xFF00C9A7)) : null,
+        onTap: onTap,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
+      backgroundColor: const Color(0xFFF4F6F9),
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
+        centerTitle: false,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.black, size: 20),
+          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.black87, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text('Coin Seller', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 18)),
+        title: const Text('Coin Seller', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 19)),
         actions: [
           IconButton(
             icon: const Icon(Icons.help_outline, color: Colors.black87),
@@ -93,60 +162,102 @@ class _CoinSellerScreenState extends State<CoinSellerScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Top Seller Profile
-            Row(
-              children: [
-                CircleAvatar(
-                  radius: 28,
-                  backgroundColor: Colors.amber,
-                  child: Text(
-                    _user.userName.isNotEmpty ? _user.userName[0].toUpperCase() : 'S',
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 22, color: Colors.black),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(_user.userName, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black)),
-
-const SizedBox(height: 3),
-                      Text('ID: ${_user.userId}', style: const TextStyle(fontSize: 12, color: Colors.grey)),
-                    ],
-                  ),
-                ),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF00C9A7),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                    elevation: 0,
-                  ),
-                  onPressed: () {},
-                  child: const Text('Level Up', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 12)),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text('Current level: $_sellerLevel', style: const TextStyle(fontSize: 12, color: Colors.black54)),
-            const SizedBox(height: 16),
-
-            // Balance Card
+            // Top Seller Profile (3D Style Card)
             Container(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: const Color(0xFFFFF9E6),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.amber.withOpacity(0.3)),
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4)),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    decoration: const BoxDecoration(
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(color: Colors.black26, blurRadius: 6, offset: Offset(0, 3)),
+                      ],
+                    ),
+                    child: CircleAvatar(
+                      radius: 28,
+                      backgroundColor: Colors.amber,
+                      child: Text(
+                        _user.userName.isNotEmpty ? _user.userName[0].toUpperCase() : 'S',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 22, color: Colors.black),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(_user.userName, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87)),
+                        const SizedBox(height: 3),
+                        Text('ID: ${_user.userId}', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                        const SizedBox(height: 2),
+                        Text('Level: $_sellerLevel', style: const TextStyle(fontSize: 11, color: Colors.black54)),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(color: const Color(0xFF00C9A7).withOpacity(0.35), blurRadius: 8, offset: const Offset(0, 4)),
+
+],
+                    ),
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF00C9A7),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        elevation: 0,
+                      ),
+                      onPressed: () {},
+                      child: const Text('Level Up', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 12)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 18),
+
+            // 3D Balance Card with Vibrant Green Coin Number
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFFFFFDF7), Color(0xFFFFF8E7)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(color: Colors.amber.withOpacity(0.35), width: 1.2),
+                boxShadow: [
+                  BoxShadow(color: Colors.amber.withOpacity(0.12), blurRadius: 18, offset: const Offset(0, 8)),
+                  BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 6, offset: const Offset(0, 2)),
+                ],
               ),
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
                     children: [
-                      const Icon(Icons.monetization_on, color: Colors.amber, size: 24),
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: Colors.amber.withOpacity(0.2),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.monetization_on, color: Colors.amber, size: 22),
+                      ),
                       const SizedBox(width: 8),
-                      const Text('Balance', style: TextStyle(fontSize: 14, color: Colors.black54)),
+                      const Text('Total Balance', style: TextStyle(fontSize: 14, color: Colors.black54, fontWeight: FontWeight.w600)),
                       const Spacer(),
                       OutlinedButton(
                         style: OutlinedButton.styleFrom(
@@ -159,50 +270,84 @@ const SizedBox(height: 3),
                       ),
                     ],
                   ),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text('${_user.coins}', style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Colors.black)),
+                  const SizedBox(height: 10),
+                  // ሳንቲሙ በአረንጓዴ ቀለም
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.baseline,
+                    textBaseline: TextBaseline.alphabetic,
+                    children: [
+                      Text(
+                        '${_user.coins}',
+                        style: const TextStyle(
+                          fontSize: 34,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFF00A884), // ደማቅ አረንጓዴ
+                          letterSpacing: 0.5,
+                          shadows: [
+                            Shadow(color: Color(0x3300A884), blurRadius: 10, offset: Offset(0, 3)),
+                          ],
+                        ),
+
+),
+                      const SizedBox(width: 6),
+                      const Text(
+                        'Coins',
+                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF00A884)),
+                      ),
+                    ],
                   ),
-                  const Divider(color: Colors.black12, height: 24),
+                  const Divider(color: Colors.black12, height: 26),
                   GestureDetector(
                     onTap: _selectPaymentMethodDialog,
-                    child: Row(
-                      children: [
-                        const Icon(Icons.account_balance_wallet, color: Colors.orange, size: 20),
-                        const SizedBox(width: 8),
-                        const Text('Payment Method', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-                        const Spacer(),
-                        Text(_selectedPaymentMethod, style: const TextStyle(fontSize: 12, color: Colors.black54)),
-                        const Icon(Icons.arrow_forward_ios, size: 12, color: Colors.black38),
-                      ],
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.7),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.black.withOpacity(0.04)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.account_balance_wallet, color: Colors.orange, size: 20),
+                          const SizedBox(width: 8),
+                          const Text('Payment Method', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                          const Spacer(),
+                          Text(_selectedPaymentMethod, style: const TextStyle(fontSize: 12, color: Colors.black87, fontWeight: FontWeight.bold)),
+                          const SizedBox(width: 4),
+                          const Icon(Icons.arrow_forward_ios, size: 12, color: Colors.black38),
+                        ],
+                      ),
                     ),
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 18),
+            const SizedBox(height: 22),
 
-            // Three Main Action Buttons (Transfer, Recharge, Exchange)
+            // Three Main Action Buttons (3D Rounded Buttons)
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                _buildActionButton(icon: Icons.send_to_mobile, label: 'Transfer', onTap: _openTransferSheet),
-                _buildActionButton(icon: Icons.add_card, label: 'Recharge', onTap: _openRechargeSheet),
-                _buildActionButton(icon: Icons.currency_exchange, label: 'Exchange', onTap: _openExchangeSheet),
+                _build3DActionButton(icon: Icons.send_to_mobile, label: 'Transfer', onTap: _openTransferSheet),
+                _build3DActionButton(icon: Icons.add_card, label: 'Recharge', onTap: _openRechargeSheet),
+                _build3DActionButton(icon: Icons.currency_exchange, label: 'Exchange', onTap: _openExchangeSheet),
               ],
             ),
             const SizedBox(height: 24),
 
-// Greeting Message Settings Row
+            // Greeting Message Settings Row
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(18),
+                boxShadow: [
+                  BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4)),
+                ],
               ),
               child: const Row(
                 children: [
-                  Text('Greeting Message Settings', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+                  Text('Greeting Message Settings', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.black87)),
                   Spacer(),
                   Icon(Icons.arrow_forward_ios, size: 14, color: Colors.black38),
                 ],
@@ -214,21 +359,30 @@ const SizedBox(height: 3),
     );
   }
 
-  Widget _buildActionButton({required IconData icon, required String label, required VoidCallback onTap}) {
+  Widget _build3DActionButton({required IconData icon, required String label, required VoidCallback onTap}) {
     return GestureDetector(
       onTap: onTap,
       child: Column(
         children: [
           Container(
-            width: 54,
-            height: 54,
+            width: 58,
+            height: 58,
             decoration: BoxDecoration(
-              color: const Color(0xFFE0F7F4),
+              gradient: const LinearGradient(
+                colors: [Color(0xFFE8FAF6), Color(0xFFD3F5EF)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
               shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(color: const Color(0xFF00C9A7).withOpacity(0.3), blurRadius: 10, offset: const Offset(0, 5)),
+
+const BoxShadow(color: Colors.white, blurRadius: 4, offset: Offset(-2, -2)),
+              ],
             ),
-            child: Icon(icon, color: const Color(0xFF00C9A7), size: 26),
+            child: Icon(icon, color: const Color(0xFF009E83), size: 28),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
           Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black87)),
         ],
       ),
@@ -254,18 +408,21 @@ class _SellerTransferSheetState extends State<SellerTransferSheet> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: MediaQuery.of(context).size.height * 0.75,
-      padding: const EdgeInsets.all(20),
+      height: MediaQuery.of(context).size.height * 0.78,
+      padding: const EdgeInsets.all(22),
       decoration: const BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+        boxShadow: [
+          BoxShadow(color: Colors.black26, blurRadius: 20, offset: Offset(0, -5)),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Text('Transfer Coins', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const Text('Transfer Coins', style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold)),
               const Spacer(),
               IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
             ],
@@ -296,9 +453,10 @@ class _SellerTransferSheetState extends State<SellerTransferSheet> {
             keyboardType: TextInputType.number,
             decoration: InputDecoration(
               labelText: _isTransferToUser ? 'User ID' : 'Coinseller ID',
-
-suffixIcon: TextButton(onPressed: () {}, child: const Text('Check', style: TextStyle(color: Color(0xFF00C9A7)))),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              suffixIcon: TextButton(onPressed: () {}, child: const Text('Check', style: TextStyle(color: Color(0xFF00C9A7)))),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+              filled: true,
+              fillColor: const Color(0xFFF9FAFC),
             ),
           ),
           const SizedBox(height: 14),
@@ -307,21 +465,36 @@ suffixIcon: TextButton(onPressed: () {}, child: const Text('Check', style: TextS
             keyboardType: TextInputType.number,
             decoration: InputDecoration(
               labelText: 'Coin Amount (x1,000)',
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+              filled: true,
+              fillColor: const Color(0xFFF9FAFC),
             ),
           ),
           const SizedBox(height: 6),
           const Text('Please enter a multiple of 1,000', style: TextStyle(color: Colors.redAccent, fontSize: 11)),
-          const Spacer(),
-          SizedBox(
+
+const Spacer(),
+          Container(
             width: double.infinity,
-            height: 48,
+            height: 50,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(25),
+              boxShadow: [
+                BoxShadow(color: const Color(0xFF00C9A7).withOpacity(0.4), blurRadius: 10, offset: const Offset(0, 5)),
+              ],
+            ),
             child: ElevatedButton(
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF00C9A7),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
+                elevation: 0,
               ),
-              onPressed: () {},
+              onPressed: () {
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Coins Transferred Successfully!')),
+                );
+              },
               child: const Text('Transfer', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 16)),
             ),
           ),
@@ -332,81 +505,277 @@ suffixIcon: TextButton(onPressed: () {}, child: const Text('Check', style: TextS
 }
 
 // ---------------------------------------------------------------------------
-// 2. RECHARGE SHEET (WHOLESALE COINS FOR SELLERS)
+// 2. RECHARGE SHEET (TELEBIRR PHONE ONLY + BINANCE PAY WITH QR CODE)
 // ---------------------------------------------------------------------------
-class SellerRechargeSheet extends StatelessWidget {
-  const SellerRechargeSheet({Key? key}) : super(key: key);
+class SellerRechargeSheet extends StatefulWidget {
+  final String telebirrPhone;
+  final String binanceUid;
+
+  const SellerRechargeSheet({
+    Key? key,
+    required this.telebirrPhone,
+    required this.binanceUid,
+  }) : super(key: key);
+
+  @override
+  State<SellerRechargeSheet> createState() => _SellerRechargeSheetState();
+}
+
+class _SellerRechargeSheetState extends State<SellerRechargeSheet> {
+  int _selectedTierIndex = 0;
+  String _payMethod = 'Telebirr';
+  final TextEditingController _txIdController = TextEditingController();
 
   final List<Map<String, dynamic>> _wholesaleTiers = const [
-    {'coins': '1,980,000', 'price': '\$200', 'badge': 'Standard Seller'},
-    {'coins': '9,900,000', 'price': '\$1000', 'badge': 'Standard Seller'},
-    {'coins': '14,850,000', 'price': '\$1500', 'badge': 'Senior Seller'},
-    {'coins': '30,000,000', 'price': '\$3000', 'badge': 'Senior Seller'},
+    {'coins': '1,980,000', 'priceUsd': '\$200', 'priceEtb': '24,000 ETB', 'badge': 'Standard Seller'},
+    {'coins': '9,900,000', 'priceUsd': '\$1000', 'priceEtb': '120,000 ETB', 'badge': 'Standard Seller'},
+    {'coins': '14,850,000', 'priceUsd': '\$1500', 'priceEtb': '180,000 ETB', 'badge': 'Senior Seller'},
+    {'coins': '30,000,000', 'priceUsd': '\$3000', 'priceEtb': '360,000 ETB', 'badge': 'Senior Seller'},
   ];
+
+  void _copy(String text, String label) {
+    Clipboard.setData(ClipboardData(text: text));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$label ኮፒ ተደርጓል!')));
+  }
 
   @override
   Widget build(BuildContext context) {
+    final selectedTier = _wholesaleTiers[_selectedTierIndex];
+
     return Container(
-      height: MediaQuery.of(context).size.height * 0.75,
-      padding: const EdgeInsets.all(20),
+      height: MediaQuery.of(context).size.height * 0.90,
+      padding: const EdgeInsets.all(22),
       decoration: const BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+        boxShadow: [
+          BoxShadow(color: Colors.black26, blurRadius: 20, offset: Offset(0, -6)),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Text('Wholesale Recharge', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const Text('Wholesale Recharge (ሳንቲም በጅምላ መሙያ)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               const Spacer(),
               IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
             ],
           ),
-          const SizedBox(height: 12),
-          Expanded(
-            child: GridView.builder(
-              itemCount: _wholesaleTiers.length,
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                crossAxisSpacing: 12,
-                mainAxisSpacing: 12,
-                childAspectRatio: 1.25,
-              ),
-              itemBuilder: (ctx, idx) {
-                final item = _wholesaleTiers[idx];
-                return Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF7F8FA),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.black12),
-                  ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(item['badge'], style: const TextStyle(fontSize: 10, color: Colors.orange, fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 6),
+          const SizedBox(height: 10),
 
-Text(item['coins'], style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 4),
-                      Text(item['price'], style: const TextStyle(fontSize: 12, color: Colors.black54)),
-                    ],
+          // የጥቅል ካርዶች (3D Elevation Grid)
+          SizedBox(
+            height: 94,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: _wholesaleTiers.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 10),
+              itemBuilder: (ctx, idx) {
+
+final item = _wholesaleTiers[idx];
+                final isSelected = _selectedTierIndex == idx;
+                return GestureDetector(
+                  onTap: () => setState(() => _selectedTierIndex = idx),
+                  child: Container(
+                    width: 125,
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: isSelected ? const Color(0xFFF0FAF8) : const Color(0xFFF9FAFC),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: isSelected ? const Color(0xFF00C9A7) : Colors.black12,
+                        width: isSelected ? 2 : 1,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: isSelected ? const Color(0xFF00C9A7).withOpacity(0.2) : Colors.black.withOpacity(0.03),
+                          blurRadius: 6,
+                          offset: const Offset(0, 3),
+                        )
+                      ],
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(item['badge'], style: const TextStyle(fontSize: 9, color: Colors.orange, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 4),
+                        Text(
+                          item['coins'],
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: isSelected ? const Color(0xFF00A884) : Colors.black87,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          _payMethod == 'Telebirr' ? item['priceEtb'] : item['priceUsd'],
+                          style: const TextStyle(fontSize: 10, color: Colors.black54),
+                        ),
+                      ],
+                    ),
                   ),
                 );
               },
             ),
           ),
-          SizedBox(
+          const SizedBox(height: 14),
+
+          // የመክፈያ መንገድ መምረጫ
+          Row(
+            children: [
+              Expanded(
+                child: ChoiceChip(
+                  label: const Center(child: Text('ቴሌብር (Telebirr)')),
+                  selected: _payMethod == 'Telebirr',
+                  selectedColor: const Color(0xFF00C9A7),
+                  onSelected: (_) => setState(() => _payMethod = 'Telebirr'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: ChoiceChip(
+                  label: const Center(child: Text('Binance Pay')),
+                  selected: _payMethod == 'Binance',
+                  selectedColor: Colors.amber,
+                  onSelected: (_) => setState(() => _payMethod = 'Binance'),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          // የክፍያ መረጃ ሳጥን (3D Card)
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF9FAFC),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.black12),
+              boxShadow: [
+                BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 8, offset: const Offset(0, 4)),
+              ],
+            ),
+            child: _payMethod == 'Telebirr'
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('በቴሌብር ለመክፈል፦', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+
+const SizedBox(height: 8),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('ስልክ ቁጥር: ${widget.telebirrPhone}', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                          IconButton(
+                            icon: const Icon(Icons.copy, size: 20, color: Color(0xFF00C9A7)),
+                            onPressed: () => _copy(widget.telebirrPhone, 'የቴሌብር ስልክ ቁጥር'),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text('የሚከፍሉት፦ ${selectedTier['priceEtb']}', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green, fontSize: 13)),
+                    ],
+                  )
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      const Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text('በባይናንስ (Binance Pay) ለመክፈል፦', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                      ),
+                      const SizedBox(height: 8),
+
+                      // QR Code Card with 3D Shadow
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: Colors.amber.shade400, width: 1.5),
+                          boxShadow: [
+                            BoxShadow(color: Colors.amber.withOpacity(0.25), blurRadius: 10, offset: const Offset(0, 4)),
+                          ],
+                        ),
+                        child: Image.asset(
+                          'assets/images/binance_qr.png',
+                          height: 120,
+                          width: 120,
+                          fit: BoxFit.contain,
+                          errorBuilder: (context, error, stackTrace) => const Icon(
+                            Icons.qr_code_2,
+                            size: 90,
+                            color: Colors.amber,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      const Text('በ Binance App ስካን (Scan) አድርገው ይክፈሉ', style: TextStyle(fontSize: 11, color: Colors.black54)),
+                      const SizedBox(height: 6),
+
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('Binance UID: ${widget.binanceUid}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                          IconButton(
+                            icon: const Icon(Icons.copy, size: 20, color: Colors.amber),
+                            onPressed: () => _copy(widget.binanceUid, 'Binance UID'),
+                          ),
+                        ],
+                      ),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text('የሚከፍሉት፦ ${selectedTier['priceUsd']}', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.amber, fontSize: 13)),
+                      ),
+                    ],
+                  ),
+          ),
+          const SizedBox(height: 12),
+
+          // ማረጋገጫ ቁጥር ማስገቢያ
+          TextField(
+            controller: _txIdController,
+            decoration: InputDecoration(
+              labelText: _payMethod == 'Telebirr' ? 'የቴሌብር ግብይት ቁጥር (Transaction ID)' : 'የባይናንስ TxID / Order ID',
+
+border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+              filled: true,
+              fillColor: const Color(0xFFF9FAFC),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            ),
+          ),
+          const Spacer(),
+
+          // Confirm Button with 3D Shadow
+          Container(
             width: double.infinity,
-            height: 48,
+            height: 50,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(25),
+              boxShadow: [
+                BoxShadow(color: const Color(0xFF00C9A7).withOpacity(0.4), blurRadius: 10, offset: const Offset(0, 5)),
+              ],
+            ),
             child: ElevatedButton(
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF00C9A7),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
+                elevation: 0,
               ),
-              onPressed: () {},
-              child: const Text('Recharge Now', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 16)),
+              onPressed: () {
+                if (_txIdController.text.trim().isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('እባክዎ የግብይት ማረጋገጫ ቁጥሩን ያስገቡ!')),
+                  );
+                  return;
+                }
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('የጅምላ ግዢ ጥያቄዎ ደርሷል፤ ተረጋግጦ ይሞላልዎታል!')),
+                );
+              },
+              child: const Text('ክፍያውን አረጋግጥ (Confirm)', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 16)),
             ),
           ),
         ],
@@ -431,11 +800,14 @@ class SellerExchangeSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: MediaQuery.of(context).size.height * 0.75,
-      padding: const EdgeInsets.all(20),
+      height: MediaQuery.of(context).size.height * 0.78,
+      padding: const EdgeInsets.all(22),
       decoration: const BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+        boxShadow: [
+          BoxShadow(color: Colors.black26, blurRadius: 20, offset: Offset(0, -6)),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -462,32 +834,45 @@ class SellerExchangeSheet extends StatelessWidget {
                 return Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF7F8FA),
-                    borderRadius: BorderRadius.circular(12),
+
+color: const Color(0xFFF9FAFC),
+                    borderRadius: BorderRadius.circular(16),
                     border: Border.all(color: Colors.black12),
+                    boxShadow: [
+                      BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 6, offset: const Offset(0, 3)),
+                    ],
                   ),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Text(item['level'], style: const TextStyle(fontSize: 10, color: Colors.orange, fontWeight: FontWeight.bold)),
                       const SizedBox(height: 6),
-                      Text('${item['coins']} Coins', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                      Text(
+                        '${item['coins']} Coins',
+                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF00A884)),
+                      ),
                       const SizedBox(height: 4),
                       Text('${item['points']} Pts', style: const TextStyle(fontSize: 11, color: Colors.black54)),
                     ],
                   ),
                 );
-
-},
+              },
             ),
           ),
-          SizedBox(
+          Container(
             width: double.infinity,
-            height: 48,
+            height: 50,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(25),
+              boxShadow: [
+                BoxShadow(color: const Color(0xFF00C9A7).withOpacity(0.4), blurRadius: 10, offset: const Offset(0, 5)),
+              ],
+            ),
             child: ElevatedButton(
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF00C9A7),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
+                elevation: 0,
               ),
               onPressed: () {},
               child: const Text('Exchange', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 16)),
