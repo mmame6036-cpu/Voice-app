@@ -2,91 +2,99 @@ import 'package:flutter/material.dart';
 
 class RoomSeatsGrid extends StatelessWidget {
   final List<Map<String, dynamic>> seats;
-  final Function(int index) onSeatTap;
   final int currentSeatCount;
-  final Function(int count) onSeatCountChanged;
+  final Function(int) onSeatTap;
+  final Function(int) onSeatCountChanged;
 
   const RoomSeatsGrid({
     Key? key,
     required this.seats,
-    required this.onSeatTap,
     required this.currentSeatCount,
+    required this.onSeatTap,
     required this.onSeatCountChanged,
   }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    final visibleSeats = seats.take(currentSeatCount).toList();
-    final hostSeat = visibleSeats.isNotEmpty ? visibleSeats[0] : null;
-    final otherSeats = visibleSeats.length > 1 ? visibleSeats.sublist(1) : [];
-
     return Column(
-      mainAxisSize: MainAxisSize.min,
       children: [
-        if (hostSeat != null)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 6),
-            child: _buildHostSeat(hostSeat),
-          ),
+        // 1. የሆስት (Host) ወንበር ከላይ መሃል ላይ
+        if (seats.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          _buildSeatItem(context, 0, isHost: true),
+          const SizedBox(height: 12),
+        ],
+
+        // 2. የተቀሩት ተሳታፊ ወንበሮች (በ 4 ረድፍ ተቀራራቢ ሆነው)
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 20),
           child: GridView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
+            itemCount: seats.length > 1 ? seats.length - 1 : 0,
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 5,
-              mainAxisSpacing: 8,
-              crossAxisSpacing: 8,
-              childAspectRatio: 0.72,
+              crossAxisCount: 4,
+              mainAxisSpacing: 14,
+              crossAxisSpacing: 14,
+              childAspectRatio: 0.82,
             ),
-            itemCount: otherSeats.length,
             itemBuilder: (context, index) {
-              final seat = otherSeats[index];
-              final seatIndex = seat['index'] as int;
-              final isGold = seatIndex >= 2 && seatIndex <= 7;
-              return _buildSeatItem(seat, seatIndex - 1, isGold: isGold);
+              final actualIndex = index + 1;
+              return _buildSeatItem(context, actualIndex, isHost: false);
             },
           ),
         ),
-        Padding(
-          padding: const EdgeInsets.only(right: 14, top: 4),
-          child: Align(
-            alignment: Alignment.centerRight,
+
+        const SizedBox(height: 10),
+
+        // 3. የወንበር ብዛት መቆጣጠሪያ ቁልፍ
+        Align(
+          alignment: Alignment.centerRight,
+          child: Padding(
+            padding: const EdgeInsets.only(right: 20),
             child: PopupMenuButton<int>(
               initialValue: currentSeatCount,
-              tooltip: 'Change Seat Count',
               onSelected: onSeatCountChanged,
-              color: const Color(0xFF1E2536),
+              color: const Color(0xFF1E2638),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              itemBuilder: (context) => [
+                const PopupMenuItem(
+                  value: 8,
+                  child: Text('8 Seats', style: TextStyle(color: Colors.white, fontSize: 13)),
+                ),
+                const PopupMenuItem(
+                  value: 12,
+                  child: Text('12 Seats', style: TextStyle(color: Colors.white, fontSize: 13)),
+                ),
+                const PopupMenuItem(
+                  value: 16,
+                  child: Text('16 Seats', style: TextStyle(color: Colors.white, fontSize: 13)),
+                ),
+                const PopupMenuItem(
+                  value: 20,
+                  child: Text('20 Seats', style: TextStyle(color: Colors.white, fontSize: 13)),
+                ),
+              ],
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.45),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: Colors.white24, width: 0.8),
+                  color: Colors.black.withOpacity(0.4),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.white24),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.event_seat, color: Colors.amber, size: 14),
+                    const Icon(Icons.event_seat_rounded, color: Color(0xFFFFB800), size: 14),
                     const SizedBox(width: 4),
                     Text(
                       '$currentSeatCount Seats',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                      ),
+                      style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
                     ),
                     const Icon(Icons.arrow_drop_down, color: Colors.white70, size: 16),
                   ],
                 ),
               ),
-              itemBuilder: (context) => [
-                _buildMenuItem(10),
-                _buildMenuItem(20),
-                _buildMenuItem(30),
-              ],
             ),
           ),
         ),
@@ -94,219 +102,121 @@ class RoomSeatsGrid extends StatelessWidget {
     );
   }
 
-  PopupMenuItem<int> _buildMenuItem(int count) {
-    return PopupMenuItem<int>(
-      value: count,
-      child: Text(
-        '$count Seats',
-        style: TextStyle(
-          color: currentSeatCount == count ? const Color(0xFF00FFD5) : Colors.white,
-          fontWeight: currentSeatCount == count ? FontWeight.bold : FontWeight.normal,
-          fontSize: 13,
-        ),
-      ),
-    );
-  }
+  Widget _buildSeatItem(BuildContext context, int index, {required bool isHost}) {
 
-  Widget _buildHostSeat(Map<String, dynamic> seat) {
-    final hasUser = seat['user'] != null;
-    final isSpeaking = seat['isSpeaking'] == true;
-    final userName = seat['user'] ?? 'Host';
-
-return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: () => onSeatTap(0),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Stack(
-            alignment: Alignment.center,
-            children: [
-              if (isSpeaking)
-                Container(
-                  width: 58,
-                  height: 58,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(color: const Color(0xFF00FFD5), width: 2.5),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFF00FFD5).withOpacity(0.6),
-                        blurRadius: 10,
-                        spreadRadius: 2,
-                      ),
-                    ],
-                  ),
-                ),
-              Container(
-                width: 50,
-                height: 50,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFFFFB300), Color(0xFFFF6F00)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.35),
-                      blurRadius: 6,
-                      offset: const Offset(2, 2),
-                    ),
-                  ],
-                ),
-                child: Center(
-                  child: hasUser
-                      ? Text(
-                          userName.isNotEmpty ? userName[0].toUpperCase() : 'H',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 20,
-                          ),
-                        )
-                      : const Icon(Icons.star, color: Colors.white, size: 24),
-                ),
-              ),
-              Positioned(
-                bottom: 0,
-                right: 0,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                  decoration: BoxDecoration(
-                    color: Colors.amber.shade800,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Text(
-                    '1',
-                    style: TextStyle(fontSize: 8, color: Colors.white, fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 3),
-          Text(
-            userName,
-            style: const TextStyle(
-              fontSize: 10,
-              color: Colors.amber,
-              fontWeight: FontWeight.bold,
-              shadows: [Shadow(color: Colors.black, blurRadius: 4)],
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSeatItem(Map<String, dynamic> seat, int actualIndex, {required bool isGold}) {
-    final hasUser = seat['user'] != null;
-    final isSpeaking = seat['isSpeaking'] == true;
-    final userName = seat['user'] ?? '';
-    final seatIndex = seat['index'] as int;
+if (index >= seats.length) return const SizedBox();
+    final seat = seats[index];
+    final bool isOccupied = seat['user'] != null;
+    final bool isSpeaking = seat['isSpeaking'] == true;
+    final String displayName = isOccupied ? seat['user'].toString() : (isHost ? 'Host' : '${index + 1}');
 
     return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: () => onSeatTap(actualIndex),
+      onTap: () => onSeatTap(index),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           Stack(
             alignment: Alignment.center,
             children: [
-              if (isSpeaking)
-                Container(
-                  width: 42,
-                  height: 42,
-                  decoration: BoxDecoration(
-
-shape: BoxShape.circle,
-                    border: Border.all(color: const Color(0xFF00FFD5), width: 2),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFF00FFD5).withOpacity(0.5),
-                        blurRadius: 6,
-                      ),
-                    ],
-                  ),
-                ),
-              Container(
-                width: 36,
-                height: 36,
+              // ድምፅ ሲያወራ የሚበራ ክብ (Speaking Wave)
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                width: isHost ? 58 : 50,
+                height: isHost ? 58 : 50,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  border: isGold
-                      ? Border.all(color: const Color(0xFFFFD700), width: 1.5)
-                      : Border.all(color: Colors.white24, width: 0.5),
-                  gradient: hasUser
-                      ? const LinearGradient(
-                          colors: [Color(0xFF6C5CE7), Color(0xFF8E44AD)],
-                        )
-                      : LinearGradient(
-                          colors: isGold
-                              ? [
-                                  const Color(0xFF5A4515).withOpacity(0.6),
-                                  const Color(0xFF2E2207).withOpacity(0.6)
-                                ]
-                              : [
-                                  Colors.black.withOpacity(0.35),
-                                  Colors.black.withOpacity(0.2)
-                                ],
-                        ),
+                  border: Border.all(
+                    color: isSpeaking
+                        ? const Color(0xFF00FFCC)
+                        : (isOccupied ? const Color(0xFF4A90E2) : Colors.transparent),
+                    width: isSpeaking ? 2.5 : 1.5,
+                  ),
+                  boxShadow: isSpeaking
+                      ? [
+                          BoxShadow(
+                            color: const Color(0xFF00FFCC).withOpacity(0.6),
+                            blurRadius: 10,
+                            spreadRadius: 2,
+                          )
+                        ]
+                      : [],
+                ),
+              ),
+
+              // የወንበሩ ዋና አምሳል (Avatar or Empty Seat)
+              Container(
+                width: isHost ? 52 : 44,
+                height: isHost ? 52 : 44,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: isOccupied
+                      ? (isHost
+                          ? const LinearGradient(colors: [Color(0xFFFF9900), Color(0xFFFF5E3A)])
+                          : const LinearGradient(colors: [Color(0xFF6A11CB), Color(0xFF2575FC)]))
+                      : null,
+                  color: isOccupied ? null : Colors.black.withOpacity(0.35),
+                  border: Border.all(
+                    color: isOccupied ? Colors.white70 : Colors.white24,
+                    width: 1,
+                  ),
                 ),
                 child: Center(
-                  child: hasUser
+                  child: isOccupied
                       ? Text(
-                          userName.isNotEmpty ? userName[0].toUpperCase() : 'U',
+                          displayName.substring(0, 1).toUpperCase(),
                           style: const TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.bold,
-                            fontSize: 13,
+                            fontSize: 18,
                           ),
                         )
                       : Icon(
-                          Icons.mic_none,
-                          color: isGold ? const Color(0xFFFFD700) : Colors.white38,
-                          size: 15,
+                          isHost ? Icons.star_rounded : Icons.mic_none_rounded,
+                          color: isHost ? const Color(0xFFFFB800) : Colors.white38,
+                          size: isHost ? 24 : 20,
                         ),
                 ),
               ),
+
+              // የወንበር ቁጥር መለያ (Badge)
               Positioned(
                 bottom: 0,
                 right: 0,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 0.5),
+                  padding: const EdgeInsets.all(3),
                   decoration: BoxDecoration(
-                    color: isGold ? const Color(0xFFD4AF37) : Colors.black.withOpacity(0.6),
-                    borderRadius: BorderRadius.circular(6),
+                    color: isHost ? const Color(0xFFFF9900) : const Color(0xFF1E2638),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.black, width: 1.5),
                   ),
                   child: Text(
-                    '$seatIndex',
-                    style: TextStyle(
-                      fontSize: 7,
-                      color: isGold ? Colors.black : Colors.white,
+                    isHost ? '★' : '${index + 1}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 8,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                ),
+
+),
               ),
             ],
           ),
-          const SizedBox(height: 2),
-          Text(
-            hasUser ? userName : '$seatIndex',
-            style: TextStyle(
-              fontSize: 9,
-              color: isGold && !hasUser ? const Color(0xFFFFD700) : (hasUser ? Colors.white : Colors.white60),
-              fontWeight: hasUser || isGold ? FontWeight.bold : FontWeight.normal,
-              shadows: const [Shadow(color: Colors.black, blurRadius: 3)],
+          const SizedBox(height: 4),
+          // የስም ወይም የወንበር መለያ ጽሑፍ
+          SizedBox(
+            width: 60,
+            child: Text(
+              displayName,
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: isOccupied ? Colors.white : Colors.white60,
+                fontSize: 10.5,
+                fontWeight: isOccupied ? FontWeight.bold : FontWeight.normal,
+              ),
             ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),
