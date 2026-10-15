@@ -7,7 +7,7 @@ class BasicToolsSheet extends StatelessWidget {
   const BasicToolsSheet({
     Key? key,
     this.onSeatsChanged,
-    this.currentSeats = 25,
+    this.currentSeats = 25,     
   }) : super(key: key);
 
   static Future<void> show(
