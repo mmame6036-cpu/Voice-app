@@ -1,4 +1,92 @@
-if (response.statusCode == 200) {
+import 'dart:convert';
+import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'services/user_service.dart';
+import 'screens/login_screen.dart';
+import 'screens/coin_seller_screen.dart';
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await UserService().initializeUser();
+  runApp(const NileVoiceApp());
+}
+
+class NileVoiceApp extends StatelessWidget {
+  const NileVoiceApp({Key? key}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      title: 'Nile Voice',
+      theme: ThemeData.dark().copyWith(
+        scaffoldBackgroundColor: const Color(0xFF0C0D12),
+        primaryColor: const Color(0xFFFFD700),
+      ),
+      initialRoute: '/login',
+      routes: {
+        '/login': (context) => const LoginScreen(),
+        '/home': (context) => const HomeScreen(),
+      },
+    );
+  }
+}
+
+class HomeScreen extends StatefulWidget {
+  const HomeScreen({Key? key}) : super(key: key);
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  final UserService _user = UserService();
+  bool _isLoading = false;
+  String _selectedCategory = 'All';
+  List<dynamic> _rooms = [];
+
+  final List<String> _categories = const ['All', 'Party', 'Chat', 'Music', 'Gaming'];
+
+  final List<Map<String, dynamic>> _banners = const [
+    {
+      'title': 'Welcome to Nile Voice',
+      'subtitle': 'Explore live voice rooms & party together',
+      'icon': Icons.graphic_eq,
+      'colors': [Color(0xFF2C2619), Color(0xFF141620)],
+    },
+    {
+      'title': 'VIP Membership',
+      'subtitle': 'Get exclusive golden rewards daily',
+      'icon': Icons.workspace_premium,
+      'colors': [Color(0xFF1A2624), Color(0xFF141620)],
+    },
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchRooms();
+  }
+
+  List<dynamic> _getDefaultRooms() {
+    return [
+      {
+        'roomId': '1001',
+        'title': 'Global Chat Lounge 🌍',
+        'hostName': 'Master Host',
+        'usersCount': '12',
+      }
+    ];
+  }
+
+  Future<void> _fetchRooms() async {
+    setState(() => _isLoading = true);
+    try {
+      final response = await http
+          .get(Uri.parse('https://voice-app-2-jd95.onrender.com/api/rooms'))
+          .timeout(const Duration(seconds: 8));
+
+      if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['success'] == true && mounted) {
           final fetched = data['rooms'] ?? [];
@@ -43,7 +131,8 @@ if (response.statusCode == 200) {
             decoration: InputDecoration(
               hintText: 'Enter Room ID (e.g. 1001)',
               hintStyle: const TextStyle(color: Colors.white38),
-              filled: true,
+
+filled: true,
               fillColor: Colors.white.withOpacity(0.05),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
@@ -65,15 +154,8 @@ if (response.statusCode == 200) {
                 final targetId = searchController.text.trim();
                 Navigator.pop(context);
                 if (targetId.isNotEmpty) {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => RoomScreen(
-                        roomId: targetId,
-                        roomTitle: "Room $targetId",
-                        hostName: "Host",
-                      ),
-                    ),
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Joining Room: $targetId')),
                   );
                 }
               },
@@ -101,17 +183,10 @@ if (response.statusCode == 200) {
     } catch (_) {}
 
     if (!mounted) return;
-
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => RoomScreen(
-          roomId: _user.userId,
-          roomTitle: "${_user.userName}'s Room",
-          hostName: _user.userName,
-        ),
-      ),
-    ).then((_) => _fetchRooms());
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text("Opened ${_user.userName}'s Room")),
+    );
+    _fetchRooms();
   }
 
   @override
@@ -119,8 +194,7 @@ if (response.statusCode == 200) {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: const Color(0xFF161B26),
-
-elevation: 0,
+        elevation: 0,
         title: const Text('Nile Voice', style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.8)),
         actions: [
           IconButton(
@@ -128,23 +202,20 @@ elevation: 0,
             tooltip: 'Search Room',
             onPressed: _showSearchRoomDialog,
           ),
-          GestureDetector(
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RechargeScreen())),
-            child: Container(
-              margin: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: Colors.amber.withOpacity(0.15),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: Colors.amber.withOpacity(0.4)),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.monetization_on, color: Colors.amber, size: 16),
-                  const SizedBox(width: 4),
-                  Text('${_user.coins}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.amber)),
-                ],
-              ),
+          Container(
+            margin: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.amber.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: Colors.amber.withOpacity(0.4)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.monetization_on, color: Colors.amber, size: 16),
+                const SizedBox(width: 4),
+                Text('${_user.coins}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.amber)),
+              ],
             ),
           ),
         ],
@@ -162,12 +233,12 @@ elevation: 0,
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            // 1. Featured Top Slider / Banner
             SizedBox(
               height: 120,
               child: PageView.builder(
                 itemCount: _banners.length,
-                itemBuilder: (context, index) {
+
+itemBuilder: (context, index) {
                   final b = _banners[index];
                   return Container(
                     margin: const EdgeInsets.symmetric(horizontal: 4),
@@ -202,15 +273,11 @@ elevation: 0,
                 },
               ),
             ),
-
             const SizedBox(height: 18),
-
-            // 2. Categories Filter Bar
             SizedBox(
               height: 38,
               child: ListView.separated(
-
-scrollDirection: Axis.horizontal,
+                scrollDirection: Axis.horizontal,
                 itemCount: _categories.length,
                 separatorBuilder: (_, __) => const SizedBox(width: 8),
                 itemBuilder: (context, index) {
@@ -231,10 +298,7 @@ scrollDirection: Axis.horizontal,
                 },
               ),
             ),
-
             const SizedBox(height: 20),
-
-            // 3. Live Rooms Header
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -248,26 +312,22 @@ scrollDirection: Axis.horizontal,
                 ),
               ],
             ),
-
             const SizedBox(height: 8),
-
-            // Global Master Room
             _buildRoomCard(
               roomId: '1001',
               title: 'Global Chat Lounge 🌍',
               host: 'Master Host',
               usersCount: '12',
             ),
-
             const SizedBox(height: 10),
-
             if (_isLoading)
               const Center(
                 child: Padding(
                   padding: EdgeInsets.all(24),
                   child: CircularProgressIndicator(color: Color(0xFF00C9A7)),
                 ),
-              )
+
+)
             else
               ..._rooms.map((room) {
                 final rId = room['roomId'].toString();
@@ -282,7 +342,6 @@ scrollDirection: Axis.horizontal,
                   ),
                 );
               }).toList(),
-
             const SizedBox(height: 80),
           ],
         ),
@@ -296,407 +355,63 @@ scrollDirection: Axis.horizontal,
     required String host,
     required String usersCount,
   }) {
-    return GestureDetector(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => RoomScreen(
-              roomId: roomId,
-              roomTitle: title,
-              hostName: host,
-            ),
-          ),
-        );
-      },
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: const Color(0xFF161B26),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.white10),
-        ),
-        child: Row(
-          children: [
-            Stack(
-              alignment: Alignment.center,
-              children: [
-                const CircleAvatar(
-                  radius: 26,
-                  backgroundColor: Color(0xFF00C9A7),
-
-child: Icon(Icons.headset, color: Colors.black, size: 26),
-                ),
-                Positioned(
-                  bottom: 0,
-                  right: 0,
-                  child: Container(
-                    width: 10,
-                    height: 10,
-                    decoration: BoxDecoration(
-                      color: Colors.greenAccent,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: const Color(0xFF161B26), width: 1.5),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.white),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 4),
-                  Text('ID: $roomId • Host: $host', style: const TextStyle(color: Colors.white54, fontSize: 12)),
-                ],
-              ),
-            ),
-            Row(
-              children: [
-                const Icon(Icons.people_alt_outlined, color: Color(0xFF00C9A7), size: 16),
-                const SizedBox(width: 4),
-                Text(usersCount, style: const TextStyle(color: Color(0xFF00C9A7), fontSize: 12, fontWeight: FontWeight.bold)),
-              ],
-            ),
-          ],
-        ),
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF161B26),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white10),
       ),
-    );
-  }
-}
-
-class ProfileScreen extends StatefulWidget {
-  const ProfileScreen({Key? key}) : super(key: key);
-
-  @override
-  State<ProfileScreen> createState() => _ProfileScreenState();
-}
-
-class _ProfileScreenState extends State<ProfileScreen> {
-  final UserService _user = UserService();
-
-  @override
-  void initState() {
-    super.initState();
-    _refreshProfile();
-  }
-
-  Future<void> _refreshProfile() async {
-    await _user.initializeUser();
-    if (mounted) setState(() {});
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF0F141C),
-      body: SafeArea(
-        child: RefreshIndicator(
-          onRefresh: _refreshProfile,
-          color: const Color(0xFF00C9A7),
-          child: SingleChildScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.all(16),
+      child: Row(
+        children: [
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              const CircleAvatar(
+                radius: 26,
+                backgroundColor: Color(0xFF00C9A7),
+                child: Icon(Icons.headset, color: Colors.black, size: 26),
+              ),
+              Positioned(
+                bottom: 0,
+                right: 0,
+                child: Container(
+                  width: 10,
+                  height: 10,
+                  decoration: BoxDecoration(
+                    color: Colors.greenAccent,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: const Color(0xFF161B26), width: 1.5),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(width: 14),
+          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    CircleAvatar(
-                      radius: 36,
-                      backgroundColor: const Color(0xFF00C9A7),
-                      child: Text(
-                        _user.userName.isNotEmpty ? _user.userName[0].toUpperCase() : 'U',
-                        style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.black),
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            _user.userName,
-                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 6),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-
-decoration: BoxDecoration(
-                              color: const Color(0xFF161B26),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: Colors.white12),
-                            ),
-                            child: Text(
-                              'ID: ${_user.userId}',
-                              style: const TextStyle(color: Color(0xFF00C9A7), fontWeight: FontWeight.bold, fontSize: 12),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.settings_outlined, color: Colors.white70),
-                      onPressed: () {},
-                    ),
-                  ],
+                Text(
+                  title,
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.white),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                const SizedBox(height: 20),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF2E2415), Color(0xFF161B26)],
-                    ),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: Colors.amber.withOpacity(0.3)),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.workspace_premium, color: Colors.amber, size: 28),
-                      const SizedBox(width: 10),
-                      const Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('VIP Club', style: TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: 14)),
-                            Text('Upgrade to VIP and get free daily coins', style: TextStyle(color: Colors.white54, fontSize: 11)),
-                          ],
-                        ),
-                      ),
-                      ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.amber,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                          minimumSize: Size.zero,
-                        ),
-                        onPressed: () {},
-                        child: const Text('Get VIP', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 11)),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () async {
-                          await Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (_) => const RechargeScreen()),
-                          );
-                          _refreshProfile();
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF161B26),
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: Colors.white10),
-                          ),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: Column(
-
-crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    const Text('Coins', style: TextStyle(color: Colors.white60, fontSize: 12)),
-                                    const SizedBox(height: 6),
-                                    Text(
-                                      '${_user.coins}',
-                                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const CircleAvatar(
-                                radius: 16,
-                                backgroundColor: Colors.amber,
-                                child: Icon(Icons.monetization_on, color: Colors.black, size: 20),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () async {
-                          await Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (_) => const PointsScreen()),
-                          );
-                          _refreshProfile();
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF161B26),
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: Colors.white10),
-                          ),
-                          child: const Row(
-                            children: [
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text('Points', style: TextStyle(color: Colors.white60, fontSize: 12)),
-                                    SizedBox(height: 6),
-                                    Text(
-                                      '0',
-                                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              CircleAvatar(
-                                radius: 16,
-                                backgroundColor: Color(0xFF38B29C),
-                                child: Icon(Icons.diamond, color: Colors.white, size: 18),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 20),
-
-                // Main Centers Row
-                Container(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF161B26),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.white10),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(12),
-
-onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(builder: (_) => const HostCenterScreen()),
-                            );
-                          },
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 8),
-                            child: _buildActionItem(icon: Icons.mic_external_on, label: 'Host Center'),
-                          ),
-                        ),
-                      ),
-                      Expanded(
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(12),
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(builder: (_) => const AgencyScreen()),
-                            );
-                          },
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 8),
-                            child: _buildActionItem(icon: Icons.groups_outlined, label: 'Agency'),
-                          ),
-                        ),
-                      ),
-                      Expanded(
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(12),
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(builder: (_) => const CoinSellerScreen()),
-                            );
-                          },
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 8),
-                            child: _buildActionItem(icon: Icons.storefront_outlined, label: 'Coin Seller'),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 16),
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF161B26),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.white10),
-                  ),
-                  child: GridView.count(
-                    crossAxisCount: 4,
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    mainAxisSpacing: 16,
-                    crossAxisSpacing: 10,
-                    children: [
-                      _buildGridMenuItem(icon: Icons.task_alt, label: 'Task'),
-                      _buildGridMenuItem(icon: Icons.person_add_alt, label: 'Invite'),
-                      _buildGridMenuItem(icon: Icons.shopping_bag_outlined, label: 'Store'),
-                      _buildGridMenuItem(icon: Icons.backpack_outlined, label: 'Backpack'),
-                      _buildGridMenuItem(icon: Icons.military_tech_outlined, label: 'Level'),
-                      _buildGridMenuItem(icon: Icons.shield_outlined, label: 'Medal Wall'),
-                      _buildGridMenuItem(icon: Icons.headset_mic_outlined, label: 'Support'),
-                      _buildGridMenuItem(icon: Icons.tune, label: 'Settings'),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 40),
+                const SizedBox(height: 4),
+                Text('ID: $roomId • Host: $host', style: const TextStyle(color: Colors.white54, fontSize: 12)),
               ],
             ),
           ),
-        ),
+          Row(
+            children: [
+              const Icon(Icons.people_alt_outlined, color: Color(0xFF00C9A7), size: 16),
+              const SizedBox(width: 4),
+              Text(usersCount, style: const TextStyle(color: Color(0xFF00C9A7), fontSize: 12, fontWeight: FontWeight.bold)),
+            ],
+          ),
+        ],
       ),
-    );
-  }
-
-  Widget _buildActionItem({required IconData icon, required String label}) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, color: const Color(0xFF00C9A7), size: 26),
-        const SizedBox(height: 6),
-        Text(label, style: const TextStyle(fontSize: 12, color: Colors.white70)),
-      ],
-    );
-  }
-
-Widget _buildGridMenuItem({required IconData icon, required String label}) {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Icon(icon, color: Colors.white70, size: 24),
-        const SizedBox(height: 6),
-        Text(
-          label,
-          style: const TextStyle(fontSize: 11, color: Colors.white60),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-      ],
     );
   }
 }
