@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'services/user_service.dart';
+import 'call_screen.dart';
 
 class MessagesScreen extends StatefulWidget {
   const MessagesScreen({Key? key}) : super(key: key);
@@ -14,10 +15,47 @@ class MessagesScreen extends StatefulWidget {
 class _MessagesScreenState extends State<MessagesScreen> {
   final UserService _userService = UserService();
   final TextEditingController _searchController = TextEditingController();
+  IO.Socket? _globalSocket;
   
   Map<String, dynamic>? _foundUser;
   bool _isSearching = false;
-  String _statusMessage = 'Search users by their unique ID to start chatting';
+  String _statusMessage = 'Search users by their unique ID to start chatting or calling';
+
+  @override
+  void initState() {
+    super.initState();
+    _initGlobalSocket();
+  }
+
+  // Listen for incoming calls across the app
+  void _initGlobalSocket() {
+    _globalSocket = IO.io(
+      UserService.serverUrl,
+      IO.OptionBuilder()
+          .setTransports(['websocket'])
+          .enableAutoConnect()
+          .build(),
+    );
+
+    _globalSocket?.onConnect((_) {
+      _globalSocket?.emit('user_connected', _userService.userId);
+    });
+
+    _globalSocket?.on('incoming_call', (data) {
+      if (!mounted) return;
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => CallScreen(
+            targetUserId: data['callerId'].toString(),
+            targetUserName: data['callerName'] ?? 'Unknown Caller',
+            channelName: data['channelName'] ?? 'call_room',
+            isIncoming: true,
+          ),
+        ),
+      );
+    });
+  }
 
   Future<void> _handleSearch() async {
     final queryId = _searchController.text.trim();
@@ -55,9 +93,26 @@ class _MessagesScreenState extends State<MessagesScreen> {
     );
   }
 
+  void _startCall(String peerId, String peerName) {
+    final channelName = 'call_${_userService.userId}_${peerId}_${DateTime.now().millisecondsSinceEpoch}';
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => CallScreen(
+          targetUserId: peerId,
+          targetUserName: peerName,
+          channelName: channelName,
+          isIncoming: false,
+        ),
+      ),
+    );
+  }
+
   @override
   void dispose() {
     _searchController.dispose();
+    _globalSocket?.disconnect();
+    _globalSocket?.dispose();
     super.dispose();
   }
 
@@ -68,12 +123,11 @@ class _MessagesScreenState extends State<MessagesScreen> {
       appBar: AppBar(
         backgroundColor: const Color(0xFF161B26),
         elevation: 0,
-        title: const Text('Messages', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text('Messages & Calls', style: TextStyle(fontWeight: FontWeight.bold)),
       ),
       body: ListView(
         padding: const EdgeInsets.all(16.0),
         children: [
-          // Top Notification Shortcuts (System, Event, Customer Support)
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
@@ -84,7 +138,8 @@ class _MessagesScreenState extends State<MessagesScreen> {
                 onTap: () {},
               ),
               _buildTopCategoryItem(
-                icon: Icons.star,
+
+icon: Icons.star,
                 iconColor: const Color(0xFFFF8A80),
                 label: 'Event',
                 onTap: () {},
@@ -92,7 +147,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
               _buildTopCategoryItem(
                 icon: Icons.support_agent,
                 iconColor: const Color(0xFFFFD54F),
-                label: 'Customer',
+                label: 'Support',
                 onTap: () {
                   _openChat('1000', 'Customer Support');
                 },
@@ -119,9 +174,8 @@ class _MessagesScreenState extends State<MessagesScreen> {
                     keyboardType: TextInputType.text,
                     style: const TextStyle(color: Colors.white),
                     decoration: const InputDecoration(
-                      hintText: 'Enter User ID to chat...',
-
-hintStyle: TextStyle(color: Colors.white38),
+                      hintText: 'Enter User ID to chat or call...',
+                      hintStyle: TextStyle(color: Colors.white38),
                       border: InputBorder.none,
                     ),
                     onSubmitted: (_) => _handleSearch(),
@@ -142,7 +196,7 @@ hintStyle: TextStyle(color: Colors.white38),
           ),
           const SizedBox(height: 20),
 
-          // Searched User Card
+          // Found User Result Card
           if (_foundUser != null)
             Container(
               padding: const EdgeInsets.all(16),
@@ -170,17 +224,30 @@ hintStyle: TextStyle(color: Colors.white38),
                           style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
                         ),
                         Text(
-                          'User ID: ${_foundUser!['userId']}',
+                          'ID: ${_foundUser!['userId']}',
                           style: const TextStyle(color: Color(0xFF00C9A7), fontSize: 13),
                         ),
                       ],
                     ),
                   ),
+                  IconButton(
+                    icon: const Icon(Icons.call, color: Color(0xFF00C9A7)),
+                    tooltip: 'Voice Call',
+                    onPressed: () {
+
+_startCall(
+                        _foundUser!['userId'].toString(),
+                        _foundUser!['name'] ?? 'User',
+                      );
+                    },
+                  ),
+                  const SizedBox(width: 4),
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF00C9A7),
                       foregroundColor: Colors.black,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                     ),
                     onPressed: () {
                       _openChat(
@@ -267,10 +334,13 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   }
 
   void _connectSocket() {
-    _socket = IO.io('https://voice-app-backend.onrender.com', <String, dynamic>{
-      'transports': ['websocket'],
-      'autoConnect': true,
-    });
+    _socket = IO.io(
+      UserService.serverUrl,
+      IO.OptionBuilder()
+          .setTransports(['websocket'])
+          .enableAutoConnect()
+          .build(),
+    );
 
     _socket?.onConnect((_) {
       _socket?.emit('user_connected', widget.currentUserId);
@@ -278,7 +348,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
 
     _socket?.on('receive_direct_message', (data) {
       if (!mounted) return;
-      if (data['senderId'] == widget.peerId) {
+      if (data['senderId'].toString() == widget.peerId) {
         setState(() {
           _messages.add(Map<String, dynamic>.from(data));
         });
@@ -290,15 +360,16 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   Future<void> _fetchChatHistory() async {
     try {
       final url = Uri.parse(
-        'https://voice-app-backend.onrender.com/api/chat-history?user1=${widget.currentUserId}&user2=${widget.peerId}',
+        '${UserService.serverUrl}/api/chat-history?user1=${widget.currentUserId}&user2=${widget.peerId}',
       );
-      final response = await http.get(url);
-      if (response.statusCode == 200) {
+      final response = await http.get(url).timeout(const Duration(seconds: 8));
+
+if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['success'] == true && mounted) {
           setState(() {
             _messages.clear();
-            _messages.addAll(List<Map<String, dynamic>>.from(data['messages']));
+            _messages.addAll(List<Map<String, dynamic>>.from(data['messages'] ?? []));
             _isLoading = false;
           });
           _scrollToBottom();
@@ -331,6 +402,21 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
 
     _messageController.clear();
     _scrollToBottom();
+  }
+
+  void _triggerCall() {
+    final channelName = 'call_${widget.currentUserId}_${widget.peerId}_${DateTime.now().millisecondsSinceEpoch}';
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => CallScreen(
+          targetUserId: widget.peerId,
+          targetUserName: widget.peerName,
+          channelName: channelName,
+          isIncoming: false,
+        ),
+      ),
+    );
   }
 
   void _scrollToBottom() {
@@ -367,6 +453,13 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
             Text('ID: ${widget.peerId}', style: const TextStyle(fontSize: 12, color: Color(0xFF00C9A7))),
           ],
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.call, color: Color(0xFF00C9A7)),
+            tooltip: 'Call User',
+            onPressed: _triggerCall,
+          ),
+        ],
       ),
       body: Column(
         children: [
@@ -375,12 +468,11 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                 ? const Center(child: CircularProgressIndicator(color: Color(0xFF00C9A7)))
                 : ListView.builder(
                     controller: _scrollController,
-
-padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.all(16),
                     itemCount: _messages.length,
                     itemBuilder: (context, index) {
                       final msg = _messages[index];
-                      final isMe = msg['senderId'] == widget.currentUserId;
+                      final isMe = msg['senderId'].toString() == widget.currentUserId;
 
                       return Align(
                         alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
@@ -392,7 +484,8 @@ padding: const EdgeInsets.all(16),
                             borderRadius: BorderRadius.only(
                               topLeft: const Radius.circular(14),
                               topRight: const Radius.circular(14),
-                              bottomLeft: isMe ? const Radius.circular(14) : Radius.zero,
+
+bottomLeft: isMe ? const Radius.circular(14) : Radius.zero,
                               bottomRight: isMe ? Radius.zero : const Radius.circular(14),
                             ),
                             border: Border.all(
