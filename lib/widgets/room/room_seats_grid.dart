@@ -1,222 +1,119 @@
 import 'package:flutter/material.dart';
 
 class RoomSeatsGrid extends StatelessWidget {
-  final List<Map<String, dynamic>> seats;
-  final int currentSeatCount;
-  final Function(int) onSeatTap;
-  final Function(int) onSeatCountChanged;
+  final int seatCount;
+  final Function(int seatIndex)? onSeatTap;
 
   const RoomSeatsGrid({
     Key? key,
-    required this.seats,
-    required this.currentSeatCount,
-    required this.onSeatTap,
-    required this.onSeatCountChanged,
+    this.seatCount = 25,
+    this.onSeatTap,
   }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
+    if (seatCount == 25) {
+      return _build25SeatsLayout();
+    }
+    // ለሌሎች የወንበር መጠኖች (9, 16, 20, 24, 30)
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: seatCount,
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: seatCount <= 16 ? 4 : 5,
+        crossAxisSpacing: 8,
+        mainAxisSpacing: 12,
+      ),
+      itemBuilder: (ctx, i) => _buildSeatItem(seatNumber: i + 1, hasCrown: i < 3),
+    );
+  }
+
+  // ምስሉ ላይ የሚታየው ትክክለኛ የ 25 ወንበሮች አቀማመጥ
+  Widget _build25SeatsLayout() {
     return Column(
       children: [
-        // 1. የሆስት (Host) ወንበር ከላይ መሃል ላይ
-        if (seats.isNotEmpty) ...[
-          const SizedBox(height: 10),
-          _buildSeatItem(context, 0, isHost: true),
-          const SizedBox(height: 12),
-        ],
+        // Row 1: Seat 1 (Centered Host)
+        _buildSeatItem(seatNumber: 1, isHost: true),
+        const SizedBox(height: 12),
 
-        // 2. የተቀሩት ተሳታፊ ወንበሮች (በ 4 ረድፍ ተቀራራቢ ሆነው)
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: seats.length > 1 ? seats.length - 1 : 0,
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 4,
-              mainAxisSpacing: 14,
-              crossAxisSpacing: 14,
-              childAspectRatio: 0.82,
-            ),
-            itemBuilder: (context, index) {
-              final actualIndex = index + 1;
-              return _buildSeatItem(context, actualIndex, isHost: false);
-            },
-          ),
+        // Row 2: Seats 2 to 7 (2 to 6 have Gold Crown, 7 is regular)
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            _buildSeatItem(seatNumber: 2, hasCrown: true),
+            _buildSeatItem(seatNumber: 3, hasCrown: true),
+            _buildSeatItem(seatNumber: 4, hasCrown: true),
+            _buildSeatItem(seatNumber: 5, hasCrown: true),
+            _buildSeatItem(seatNumber: 6, hasCrown: true),
+            _buildSeatItem(seatNumber: 7, hasCrown: false),
+          ],
         ),
+        const SizedBox(height: 12),
 
-        const SizedBox(height: 10),
+        // Row 3: Seats 8 to 13
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: List.generate(6, (i) => _buildSeatItem(seatNumber: i + 8)),
+        ),
+        const SizedBox(height: 12),
 
-        // 3. የወንበር ብዛት መቆጣጠሪያ ቁልፍ
-        Align(
-          alignment: Alignment.centerRight,
-          child: Padding(
-            padding: const EdgeInsets.only(right: 20),
-            child: PopupMenuButton<int>(
-              initialValue: currentSeatCount,
-              onSelected: onSeatCountChanged,
-              color: const Color(0xFF1E2638),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              itemBuilder: (context) => [
-                const PopupMenuItem(
-                  value: 8,
-                  child: Text('8 Seats', style: TextStyle(color: Colors.white, fontSize: 13)),
-                ),
-                const PopupMenuItem(
-                  value: 12,
-                  child: Text('12 Seats', style: TextStyle(color: Colors.white, fontSize: 13)),
-                ),
-                const PopupMenuItem(
-                  value: 16,
-                  child: Text('16 Seats', style: TextStyle(color: Colors.white, fontSize: 13)),
-                ),
-                const PopupMenuItem(
-                  value: 20,
-                  child: Text('20 Seats', style: TextStyle(color: Colors.white, fontSize: 13)),
-                ),
-              ],
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.4),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.white24),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.event_seat_rounded, color: Color(0xFFFFB800), size: 14),
-                    const SizedBox(width: 4),
-                    Text(
-                      '$currentSeatCount Seats',
-                      style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
-                    ),
-                    const Icon(Icons.arrow_drop_down, color: Colors.white70, size: 16),
-                  ],
-                ),
-              ),
-            ),
-          ),
+        // Row 4: Seats 14 to 19
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: List.generate(6, (i) => _buildSeatItem(seatNumber: i + 14)),
+        ),
+        const SizedBox(height: 12),
+
+        // Row 5: Seats 20 to 25
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: List.generate(6, (i) => _buildSeatItem(seatNumber: i + 20)),
         ),
       ],
     );
   }
 
-  Widget _buildSeatItem(BuildContext context, int index, {required bool isHost}) {
-
-if (index >= seats.length) return const SizedBox();
-    final seat = seats[index];
-    final bool isOccupied = seat['user'] != null;
-    final bool isSpeaking = seat['isSpeaking'] == true;
-    final String displayName = isOccupied ? seat['user'].toString() : (isHost ? 'Host' : '${index + 1}');
-
+  Widget _buildSeatItem({required int seatNumber, bool isHost = false, bool hasCrown = false}) {
     return GestureDetector(
-      onTap: () => onSeatTap(index),
+      onTap: () => onSeatTap?.call(seatNumber),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           Stack(
+            clipBehavior: Clip.none,
             alignment: Alignment.center,
             children: [
-              // ድምፅ ሲያወራ የሚበራ ክብ (Speaking Wave)
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 300),
-                width: isHost ? 58 : 50,
-                height: isHost ? 58 : 50,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: isSpeaking
-                        ? const Color(0xFF00FFCC)
-                        : (isOccupied ? const Color(0xFF4A90E2) : Colors.transparent),
-                    width: isSpeaking ? 2.5 : 1.5,
-                  ),
-                  boxShadow: isSpeaking
-                      ? [
-                          BoxShadow(
-                            color: const Color(0xFF00FFCC).withOpacity(0.6),
-                            blurRadius: 10,
-                            spreadRadius: 2,
-                          )
-                        ]
-                      : [],
+              if (hasCrown)
+                const Positioned(
+                  top: -12,
+                  child: Icon(Icons.workspace_premium, size: 16, color: Color(0xFFFFD700)),
                 ),
-              ),
-
-              // የወንበሩ ዋና አምሳል (Avatar or Empty Seat)
               Container(
-                width: isHost ? 52 : 44,
-                height: isHost ? 52 : 44,
+                width: 38,
+                height: 38,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  gradient: isOccupied
-                      ? (isHost
-                          ? const LinearGradient(colors: [Color(0xFFFF9900), Color(0xFFFF5E3A)])
-                          : const LinearGradient(colors: [Color(0xFF6A11CB), Color(0xFF2575FC)]))
-                      : null,
-                  color: isOccupied ? null : Colors.black.withOpacity(0.35),
+                  gradient: const RadialGradient(
+                    colors: [Color(0xFF4A4B54), Color(0xFF1E1F26)],
+                    center: Alignment(-0.2, -0.3),
+                  ),
                   border: Border.all(
-                    color: isOccupied ? Colors.white70 : Colors.white24,
-                    width: 1,
+                    color: hasCrown ? Colors.amber.withOpacity(0.5) : Colors.white24,
+                    width: 1.2,
                   ),
+                  boxShadow: const [
+                    BoxShadow(color: Colors.black54, blurRadius: 4, offset: Offset(0, 2)),
+                  ],
                 ),
-                child: Center(
-                  child: isOccupied
-                      ? Text(
-                          displayName.substring(0, 1).toUpperCase(),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 18,
-                          ),
-                        )
-                      : Icon(
-                          isHost ? Icons.star_rounded : Icons.mic_none_rounded,
-                          color: isHost ? const Color(0xFFFFB800) : Colors.white38,
-                          size: isHost ? 24 : 20,
-                        ),
-                ),
-              ),
-
-              // የወንበር ቁጥር መለያ (Badge)
-              Positioned(
-                bottom: 0,
-                right: 0,
-                child: Container(
-                  padding: const EdgeInsets.all(3),
-                  decoration: BoxDecoration(
-                    color: isHost ? const Color(0xFFFF9900) : const Color(0xFF1E2638),
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.black, width: 1.5),
-                  ),
-                  child: Text(
-                    isHost ? '★' : '${index + 1}',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 8,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-
-),
+                child: const Icon(Icons.chair, color: Colors.white70, size: 18),
               ),
             ],
           ),
-          const SizedBox(height: 4),
-          // የስም ወይም የወንበር መለያ ጽሑፍ
-          SizedBox(
-            width: 60,
-            child: Text(
-              displayName,
-              textAlign: TextAlign.center,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: isOccupied ? Colors.white : Colors.white60,
-                fontSize: 10.5,
-                fontWeight: isOccupied ? FontWeight.bold : FontWeight.normal,
-              ),
-            ),
+          const SizedBox(height: 3),
+          Text(
+            '$seatNumber',
+            style: const TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.bold),
           ),
         ],
       ),
