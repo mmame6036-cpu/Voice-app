@@ -1,5 +1,7 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
 import 'services/user_service.dart';
 
 class CoinSellerScreen extends StatefulWidget {
@@ -35,6 +37,7 @@ class _CoinSellerScreenState extends State<CoinSellerScreen> {
         telebirrPhone: _telebirrPhone,
         binanceUid: _binanceUid,
         userId: _user.userId,
+        userName: _user.userName,
       ),
     );
   }
@@ -45,6 +48,13 @@ class _CoinSellerScreenState extends State<CoinSellerScreen> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => const SellerExchangeSheet(),
+    );
+  }
+
+  void _openAdminPanel() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const AdminPaymentScreen()),
     );
   }
 
@@ -94,13 +104,13 @@ class _CoinSellerScreenState extends State<CoinSellerScreen> {
                   borderRadius: BorderRadius.circular(12),
                   side: BorderSide(
                     color: _selectedPaymentMethod == 'Binance Pay' ? const Color(0xFFFFD700) : Colors.white12,
-                  ),
+
+),
                 ),
                 tileColor: const Color(0xFF1E212D),
                 leading: const Icon(Icons.currency_bitcoin, color: Color(0xFFFFD700)),
                 title: const Text('Binance Pay', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
-
-subtitle: Text('UID: $_binanceUid', style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                subtitle: Text('UID: $_binanceUid', style: const TextStyle(color: Colors.white54, fontSize: 12)),
                 trailing: _selectedPaymentMethod == 'Binance Pay' ? const Icon(Icons.check_circle, color: Color(0xFFFFD700)) : null,
                 onTap: () {
                   setState(() => _selectedPaymentMethod = 'Binance Pay');
@@ -132,8 +142,8 @@ subtitle: Text('UID: $_binanceUid', style: const TextStyle(color: Colors.white54
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.help_outline, color: Color(0xFFFFD700), size: 22),
-            onPressed: () {},
+            icon: const Icon(Icons.admin_panel_settings, color: Color(0xFFFFD700), size: 24),
+            onPressed: _openAdminPanel,
           ),
         ],
       ),
@@ -142,7 +152,6 @@ subtitle: Text('UID: $_binanceUid', style: const TextStyle(color: Colors.white54
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Seller Header Card
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
@@ -187,14 +196,14 @@ subtitle: Text('UID: $_binanceUid', style: const TextStyle(color: Colors.white54
                         const SizedBox(height: 2),
                         Text(
                           'Level: $_sellerLevel',
-                          style: const TextStyle(fontSize: 10, color: Color(0xFFFFD700), fontWeight: FontWeight.bold),
+
+style: const TextStyle(fontSize: 10, color: Color(0xFFFFD700), fontWeight: FontWeight.bold),
                         ),
                       ],
                     ),
                   ),
                   ElevatedButton(
-
-style: ElevatedButton.styleFrom(
+                    style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF00C9A7),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -207,8 +216,6 @@ style: ElevatedButton.styleFrom(
               ),
             ),
             const SizedBox(height: 14),
-
-            // Golden Balance Card
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -268,14 +275,14 @@ style: ElevatedButton.styleFrom(
                           shadows: [
                             Shadow(color: Color(0x66FFD700), blurRadius: 10, offset: Offset(0, 2)),
                           ],
-                        ),
+
+),
                       ),
                       const SizedBox(width: 6),
                       const Text(
                         'Coins',
                         style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFFFFD700)),
-
-),
+                      ),
                     ],
                   ),
                   const Divider(color: Colors.white12, height: 22),
@@ -305,8 +312,6 @@ style: ElevatedButton.styleFrom(
               ),
             ),
             const SizedBox(height: 18),
-
-            // Action Buttons
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
@@ -316,8 +321,6 @@ style: ElevatedButton.styleFrom(
               ],
             ),
             const SizedBox(height: 18),
-
-            // Greeting Message Settings
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               decoration: BoxDecoration(
@@ -370,18 +373,20 @@ style: ElevatedButton.styleFrom(
 }
 
 // ---------------------------------------------------------------------------
-// 1. RECHARGE SHEET (DARK & GOLD WITH DIRECT ACTION ROUTING)
+// 1. RECHARGE SHEET
 // ---------------------------------------------------------------------------
 class SellerRechargeSheet extends StatefulWidget {
   final String telebirrPhone;
   final String binanceUid;
   final String userId;
+  final String userName;
 
   const SellerRechargeSheet({
     Key? key,
     required this.telebirrPhone,
     required this.binanceUid,
     required this.userId,
+    required this.userName,
   }) : super(key: key);
 
   @override
@@ -409,9 +414,11 @@ class _SellerRechargeSheetState extends State<SellerRechargeSheet> {
         MaterialPageRoute(
           builder: (_) => BinancePaymentScreen(
             userId: widget.userId,
+            userName: widget.userName,
             coinQuantity: selectedTier['coins'],
             priceUsd: selectedTier['priceUsd'],
             orderAmount: selectedTier['amountCoins'].toString(),
+            amountCoins: selectedTier['amountCoins'],
           ),
         ),
       );
@@ -420,9 +427,12 @@ class _SellerRechargeSheetState extends State<SellerRechargeSheet> {
         context,
         MaterialPageRoute(
           builder: (_) => TelebirrPaymentScreen(
+            userId: widget.userId,
+            userName: widget.userName,
             telebirrPhone: widget.telebirrPhone,
             priceEtb: selectedTier['priceEtb'],
             coinQuantity: selectedTier['coins'],
+            amountCoins: selectedTier['amountCoins'],
           ),
         ),
       );
@@ -461,18 +471,16 @@ class _SellerRechargeSheetState extends State<SellerRechargeSheet> {
             ],
           ),
           const SizedBox(height: 10),
-
-          // Tiers Grid
           SizedBox(
             height: 80,
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
-              itemCount: _wholesaleTiers.length,
+
+itemCount: _wholesaleTiers.length,
               separatorBuilder: (_, __) => const SizedBox(width: 8),
               itemBuilder: (ctx, idx) {
                 final item = _wholesaleTiers[idx];
-
-final isSelected = _selectedTierIndex == idx;
+                final isSelected = _selectedTierIndex == idx;
                 return GestureDetector(
                   onTap: () => setState(() => _selectedTierIndex = idx),
                   child: Container(
@@ -525,8 +533,6 @@ final isSelected = _selectedTierIndex == idx;
             ),
           ),
           const SizedBox(height: 14),
-
-          // Payment Selection
           Row(
             children: [
               Expanded(
@@ -556,12 +562,12 @@ final isSelected = _selectedTierIndex == idx;
               ),
               const SizedBox(width: 8),
               Expanded(
-                child: GestureDetector(
+
+child: GestureDetector(
                   onTap: () => setState(() => _payMethod = 'Binance'),
                   child: Container(
                     padding: const EdgeInsets.symmetric(vertical: 10),
-
-decoration: BoxDecoration(
+                    decoration: BoxDecoration(
                       color: _payMethod == 'Binance' ? const Color(0xFFFFD700) : const Color(0xFF1E212D),
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(
@@ -584,8 +590,6 @@ decoration: BoxDecoration(
             ],
           ),
           const Spacer(),
-
-          // Confirm Button
           SizedBox(
             width: double.infinity,
             height: 44,
@@ -610,20 +614,24 @@ decoration: BoxDecoration(
 }
 
 // ---------------------------------------------------------------------------
-// 2. BINANCE PAYMENT SCREEN (FULL ACTION SCREEN)
+// 2. BINANCE PAYMENT SCREEN
 // ---------------------------------------------------------------------------
 class BinancePaymentScreen extends StatelessWidget {
   final String userId;
+  final String userName;
   final String coinQuantity;
   final String priceUsd;
   final String orderAmount;
+  final int amountCoins;
 
   const BinancePaymentScreen({
     Key? key,
     required this.userId,
+    required this.userName,
     required this.coinQuantity,
     required this.priceUsd,
     required this.orderAmount,
+    required this.amountCoins,
   }) : super(key: key);
 
   void _copy(BuildContext context, String text, String label) {
@@ -631,14 +639,44 @@ class BinancePaymentScreen extends StatelessWidget {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$label Copied!')));
   }
 
+  Future<void> _submitBinancePayment(BuildContext context, String orderId) async {
+    try {
+      final url = Uri.parse('${UserService.serverUrl}/api/recharge-request');
+      final res = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'userId': userId,
+          'userName': userName,
+          'paymentMethod': 'Binance Pay',
+          'txId': orderId,
+          'amountCoins': amountCoins,
+          'pricePaid': priceUsd,
+        }),
+      );
+      if (res.statusCode == 200) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Binance Payment Submitted Successfully! Awaiting Verification.'),
+            backgroundColor: Color(0xFF00C9A7),
+          ),
+        );
+      }
+    } catch (_) {
+      Navigator.pop(context);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    const String orderId = '2026101510480332614106854406';
+    final String orderId = 'BIN${DateTime.now().millisecondsSinceEpoch}';
 
     return Scaffold(
       backgroundColor: const Color(0xFF0C0D12),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF141620),
+
+backgroundColor: const Color(0xFF141620),
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 18),
@@ -665,13 +703,10 @@ class BinancePaymentScreen extends StatelessWidget {
                 children: [
                   const Icon(Icons.currency_bitcoin, color: Color(0xFFFFD700), size: 36),
                   const SizedBox(height: 6),
-
-const Text('Binance', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
+                  const Text('Binance', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
                   const SizedBox(height: 2),
                   const Text('Scan to pay', style: TextStyle(fontSize: 12, color: Colors.white54)),
                   const SizedBox(height: 16),
-
-                  // QR Code Box
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
@@ -695,8 +730,6 @@ const Text('Binance', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold
                     ),
                   ),
                   const SizedBox(height: 16),
-
-                  // Order ID row
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -719,8 +752,6 @@ const Text('Binance', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold
               ),
             ),
             const SizedBox(height: 14),
-
-            // Payment Details Box
             Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
@@ -729,7 +760,8 @@ const Text('Binance', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold
                 border: Border.all(color: Colors.white10),
               ),
               child: Column(
-                children: [
+
+children: [
                   _buildDetailRow('User ID', userId),
                   const Divider(color: Colors.white10, height: 16),
                   _buildDetailRow('Quantity', priceUsd),
@@ -741,8 +773,6 @@ const Text('Binance', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold
               ),
             ),
             const SizedBox(height: 20),
-
-            // Pay Now Button
             SizedBox(
               width: double.infinity,
               height: 48,
@@ -752,12 +782,7 @@ const Text('Binance', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
                   elevation: 4,
                 ),
-                onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Opening Binance App / Confirming Payment...')),
-
-);
-                },
+                onPressed: () => _submitBinancePayment(context, orderId),
                 child: const Text('Pay Now', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
               ),
             ),
@@ -789,20 +814,55 @@ const Text('Binance', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold
 // 3. TELEBIRR PAYMENT SCREEN
 // ---------------------------------------------------------------------------
 class TelebirrPaymentScreen extends StatelessWidget {
+  final String userId;
+  final String userName;
   final String telebirrPhone;
   final String priceEtb;
   final String coinQuantity;
+  final int amountCoins;
 
   const TelebirrPaymentScreen({
     Key? key,
+    required this.userId,
+    required this.userName,
     required this.telebirrPhone,
     required this.priceEtb,
     required this.coinQuantity,
+    required this.amountCoins,
   }) : super(key: key);
 
   void _copy(BuildContext context, String text, String label) {
     Clipboard.setData(ClipboardData(text: text));
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$label Copied!')));
+  }
+
+  Future<void> _submitTelebirrPayment(BuildContext context, String txId) async {
+    try {
+      final url = Uri.parse('${UserService.serverUrl}/api/recharge-request');
+      final res = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'userId': userId,
+          'userName': userName,
+          'paymentMethod': 'Telebirr',
+          'txId': txId.trim(),
+          'amountCoins': amountCoins,
+          'pricePaid': priceEtb,
+        }),
+      );
+      if (res.statusCode == 200) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Recharge Request Submitted Successfully!'),
+            backgroundColor: Color(0xFF00C9A7),
+          ),
+        );
+      }
+    } catch (_) {
+      Navigator.pop(context);
+    }
   }
 
   @override
@@ -816,7 +876,8 @@ class TelebirrPaymentScreen extends StatelessWidget {
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 18),
-          onPressed: () => Navigator.pop(context),
+
+onPressed: () => Navigator.pop(context),
         ),
         centerTitle: true,
         title: const Text('Telebirr Payment', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
@@ -855,8 +916,7 @@ class TelebirrPaymentScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 16),
-
-TextField(
+            TextField(
               controller: txController,
               style: const TextStyle(color: Colors.white),
               decoration: InputDecoration(
@@ -883,10 +943,7 @@ TextField(
                     );
                     return;
                   }
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Recharge Request Submitted!')),
-                  );
+                  _submitTelebirrPayment(context, txController.text);
                 },
                 child: const Text('Confirm Payment', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 15)),
               ),
@@ -899,7 +956,227 @@ TextField(
 }
 
 // ---------------------------------------------------------------------------
-// 4. TRANSFER SHEET
+// 4. ADMIN PAYMENT SCREEN (Direct in-file implementation)
+// ---------------------------------------------------------------------------
+class AdminPaymentScreen extends StatefulWidget {
+  const AdminPaymentScreen({Key? key}) : super(key: key);
+
+  @override
+  State<AdminPaymentScreen> createState() => _AdminPaymentScreenState();
+}
+
+class _AdminPaymentScreenState extends State<AdminPaymentScreen> {
+  bool _isLoading = true;
+  List<dynamic> _pendingList = [];
+
+@override
+  void initState() {
+    super.initState();
+    _fetchPendingPayments();
+  }
+
+  Future<void> _fetchPendingPayments() async {
+    setState(() => _isLoading = true);
+    try {
+      final url = Uri.parse('${UserService.serverUrl}/api/admin/pending-payments');
+      final res = await http.get(url).timeout(const Duration(seconds: 10));
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        if (data['success'] == true && data['data'] != null) {
+          setState(() {
+            _pendingList = data['data'];
+            _isLoading = false;
+          });
+          return;
+        }
+      }
+    } catch (_) {}
+    setState(() => _isLoading = false);
+  }
+
+  Future<void> _approvePayment(String paymentId, int amountCoins, String userId) async {
+    try {
+      final url = Uri.parse('${UserService.serverUrl}/api/admin/approve-payment');
+      final res = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'paymentId': paymentId}),
+      );
+
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        if (data['success'] == true) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Approved! Added $amountCoins coins to User $userId'),
+              backgroundColor: const Color(0xFF00C9A7),
+            ),
+          );
+          _fetchPendingPayments();
+          return;
+        }
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to approve payment'), backgroundColor: Colors.redAccent),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.redAccent),
+      );
+    }
+  }
+
+  void _copyToClipboard(String text, String label) {
+    Clipboard.setData(ClipboardData(text: text));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('$label copied to clipboard')),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF0C0D12),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF141620),
+        elevation: 0,
+        title: const Text(
+          'Admin Payment Approval',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 17),
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh, color: Color(0xFFFFD700)),
+            onPressed: _fetchPendingPayments,
+          ),
+        ],
+      ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator(color: Color(0xFFFFD700)))
+          : _pendingList.isEmpty
+              ? const Center(
+                  child: Text(
+                    'No pending payment requests',
+                    style: TextStyle(color: Colors.white54, fontSize: 15),
+                  ),
+                )
+              : ListView.separated(
+                  padding: const EdgeInsets.all(14),
+                  itemCount: _pendingList.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 12),
+                  itemBuilder: (ctx, idx) {
+                    final item = _pendingList[idx];
+                    final String paymentId = item['_id'] ?? '';
+                    final String userId = item['userId'] ?? 'Unknown';
+                    final String userName = item['userName'] ?? 'User';
+                    final String method = item['paymentMethod'] ?? 'Telebirr';
+                    final String txId = item['txId'] ?? '';
+                    final int coins = item['amountCoins'] ?? 0;
+                    final String price = item['pricePaid'] ?? '';
+                    final bool isBinance = method.toLowerCase().contains('binance');
+
+return Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF161824),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: isBinance ? const Color(0xFFFFD700).withOpacity(0.5) : const Color(0xFF00C9A7).withOpacity(0.5),
+                        ),
+                        boxShadow: const [
+                          BoxShadow(color: Colors.black45, blurRadius: 8, offset: Offset(0, 3)),
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: isBinance ? const Color(0xFF332A15) : const Color(0xFF113028),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  method,
+                                  style: TextStyle(
+                                    color: isBinance ? const Color(0xFFFFD700) : const Color(0xFF00C9A7),
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ),
+                              const Spacer(),
+                              Text(
+                                price,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          Text(
+                            'User: $userName (ID: $userId)',
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Coins to add: $coins Coins',
+                            style: const TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold, fontSize: 13),
+                          ),
+                          const SizedBox(height: 6),
+                          Row(
+                            children: [
+                              const Text('TxID: ', style: TextStyle(color: Colors.white54, fontSize: 12)),
+                              Expanded(
+                                child: Text(
+                                  txId,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.copy, size: 16, color: Colors.white54),
+                                onPressed: () => _copyToClipboard(txId, 'TxID'),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+
+Row(
+                            children: [
+                              Expanded(
+                                child: ElevatedButton.icon(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFF00C9A7),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                  ),
+                                  icon: const Icon(Icons.check, color: Colors.black, size: 18),
+                                  label: const Text(
+                                    'Approve',
+                                    style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+                                  ),
+                                  onPressed: () => _approvePayment(paymentId, coins, userId),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 5. TRANSFER SHEET
 // ---------------------------------------------------------------------------
 class SellerTransferSheet extends StatefulWidget {
   const SellerTransferSheet({Key? key}) : super(key: key);
@@ -948,8 +1225,7 @@ class _SellerTransferSheetState extends State<SellerTransferSheet> {
               ChoiceChip(
                 label: const Text('Coinseller'),
                 selected: !_isTransferToUser,
-
-selectedColor: const Color(0xFFFFD700),
+                selectedColor: const Color(0xFFFFD700),
                 onSelected: (val) => setState(() => _isTransferToUser = false),
               ),
             ],
@@ -962,7 +1238,8 @@ selectedColor: const Color(0xFFFFD700),
             decoration: InputDecoration(
               labelText: _isTransferToUser ? 'User ID' : 'Coinseller ID',
               labelStyle: const TextStyle(color: Colors.white54),
-              suffixIcon: TextButton(onPressed: () {}, child: const Text('Check', style: TextStyle(color: Color(0xFFFFD700)))),
+
+suffixIcon: TextButton(onPressed: () {}, child: const Text('Check', style: TextStyle(color: Color(0xFFFFD700)))),
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               filled: true,
               fillColor: const Color(0xFF1A1D2B),
@@ -1008,7 +1285,7 @@ selectedColor: const Color(0xFFFFD700),
 }
 
 // ---------------------------------------------------------------------------
-// 5. EXCHANGE SHEET
+// 6. EXCHANGE SHEET
 // ---------------------------------------------------------------------------
 class SellerExchangeSheet extends StatelessWidget {
   const SellerExchangeSheet({Key? key}) : super(key: key);
@@ -1038,8 +1315,7 @@ class SellerExchangeSheet extends StatelessWidget {
               const Text('Exchange Points to Coins', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFFFFD700))),
               const Spacer(),
               IconButton(icon: const Icon(Icons.close, color: Colors.white54), onPressed: () => Navigator.pop(context)),
-
-],
+            ],
           ),
           const SizedBox(height: 10),
           Expanded(
@@ -1053,7 +1329,8 @@ class SellerExchangeSheet extends StatelessWidget {
               ),
               itemBuilder: (ctx, idx) {
                 final item = _exchangeTiers[idx];
-                return Container(
+
+return Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
                     color: const Color(0xFF1A1D2B),
