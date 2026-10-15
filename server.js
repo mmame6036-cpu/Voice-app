@@ -388,6 +388,96 @@ io.on('connection', (socket) => {
     }
   });
 
+  // ==========================================
+  // --- 1-on-1 Private Call (የደወል ስርዓት) ---
+  // ==========================================
+  socket.on('call_user', async (data) => {
+    try {
+      const { callerId, callerName, targetUserId } = data;
+      const caller = await User.findOne({ userId: String(callerId) });
+
+if (!caller || caller.coins < 20) {
+        socket.emit('call_error', { message: 'Insufficient coins. You need at least 20 coins to make a call.' });
+        return;
+      }
+
+      // Generate a unique private channel for this call
+      const privateChannel = call_${callerId}_${targetUserId}_${Date.now()};
+
+      io.to(String(targetUserId)).emit('incoming_call', {
+        callerId: callerId,
+        callerName: callerName || User ${callerId},
+        channelName: privateChannel
+      });
+
+      socket.emit('call_ringing', { channelName: privateChannel });
+    } catch (err) {
+      console.error('Call User Error:', err);
+    }
+  });
+
+  socket.on('accept_call', (data) => {
+    const { callerId, channelName, receiverId } = data;
+    io.to(String(callerId)).emit('call_accepted', {
+      channelName: channelName,
+      receiverId: receiverId
+    });
+  });
+
+  socket.on('reject_call', (data) => {
+    const { callerId, reason } = data;
+    io.to(String(callerId)).emit('call_rejected', {
+      reason: reason || 'Call rejected'
+    });
+  });
+
+  socket.on('end_call', (data) => {
+    const { targetUserId } = data;
+    if (targetUserId) {
+      io.to(String(targetUserId)).emit('call_ended');
+    }
+  });
+
+  // Call billing per minute: deduct 20 coins from caller, grant 20 points to receiver
+  socket.on('call_deduct_coins', async (data) => {
+    try {
+      const { callerId, receiverId, amount } = data;
+      const cost = Number(amount) || 20;
+
+      const caller = await User.findOne({ userId: String(callerId) });
+      if (!caller || caller.coins < cost) {
+        socket.emit('call_balance_depleted', { message: 'Call ended due to low coin balance.' });
+        io.to(String(receiverId)).emit('call_ended');
+        return;
+      }
+
+      caller.coins -= cost;
+      await caller.save();
+
+      if (receiverId) {
+        await User.findOneAndUpdate(
+          { userId: String(receiverId) },
+          { $inc: { points: cost } }
+        );
+      }
+
+      await Transaction.create({
+        userId: String(callerId),
+        type: 'call_fee',
+        amount: cost,
+        balanceAfter: caller.coins,
+        description: 1-Minute Private Voice Call to User ${receiverId}
+      });
+
+      socket.emit('call_coin_deducted', { remainingCoins: caller.coins });
+    } catch (err) {
+      console.error('Call coin deduct error:', err);
+    }
+  });
+
+  // ==========================================
+  // --- Audio Rooms & Streaming ---
+  // ==========================================
   socket.on('join_room', (data) => {
     const roomId = String(data.room  data.roomId  '1001');
     socket.currentRoom = roomId;
@@ -403,7 +493,7 @@ io.on('connection', (socket) => {
     const chairIndex = data.chairIndex;
     const action = data.action;
 
-if (!roomSeatsState[roomId]) {
+    if (!roomSeatsState[roomId]) {
       roomSeatsState[roomId] = {};
     }
 
@@ -438,7 +528,7 @@ if (!roomSeatsState[roomId]) {
     io.to(roomId).emit('chat_message', data);
   });
 
-  socket.on('gift_sent', async (data) => {
+socket.on('gift_sent', async (data) => {
     try {
       const { senderId, receiverId, giftPrice, room, giftName } = data;
       const roomId = String(room  data.roomId  '1001');
