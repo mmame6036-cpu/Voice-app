@@ -27,6 +27,7 @@ class _CoinSellerScreenState extends State<CoinSellerScreen> {
     );
   }
 
+  // በቀጥታ አዲሱን Recharge Sheet ይከፍታል
   void _openRechargeSheet() {
     showModalBottomSheet(
       context: context,
@@ -68,24 +69,24 @@ class _CoinSellerScreenState extends State<CoinSellerScreen> {
             children: [
               const Text('የመክፈያ መንገድ ይምረጡ', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.black87)),
               const SizedBox(height: 16),
-              _buildPaymentOptionTile(
-                icon: Icons.phone_android,
-                iconColor: Colors.blueAccent,
-                title: 'Telebirr (ቴሌብር)',
-                subtitle: 'ስልክ: $_telebirrPhone',
-                isSelected: _selectedPaymentMethod == 'Telebirr',
+              ListTile(
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: const BorderSide(color: Colors.black12)),
+                leading: const Icon(Icons.phone_android, color: Colors.blueAccent),
+                title: const Text('Telebirr (ቴሌብር)', style: TextStyle(fontWeight: FontWeight.bold)),
+                subtitle: Text('ስልክ: $_telebirrPhone'),
+                trailing: _selectedPaymentMethod == 'Telebirr' ? const Icon(Icons.check_circle, color: Color(0xFF00C9A7)) : null,
                 onTap: () {
                   setState(() => _selectedPaymentMethod = 'Telebirr');
                   Navigator.pop(ctx);
                 },
               ),
               const SizedBox(height: 10),
-              _buildPaymentOptionTile(
-                icon: Icons.currency_bitcoin,
-                iconColor: Colors.amber[700]!,
-                title: 'Binance Pay',
-                subtitle: 'UID: $_binanceUid',
-                isSelected: _selectedPaymentMethod == 'Binance Pay',
+              ListTile(
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: const BorderSide(color: Colors.black12)),
+                leading: const Icon(Icons.currency_bitcoin, color: Colors.amber),
+                title: const Text('Binance Pay', style: TextStyle(fontWeight: FontWeight.bold)),
+                subtitle: Text('UID: $_binanceUid'),
+                trailing: _selectedPaymentMethod == 'Binance Pay' ? const Icon(Icons.check_circle, color: Color(0xFF00C9A7)) : null,
                 onTap: () {
                   setState(() => _selectedPaymentMethod = 'Binance Pay');
                   Navigator.pop(ctx);
@@ -98,48 +99,10 @@ class _CoinSellerScreenState extends State<CoinSellerScreen> {
     );
   }
 
-  Widget _buildPaymentOptionTile({
-    required IconData icon,
-    required Color iconColor,
-    required String title,
-    required String subtitle,
-    required bool isSelected,
-    required VoidCallback onTap,
-  }) {
-    return Container(
-      decoration: BoxDecoration(
-        color: isSelected ? const Color(0xFFF0FAF8) : const Color(0xFFF9FAFC),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isSelected ? const Color(0xFF00C9A7) : Colors.black12,
-          width: isSelected ? 1.8 : 1.0,
-        ),
-        boxShadow: [
-
-BoxShadow(
-            color: Colors.black.withOpacity(0.03),
-            blurRadius: 6,
-            offset: const Offset(0, 3),
-          )
-        ],
-      ),
-      child: ListTile(
-        leading: Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(color: iconColor.withOpacity(0.12), shape: BoxShape.circle),
-          child: Icon(icon, color: iconColor, size: 24),
-        ),
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-        subtitle: Text(subtitle, style: const TextStyle(fontSize: 12, color: Colors.black54)),
-        trailing: isSelected ? const Icon(Icons.check_circle, color: Color(0xFF00C9A7)) : null,
-        onTap: onTap,
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+
+return Scaffold(
       backgroundColor: const Color(0xFFF4F6F9),
       appBar: AppBar(
         backgroundColor: Colors.white,
@@ -162,7 +125,7 @@ BoxShadow(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Top Seller Profile (3D Style Card)
+            // Top Profile Card (3D)
             Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
@@ -203,38 +166,30 @@ BoxShadow(
                       ],
                     ),
                   ),
-                  Container(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: [
-                        BoxShadow(color: const Color(0xFF00C9A7).withOpacity(0.35), blurRadius: 8, offset: const Offset(0, 4)),
-
-],
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF00C9A7),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      elevation: 3,
                     ),
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF00C9A7),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                        elevation: 0,
-                      ),
-                      onPressed: () {},
-                      child: const Text('Level Up', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 12)),
-                    ),
+                    onPressed: () {},
+                    child: const Text('Level Up', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 12)),
                   ),
                 ],
               ),
             ),
             const SizedBox(height: 18),
 
-            // 3D Balance Card with Vibrant Green Coin Number
+            // 3D Balance Card (የኮይኑ ቁጥር በደማቅ አረንጓዴ)
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
                   colors: [Color(0xFFFFFDF7), Color(0xFFFFF8E7)],
                   begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
+
+end: Alignment.bottomRight,
                 ),
                 borderRadius: BorderRadius.circular(24),
                 border: Border.all(color: Colors.amber.withOpacity(0.35), width: 1.2),
@@ -270,8 +225,8 @@ BoxShadow(
                       ),
                     ],
                   ),
-                  const SizedBox(height: 10),
-                  // ሳንቲሙ በአረንጓዴ ቀለም
+                  const SizedBox(height: 12),
+                  // ሳንቲም በአረንጓዴ ቁጥር
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.baseline,
                     textBaseline: TextBaseline.alphabetic,
@@ -287,12 +242,11 @@ BoxShadow(
                             Shadow(color: Color(0x3300A884), blurRadius: 10, offset: Offset(0, 3)),
                           ],
                         ),
-
-),
+                      ),
                       const SizedBox(width: 6),
                       const Text(
                         'Coins',
-                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF00A884)),
+                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF00A884)),
                       ),
                     ],
                   ),
@@ -310,7 +264,8 @@ BoxShadow(
                         children: [
                           const Icon(Icons.account_balance_wallet, color: Colors.orange, size: 20),
                           const SizedBox(width: 8),
-                          const Text('Payment Method', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+
+const Text('Payment Method', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
                           const Spacer(),
                           Text(_selectedPaymentMethod, style: const TextStyle(fontSize: 12, color: Colors.black87, fontWeight: FontWeight.bold)),
                           const SizedBox(width: 4),
@@ -335,7 +290,7 @@ BoxShadow(
             ),
             const SizedBox(height: 24),
 
-            // Greeting Message Settings Row
+            // Greeting Message Settings
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
               decoration: BoxDecoration(
@@ -375,9 +330,8 @@ BoxShadow(
               ),
               shape: BoxShape.circle,
               boxShadow: [
-                BoxShadow(color: const Color(0xFF00C9A7).withOpacity(0.3), blurRadius: 10, offset: const Offset(0, 5)),
-
-const BoxShadow(color: Colors.white, blurRadius: 4, offset: Offset(-2, -2)),
+                BoxShadow(color: const Color(0xFF00C9A7).withOpacity(0.35), blurRadius: 10, offset: const Offset(0, 5)),
+                const BoxShadow(color: Colors.white, blurRadius: 4, offset: Offset(-2, -2)),
               ],
             ),
             child: Icon(icon, color: const Color(0xFF009E83), size: 28),
@@ -391,7 +345,7 @@ const BoxShadow(color: Colors.white, blurRadius: 4, offset: Offset(-2, -2)),
 }
 
 // ---------------------------------------------------------------------------
-// 1. TRANSFER SHEET (TRANSFER TO USER / COINSELLER)
+// 1. TRANSFER SHEET
 // ---------------------------------------------------------------------------
 class SellerTransferSheet extends StatefulWidget {
   const SellerTransferSheet({Key? key}) : super(key: key);
@@ -405,7 +359,7 @@ class _SellerTransferSheetState extends State<SellerTransferSheet> {
   final TextEditingController _idController = TextEditingController();
   final TextEditingController _amountController = TextEditingController();
 
-  @override
+@override
   Widget build(BuildContext context) {
     return Container(
       height: MediaQuery.of(context).size.height * 0.78,
@@ -472,8 +426,7 @@ class _SellerTransferSheetState extends State<SellerTransferSheet> {
           ),
           const SizedBox(height: 6),
           const Text('Please enter a multiple of 1,000', style: TextStyle(color: Colors.redAccent, fontSize: 11)),
-
-const Spacer(),
+          const Spacer(),
           Container(
             width: double.infinity,
             height: 50,
@@ -505,7 +458,7 @@ const Spacer(),
 }
 
 // ---------------------------------------------------------------------------
-// 2. RECHARGE SHEET (TELEBIRR PHONE ONLY + BINANCE PAY WITH QR CODE)
+// 2. RECHARGE SHEET (TELEBIRR PHONE + BINANCE QR & UID)
 // ---------------------------------------------------------------------------
 class SellerRechargeSheet extends StatefulWidget {
   final String telebirrPhone;
@@ -544,7 +497,7 @@ class _SellerRechargeSheetState extends State<SellerRechargeSheet> {
 
     return Container(
       height: MediaQuery.of(context).size.height * 0.90,
-      padding: const EdgeInsets.all(22),
+      padding: const EdgeInsets.all(20),
       decoration: const BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
@@ -562,40 +515,40 @@ class _SellerRechargeSheetState extends State<SellerRechargeSheet> {
               IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
 
-          // የጥቅል ካርዶች (3D Elevation Grid)
+          // 1. የጥቅል ካርዶች
           SizedBox(
-            height: 94,
+            height: 90,
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               itemCount: _wholesaleTiers.length,
               separatorBuilder: (_, __) => const SizedBox(width: 10),
               itemBuilder: (ctx, idx) {
-
-final item = _wholesaleTiers[idx];
+                final item = _wholesaleTiers[idx];
                 final isSelected = _selectedTierIndex == idx;
                 return GestureDetector(
                   onTap: () => setState(() => _selectedTierIndex = idx),
                   child: Container(
-                    width: 125,
-                    padding: const EdgeInsets.all(10),
+                    width: 120,
+                    padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
                       color: isSelected ? const Color(0xFFF0FAF8) : const Color(0xFFF9FAFC),
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: BorderRadius.circular(14),
                       border: Border.all(
                         color: isSelected ? const Color(0xFF00C9A7) : Colors.black12,
                         width: isSelected ? 2 : 1,
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: isSelected ? const Color(0xFF00C9A7).withOpacity(0.2) : Colors.black.withOpacity(0.03),
-                          blurRadius: 6,
+                          color: isSelected ? const Color(0xFF00C9A7).withOpacity(0.2) : Colors.black.withOpacity(0.02),
+                          blurRadius: 5,
                           offset: const Offset(0, 3),
                         )
                       ],
                     ),
-                    child: Column(
+
+child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Text(item['badge'], style: const TextStyle(fontSize: 9, color: Colors.orange, fontWeight: FontWeight.bold)),
@@ -620,9 +573,9 @@ final item = _wholesaleTiers[idx];
               },
             ),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 12),
 
-          // የመክፈያ መንገድ መምረጫ
+          // 2. የመክፈያ መንገድ መምረጫ
           Row(
             children: [
               Expanded(
@@ -644,17 +597,17 @@ final item = _wholesaleTiers[idx];
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
 
-          // የክፍያ መረጃ ሳጥን (3D Card)
+          // 3. የክፍያ መረጃ ሳጥን
           Container(
-            padding: const EdgeInsets.all(14),
+            padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: const Color(0xFFF9FAFC),
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(14),
               border: Border.all(color: Colors.black12),
               boxShadow: [
-                BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 8, offset: const Offset(0, 4)),
+                BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 6, offset: const Offset(0, 3)),
               ],
             ),
             child: _payMethod == 'Telebirr'
@@ -662,8 +615,7 @@ final item = _wholesaleTiers[idx];
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text('በቴሌብር ለመክፈል፦', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-
-const SizedBox(height: 8),
+                      const SizedBox(height: 6),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
@@ -674,7 +626,6 @@ const SizedBox(height: 8),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 4),
                       Text('የሚከፍሉት፦ ${selectedTier['priceEtb']}', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green, fontSize: 13)),
                     ],
                   )
@@ -683,43 +634,43 @@ const SizedBox(height: 8),
                     children: [
                       const Align(
                         alignment: Alignment.centerLeft,
-                        child: Text('በባይናንስ (Binance Pay) ለመክፈል፦', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                        child: Text('በባይናንስ ለመክፈል፦', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 6),
 
-                      // QR Code Card with 3D Shadow
+// QR Code Card
                       Container(
-                        padding: const EdgeInsets.all(8),
+                        padding: const EdgeInsets.all(6),
                         decoration: BoxDecoration(
                           color: Colors.white,
-                          borderRadius: BorderRadius.circular(14),
+                          borderRadius: BorderRadius.circular(12),
                           border: Border.all(color: Colors.amber.shade400, width: 1.5),
                           boxShadow: [
-                            BoxShadow(color: Colors.amber.withOpacity(0.25), blurRadius: 10, offset: const Offset(0, 4)),
+                            BoxShadow(color: Colors.amber.withOpacity(0.2), blurRadius: 8, offset: const Offset(0, 3)),
                           ],
                         ),
                         child: Image.asset(
                           'assets/images/binance_qr.png',
-                          height: 120,
-                          width: 120,
+                          height: 100,
+                          width: 100,
                           fit: BoxFit.contain,
                           errorBuilder: (context, error, stackTrace) => const Icon(
                             Icons.qr_code_2,
-                            size: 90,
+                            size: 80,
                             color: Colors.amber,
                           ),
                         ),
                       ),
+                      const SizedBox(height: 2),
+                      const Text('በ Binance App ስካን (Scan) አድርገው ይክፈሉ', style: TextStyle(fontSize: 10, color: Colors.black54)),
                       const SizedBox(height: 4),
-                      const Text('በ Binance App ስካን (Scan) አድርገው ይክፈሉ', style: TextStyle(fontSize: 11, color: Colors.black54)),
-                      const SizedBox(height: 6),
 
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text('Binance UID: ${widget.binanceUid}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                          Text('Binance UID: ${widget.binanceUid}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
                           IconButton(
-                            icon: const Icon(Icons.copy, size: 20, color: Colors.amber),
+                            icon: const Icon(Icons.copy, size: 18, color: Colors.amber),
                             onPressed: () => _copy(widget.binanceUid, 'Binance UID'),
                           ),
                         ],
@@ -731,15 +682,14 @@ const SizedBox(height: 8),
                     ],
                   ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
 
-          // ማረጋገጫ ቁጥር ማስገቢያ
+          // 4. ማረጋገጫ ማስገቢያ
           TextField(
             controller: _txIdController,
             decoration: InputDecoration(
               labelText: _payMethod == 'Telebirr' ? 'የቴሌብር ግብይት ቁጥር (Transaction ID)' : 'የባይናንስ TxID / Order ID',
-
-border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               filled: true,
               fillColor: const Color(0xFFF9FAFC),
               contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -747,12 +697,12 @@ border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
           ),
           const Spacer(),
 
-          // Confirm Button with 3D Shadow
+          // Confirm Button
           Container(
             width: double.infinity,
-            height: 50,
+            height: 48,
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(25),
+              borderRadius: BorderRadius.circular(24),
               boxShadow: [
                 BoxShadow(color: const Color(0xFF00C9A7).withOpacity(0.4), blurRadius: 10, offset: const Offset(0, 5)),
               ],
@@ -760,7 +710,7 @@ border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
             child: ElevatedButton(
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF00C9A7),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
                 elevation: 0,
               ),
               onPressed: () {
@@ -771,7 +721,8 @@ border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
                   return;
                 }
                 Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
+
+ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('የጅምላ ግዢ ጥያቄዎ ደርሷል፤ ተረጋግጦ ይሞላልዎታል!')),
                 );
               },
@@ -785,7 +736,7 @@ border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
 }
 
 // ---------------------------------------------------------------------------
-// 3. EXCHANGE SHEET (POINTS TO COINS)
+// 3. EXCHANGE SHEET
 // ---------------------------------------------------------------------------
 class SellerExchangeSheet extends StatelessWidget {
   const SellerExchangeSheet({Key? key}) : super(key: key);
@@ -834,8 +785,7 @@ class SellerExchangeSheet extends StatelessWidget {
                 return Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-
-color: const Color(0xFFF9FAFC),
+                    color: const Color(0xFFF9FAFC),
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(color: Colors.black12),
                     boxShadow: [
@@ -864,7 +814,8 @@ color: const Color(0xFFF9FAFC),
             height: 50,
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(25),
-              boxShadow: [
+
+boxShadow: [
                 BoxShadow(color: const Color(0xFF00C9A7).withOpacity(0.4), blurRadius: 10, offset: const Offset(0, 5)),
               ],
             ),
