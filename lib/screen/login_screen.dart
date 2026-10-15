@@ -64,7 +64,10 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        if (data['success'] == true) {
+        if (data['success'] == true && data['user'] != null) {
+          // Persist authenticated user session locally
+          await UserService().setUserData(data['user']);
+
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
