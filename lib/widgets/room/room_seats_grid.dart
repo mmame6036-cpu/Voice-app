@@ -67,4 +67,47 @@ class RoomSeatsGrid extends StatelessWidget {
 
   Widget _buildSeatItem({required int seatNumber, bool isHost = false, bool hasCrown = false}) {
     return GestureDetector(
-      onTap:
+      onTap: () => onSeatTap?.call(seatNumber),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Stack(
+            clipBehavior: Clip.none,
+            alignment: Alignment.center,
+            children: [
+              if (hasCrown)
+                const Positioned(
+                  top: -12,
+                  child: Icon(Icons.workspace_premium, size: 16, color: Color(0xFFFFD700)),
+                ),
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: const RadialGradient(
+                    colors: [Color(0xFF4A4B54), Color(0xFF1E1F26)],
+                    center: Alignment(-0.2, -0.3),
+                  ),
+                  border: Border.all(
+                    color: hasCrown ? Colors.amber.withOpacity(0.5) : Colors.white24,
+                    width: 1.2,
+                  ),
+                  boxShadow: const [
+                    BoxShadow(color: Colors.black54, blurRadius: 4, offset: Offset(0, 2)),
+                  ],
+                ),
+                child: const Icon(Icons.chair, color: Colors.white70, size: 18),
+              ),
+            ],
+          ),
+          const SizedBox(height: 3),
+          Text(
+            '$seatNumber',
+            style: const TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.bold),
+          ),
+        ],
+      ),
+    );
+  }
+}
