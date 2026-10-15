@@ -1,3 +1,4 @@
+KEDER:
 const express = require('express');
 const http = require('http');
 const cors = require('cors');
@@ -22,7 +23,6 @@ const io = new Server(server, {
   cors: { origin: '*' }
 });
 
-// Pass Socket.io instance to routes
 app.set('io', io);
 
 // 1. Health check route
@@ -38,7 +38,7 @@ const handleTokenGeneration = (req, res) => {
   try {
     const channelName = String(req.query.channelName || '1001').trim();
     const role = RtcRole.PUBLISHER;
-    const expireTime = 3600 * 24 * 30; // 30 days validity
+    const expireTime = 3600 * 24 * 30;
     const currentTime = Math.floor(Date.now() / 1000);
     const privilegeExpireTime = currentTime + expireTime;
 
@@ -103,9 +103,100 @@ const messageSchema = new mongoose.Schema({
 });
 const Message = mongoose.model('Message', messageSchema);
 
+// Payment Request Schema (For Coin Seller Recharge)
+const paymentSchema = new mongoose.Schema({
+  userId: { type: String, required: true },
+  userName: { type: String, default: 'User' },
+  paymentMethod: { type: String, enum: ['Telebirr', 'Binance', 'Binance Pay'], required: true },
+  txId: { type: String, required: true, unique: true },
+  amountCoins: { type: Number, required: true },
+  pricePaid: { type: String, required: true },
+  status: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending' },
+  createdAt: { type: Date, default: Date.now }
+});
+const Payment = mongoose.model('Payment', paymentSchema);
+
 // --- Modular Routes ---
 app.use('/api/wallet', walletRoutes);
 app.use('/api/admin', adminRoutes);
+
+// --- Payment & Recharge Endpoints ---
+app.post('/api/recharge-request', async (req, res) => {
+  try {
+    const { userId, userName, paymentMethod, txId, amountCoins, pricePaid } = req.body;
+
+    if (!userId  !txId  !amountCoins) {
+      return res.status(400).json({ success: false, message: 'Missing required payment fields' });
+    }
+
+    const existingTx = await Payment.findOne({ txId: String(txId).trim() });
+    if (existingTx) {
+      return res.status(400).json({ success: false, message: 'Transaction ID already submitted' });
+    }
+
+    const newPayment = new Payment({
+      userId: String(userId),
+      userName: userName || 'User',
+      paymentMethod,
+      txId: String(txId).trim(),
+      amountCoins: Number(amountCoins),
+      pricePaid: String(pricePaid),
+      status: 'pending'
+    });
+
+    await newPayment.save();
+    return res.json({ success: true, message: 'Recharge request submitted successfully' });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Admin: View Pending Payments
+app.get('/api/admin/pending-payments', async (req, res) => {
+  try {
+    const pendings = await Payment.find({ status: 'pending' }).sort({ createdAt: -1 });
+    return res.json({ success: true, data: pendings });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Admin: Approve Payment & Add Coins
+app.post('/api/admin/approve-payment', async (req, res) => {
+  try {
+    const { paymentId } = req.body;
+
+    const payment = await Payment.findById(paymentId);
+    if (!payment || payment.status !== 'pending') {
+      return res.status(400).json({ success: false, message: 'Invalid or already processed payment' });
+    }
+
+    const user = await User.findOneAndUpdate(
+      { userId: payment.userId },
+      { $inc: { coins: payment.amountCoins } },
+      { new: true }
+    );
+
+    await Transaction.create({
+      userId: payment.userId,
+      type: 'recharge',
+      amount: payment.amountCoins,
+      balanceAfter: user ? user.coins : 0,
+      description: Wholesale Recharge via ${payment.paymentMethod} (TxID: ${payment.txId})
+    });
+
+    payment.status = 'approved';
+    await payment.save();
+
+    return res.json({
+      success: true,
+      message: 'Payment approved and coins added successfully',
+      updatedCoins: user ? user.coins : null
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
 
 // --- Room Management Endpoints ---
 app.post('/api/rooms/create', async (req, res) => {
@@ -161,7 +252,7 @@ app.post('/api/register-user', async (req, res) => {
       assignedId = String(counter.seq);
     }
 
-    const defaultName = name ? name : ('User_' + assignedId);
+const defaultName = name ? name : ('User_' + assignedId);
     const defaultDevice = deviceId ? deviceId : ('dev_' + Date.now());
 
     const newUser = new User({
@@ -205,7 +296,6 @@ app.get('/api/search-user', async (req, res) => {
   }
 });
 
-// Fetch direct messaging chat history
 app.get('/api/chat-history', async (req, res) => {
   try {
     const { user1, user2 } = req.query;
@@ -222,7 +312,6 @@ app.get('/api/chat-history', async (req, res) => {
 });
 
 // --- Socket.io Real-time Communication ---
-// ክፍሎች ውስጥ ያሉትን ወንበሮች በሜሞሪ መያዣ (Room Seat State)
 const roomSeatsState = {};
 
 io.on('connection', (socket) => {
@@ -252,19 +341,16 @@ io.on('connection', (socket) => {
     }
   });
 
-  // ተጠቃሚ ክፍል ሲቀላቀል
   socket.on('join_room', (data) => {
     const roomId = String(data.room  data.roomId  '1001');
     socket.currentRoom = roomId;
     socket.join(roomId);
 
-    // ቀድመው የተያዙ ወንበሮች ካሉ ለአዲሱ ተጠቃሚ ወዲያው መላክ
     if (roomSeatsState[roomId]) {
       socket.emit('sync_room_seats', roomSeatsState[roomId]);
     }
   });
 
-  // ወንበር ሲያዝ ወይም ሲለቀቅ
   socket.on('chair_action', (data) => {
     const roomId = String(data.room  data.roomId  '1001');
     const chairIndex = data.chairIndex;
@@ -274,8 +360,7 @@ io.on('connection', (socket) => {
       roomSeatsState[roomId] = {};
     }
 
-if (action === 'take') {
-      // ተጠቃሚው ቀድሞ ሌላ ወንበር ላይ ከነበረ ነፃ ማድረግ
+    if (action === 'take') {
       for (const idx in roomSeatsState[roomId]) {
         if (roomSeatsState[roomId][idx].userId === data.userId) {
           delete roomSeatsState[roomId][idx];
@@ -289,7 +374,6 @@ if (action === 'take') {
       delete roomSeatsState[roomId][chairIndex];
     }
 
-    // ለሁሉም የክፍሉ ተጠቃሚዎች ወዲያው ማሰራጨት
     io.to(roomId).emit('chair_action', {
       ...data,
       room: roomId,
@@ -307,14 +391,13 @@ if (action === 'take') {
     io.to(roomId).emit('chat_message', data);
   });
 
-  // ስጦታ ሲላክ ሳንቲም መቀነስ እና ነጥብ መስጠት
   socket.on('gift_sent', async (data) => {
     try {
       const { senderId, receiverId, giftPrice, room, giftName } = data;
       const roomId = String(room  data.roomId  '1001');
       const cost = Number(giftPrice) || 0;
 
-      const sender = await User.findOne({ userId: String(senderId) });
+const sender = await User.findOne({ userId: String(senderId) });
       if (!sender || sender.coins < cost) {
         socket.emit('gift_error', { message: 'Insufficient coins balance' });
         return;
@@ -351,7 +434,6 @@ if (action === 'take') {
     io.emit('game_win_broadcast', data);
   });
 
-  // ተጠቃሚ ሲወጣ ወይም ኢንተርኔት ሲያቋርጥ
   socket.on('disconnect', () => {
     if (socket.currentRoom && socket.userId) {
       const roomId = socket.currentRoom;
