@@ -7,7 +7,7 @@ class BasicToolsSheet extends StatelessWidget {
   const BasicToolsSheet({
     Key? key,
     this.onSeatsChanged,
-    this.currentSeats = 25,     
+    this.currentSeats = 25,
   }) : super(key: key);
 
   static Future<void> show(
@@ -39,7 +39,11 @@ class BasicToolsSheet extends StatelessWidget {
         children: [
           const Text(
             'Basic Tools',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+            ),
           ),
           const SizedBox(height: 20),
           Row(
@@ -90,7 +94,12 @@ class BasicToolsSheet extends StatelessWidget {
     );
   }
 
-  Widget _buildToolIcon(IconData icon, String label, VoidCallback onTap, {Color iconColor = Colors.white}) {
+  Widget _buildToolIcon(
+    IconData icon,
+    String label,
+    VoidCallback onTap, {
+    Color iconColor = Colors.white,
+  }) {
     return GestureDetector(
       onTap: onTap,
       child: SizedBox(
@@ -99,7 +108,10 @@ class BasicToolsSheet extends StatelessWidget {
           children: [
             Container(
               padding: const EdgeInsets.all(10),
-              decoration: const BoxDecoration(color: Colors.white12, shape: BoxShape.circle),
+              decoration: const BoxDecoration(
+                color: Colors.white12,
+                shape: BoxShape.circle,
+              ),
               child: Icon(icon, color: iconColor, size: 22),
             ),
             const SizedBox(height: 6),
@@ -119,7 +131,7 @@ class RoomSettingsScreen extends StatefulWidget {
   final int currentSeats;
   const RoomSettingsScreen({Key? key, required this.currentSeats}) : super(key: key);
 
-  @override
+@override
   State<RoomSettingsScreen> createState() => _RoomSettingsScreenState();
 }
 
@@ -149,7 +161,14 @@ class _RoomSettingsScreenState extends State<RoomSettingsScreen> {
             onPressed: () => Navigator.pop(context, _seats),
           ),
           centerTitle: true,
-          title: const Text('Room Settings', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 17)),
+          title: const Text(
+            'Room Settings',
+            style: TextStyle(
+              color: Colors.black,
+              fontWeight: FontWeight.bold,
+              fontSize: 17,
+            ),
+          ),
         ),
         body: ListView(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -168,7 +187,15 @@ class _RoomSettingsScreenState extends State<RoomSettingsScreen> {
                           height: 44,
                           color: Colors.black,
                           child: const Center(
-                            child: Text('HAMZA\nFANS', textAlign: TextAlign.center, style: TextStyle(color: Colors.amber, fontSize: 8, fontWeight: FontWeight.bold)),
+                            child: Text(
+                              'HAMZA\nFANS',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: Colors.amber,
+                                fontSize: 8,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                           ),
                         ),
                       ),
@@ -182,11 +209,14 @@ class _RoomSettingsScreenState extends State<RoomSettingsScreen> {
             const SizedBox(height: 12),
             _buildSettingCard(
               children: [
-                _buildTile(title: 'Room ID', trailing: const Text('505798', style: TextStyle(color: Colors.black54, fontSize: 14))),
+                _buildTile(
+                  title: 'Room ID',
+                  trailing: const Text('505798', style: TextStyle(color: Colors.black54, fontSize: 14)),
+                ),
                 const Divider(height: 1, indent: 16, endIndent: 16),
                 _buildTile(title: 'Room Name', value: 'KEDIR', showArrow: true),
                 const Divider(height: 1, indent: 16, endIndent: 16),
-                _buildTile(title: 'Room Description', value: 'ኑ አብረን እንደግ እንበልፅግ ...', showArrow: true),
+                _buildTile(title: 'Room Description', value: 'nu abren endeg...', showArrow: true),
                 const Divider(height: 1, indent: 16, endIndent: 16),
                 _buildTile(
                   title: 'Room Type',
@@ -195,8 +225,19 @@ class _RoomSettingsScreenState extends State<RoomSettingsScreen> {
                     children: [
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                        decoration: BoxDecoration(color: const Color(0xFF9B51E0), borderRadius: BorderRadius.circular(12)),
-                        child: const Text('Chatting', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF9B51E0),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Text(
+                          'Chatting',
+                          style: TextStyle(
+                            color: Colors.white,
+
+fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                       ),
                       const SizedBox(width: 6),
                       const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.black26),
@@ -210,8 +251,7 @@ class _RoomSettingsScreenState extends State<RoomSettingsScreen> {
               ],
             ),
             const SizedBox(height: 12),
-
-_buildSettingCard(
+            _buildSettingCard(
               children: [
                 _buildTile(
                   title: 'Mic Seats',
@@ -220,9 +260,13 @@ _buildSettingCard(
                   onTap: () async {
                     final sel = await Navigator.push<int>(
                       context,
-                      MaterialPageRoute(builder: (_) => MicSeatsSelectorScreen(selectedSeats: _seats)),
+                      MaterialPageRoute(
+                        builder: (_) => MicSeatsSelectorScreen(selectedSeats: _seats),
+                      ),
                     );
-                    if (sel != null) setState(() => _seats = sel);
+                    if (sel != null) {
+                      setState(() => _seats = sel);
+                    }
                   },
                 ),
                 const Divider(height: 1, indent: 16, endIndent: 16),
@@ -243,19 +287,32 @@ _buildSettingCard(
 
   Widget _buildSettingCard({required List<Widget> children}) {
     return Container(
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+      ),
       child: Column(children: children),
     );
   }
 
-  Widget _buildTile({required String title, String? value, Widget? trailing, bool showArrow = false, VoidCallback? onTap}) {
+  Widget _buildTile({
+    required String title,
+    String? value,
+    Widget? trailing,
+    bool showArrow = false,
+    VoidCallback? onTap,
+  }) {
     return ListTile(
-      title: Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.black87)),
+      title: Text(
+        title,
+        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.black87),
+      ),
       trailing: trailing ??
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (value != null) Text(value, style: const TextStyle(fontSize: 13, color: Colors.black45)),
+              if (value != null)
+                Text(value, style: const TextStyle(fontSize: 13, color: Colors.black45)),
               if (showArrow) ...[
                 const SizedBox(width: 6),
                 const Icon(Icons.arrow_forward_ios, size: 13, color: Colors.black26),
@@ -294,10 +351,14 @@ class _MicSeatsSelectorScreenState extends State<MicSeatsSelectorScreen> {
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new, color: Colors.black, size: 20),
-          onPressed: () => Navigator.pop(context, _chosen),
+          onPressed: () => Navigator.pop(context),
         ),
         centerTitle: true,
-        title: const Text('Mic Seats', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 17)),
+
+title: const Text(
+          'Mic Seats',
+          style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 17),
+        ),
       ),
       body: Column(
         children: [
@@ -319,9 +380,11 @@ class _MicSeatsSelectorScreenState extends State<MicSeatsSelectorScreen> {
                   child: Container(
                     decoration: BoxDecoration(
                       color: const Color(0xFF1E212B),
-
-borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: isSelected ? const Color(0xFF00C9A7) : Colors.transparent, width: 2),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: isSelected ? const Color(0xFF00C9A7) : Colors.transparent,
+                        width: 2,
+                      ),
                     ),
                     child: Center(
                       child: Column(
@@ -329,7 +392,14 @@ borderRadius: BorderRadius.circular(16),
                         children: [
                           const Icon(Icons.event_seat, color: Colors.white70, size: 36),
                           const SizedBox(height: 8),
-                          Text('$count Seats', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                          Text(
+                            '$count Seats',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -349,7 +419,10 @@ borderRadius: BorderRadius.circular(16),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
                 ),
                 onPressed: () => Navigator.pop(context, _chosen),
-                child: const Text('Save', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                child: const Text(
+                  'Save',
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                ),
               ),
             ),
           ),
