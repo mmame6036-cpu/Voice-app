@@ -1,4 +1,3 @@
-KEDER:
 const express = require('express');
 const http = require('http');
 const cors = require('cors');
@@ -280,6 +279,54 @@ const defaultName = name ? name : ('User_' + assignedId);
   }
 });
 
+// --- Google Authentication Endpoint ---
+app.post('/api/auth/google', async (req, res) => {
+  try {
+    const { googleId, email, name, avatar } = req.body;
+
+    if (!googleId) {
+      return res.status(400).json({ success: false, message: 'Google ID is required' });
+    }
+
+    let user = await User.findOne({ $or: [{ deviceId: googleId }, { userId: googleId }] });
+
+    if (user) {
+      return res.json({ success: true, user, isNewUser: false });
+    }
+
+    let counter = await Counter.findOneAndUpdate(
+      { id: 'user_id' },
+      { $inc: { seq: 1 } },
+      { new: true, upsert: true }
+    );
+    const assignedId = String(counter.seq);
+
+    user = new User({
+      userId: assignedId,
+      name: name || User_${assignedId},
+      deviceId: googleId,
+      avatar: avatar || '',
+      coins: 1000,
+      points: 0,
+      isFrozen: false
+    });
+
+    await user.save();
+
+    await Transaction.create({
+      userId: assignedId,
+      type: 'recharge',
+      amount: 1000,
+      balanceAfter: 1000,
+      description: 'Google Sign-up Welcome Bonus'
+    });
+
+    return res.json({ success: true, user, isNewUser: true });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 app.get('/api/search-user', async (req, res) => {
   try {
     const userId = req.query.userId;
@@ -356,7 +403,7 @@ io.on('connection', (socket) => {
     const chairIndex = data.chairIndex;
     const action = data.action;
 
-    if (!roomSeatsState[roomId]) {
+if (!roomSeatsState[roomId]) {
       roomSeatsState[roomId] = {};
     }
 
@@ -397,7 +444,7 @@ io.on('connection', (socket) => {
       const roomId = String(room  data.roomId  '1001');
       const cost = Number(giftPrice) || 0;
 
-const sender = await User.findOne({ userId: String(senderId) });
+      const sender = await User.findOne({ userId: String(senderId) });
       if (!sender || sender.coins < cost) {
         socket.emit('gift_error', { message: 'Insufficient coins balance' });
         return;
