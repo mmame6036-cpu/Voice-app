@@ -1,25 +1,18 @@
 import 'package:flutter/material.dart';
 
 class RoomSeatsGrid extends StatelessWidget {
+  final List<Map<String, dynamic>> seats;
   final int currentSeatCount;
   final Function(int seatIndex)? onSeatTap;
   final Function(int count)? onSeatCountChanged;
-  final Function(int count)? onSeatsCountChanged;
-  final Function(int count)? onSeatsChanged;
 
   const RoomSeatsGrid({
     Key? key,
-    int? currentSeatCount,
-    int? seatCount,
-    int? seats,
-    int? seatsCount,
+    required this.seats,
+    required this.currentSeatCount,
     this.onSeatTap,
     this.onSeatCountChanged,
-    this.onSeatsCountChanged,
-    this.onSeatsChanged,
-    Function(int)? onSeatSelected,
-  })  : currentSeatCount = currentSeatCount ?? seatCount ?? seats ?? seatsCount ?? 25,
-        super(key: key);
+  }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -29,58 +22,59 @@ class RoomSeatsGrid extends StatelessWidget {
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      itemCount: currentSeatCount,
+      itemCount: seats.length,
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: currentSeatCount <= 16 ? 4 : 5,
         crossAxisSpacing: 8,
         mainAxisSpacing: 12,
       ),
-      itemBuilder: (ctx, i) => _buildSeatItem(i + 1, false, i < 3),
+      itemBuilder: (ctx, i) => _buildSeatItem(i, i < 3),
     );
   }
 
   Widget _build25SeatsLayout() {
     return Column(
       children: [
-        _buildSeatItem(1, true, false),
+        _buildSeatItem(0, false, isHost: true),
         const SizedBox(height: 12),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
-            _buildSeatItem(2, false, true),
-            _buildSeatItem(3, false, true),
-            _buildSeatItem(4, false, true),
-            _buildSeatItem(5, false, true),
-            _buildSeatItem(6, false, true),
-            _buildSeatItem(7, false, false),
+            _buildSeatItem(1, true),
+            _buildSeatItem(2, true),
+            _buildSeatItem(3, true),
+            _buildSeatItem(4, true),
+            _buildSeatItem(5, true),
+            _buildSeatItem(6, false),
           ],
         ),
         const SizedBox(height: 12),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: List.generate(6, (i) => _buildSeatItem(i + 8, false, false)),
+          children: List.generate(6, (i) => _buildSeatItem(i + 7, false)),
         ),
         const SizedBox(height: 12),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: List.generate(6, (i) => _buildSeatItem(i + 14, false, false)),
+          children: List.generate(6, (i) => _buildSeatItem(i + 13, false)),
         ),
         const SizedBox(height: 12),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: List.generate(6, (i) => _buildSeatItem(i + 20, false, false)),
+          children: List.generate(6, (i) => _buildSeatItem(i + 19, false)),
         ),
       ],
     );
   }
 
-  Widget _buildSeatItem(int seatNumber, bool isHost, bool hasCrown) {
+  Widget _buildSeatItem(int index, bool hasCrown, {bool isHost = false}) {
+    if (index >= seats.length) return const SizedBox(width: 38, height: 38);
+    final seat = seats[index];
+    final userName = seat['user'] as String?;
+    final isSpeaking = seat['isSpeaking'] == true;
+
     return GestureDetector(
-      onTap: () {
-        if (onSeatTap != null) {
-          onSeatTap!(seatNumber);
-        }
-      },
+      onTap: () => onSeatTap?.call(index),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -107,21 +101,36 @@ class RoomSeatsGrid extends StatelessWidget {
                     center: Alignment(-0.2, -0.3),
                   ),
                   border: Border.all(
-                    color: hasCrown ? Colors.amber.withOpacity(0.5) : Colors.white24,
-                    width: 1.2,
+                    color: isSpeaking
+                        ? const Color(0xFF00C9A7)
+                        : (hasCrown ? Colors.amber.withOpacity(0.5) : Colors.white24),
+                    width: isSpeaking ? 2.0 : 1.2,
                   ),
                   boxShadow: const [
                     BoxShadow(color: Colors.black54, blurRadius: 4, offset: Offset(0, 2)),
                   ],
                 ),
-                child: const Icon(Icons.chair, color: Colors.white70, size: 18),
+                child: userName != null && userName.isNotEmpty
+                    ? Center(
+                        child: Text(
 
-),
+userName.substring(0, 1).toUpperCase(),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      )
+                    : const Icon(Icons.chair, color: Colors.white70, size: 18),
+              ),
             ],
           ),
           const SizedBox(height: 3),
           Text(
-            '$seatNumber',
+            userName != null && userName.isNotEmpty ? userName : '${index + 1}',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: const TextStyle(
               color: Colors.white70,
               fontSize: 10,
