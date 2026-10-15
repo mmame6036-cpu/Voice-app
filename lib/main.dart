@@ -9,7 +9,7 @@ import 'points_screen.dart';
 import 'host_center_screen.dart';
 import 'agency_screen.dart';
 import 'coin_seller_screen.dart';
-import 'login_screen.dart';
+import 'screen/login_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
