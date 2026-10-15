@@ -1,6 +1,7 @@
 const express = require('express');
 const http = require('http');
 const cors = require('cors');
+const path = require('path');
 const { Server } = require('socket.io');
 const { RtcTokenBuilder, RtcRole } = require('agora-token');
 const mongoose = require('mongoose');
@@ -16,6 +17,7 @@ const adminRoutes = require('./routes/admin');
 const app = express();
 app.use(cors());
 app.use(express.json());
+app.use(express.static(path.join(__dirname, 'public')));
 
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -89,6 +91,7 @@ const userSchema = new mongoose.Schema({
   avatar: { type: String, default: '' },
   coins: { type: Number, default: 1000 },
   points: { type: Number, default: 0 },
+  isAgent: { type: Boolean, default: false }, // ኤጀንት / Coin Seller ፍቃድ
   isFrozen: { type: Boolean, default: false },
   createdAt: { type: Date, default: Date.now }
 });
@@ -102,7 +105,7 @@ const messageSchema = new mongoose.Schema({
 });
 const Message = mongoose.model('Message', messageSchema);
 
-// Payment Request Schema (For Coin Seller Recharge)
+// Payment Request Schema (For Wholesale Coin Seller Recharge)
 const paymentSchema = new mongoose.Schema({
   userId: { type: String, required: true },
   userName: { type: String, default: 'User' },
@@ -118,6 +121,97 @@ const Payment = mongoose.model('Payment', paymentSchema);
 // --- Modular Routes ---
 app.use('/api/wallet', walletRoutes);
 app.use('/api/admin', adminRoutes);
+
+// --- Agent Management Endpoints ---
+
+// 1. Admin: Toggle or Set Agent Role
+app.post('/api/admin/toggle-agent', async (req, res) => {
+  try {
+    const { userId, isAgent } = req.body;
+    if (!userId) {
+      return res.status(400).json({ success: false, message: 'User ID is required' });
+    }
+
+    const user = await User.findOne({ userId: String(userId).trim() });
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    user.isAgent = (typeof isAgent === 'boolean') ? isAgent : !user.isAgent;
+    await user.save();
+
+    return res.json({
+      success: true,
+      message: Agent status updated to ${user.isAgent},
+      user: {
+        userId: user.userId,
+        name: user.name,
+        isAgent: user.isAgent,
+        coins: user.coins
+      }
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 2. Agent: Transfer Coins to Users (Coin Selling Flow)
+app.post('/api/wallet/agent-transfer-coins', async (req, res) => {
+  try {
+    const { agentId, targetUserId, amountCoins } = req.body;
+    const coinsToTransfer = Number(amountCoins);
+
+    if (!agentId  !targetUserId  !coinsToTransfer || coinsToTransfer <= 0) {
+      return res.status(400).json({ success: false, message: 'Invalid transfer details' });
+    }
+
+    const agent = await User.findOne({ userId: String(agentId).trim() });
+    if (!agent || !agent.isAgent) {
+      return res.status(403).json({ success: false, message: 'Unauthorized. You are not a registered Agent.' });
+    }
+
+    if (agent.coins < coinsToTransfer) {
+      return res.status(400).json({ success: false, message: 'Insufficient agent coin balance' });
+    }
+
+    const recipient = await User.findOne({ userId: String(targetUserId).trim() });
+    if (!recipient) {
+      return res.status(404).json({ success: false, message: 'Recipient user not found' });
+    }
+
+    // Deduct from agent, add to recipient
+    agent.coins -= coinsToTransfer;
+    recipient.coins += coinsToTransfer;
+
+    await agent.save();
+    await recipient.save();
+
+    // Log Transactions
+    await Transaction.create({
+      userId: agent.userId,
+      type: 'agent_sale',
+      amount: -coinsToTransfer,
+      balanceAfter: agent.coins,
+      description: Sold ${coinsToTransfer} coins to User ${recipient.userId}
+    });
+
+    await Transaction.create({
+      userId: recipient.userId,
+      type: 'agent_purchase',
+      amount: coinsToTransfer,
+      balanceAfter: recipient.coins,
+      description: Received ${coinsToTransfer} coins from Agent ${agent.userId}
+    });
+
+    return res.json({
+      success: true,
+      message: Successfully transferred ${coinsToTransfer} coins to User ${recipient.userId},
+      agentCoins: agent.coins
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
 
 // --- Payment & Recharge Endpoints ---
 app.post('/api/recharge-request', async (req, res) => {
@@ -251,7 +345,7 @@ app.post('/api/register-user', async (req, res) => {
       assignedId = String(counter.seq);
     }
 
-const defaultName = name ? name : ('User_' + assignedId);
+    const defaultName = name ? name : ('User_' + assignedId);
     const defaultDevice = deviceId ? deviceId : ('dev_' + Date.now());
 
     const newUser = new User({
@@ -260,6 +354,7 @@ const defaultName = name ? name : ('User_' + assignedId);
       deviceId: defaultDevice,
       coins: 1000,
       points: 0,
+      isAgent: (assignedId === '1000'), // ባለቤቱ (1000) በነባሪ ኤጀንት ይሆናል
       isFrozen: false
     });
 
@@ -290,7 +385,7 @@ app.post('/api/auth/google', async (req, res) => {
 
     let user = await User.findOne({ $or: [{ deviceId: googleId }, { userId: googleId }] });
 
-    if (user) {
+if (user) {
       return res.json({ success: true, user, isNewUser: false });
     }
 
@@ -308,6 +403,7 @@ app.post('/api/auth/google', async (req, res) => {
       avatar: avatar || '',
       coins: 1000,
       points: 0,
+      isAgent: (assignedId === '1000'),
       isFrozen: false
     });
 
@@ -396,12 +492,11 @@ io.on('connection', (socket) => {
       const { callerId, callerName, targetUserId } = data;
       const caller = await User.findOne({ userId: String(callerId) });
 
-if (!caller || caller.coins < 20) {
+      if (!caller || caller.coins < 20) {
         socket.emit('call_error', { message: 'Insufficient coins. You need at least 20 coins to make a call.' });
         return;
       }
 
-      // Generate a unique private channel for this call
       const privateChannel = call_${callerId}_${targetUserId}_${Date.now()};
 
       io.to(String(targetUserId)).emit('incoming_call', {
@@ -431,7 +526,7 @@ if (!caller || caller.coins < 20) {
     });
   });
 
-  socket.on('end_call', (data) => {
+socket.on('end_call', (data) => {
     const { targetUserId } = data;
     if (targetUserId) {
       io.to(String(targetUserId)).emit('call_ended');
@@ -528,7 +623,7 @@ if (!caller || caller.coins < 20) {
     io.to(roomId).emit('chat_message', data);
   });
 
-socket.on('gift_sent', async (data) => {
+  socket.on('gift_sent', async (data) => {
     try {
       const { senderId, receiverId, giftPrice, room, giftName } = data;
       const roomId = String(room  data.roomId  '1001');
@@ -571,7 +666,7 @@ socket.on('gift_sent', async (data) => {
     io.emit('game_win_broadcast', data);
   });
 
-  socket.on('disconnect', () => {
+socket.on('disconnect', () => {
     if (socket.currentRoom && socket.userId) {
       const roomId = socket.currentRoom;
       if (roomSeatsState[roomId]) {
