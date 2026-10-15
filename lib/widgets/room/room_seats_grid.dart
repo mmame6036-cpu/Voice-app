@@ -1,28 +1,29 @@
 import 'package:flutter/material.dart';
 
 class RoomSeatsGrid extends StatelessWidget {
-  final int seatCount;
+  final int currentSeatCount;
   final Function(int seatIndex)? onSeatTap;
 
   const RoomSeatsGrid({
     Key? key,
-    int? seats,
+    int? currentSeatCount,
     int? seatCount,
+    int? seats,
     this.onSeatTap,
-  })  : seatCount = seats ?? seatCount ?? 25,
+  })  : currentSeatCount = currentSeatCount ?? seatCount ?? seats ?? 25,
         super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    if (seatCount == 25) {
+    if (currentSeatCount == 25) {
       return _build25SeatsLayout();
     }
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      itemCount: seatCount,
+      itemCount: currentSeatCount,
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: seatCount <= 16 ? 4 : 5,
+        crossAxisCount: currentSeatCount <= 16 ? 4 : 5,
         crossAxisSpacing: 8,
         mainAxisSpacing: 12,
       ),
