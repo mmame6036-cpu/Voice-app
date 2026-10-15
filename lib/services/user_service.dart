@@ -13,36 +13,46 @@ class UserService {
 
   String userId = '';
   String userName = '';
-  int coins = 50000;
+  String avatar = '';
+  int coins = 0;
+  int points = 0;
   bool isOwner = false;
   bool isInitialized = false;
 
-  // የስልኩን ቋሚ ማከማቻ ፋይል ማግኛ
   Future<File> _getStorageFile() async {
     final dir = Directory.systemTemp;
     return File('${dir.path}/app_persistent_profile.json');
   }
 
   Future<void> initializeUser() async {
-    if (isInitialized && userId.isNotEmpty) return;
+    if (isInitialized && userId.isNotEmpty) {
+      await refreshUserData();
+      return;
+    }
 
     try {
       final file = await _getStorageFile();
 
-      // 1. ስልኩ ውስጥ ቀድሞ የተቀመጠ ቋሚ ID ካለ መፈተሽ
+      // 1. Check local persistent storage
       if (await file.exists()) {
         final content = await file.readAsString();
         final localData = jsonDecode(content);
         if (localData['userId'] != null && localData['userId'].toString().isNotEmpty) {
           userId = localData['userId'].toString();
           userName = localData['name'] ?? 'User_$userId';
+          avatar = localData['avatar'] ?? '';
+          coins = localData['coins'] ?? 0;
+          points = localData['points'] ?? 0;
           isOwner = (userId == '1000');
           isInitialized = true;
+
+          // Sync latest values from database
+          await refreshUserData();
           return;
         }
       }
 
-      // 2. ከሌለ ለእያንዳንዱ ስልክ የተለየ ልዩ ቁልፍ ማዘጋጀት
+      // 2. Register fallback device account if no profile exists
       final randomDeviceSeed = Random().nextInt(899999) + 100000;
       final deviceKey = 'dev_${Platform.operatingSystem}_$randomDeviceSeed';
 
@@ -63,40 +73,80 @@ class UserService {
         final resData = jsonDecode(body);
 
         if (resData['success'] == true && resData['user'] != null) {
-          userId = resData['user']['userId'].toString();
-          userName = resData['user']['name'] ?? 'User_$userId';
-          isOwner = (userId == '1000');
-
-          await file.writeAsString(jsonEncode({
-            'userId': userId,
-            'name': userName,
-          }));
-
+          _updateFromUserMap(resData['user']);
+          await _saveToStorage();
           isInitialized = true;
           return;
         }
       }
     } catch (e) {
-      debugPrint('UserService Server Error: $e');
+      debugPrint('UserService Initialization Error: $e');
     }
 
-    // ሰርቨሩ ባይገኝም እንኳ ለእያንዳንዱ ስልክ የማይመሳሰል ቋሚ ID መስጠት
     if (userId.isEmpty) {
       final randomUnique = Random().nextInt(8999) + 1001;
       userId = randomUnique.toString();
       userName = 'User_$userId';
+      coins = 1000;
+      points = 0;
       isOwner = false;
-
-      try {
-        final file = await _getStorageFile();
-        await file.writeAsString(jsonEncode({
-          'userId': userId,
-          'name': userName,
-        }));
-      } catch (_) {}
+      await _saveToStorage();
     }
 
     isInitialized = true;
+  }
+
+  // Set user directly after successful Google Login
+  Future<void> setUserData(Map<String, dynamic> userData) async {
+    _updateFromUserMap(userData);
+    await _saveToStorage();
+  }
+
+  // Refresh latest coins, points, and profile from MongoDB
+  Future<void> refreshUserData() async {
+    if (userId.isEmpty) return;
+    try {
+      final client = HttpClient();
+      client.connectionTimeout = const Duration(seconds: 8);
+      final request = await client.getUrl(
+        Uri.parse('$serverUrl/api/search-user?userId=${userId.trim()}'),
+      );
+      final response = await request.close();
+      if (response.statusCode == 200) {
+        final body = await response.transform(utf8.decoder).join();
+        final data = jsonDecode(body);
+        if (data['success'] == true && data['user'] != null) {
+          _updateFromUserMap(data['user']);
+          await _saveToStorage();
+        }
+      }
+    } catch (e) {
+      debugPrint('UserService Refresh Error: $e');
+    }
+  }
+
+void _updateFromUserMap(Map<String, dynamic> userMap) {
+    userId = userMap['userId'].toString();
+    userName = userMap['name'] ?? 'User_$userId';
+    avatar = userMap['avatar'] ?? '';
+    coins = (userMap['coins'] is num) ? (userMap['coins'] as num).toInt() : 0;
+    points = (userMap['points'] is num) ? (userMap['points'] as num).toInt() : 0;
+    isOwner = (userId == '1000');
+  }
+
+  Future<void> _saveToStorage() async {
+    try {
+      final file = await _getStorageFile();
+      await file.writeAsString(jsonEncode({
+        'userId': userId,
+        'name': userName,
+        'avatar': avatar,
+        'coins': coins,
+        'points': points,
+      }));
+    } catch (e) {
+      debugPrint('Storage write error: $e');
+    }
   }
 
   Future<Map<String, dynamic>?> searchUser(String queryId) async {
