@@ -37,7 +37,7 @@ class _RoomScreenState extends State<RoomScreen> {
   late final AgoraService _agora;
 
   bool _isMicMuted = false;
-  int _currentSeatCount = 8;
+  int _currentSeatCount = 25;
   final TextEditingController _msgController = TextEditingController();
 
   final List<Map<String, String>> _messages = [
@@ -54,11 +54,7 @@ class _RoomScreenState extends State<RoomScreen> {
     super.initState();
     _agora = AgoraService();
     _initSeats(_currentSeatCount);
-
-    // 1. ሰርቨሩን እና Socket ማገናኘት
     _initSocket();
-
-    // 2. Agora ድምፅን ማገናኘት
     _initAudio();
   }
 
@@ -79,7 +75,6 @@ class _RoomScreenState extends State<RoomScreen> {
     _socket.connect();
     _socket.joinRoom(widget.roomId);
 
-    // ቀድመው የተያዙ ወንበሮችን ከሰርቨር ተቀብሎ በአንድ ጊዜ በስክሪኑ ላይ ማመሳሰል
     _socket.socket?.on('sync_room_seats', (data) {
       if (!mounted || data == null) return;
       setState(() {
@@ -94,7 +89,6 @@ class _RoomScreenState extends State<RoomScreen> {
       });
     });
 
-    // ሌሎች ስልኮች ወንበር ሲይዙ ወይም ሲለቁ በቅጽበት ይቀበላል
     _socket.onChairActionReceived = (data) {
       if (!mounted) return;
       final int? chairIndex = data['chairIndex'] != null
@@ -104,14 +98,12 @@ class _RoomScreenState extends State<RoomScreen> {
       final String? uName = data['userName'];
       final String? uId = data['userId'];
 
-      // የተስተካከለው የመስመር ማረጋገጫ (|| ገብቶበታል)
       if (chairIndex == null || chairIndex < 0 || chairIndex >= _seats.length) {
         return;
       }
 
       setState(() {
         if (action == 'take') {
-          // ተጠቃሚው ሌላ ወንበር ላይ ከነበረ ነፃ ማድረግ
           for (int i = 0; i < _seats.length; i++) {
             if (_seats[i]['userId'] == uId && i != chairIndex) {
               _seats[i]['user'] = null;
@@ -127,8 +119,7 @@ class _RoomScreenState extends State<RoomScreen> {
           });
         } else if (action == 'leave') {
           if (_seats[chairIndex]['userId'] == uId) {
-
-_seats[chairIndex]['user'] = null;
+            _seats[chairIndex]['user'] = null;
             _seats[chairIndex]['userId'] = null;
             _seats[chairIndex]['isSpeaking'] = false;
             _messages.add({
@@ -140,8 +131,7 @@ _seats[chairIndex]['user'] = null;
       });
     };
 
-    // ሌሎች ስልኮች የጻፉትን መልእክት በቅጽበት ይቀበላል
-    _socket.onChatMessageReceived = (data) {
+_socket.onChatMessageReceived = (data) {
       if (!mounted) return;
       final String? sender = data['sender'] ?? data['userName'] ?? 'User';
       final String? text = data['text'] ?? data['message'];
@@ -173,17 +163,14 @@ _seats[chairIndex]['user'] = null;
       onVolumeChanged: (speakers) {
         if (!mounted) return;
         setState(() {
-          // 1. መጀመሪያ ሁሉንም ወንበሮች አጥፋ
           for (var seat in _seats) {
             seat['isSpeaking'] = false;
           }
 
-          // 2. የሚያወራውን ሰው ወንበር ብቻ ፈልጎ ማብራት
           for (var speaker in speakers) {
             if (speaker.volume != null && speaker.volume! > 10) {
               final speakerUid = speaker.uid?.toString();
 
-              // በ Agora uid: 0 ማለት የስልኩ ባለቤት ራሱ ነው
               if (speaker.uid == 0) {
                 for (var seat in _seats) {
                   if (seat['userId'] == _user.userId) {
@@ -191,7 +178,6 @@ _seats[chairIndex]['user'] = null;
                   }
                 }
               } else {
-                // የሌሎች ተጠቃሚዎች ድምፅ ከሆነ
                 for (var seat in _seats) {
                   if (seat['userId'] != null && seat['userId'].toString() == speakerUid) {
                     seat['isSpeaking'] = true;
@@ -210,7 +196,6 @@ _seats[chairIndex]['user'] = null;
     final currentUser = _user.userName;
     final currentUserId = _user.userId;
 
-    // ወንበር ላይ የተቀመጠው ራሱ ከሆነ ለመልቀቅ
     if (seat['userId'] == currentUserId || seat['user'] == currentUser) {
       showModalBottomSheet(
         context: context,
@@ -255,7 +240,6 @@ _seats[chairIndex]['user'] = null;
       return;
     }
 
-// ወንበሩ በሌላ ሰው ከተያዘ
     if (seat['user'] != null && seat['user'].toString().isNotEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -266,7 +250,6 @@ _seats[chairIndex]['user'] = null;
       return;
     }
 
-    // ተጠቃሚው ሌላ ወንበር ላይ ከነበረ ነፃ ማድረግ
     for (var s in _seats) {
       if (s['userId'] == currentUserId) {
         s['user'] = null;
@@ -275,14 +258,13 @@ _seats[chairIndex]['user'] = null;
       }
     }
 
-    // አዲሱን ወንበር ለመያዝ ወደ ሰርቨር መላክ
     _socket.sendChairAction(
       roomId: widget.roomId,
       chairIndex: index,
       action: 'take',
     );
 
-    setState(() {
+setState(() {
       seat['user'] = currentUser;
       seat['userId'] = currentUserId;
       seat['isSpeaking'] = false;
@@ -332,7 +314,16 @@ _seats[chairIndex]['user'] = null;
   }
 
   void _openBasicTools() {
-    BasicToolsSheet.show(context);
+    BasicToolsSheet.show(
+      context,
+      currentSeats: _currentSeatCount,
+      onSeatsChanged: (newCount) {
+        setState(() {
+          _currentSeatCount = newCount;
+          _initSeats(newCount);
+        });
+      },
+    );
   }
 
   void _toggleMic() async {
