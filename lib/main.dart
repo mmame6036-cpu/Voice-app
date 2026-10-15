@@ -9,7 +9,8 @@ import 'points_screen.dart';
 import 'host_center_screen.dart';
 import 'agency_screen.dart';
 import 'coin_seller_screen.dart';
-import 'screens/login_screen.dart';
+import 'login_screen.dart';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await UserService().initializeUser();
@@ -31,10 +32,10 @@ class NileVoiceApp extends StatelessWidget {
       ),
       initialRoute: '/login',
       routes: {
-        '/login': (context) =>const LoginScreen(),
-        '/home': (context) =>const MainNavigationScreen(),
+        '/login': (context) => const LoginScreen(),
+        '/home': (context) => const MainNavigationScreen(),
       },
-   );
+    );
   }
 }
 
@@ -98,7 +99,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
   final List<String> _categories = ['All', 'Party', 'Chat', 'Music', 'Gaming'];
 
-  // ማራኪ የላይኛው ባነሮች
   final List<Map<String, dynamic>> _banners = [
     {
       'title': 'Weekly PK Star Tournament',
@@ -120,7 +120,6 @@ class _HomeScreenState extends State<HomeScreen> {
     _fetchRooms();
   }
 
-  // ሁልጊዜ ክፍሎች እንዲታዩ የሚያደርግ የናሙና ክፍሎች ዝርዝር
   List<Map<String, dynamic>> _getDefaultRooms() {
     return [
       {
@@ -144,13 +143,13 @@ class _HomeScreenState extends State<HomeScreen> {
     ];
   }
 
-  Future<void> _fetchRooms() async {
+Future<void> _fetchRooms() async {
     try {
       final response = await http
           .get(Uri.parse('https://voice-app-2-jd95.onrender.com/api/rooms'))
           .timeout(const Duration(seconds: 5));
 
-if (response.statusCode == 200) {
+      if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['success'] == true && mounted) {
           final fetched = data['rooms'] ?? [];
@@ -266,13 +265,12 @@ if (response.statusCode == 200) {
     ).then((_) => _fetchRooms());
   }
 
-  @override
+@override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: const Color(0xFF161B26),
-
-elevation: 0,
+        elevation: 0,
         title: const Text('Nile Voice', style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.8)),
         actions: [
           IconButton(
@@ -314,7 +312,6 @@ elevation: 0,
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            // 1. Featured Top Slider / Banner
             SizedBox(
               height: 120,
               child: PageView.builder(
@@ -354,15 +351,12 @@ elevation: 0,
                 },
               ),
             ),
-
             const SizedBox(height: 18),
-
-            // 2. Categories Filter Bar
             SizedBox(
               height: 38,
-              child: ListView.separated(
 
-scrollDirection: Axis.horizontal,
+child: ListView.separated(
+                scrollDirection: Axis.horizontal,
                 itemCount: _categories.length,
                 separatorBuilder: (_, __) => const SizedBox(width: 8),
                 itemBuilder: (context, index) {
@@ -383,10 +377,7 @@ scrollDirection: Axis.horizontal,
                 },
               ),
             ),
-
             const SizedBox(height: 20),
-
-            // 3. Live Rooms Header
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -400,19 +391,14 @@ scrollDirection: Axis.horizontal,
                 ),
               ],
             ),
-
             const SizedBox(height: 8),
-
-            // Global Master Room (ቋሚ ክፍል)
             _buildRoomCard(
               roomId: '1001',
               title: 'Global Chat Lounge 🌍',
               host: 'Master Host',
               usersCount: '12',
             ),
-
             const SizedBox(height: 10),
-
             if (_isLoading)
               const Center(
                 child: Padding(
@@ -434,7 +420,6 @@ scrollDirection: Axis.horizontal,
                   ),
                 );
               }).toList(),
-
             const SizedBox(height: 80),
           ],
         ),
@@ -476,9 +461,9 @@ scrollDirection: Axis.horizontal,
                 const CircleAvatar(
                   radius: 26,
                   backgroundColor: Color(0xFF00C9A7),
+                  child: Icon(Icons.headset, color: Colors.black, size: 26),
 
-child: Icon(Icons.headset, color: Colors.black, size: 26),
-                ),
+),
                 Positioned(
                   bottom: 0,
                   right: 0,
@@ -583,9 +568,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           const SizedBox(height: 6),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
 
-decoration: BoxDecoration(
-                              color: const Color(0xFF161B26),
+color: const Color(0xFF161B26),
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(color: Colors.white12),
                             ),
@@ -662,9 +647,9 @@ decoration: BoxDecoration(
                             children: [
                               Expanded(
                                 child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
 
-crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
+children: [
                                     const Text('Coins', style: TextStyle(color: Colors.white60, fontSize: 12)),
                                     const SizedBox(height: 6),
                                     Text(
@@ -729,8 +714,6 @@ crossAxisAlignment: CrossAxisAlignment.start,
                   ],
                 ),
                 const SizedBox(height: 20),
-
-                // Main Centers Row
                 Container(
                   padding: const EdgeInsets.symmetric(vertical: 12),
                   decoration: BoxDecoration(
@@ -743,11 +726,11 @@ crossAxisAlignment: CrossAxisAlignment.start,
                       Expanded(
                         child: InkWell(
                           borderRadius: BorderRadius.circular(12),
-
-onTap: () {
+                          onTap: () {
                             Navigator.push(
                               context,
-                              MaterialPageRoute(builder: (_) => const HostCenterScreen()),
+
+MaterialPageRoute(builder: (_) => const HostCenterScreen()),
                             );
                           },
                           child: Padding(
@@ -789,7 +772,6 @@ onTap: () {
                     ],
                   ),
                 ),
-
                 const SizedBox(height: 16),
                 Container(
                   padding: const EdgeInsets.all(16),
@@ -851,4 +833,4 @@ Widget _buildGridMenuItem({required IconData icon, required String label}) {
       ],
     );
   }
-}I
+}
