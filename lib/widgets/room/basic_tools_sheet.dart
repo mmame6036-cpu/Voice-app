@@ -10,6 +10,22 @@ class BasicToolsSheet extends StatelessWidget {
     this.currentSeats = 25,
   }) : super(key: key);
 
+  static Future<void> show(
+    BuildContext context, {
+    int currentSeats = 25,
+    Function(int updatedSeats)? onSeatsChanged,
+  }) {
+    return showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => BasicToolsSheet(
+        currentSeats: currentSeats,
+        onSeatsChanged: onSeatsChanged,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -21,10 +37,11 @@ class BasicToolsSheet extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Text('Basic Tools', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+          const Text(
+            'Basic Tools',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+          ),
           const SizedBox(height: 20),
-
-          // Row 1
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
@@ -35,7 +52,9 @@ class BasicToolsSheet extends StatelessWidget {
                 Navigator.pop(context);
                 final res = await Navigator.push<int>(
                   context,
-                  MaterialPageRoute(builder: (_) => RoomSettingsScreen(currentSeats: currentSeats)),
+                  MaterialPageRoute(
+                    builder: (_) => RoomSettingsScreen(currentSeats: currentSeats),
+                  ),
                 );
                 if (res != null) {
                   onSeatsChanged?.call(res);
@@ -44,8 +63,6 @@ class BasicToolsSheet extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 18),
-
-          // Row 2
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
@@ -56,8 +73,6 @@ class BasicToolsSheet extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 18),
-
-          // Row 3
           Row(
             children: [
               const SizedBox(width: 8),
@@ -100,9 +115,6 @@ class BasicToolsSheet extends StatelessWidget {
   }
 }
 
-// ---------------------------------------------------------------------------
-// ROOM SETTINGS SCREEN
-// ---------------------------------------------------------------------------
 class RoomSettingsScreen extends StatefulWidget {
   final int currentSeats;
   const RoomSettingsScreen({Key? key, required this.currentSeats}) : super(key: key);
@@ -120,7 +132,7 @@ class _RoomSettingsScreenState extends State<RoomSettingsScreen> {
     _seats = widget.currentSeats;
   }
 
-@override
+  @override
   Widget build(BuildContext context) {
     return WillPopScope(
       onWillPop: () async {
@@ -198,13 +210,13 @@ class _RoomSettingsScreenState extends State<RoomSettingsScreen> {
               ],
             ),
             const SizedBox(height: 12),
-            _buildSettingCard(
+
+_buildSettingCard(
               children: [
                 _buildTile(
                   title: 'Mic Seats',
                   value: '$_seats',
-
-showArrow: true,
+                  showArrow: true,
                   onTap: () async {
                     final sel = await Navigator.push<int>(
                       context,
@@ -255,9 +267,6 @@ showArrow: true,
   }
 }
 
-// ---------------------------------------------------------------------------
-// MIC SEATS SELECTOR SCREEN
-// ---------------------------------------------------------------------------
 class MicSeatsSelectorScreen extends StatefulWidget {
   final int selectedSeats;
   const MicSeatsSelectorScreen({Key? key, required this.selectedSeats}) : super(key: key);
@@ -309,9 +318,9 @@ class _MicSeatsSelectorScreenState extends State<MicSeatsSelectorScreen> {
                   onTap: () => setState(() => _chosen = count),
                   child: Container(
                     decoration: BoxDecoration(
+                      color: const Color(0xFF1E212B),
 
-color: const Color(0xFF1E212B),
-                      borderRadius: BorderRadius.circular(16),
+borderRadius: BorderRadius.circular(16),
                       border: Border.all(color: isSelected ? const Color(0xFF00C9A7) : Colors.transparent, width: 2),
                     ),
                     child: Center(
