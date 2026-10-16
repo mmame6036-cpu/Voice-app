@@ -48,15 +48,15 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     setState(() => _isLoading = true);
 
     try {
-      final url = Uri.parse('${UserService.serverUrl}/api/auth/google');
+      // ሰርቨሩ የሚያውቀውና userId: 1000 የሚመድበው ትክክለኛ መንገድ
+      final url = Uri.parse('${UserService.serverUrl}/api/register-user');
       final response = await http.post(
         url,
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
-          'googleId': '1000', // ለአንተ Master Admin 1000 እንዲሆን
-          'email': 'admin@nilevoice.com',
+          'deviceId': 'master_admin_device_1000',
           'name': 'Master Admin',
-          'avatar': '',
+          'isOwner': true,
         }),
       ).timeout(const Duration(seconds: 15));
 
