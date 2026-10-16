@@ -121,7 +121,81 @@ const Payment = mongoose.model('Payment', paymentSchema);
 // --- Modular Routes ---
 app.use('/api/wallet', walletRoutes);
 app.use('/api/admin', adminRoutes);
+// --- Payment & Recharge Endpoints ---
+app.post('/api/recharge-request', async (req, res) => {
+  try {
+    const { userId, userName, paymentMethod, txId, amountCoins, pricePaid } = req.body;
 
+    if (!userId || !txId || !amountCoins) {
+      return res.status(400).json({ success: false, message: 'Missing required payment fields' });
+    }
+
+    const existingTx = await Payment.findOne({ txId: String(txId).trim() });
+    if (existingTx) {
+      return res.status(400).json({ success: false, message: 'ይህ የግብይት ቁጥር ቀድሞ ገብቷል!' });
+    }
+
+    const newPayment = new Payment({
+      userId: String(userId),
+      userName: userName || 'User',
+      paymentMethod,
+      txId: String(txId).trim(),
+      amountCoins: Number(amountCoins),
+      pricePaid: String(pricePaid),
+      status: 'pending'
+    });
+
+    await newPayment.save();
+    return res.json({ success: true, message: 'Recharge request submitted successfully' });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.get('/api/admin/pending-payments', async (req, res) => {
+  try {
+    const pendings = await Payment.find({ status: 'pending' }).sort({ createdAt: -1 });
+    return res.json({ success: true, data: pendings });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.post('/api/admin/approve-payment', async (req, res) => {
+  try {
+    const { paymentId } = req.body;
+
+    const payment = await Payment.findById(paymentId);
+    if (!payment || payment.status !== 'pending') {
+      return res.status(400).json({ success: false, message: 'Invalid or already processed payment' });
+    }
+
+    const user = await User.findOneAndUpdate(
+      { userId: payment.userId },
+      { $inc: { coins: payment.amountCoins } },
+      { new: true }
+    );
+
+    await Transaction.create({
+      userId: payment.userId,
+      type: 'recharge',
+      amount: payment.amountCoins,
+      balanceAfter: user ? user.coins : 0,
+      description: Wholesale Recharge via ${payment.paymentMethod} (TxID: ${payment.txId})
+    });
+
+    payment.status = 'approved';
+    await payment.save();
+
+    return res.json({
+      success: true,
+      message: 'Payment approved and coins added successfully',
+      updatedCoins: user ? user.coins : null
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
 // --- Agent Management Endpoints ---
 
 // 1. Admin: Toggle or Set Agent Role
