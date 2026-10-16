@@ -349,7 +349,7 @@ app.post('/api/admin/approve-payment', async (req, res) => {
       type: 'recharge',
       amount: payment.amountCoins,
       balanceAfter: user ? user.coins : 0,
-      description: Wholesale Recharge via ${payment.paymentMethod} (TxID: ${payment.txId})
+      description:  `Wholesale Recharge via ${payment.paymentMethod} (TxID: ${payment.txId})`
     });
 
     payment.status = 'approved';
@@ -375,7 +375,7 @@ app.post('/api/rooms/create', async (req, res) => {
     if (!room) {
       room = new Room({
         roomId: String(roomId),
-        title: title || ${hostName}'s Room,
+        title: title || `${hostName}'s Room`,
         category: category || 'Chat',
         hostId,
         hostName,
@@ -482,7 +482,7 @@ if (!googleId) {
 
     user = new User({
       userId: assignedId,
-      name: name || User_${assignedId},
+      name: name ||  `User_${assignedId}`,
       deviceId: googleId,
       avatar: avatar || '',
       coins: initialCoins,
@@ -579,11 +579,11 @@ io.on('connection', (socket) => {
         return;
       }
 
-      const privateChannel = call_${callerId}_${targetUserId}_${Date.now()};
+      const privateChannel = `call_${callerId}_${targetUserId}_${Date.now()}`;
 
       io.to(String(targetUserId)).emit('incoming_call', {
         callerId: callerId,
-        callerName: callerName || User ${callerId},
+        callerName: callerName || `User ${callerId}`,
         channelName: privateChannel
       });
 
@@ -642,7 +642,7 @@ socket.on('reject_call', (data) => {
         type: 'call_fee',
         amount: cost,
         balanceAfter: caller.coins,
-        description: 1-Minute Private Voice Call to User ${receiverId}
+        description: `1-Minute Private Voice Call to User ${receiverId}`
       });
 
       socket.emit('call_coin_deducted', { remainingCoins: caller.coins });
@@ -653,7 +653,7 @@ socket.on('reject_call', (data) => {
 
   // Audio Rooms & Streaming
   socket.on('join_room', (data) => {
-    const roomId = String(data.room  data.roomId  '1001');
+    const roomId = String(data.room || data.roomId  || '1001');
     socket.currentRoom = roomId;
     socket.join(roomId);
 
@@ -663,7 +663,7 @@ socket.on('reject_call', (data) => {
   });
 
   socket.on('chair_action', (data) => {
-    const roomId = String(data.room  data.roomId  '1001');
+    const roomId = String(data.room || data.roomId  || '1001');
     const chairIndex = data.chairIndex;
     const action = data.action;
 
