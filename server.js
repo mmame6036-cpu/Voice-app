@@ -235,7 +235,7 @@ app.post('/api/wallet/agent-transfer-coins', async (req, res) => {
     const { agentId, targetUserId, amountCoins } = req.body;
     const coinsToTransfer = Number(amountCoins);
 
-    if (!agentId  !targetUserId  !coinsToTransfer || coinsToTransfer <= 0) {
+    if (!agentId || !targetUserId || !coinsToTransfer || coinsToTransfer <= 0) {
       return res.status(400).json({ success: false, message: 'Invalid transfer details' });
     }
 
@@ -266,7 +266,7 @@ app.post('/api/wallet/agent-transfer-coins', async (req, res) => {
       type: 'agent_sale',
       amount: -coinsToTransfer,
       balanceAfter: agent.coins,
-      description: Sold ${coinsToTransfer} coins to User ${recipient.userId}
+      description:  `Soldering ${coinsToTransfer} coins to User ${recipient.userId}`
     });
 
     await Transaction.create({
