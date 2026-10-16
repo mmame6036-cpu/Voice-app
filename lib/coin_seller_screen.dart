@@ -66,6 +66,7 @@ class _CoinSellerScreenState extends State<CoinSellerScreen> {
         binanceUid: _binanceUid,
         userId: _user.userId,
         userName: _user.userName,
+        onPaymentSubmitted: _refreshUserData,
       ),
     );
   }
@@ -83,11 +84,12 @@ class _CoinSellerScreenState extends State<CoinSellerScreen> {
     );
   }
 
-  void _openAdminPanel() {
-    Navigator.push(
+  void _openAdminPanel() async {
+    await Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const AdminPaymentScreen()),
     );
+    _refreshUserData();
   }
 
   void _showTransactionDetails() {
@@ -123,9 +125,9 @@ class _CoinSellerScreenState extends State<CoinSellerScreen> {
             const SizedBox(height: 10),
             const Text(
               'To upgrade to Senior Seller:\n• Transfer over 10,000,000 coins monthly\n• Enjoy wholesale discounts & priority verification.',
-              style: TextStyle(color: Colors.white70, fontSize: 13, height: 1.4),
 
-),
+style: TextStyle(color: Colors.white70, fontSize: 13, height: 1.4),
+            ),
           ],
         ),
         actions: [
@@ -221,10 +223,10 @@ class _CoinSellerScreenState extends State<CoinSellerScreen> {
               const Text(
                 'Select Payment Method',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFFFFD700)),
-              ),
-              const SizedBox(height: 14),
 
-ListTile(
+),
+              const SizedBox(height: 14),
+              ListTile(
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                   side: BorderSide(
@@ -530,6 +532,7 @@ class SellerRechargeSheet extends StatefulWidget {
   final String binanceUid;
   final String userId;
   final String userName;
+  final VoidCallback onPaymentSubmitted;
 
   const SellerRechargeSheet({
     Key? key,
@@ -537,6 +540,7 @@ class SellerRechargeSheet extends StatefulWidget {
     required this.binanceUid,
     required this.userId,
     required this.userName,
+    required this.onPaymentSubmitted,
   }) : super(key: key);
 
   @override
@@ -554,12 +558,12 @@ class _SellerRechargeSheetState extends State<SellerRechargeSheet> {
     {'coins': '30,000,000', 'priceUsd': '\$3000', 'priceEtb': '360,000 ETB', 'badge': 'Senior Seller', 'amountUsd': 3000, 'amountCoins': 30000000},
   ];
 
-  void _proceedToPayment() {
+  void _proceedToPayment() async {
     final selectedTier = _wholesaleTiers[_selectedTierIndex];
     Navigator.pop(context);
 
     if (_payMethod == 'Binance') {
-      Navigator.push(
+      await Navigator.push(
         context,
         MaterialPageRoute(
           builder: (_) => BinancePaymentScreen(
@@ -568,13 +572,13 @@ class _SellerRechargeSheetState extends State<SellerRechargeSheet> {
             coinQuantity: selectedTier['coins'],
             priceUsd: selectedTier['priceUsd'],
             orderAmount: selectedTier['amountCoins'].toString(),
-            amountCoins: selectedTier['amountCoins'],
+
+amountCoins: selectedTier['amountCoins'],
           ),
         ),
       );
-
-} else {
-      Navigator.push(
+    } else {
+      await Navigator.push(
         context,
         MaterialPageRoute(
           builder: (_) => TelebirrPaymentScreen(
@@ -588,6 +592,7 @@ class _SellerRechargeSheetState extends State<SellerRechargeSheet> {
         ),
       );
     }
+    widget.onPaymentSubmitted();
   }
 
   @override
@@ -664,11 +669,11 @@ class _SellerRechargeSheetState extends State<SellerRechargeSheet> {
                         const SizedBox(height: 3),
                         Text(
                           item['coins'],
-                          style: TextStyle(
+
+style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.bold,
-
-color: isSelected ? const Color(0xFFFFD700) : Colors.white,
+                            color: isSelected ? const Color(0xFFFFD700) : Colors.white,
                           ),
                         ),
                         const SizedBox(height: 2),
@@ -764,9 +769,9 @@ color: isSelected ? const Color(0xFFFFD700) : Colors.white,
 }
 
 // ---------------------------------------------------------------------------
-// 2. BINANCE PAYMENT SCREEN
+// 2. BINANCE PAYMENT SCREEN (Fully Fixed & Interactive)
 // ---------------------------------------------------------------------------
-class BinancePaymentScreen extends StatelessWidget {
+class BinancePaymentScreen extends StatefulWidget {
   final String userId;
   final String userName;
   final String coinQuantity;
@@ -774,7 +779,7 @@ class BinancePaymentScreen extends StatelessWidget {
   final String orderAmount;
   final int amountCoins;
 
-const BinancePaymentScreen({
+  const BinancePaymentScreen({
     Key? key,
     required this.userId,
     required this.userName,
@@ -784,44 +789,80 @@ const BinancePaymentScreen({
     required this.amountCoins,
   }) : super(key: key);
 
+  @override
+  State<BinancePaymentScreen> createState() => _BinancePaymentScreenState();
+}
+
+class _BinancePaymentScreenState extends State<BinancePaymentScreen> {
+  late final String orderId;
+  bool _isSubmitting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    orderId = 'BIN${DateTime.now().millisecondsSinceEpoch}';
+  }
+
   void _copy(BuildContext context, String text, String label) {
     Clipboard.setData(ClipboardData(text: text));
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$label Copied!')));
   }
 
-  Future<void> _submitBinancePayment(BuildContext context, String orderId) async {
+  Future<void> _submitBinancePayment() async {
+    setState(() => _isSubmitting = true);
+
     try {
       final url = Uri.parse('${UserService.serverUrl}/api/recharge-request');
       final res = await http.post(
         url,
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
-          'userId': userId,
-          'userName': userName,
+          'userId': widget.userId,
+          'userName': widget.userName,
           'paymentMethod': 'Binance Pay',
           'txId': orderId,
-          'amountCoins': amountCoins,
-          'pricePaid': priceUsd,
+          'amountCoins': widget.amountCoins,
+          'pricePaid': widget.priceUsd,
         }),
-      );
-      if (res.statusCode == 200) {
-        Navigator.pop(context);
+      ).timeout(const Duration(seconds: 15));
+
+      final data = jsonDecode(res.body);
+
+      if (mounted) {
+        if (res.statusCode == 200 && data['success'] == true) {
+          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Binance Payment Request Submitted! Awaiting Admin Approval.'),
+              backgroundColor: Color(0xFF00C9A7),
+              duration: Duration(seconds: 4),
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(data['message'] ?? 'Failed to submit payment.'),
+              backgroundColor: Colors.redAccent,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Binance Payment Submitted Successfully! Awaiting Verification.'),
-            backgroundColor: Color(0xFF00C9A7),
+          SnackBar(
+            content: Text('Connection Error: $e'),
+            backgroundColor: Colors.redAccent,
           ),
         );
       }
-    } catch (_) {
-      Navigator.pop(context);
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final String orderId = 'BIN${DateTime.now().millisecondsSinceEpoch}';
-
     return Scaffold(
       backgroundColor: const Color(0xFF0C0D12),
       appBar: AppBar(
@@ -844,7 +885,8 @@ const BinancePaymentScreen({
                 color: const Color(0xFF161824),
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(color: const Color(0xFFFFD700).withOpacity(0.3)),
-                boxShadow: const [
+
+boxShadow: const [
                   BoxShadow(color: Colors.black54, blurRadius: 10, offset: Offset(0, 4)),
                 ],
               ),
@@ -871,8 +913,7 @@ const BinancePaymentScreen({
                       height: 140,
                       width: 140,
                       fit: BoxFit.contain,
-
-errorBuilder: (ctx, err, stack) => const Icon(
+                      errorBuilder: (ctx, err, stack) => const Icon(
                         Icons.qr_code_2,
                         size: 140,
                         color: Colors.black,
@@ -911,11 +952,11 @@ errorBuilder: (ctx, err, stack) => const Icon(
               ),
               child: Column(
                 children: [
-                  _buildDetailRow('User ID', userId),
+                  _buildDetailRow('User ID', widget.userId),
                   const Divider(color: Colors.white10, height: 16),
-                  _buildDetailRow('Quantity', priceUsd),
+                  _buildDetailRow('Quantity', widget.priceUsd),
                   const Divider(color: Colors.white10, height: 16),
-                  _buildDetailRow('Order Amount', orderAmount, isGold: true),
+                  _buildDetailRow('Order Amount', widget.orderAmount, isGold: true),
                   const Divider(color: Colors.white10, height: 16),
                   _buildDetailRow('Date', '2026-10-15 05:48:03'),
                 ],
@@ -929,10 +970,17 @@ errorBuilder: (ctx, err, stack) => const Icon(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF6C5CE7),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-                  elevation: 4,
+
+elevation: 4,
                 ),
-                onPressed: () => _submitBinancePayment(context, orderId),
-                child: const Text('Pay Now', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+                onPressed: _isSubmitting ? null : _submitBinancePayment,
+                child: _isSubmitting
+                    ? const SizedBox(
+                        height: 22,
+                        width: 22,
+                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                      )
+                    : const Text('Pay Now', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
               ),
             ),
           ],
@@ -960,9 +1008,9 @@ errorBuilder: (ctx, err, stack) => const Icon(
 }
 
 // ---------------------------------------------------------------------------
-// 3. TELEBIRR PAYMENT SCREEN
+// 3. TELEBIRR PAYMENT SCREEN (Fully Fixed with Dynamic ID & Feedback)
 // ---------------------------------------------------------------------------
-class TelebirrPaymentScreen extends StatelessWidget {
+class TelebirrPaymentScreen extends StatefulWidget {
   final String userId;
   final String userName;
   final String telebirrPhone;
@@ -980,44 +1028,74 @@ class TelebirrPaymentScreen extends StatelessWidget {
     required this.amountCoins,
   }) : super(key: key);
 
-void _copy(BuildContext context, String text, String label) {
+  @override
+  State<TelebirrPaymentScreen> createState() => _TelebirrPaymentScreenState();
+}
+
+class _TelebirrPaymentScreenState extends State<TelebirrPaymentScreen> {
+  final TextEditingController txController = TextEditingController();
+  bool _isSubmitting = false;
+
+  void _copy(BuildContext context, String text, String label) {
     Clipboard.setData(ClipboardData(text: text));
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$label Copied!')));
   }
 
-  Future<void> _submitTelebirrPayment(BuildContext context, String txId) async {
+  Future<void> _submitTelebirrPayment(String txId) async {
+    setState(() => _isSubmitting = true);
+
     try {
       final url = Uri.parse('${UserService.serverUrl}/api/recharge-request');
       final res = await http.post(
         url,
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
-          'userId': userId,
-          'userName': userName,
+          'userId': widget.userId,
+          'userName': widget.userName,
           'paymentMethod': 'Telebirr',
           'txId': txId.trim(),
-          'amountCoins': amountCoins,
-          'pricePaid': priceEtb,
+          'amountCoins': widget.amountCoins,
+          'pricePaid': widget.priceEtb,
         }),
-      );
-      if (res.statusCode == 200) {
-        Navigator.pop(context);
+      ).timeout(const Duration(seconds: 15));
+
+      final data = jsonDecode(res.body);
+
+      if (mounted) {
+        if (res.statusCode == 200 && data['success'] == true) {
+          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('የቴሌብር ክፍያ ጥያቄዎ በተሳካ ሁኔታ ተልኳል! በአጭር ጊዜ ውስጥ ይረጋገጣል።'),
+              backgroundColor: Color(0xFF00C9A7),
+              duration: Duration(seconds: 4),
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(data['message'] ?? 'Failed to submit payment.'),
+              backgroundColor: Colors.redAccent,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Recharge Request Submitted Successfully!'),
-            backgroundColor: Color(0xFF00C9A7),
+          SnackBar(
+            content: Text('የሰርቨር ግንኙነት ስህተት፦ $e'),
+            backgroundColor: Colors.redAccent,
           ),
         );
       }
-    } catch (_) {
-      Navigator.pop(context);
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
     }
   }
 
-  @override
+@override
   Widget build(BuildContext context) {
-    final TextEditingController txController = TextEditingController();
-
     return Scaffold(
       backgroundColor: const Color(0xFF0C0D12),
       appBar: AppBar(
@@ -1049,17 +1127,17 @@ void _copy(BuildContext context, String text, String label) {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text('Receiver: $telebirrPhone', style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
+                      Text('Receiver: ${widget.telebirrPhone}', style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
                       IconButton(
                         icon: const Icon(Icons.copy, color: Color(0xFF00C9A7), size: 18),
-                        onPressed: () => _copy(context, telebirrPhone, 'Phone Number'),
+                        onPressed: () => _copy(context, widget.telebirrPhone, 'Phone Number'),
                       ),
                     ],
                   ),
                   const SizedBox(height: 6),
-                  Text('Amount: $priceEtb', style: const TextStyle(color: Color(0xFFFFD700), fontSize: 14, fontWeight: FontWeight.bold)),
+                  Text('Amount: ${widget.priceEtb}', style: const TextStyle(color: Color(0xFFFFD700), fontSize: 14, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 4),
-                  Text('Coins to receive: $coinQuantity', style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                  Text('Coins to receive: ${widget.coinQuantity}', style: const TextStyle(color: Colors.white70, fontSize: 12)),
                 ],
               ),
             ),
@@ -1068,12 +1146,13 @@ void _copy(BuildContext context, String text, String label) {
               controller: txController,
               style: const TextStyle(color: Colors.white),
               decoration: InputDecoration(
-                labelText: 'Transaction ID',
+                labelText: 'Transaction ID / የግብይት ቁጥር',
                 labelStyle: const TextStyle(color: Colors.white54),
+                hintText: 'ለምሳሌ፦ TB${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}',
+                hintStyle: const TextStyle(color: Colors.white24, fontSize: 12),
                 filled: true,
                 fillColor: const Color(0xFF161824),
-
-border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Colors.white12)),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Colors.white12)),
               ),
             ),
             const SizedBox(height: 24),
@@ -1085,16 +1164,25 @@ border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: 
                   backgroundColor: const Color(0xFF00C9A7),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
                 ),
-                onPressed: () {
-                  if (txController.text.trim().isEmpty) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Please enter transaction ID')),
-                    );
-                    return;
-                  }
-                  _submitTelebirrPayment(context, txController.text);
-                },
-                child: const Text('Confirm Payment', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 15)),
+                onPressed: _isSubmitting
+                    ? null
+                    : () {
+                        if (txController.text.trim().isEmpty) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Please enter transaction ID')),
+                          );
+                          return;
+
+}
+                        _submitTelebirrPayment(txController.text);
+                      },
+                child: _isSubmitting
+                    ? const SizedBox(
+                        height: 22,
+                        width: 22,
+                        child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2),
+                      )
+                    : const Text('Confirm Payment', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 15)),
               ),
             ),
           ],
@@ -1105,7 +1193,7 @@ border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: 
 }
 
 // ---------------------------------------------------------------------------
-// 4. ADMIN PAYMENT SCREEN
+// 4. ADMIN PAYMENT SCREEN (With Instant Approval & Coin Crediting)
 // ---------------------------------------------------------------------------
 class AdminPaymentScreen extends StatefulWidget {
   const AdminPaymentScreen({Key? key}) : super(key: key);
@@ -1140,7 +1228,7 @@ class _AdminPaymentScreenState extends State<AdminPaymentScreen> {
         }
       }
     } catch (_) {}
-    setState(() => _isLoading = false);
+    if (mounted) setState(() => _isLoading = false);
   }
 
   Future<void> _approvePayment(String paymentId, int amountCoins, String userId) async {
@@ -1155,23 +1243,29 @@ class _AdminPaymentScreenState extends State<AdminPaymentScreen> {
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         if (data['success'] == true) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Approved! Added $amountCoins coins to User $userId'),
-              backgroundColor: const Color(0xFF00C9A7),
-            ),
-          );
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Approved! Added $amountCoins coins to User $userId'),
+                backgroundColor: const Color(0xFF00C9A7),
+              ),
+            );
+          }
           _fetchPendingPayments();
           return;
         }
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Failed to approve payment'), backgroundColor: Colors.redAccent),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to approve payment'), backgroundColor: Colors.redAccent),
+        );
+      }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.redAccent),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.redAccent),
+        );
+      }
     }
   }
 
@@ -1186,8 +1280,7 @@ class _AdminPaymentScreenState extends State<AdminPaymentScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF0C0D12),
-
-appBar: AppBar(
+      appBar: AppBar(
         backgroundColor: const Color(0xFF141620),
         elevation: 0,
         title: const Text(
@@ -1197,7 +1290,8 @@ appBar: AppBar(
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh, color: Color(0xFFFFD700)),
-            onPressed: _fetchPendingPayments,
+
+onPressed: _fetchPendingPayments,
           ),
         ],
       ),
@@ -1265,15 +1359,15 @@ appBar: AppBar(
                                   fontWeight: FontWeight.bold,
                                   fontSize: 14,
                                 ),
-
-),
+                              ),
                             ],
                           ),
                           const SizedBox(height: 10),
                           Text(
                             'User: $userName (ID: $userId)',
                             style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13),
-                          ),
+
+),
                           const SizedBox(height: 4),
                           Text(
                             'Coins to add: $coins Coins',
@@ -1355,7 +1449,7 @@ class _SellerTransferSheetState extends State<SellerTransferSheet> {
     final targetId = _idController.text.trim();
     if (targetId.isEmpty) return;
 
-try {
+    try {
       final res = await http.get(
         Uri.parse('${UserService.serverUrl}/api/search-user?userId=$targetId'),
       );
@@ -1364,7 +1458,8 @@ try {
         if (data['user'] != null) {
           setState(() {
             _verifiedUserName = data['user']['name'] ?? 'User';
-          });
+
+});
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
@@ -1475,15 +1570,15 @@ try {
             children: [
               const Text('Transfer Coins', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFFFFD700))),
               const Spacer(),
-
-IconButton(icon: const Icon(Icons.close, color: Colors.white54), onPressed: () => Navigator.pop(context)),
+              IconButton(icon: const Icon(Icons.close, color: Colors.white54), onPressed: () => Navigator.pop(context)),
             ],
           ),
           const SizedBox(height: 12),
           Row(
             children: [
               const Text('Sales Method: ', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white70, fontSize: 12)),
-              const SizedBox(width: 8),
+
+const SizedBox(width: 8),
               ChoiceChip(
                 label: const Text('User'),
                 selected: _isTransferToUser,
@@ -1564,14 +1659,14 @@ IconButton(icon: const Icon(Icons.close, color: Colors.white54), onPressed: () =
 }
 
 // ---------------------------------------------------------------------------
-// 6. EXCHANGE SHEET (Fully Interactive)
+// 6. EXCHANGE SHEET
 // ---------------------------------------------------------------------------
 class SellerExchangeSheet extends StatefulWidget {
   final String userId;
   final int currentPoints;
   final VoidCallback onExchangeSuccess;
 
-const SellerExchangeSheet({
+  const SellerExchangeSheet({
     Key? key,
     required this.userId,
     required this.currentPoints,
@@ -1586,7 +1681,7 @@ class _SellerExchangeSheetState extends State<SellerExchangeSheet> {
   int _selectedIndex = 0;
   bool _isExchanging = false;
 
-  final List<Map<String, dynamic>> _exchangeTiers = const [
+final List<Map<String, dynamic>> _exchangeTiers = const [
     {'coins': '960,000', 'points': '1,000,000', 'ptsValue': 1000000, 'coinValue': 960000, 'level': 'Standard Seller'},
     {'coins': '1,960,000', 'points': '2,000,000', 'ptsValue': 2000000, 'coinValue': 1960000, 'level': 'Standard Seller'},
     {'coins': '9,800,000', 'points': '10,000,000', 'ptsValue': 10000000, 'coinValue': 9800000, 'level': 'Standard Seller'},
@@ -1608,7 +1703,6 @@ class _SellerExchangeSheetState extends State<SellerExchangeSheet> {
     }
 
     setState(() => _isExchanging = true);
-    // Simulated Exchange API call
     await Future.delayed(const Duration(seconds: 1));
 
     if (mounted) {
@@ -1666,8 +1760,7 @@ class _SellerExchangeSheetState extends State<SellerExchangeSheet> {
                       borderRadius: BorderRadius.circular(14),
                       border: Border.all(
                         color: isSelected ? const Color(0xFFFFD700) : Colors.white10,
-
-width: isSelected ? 1.8 : 1,
+                        width: isSelected ? 1.8 : 1,
                       ),
                       boxShadow: [
                         if (isSelected)
@@ -1678,7 +1771,8 @@ width: isSelected ? 1.8 : 1,
                       ],
                     ),
                     child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
+
+mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Text(item['level'], style: const TextStyle(fontSize: 9, color: Color(0xFFFFD700), fontWeight: FontWeight.bold)),
                         const SizedBox(height: 4),
@@ -1764,13 +1858,14 @@ class TransactionDetailsSheet extends StatelessWidget {
     );
   }
 
-Widget _buildTxItem(String title, String amount, String method, String status, bool isPositive) {
+  Widget _buildTxItem(String title, String amount, String method, String status, bool isPositive) {
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: const Color(0xFF1A1D2B),
-        borderRadius: BorderRadius.circular(12),
+
+borderRadius: BorderRadius.circular(12),
         border: Border.all(color: Colors.white10),
       ),
       child: Row(
