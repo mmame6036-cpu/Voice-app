@@ -91,7 +91,7 @@ const userSchema = new mongoose.Schema({
   avatar: { type: String, default: '' },
   coins: { type: Number, default: 1000 },
   points: { type: Number, default: 0 },
-  isAgent: { type: Boolean, default: false }, // ኤጀንት / Coin Seller ፍቃድ
+  isAgent: { type: Boolean, default: false },
   isFrozen: { type: Boolean, default: false },
   createdAt: { type: Date, default: Date.now }
 });
@@ -354,7 +354,7 @@ app.post('/api/register-user', async (req, res) => {
       deviceId: defaultDevice,
       coins: 1000,
       points: 0,
-      isAgent: (assignedId === '1000'), // ባለቤቱ (1000) በነባሪ ኤጀንት ይሆናል
+      isAgent: (assignedId === '1000'),
       isFrozen: false
     });
 
@@ -484,9 +484,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  // ==========================================
-  // --- 1-on-1 Private Call (የደወል ስርዓት) ---
-  // ==========================================
+  // 1-on-1 Private Call
   socket.on('call_user', async (data) => {
     try {
       const { callerId, callerName, targetUserId } = data;
@@ -526,15 +524,14 @@ io.on('connection', (socket) => {
     });
   });
 
-socket.on('end_call', (data) => {
+  socket.on('end_call', (data) => {
     const { targetUserId } = data;
     if (targetUserId) {
       io.to(String(targetUserId)).emit('call_ended');
     }
   });
 
-  // Call billing per minute: deduct 20 coins from caller, grant 20 points to receiver
-  socket.on('call_deduct_coins', async (data) => {
+socket.on('call_deduct_coins', async (data) => {
     try {
       const { callerId, receiverId, amount } = data;
       const cost = Number(amount) || 20;
@@ -570,9 +567,7 @@ socket.on('end_call', (data) => {
     }
   });
 
-  // ==========================================
-  // --- Audio Rooms & Streaming ---
-  // ==========================================
+  // Audio Rooms & Streaming
   socket.on('join_room', (data) => {
     const roomId = String(data.room  data.roomId  '1001');
     socket.currentRoom = roomId;
@@ -666,12 +661,13 @@ socket.on('end_call', (data) => {
     io.emit('game_win_broadcast', data);
   });
 
-socket.on('disconnect', () => {
+  socket.on('disconnect', () => {
     if (socket.currentRoom && socket.userId) {
       const roomId = socket.currentRoom;
       if (roomSeatsState[roomId]) {
         for (const idx in roomSeatsState[roomId]) {
-          if (roomSeatsState[roomId][idx].userId === socket.userId) {
+
+if (roomSeatsState[roomId][idx].userId === socket.userId) {
             delete roomSeatsState[roomId][idx];
             io.to(roomId).emit('chair_action', {
               action: 'leave',
