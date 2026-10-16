@@ -181,7 +181,7 @@ app.post('/api/admin/approve-payment', async (req, res) => {
       type: 'recharge',
       amount: payment.amountCoins,
       balanceAfter: user ? user.coins : 0,
-      description: Wholesale Recharge via ${payment.paymentMethod} (TxID: ${payment.txId})
+      description: `Wholesale Recharge via ${payment.paymentMethod} (TxID: ${payment.txId})`
     });
 
     payment.status = 'approved';
@@ -768,6 +768,6 @@ socket.on('disconnect', () => {
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
+server.listen(PORT,  '0.0.0.0', () => {
   console.log('Server running on port ' + PORT);
 });
