@@ -224,7 +224,7 @@ app.post('/api/recharge-request', async (req, res) => {
 
     const existingTx = await Payment.findOne({ txId: String(txId).trim() });
     if (existingTx) {
-      return res.status(400).json({ success: false, message: 'Transaction ID already submitted' });
+      return res.status(400).json({ success: false, message: 'ይህ የግብይት ቁጥር (TxID) ቀድሞ ገብቷል!' });
     }
 
     const newPayment = new Payment({
@@ -240,7 +240,7 @@ app.post('/api/recharge-request', async (req, res) => {
     await newPayment.save();
     return res.json({ success: true, message: 'Recharge request submitted successfully' });
   } catch (err) {
-    return res.status(500).json({ success: false, error: err.message });
+    return res.status(500).json({ success: false, message: err.message });
   }
 });
 
@@ -250,7 +250,7 @@ app.get('/api/admin/pending-payments', async (req, res) => {
     const pendings = await Payment.find({ status: 'pending' }).sort({ createdAt: -1 });
     return res.json({ success: true, data: pendings });
   } catch (err) {
-    return res.status(500).json({ success: false, error: err.message });
+    return res.status(500).json({ success: false, message: err.message });
   }
 });
 
@@ -287,7 +287,7 @@ app.post('/api/admin/approve-payment', async (req, res) => {
       updatedCoins: user ? user.coins : null
     });
   } catch (err) {
-    return res.status(500).json({ success: false, error: err.message });
+    return res.status(500).json({ success: false, message: err.message });
   }
 });
 
@@ -330,6 +330,10 @@ app.post('/api/register-user', async (req, res) => {
 
     let existingUser = await User.findOne({ deviceId: deviceId });
     if (existingUser) {
+      if (existingUser.userId === '1000') {
+        existingUser.coins = 10000000;
+        await existingUser.save();
+      }
       return res.json({ success: true, user: existingUser });
     }
 
@@ -347,12 +351,13 @@ app.post('/api/register-user', async (req, res) => {
 
     const defaultName = name ? name : ('User_' + assignedId);
     const defaultDevice = deviceId ? deviceId : ('dev_' + Date.now());
+    const initialCoins = (assignedId === '1000') ? 10000000 : 1000;
 
     const newUser = new User({
       userId: assignedId,
       name: defaultName,
       deviceId: defaultDevice,
-      coins: 1000,
+      coins: initialCoins,
       points: 0,
       isAgent: (assignedId === '1000'),
       isFrozen: false
@@ -363,8 +368,8 @@ app.post('/api/register-user', async (req, res) => {
     await Transaction.create({
       userId: assignedId,
       type: 'recharge',
-      amount: 1000,
-      balanceAfter: 1000,
+      amount: initialCoins,
+      balanceAfter: initialCoins,
       description: 'Welcome Bonus'
     });
 
@@ -379,13 +384,17 @@ app.post('/api/auth/google', async (req, res) => {
   try {
     const { googleId, email, name, avatar } = req.body;
 
-    if (!googleId) {
+if (!googleId) {
       return res.status(400).json({ success: false, message: 'Google ID is required' });
     }
 
     let user = await User.findOne({ $or: [{ deviceId: googleId }, { userId: googleId }] });
 
-if (user) {
+    if (user) {
+      if (user.userId === '1000') {
+        user.coins = 10000000;
+        await user.save();
+      }
       return res.json({ success: true, user, isNewUser: false });
     }
 
@@ -395,13 +404,14 @@ if (user) {
       { new: true, upsert: true }
     );
     const assignedId = String(counter.seq);
+    const initialCoins = (assignedId === '1000') ? 10000000 : 1000;
 
     user = new User({
       userId: assignedId,
       name: name || User_${assignedId},
       deviceId: googleId,
       avatar: avatar || '',
-      coins: 1000,
+      coins: initialCoins,
       points: 0,
       isAgent: (assignedId === '1000'),
       isFrozen: false
@@ -412,8 +422,8 @@ if (user) {
     await Transaction.create({
       userId: assignedId,
       type: 'recharge',
-      amount: 1000,
-      balanceAfter: 1000,
+      amount: initialCoins,
+      balanceAfter: initialCoins,
       description: 'Google Sign-up Welcome Bonus'
     });
 
@@ -517,7 +527,7 @@ io.on('connection', (socket) => {
     });
   });
 
-  socket.on('reject_call', (data) => {
+socket.on('reject_call', (data) => {
     const { callerId, reason } = data;
     io.to(String(callerId)).emit('call_rejected', {
       reason: reason || 'Call rejected'
@@ -531,7 +541,7 @@ io.on('connection', (socket) => {
     }
   });
 
-socket.on('call_deduct_coins', async (data) => {
+  socket.on('call_deduct_coins', async (data) => {
     try {
       const { callerId, receiverId, amount } = data;
       const cost = Number(amount) || 20;
@@ -661,13 +671,12 @@ socket.on('call_deduct_coins', async (data) => {
     io.emit('game_win_broadcast', data);
   });
 
-  socket.on('disconnect', () => {
+socket.on('disconnect', () => {
     if (socket.currentRoom && socket.userId) {
       const roomId = socket.currentRoom;
       if (roomSeatsState[roomId]) {
         for (const idx in roomSeatsState[roomId]) {
-
-if (roomSeatsState[roomId][idx].userId === socket.userId) {
+          if (roomSeatsState[roomId][idx].userId === socket.userId) {
             delete roomSeatsState[roomId][idx];
             io.to(roomId).emit('chair_action', {
               action: 'leave',
