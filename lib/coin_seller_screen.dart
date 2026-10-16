@@ -19,12 +19,38 @@ class _CoinSellerScreenState extends State<CoinSellerScreen> {
   final String _telebirrPhone = '0943724560';
   final String _binanceUid = '1059643208';
 
+  @override
+  void initState() {
+    super.initState();
+    _refreshUserData();
+  }
+
+  Future<void> _refreshUserData() async {
+    try {
+      final res = await http.get(
+        Uri.parse('${UserService.serverUrl}/api/search-user?userId=${_user.userId}'),
+      );
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        if (data['user'] != null && mounted) {
+          setState(() {
+            _user.coins = data['user']['coins'] ?? _user.coins;
+          });
+        }
+      }
+    } catch (_) {}
+  }
+
   void _openTransferSheet() {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => const SellerTransferSheet(),
+      builder: (_) => SellerTransferSheet(
+        agentId: _user.userId,
+        currentCoins: _user.coins,
+        onTransferSuccess: _refreshUserData,
+      ),
     );
   }
 
@@ -66,7 +92,7 @@ class _CoinSellerScreenState extends State<CoinSellerScreen> {
         return Container(
           padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
           decoration: const BoxDecoration(
-            color: Color(0xFF161822),
+            color: Color(0xFF161824),
             borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
             boxShadow: [
               BoxShadow(color: Colors.black54, blurRadius: 20, offset: Offset(0, -6)),
@@ -92,7 +118,8 @@ class _CoinSellerScreenState extends State<CoinSellerScreen> {
                 leading: const Icon(Icons.phone_android, color: Color(0xFF00C9A7)),
                 title: const Text('Telebirr', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
                 subtitle: Text('Phone: $_telebirrPhone', style: const TextStyle(color: Colors.white54, fontSize: 12)),
-                trailing: _selectedPaymentMethod == 'Telebirr' ? const Icon(Icons.check_circle, color: Color(0xFF00C9A7)) : null,
+
+trailing: _selectedPaymentMethod == 'Telebirr' ? const Icon(Icons.check_circle, color: Color(0xFF00C9A7)) : null,
                 onTap: () {
                   setState(() => _selectedPaymentMethod = 'Telebirr');
                   Navigator.pop(ctx);
@@ -104,8 +131,7 @@ class _CoinSellerScreenState extends State<CoinSellerScreen> {
                   borderRadius: BorderRadius.circular(12),
                   side: BorderSide(
                     color: _selectedPaymentMethod == 'Binance Pay' ? const Color(0xFFFFD700) : Colors.white12,
-
-),
+                  ),
                 ),
                 tileColor: const Color(0xFF1E212D),
                 leading: const Icon(Icons.currency_bitcoin, color: Color(0xFFFFD700)),
@@ -141,6 +167,10 @@ class _CoinSellerScreenState extends State<CoinSellerScreen> {
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh, color: Color(0xFFFFD700), size: 22),
+            onPressed: _refreshUserData,
+          ),
           IconButton(
             icon: const Icon(Icons.admin_panel_settings, color: Color(0xFFFFD700), size: 24),
             onPressed: _openAdminPanel,
@@ -179,7 +209,8 @@ class _CoinSellerScreenState extends State<CoinSellerScreen> {
                       child: Text(
                         _user.userName.isNotEmpty ? _user.userName[0].toUpperCase() : 'S',
                         style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: Colors.black),
-                      ),
+
+),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -196,8 +227,7 @@ class _CoinSellerScreenState extends State<CoinSellerScreen> {
                         const SizedBox(height: 2),
                         Text(
                           'Level: $_sellerLevel',
-
-style: const TextStyle(fontSize: 10, color: Color(0xFFFFD700), fontWeight: FontWeight.bold),
+                          style: const TextStyle(fontSize: 10, color: Color(0xFFFFD700), fontWeight: FontWeight.bold),
                         ),
                       ],
                     ),
@@ -255,9 +285,10 @@ style: const TextStyle(fontSize: 10, color: Color(0xFFFFD700), fontWeight: FontW
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
                         ),
-                        onPressed: () {},
+                        onPressed: _refreshUserData,
                         child: const Text('Details', style: TextStyle(color: Color(0xFFFFD700), fontSize: 10, fontWeight: FontWeight.bold)),
-                      ),
+
+),
                     ],
                   ),
                   const SizedBox(height: 10),
@@ -275,8 +306,7 @@ style: const TextStyle(fontSize: 10, color: Color(0xFFFFD700), fontWeight: FontW
                           shadows: [
                             Shadow(color: Color(0x66FFD700), blurRadius: 10, offset: Offset(0, 2)),
                           ],
-
-),
+                        ),
                       ),
                       const SizedBox(width: 6),
                       const Text(
@@ -343,7 +373,8 @@ style: const TextStyle(fontSize: 10, color: Color(0xFFFFD700), fontWeight: FontW
   }
 
   Widget _buildActionItem({required IconData icon, required String label, required VoidCallback onTap}) {
-    return GestureDetector(
+
+return GestureDetector(
       onTap: onTap,
       child: Column(
         children: [
@@ -448,7 +479,8 @@ class _SellerRechargeSheetState extends State<SellerRechargeSheet> {
         color: Color(0xFF141620),
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         border: Border(top: BorderSide(color: Color(0xFFFFD700), width: 1.5)),
-        boxShadow: [
+
+boxShadow: [
           BoxShadow(color: Colors.black87, blurRadius: 20, offset: Offset(0, -6)),
         ],
       ),
@@ -475,8 +507,7 @@ class _SellerRechargeSheetState extends State<SellerRechargeSheet> {
             height: 80,
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
-
-itemCount: _wholesaleTiers.length,
+              itemCount: _wholesaleTiers.length,
               separatorBuilder: (_, __) => const SizedBox(width: 8),
               itemBuilder: (ctx, idx) {
                 final item = _wholesaleTiers[idx];
@@ -540,7 +571,8 @@ itemCount: _wholesaleTiers.length,
                   onTap: () => setState(() => _payMethod = 'Telebirr'),
                   child: Container(
                     padding: const EdgeInsets.symmetric(vertical: 10),
-                    decoration: BoxDecoration(
+
+decoration: BoxDecoration(
                       color: _payMethod == 'Telebirr' ? const Color(0xFF00C9A7) : const Color(0xFF1E212D),
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(
@@ -562,8 +594,7 @@ itemCount: _wholesaleTiers.length,
               ),
               const SizedBox(width: 8),
               Expanded(
-
-child: GestureDetector(
+                child: GestureDetector(
                   onTap: () => setState(() => _payMethod = 'Binance'),
                   child: Container(
                     padding: const EdgeInsets.symmetric(vertical: 10),
@@ -643,7 +674,8 @@ class BinancePaymentScreen extends StatelessWidget {
     try {
       final url = Uri.parse('${UserService.serverUrl}/api/recharge-request');
       final res = await http.post(
-        url,
+
+url,
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'userId': userId,
@@ -675,8 +707,7 @@ class BinancePaymentScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: const Color(0xFF0C0D12),
       appBar: AppBar(
-
-backgroundColor: const Color(0xFF141620),
+        backgroundColor: const Color(0xFF141620),
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 18),
@@ -738,7 +769,8 @@ backgroundColor: const Color(0xFF141620),
                         child: Text(
                           orderId,
                           maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+
+overflow: TextOverflow.ellipsis,
                           style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
                         ),
                       ),
@@ -760,8 +792,7 @@ backgroundColor: const Color(0xFF141620),
                 border: Border.all(color: Colors.white10),
               ),
               child: Column(
-
-children: [
+                children: [
                   _buildDetailRow('User ID', userId),
                   const Divider(color: Colors.white10, height: 16),
                   _buildDetailRow('Quantity', priceUsd),
@@ -844,7 +875,8 @@ class TelebirrPaymentScreen extends StatelessWidget {
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'userId': userId,
-          'userName': userName,
+
+'userName': userName,
           'paymentMethod': 'Telebirr',
           'txId': txId.trim(),
           'amountCoins': amountCoins,
@@ -876,8 +908,7 @@ class TelebirrPaymentScreen extends StatelessWidget {
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 18),
-
-onPressed: () => Navigator.pop(context),
+          onPressed: () => Navigator.pop(context),
         ),
         centerTitle: true,
         title: const Text('Telebirr Payment', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
@@ -935,7 +966,8 @@ onPressed: () => Navigator.pop(context),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF00C9A7),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-                ),
+
+),
                 onPressed: () {
                   if (txController.text.trim().isEmpty) {
                     ScaffoldMessenger.of(context).showSnackBar(
@@ -956,7 +988,7 @@ onPressed: () => Navigator.pop(context),
 }
 
 // ---------------------------------------------------------------------------
-// 4. ADMIN PAYMENT SCREEN (Direct in-file implementation)
+// 4. ADMIN PAYMENT SCREEN
 // ---------------------------------------------------------------------------
 class AdminPaymentScreen extends StatefulWidget {
   const AdminPaymentScreen({Key? key}) : super(key: key);
@@ -969,7 +1001,7 @@ class _AdminPaymentScreenState extends State<AdminPaymentScreen> {
   bool _isLoading = true;
   List<dynamic> _pendingList = [];
 
-@override
+  @override
   void initState() {
     super.initState();
     _fetchPendingPayments();
@@ -1053,7 +1085,8 @@ class _AdminPaymentScreenState extends State<AdminPaymentScreen> {
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator(color: Color(0xFFFFD700)))
-          : _pendingList.isEmpty
+
+: _pendingList.isEmpty
               ? const Center(
                   child: Text(
                     'No pending payment requests',
@@ -1075,7 +1108,7 @@ class _AdminPaymentScreenState extends State<AdminPaymentScreen> {
                     final String price = item['pricePaid'] ?? '';
                     final bool isBinance = method.toLowerCase().contains('binance');
 
-return Container(
+                    return Container(
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
                         color: const Color(0xFF161824),
@@ -1127,7 +1160,8 @@ return Container(
                           Text(
                             'Coins to add: $coins Coins',
                             style: const TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold, fontSize: 13),
-                          ),
+
+),
                           const SizedBox(height: 6),
                           Row(
                             children: [
@@ -1147,8 +1181,7 @@ return Container(
                             ],
                           ),
                           const SizedBox(height: 10),
-
-Row(
+                          Row(
                             children: [
                               Expanded(
                                 child: ElevatedButton.icon(
@@ -1176,10 +1209,19 @@ Row(
 }
 
 // ---------------------------------------------------------------------------
-// 5. TRANSFER SHEET
+// 5. TRANSFER SHEET (Now Connected to Live Server Transfer API)
 // ---------------------------------------------------------------------------
 class SellerTransferSheet extends StatefulWidget {
-  const SellerTransferSheet({Key? key}) : super(key: key);
+  final String agentId;
+  final int currentCoins;
+  final VoidCallback onTransferSuccess;
+
+  const SellerTransferSheet({
+    Key? key,
+    required this.agentId,
+    required this.currentCoins,
+    required this.onTransferSuccess,
+  }) : super(key: key);
 
   @override
   State<SellerTransferSheet> createState() => _SellerTransferSheetState();
@@ -1189,6 +1231,118 @@ class _SellerTransferSheetState extends State<SellerTransferSheet> {
   bool _isTransferToUser = true;
   final TextEditingController _idController = TextEditingController();
   final TextEditingController _amountController = TextEditingController();
+  bool _isTransferring = false;
+  String? _verifiedUserName;
+
+  // የተጠቃሚን መኖር እና ስም የማረጋገጫ ተግባር
+  Future<void> _checkRecipient() async {
+    final targetId = _idController.text.trim();
+    if (targetId.isEmpty) return;
+
+    try {
+      final res = await http.get(
+        Uri.parse('${UserService.serverUrl}/api/search-user?userId=$targetId'),
+      );
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        if (data['user'] != null) {
+          setState(() {
+            _verifiedUserName = data['user']['name'] ?? 'User';
+          });
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('User found: $_verifiedUserName (ID: $targetId)'),
+
+backgroundColor: const Color(0xFF00C9A7),
+              ),
+            );
+          }
+          return;
+        }
+      }
+      if (mounted) {
+        setState(() => _verifiedUserName = null);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('User not found'), backgroundColor: Colors.redAccent),
+        );
+      }
+    } catch (_) {}
+  }
+
+  // ወደ ሰርቨር ኮይን የማስተላለፊያ እውነተኛ ተግባር
+  Future<void> _executeTransfer() async {
+    final targetId = _idController.text.trim();
+    final amountText = _amountController.text.trim();
+
+    if (targetId.isEmpty || amountText.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please fill all fields')),
+      );
+      return;
+    }
+
+    final int? amount = int.tryParse(amountText);
+    if (amount == null || amount <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a valid coin amount')),
+      );
+      return;
+    }
+
+    if (amount > widget.currentCoins) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Insufficient coin balance!'), backgroundColor: Colors.redAccent),
+      );
+      return;
+    }
+
+    setState(() => _isTransferring = true);
+
+    try {
+      final res = await http.post(
+        Uri.parse('${UserService.serverUrl}/api/wallet/agent-transfer-coins'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'agentId': widget.agentId,
+          'targetUserId': targetId,
+          'amountCoins': amount,
+        }),
+      );
+
+      final data = jsonDecode(res.body);
+
+      if (mounted) {
+        if (res.statusCode == 200 && data['success'] == true) {
+          Navigator.pop(context);
+          widget.onTransferSuccess();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(data['message'] ?? 'Coins Transferred Successfully!'),
+              backgroundColor: const Color(0xFF00C9A7),
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(data['message'] ?? 'Transfer failed'),
+              backgroundColor: Colors.redAccent,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Network error: $e'), backgroundColor: Colors.redAccent),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isTransferring = false);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1218,7 +1372,8 @@ class _SellerTransferSheetState extends State<SellerTransferSheet> {
               ChoiceChip(
                 label: const Text('User'),
                 selected: _isTransferToUser,
-                selectedColor: const Color(0xFFFFD700),
+
+selectedColor: const Color(0xFFFFD700),
                 onSelected: (val) => setState(() => _isTransferToUser = true),
               ),
               const SizedBox(width: 8),
@@ -1238,13 +1393,22 @@ class _SellerTransferSheetState extends State<SellerTransferSheet> {
             decoration: InputDecoration(
               labelText: _isTransferToUser ? 'User ID' : 'Coinseller ID',
               labelStyle: const TextStyle(color: Colors.white54),
-
-suffixIcon: TextButton(onPressed: () {}, child: const Text('Check', style: TextStyle(color: Color(0xFFFFD700)))),
+              suffixIcon: TextButton(
+                onPressed: _checkRecipient,
+                child: const Text('Check', style: TextStyle(color: Color(0xFFFFD700))),
+              ),
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               filled: true,
               fillColor: const Color(0xFF1A1D2B),
             ),
           ),
+          if (_verifiedUserName != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              'Recipient: $_verifiedUserName',
+              style: const TextStyle(color: Color(0xFF00C9A7), fontSize: 12, fontWeight: FontWeight.bold),
+            ),
+          ],
           const SizedBox(height: 12),
           TextField(
             controller: _amountController,
@@ -1269,13 +1433,14 @@ suffixIcon: TextButton(onPressed: () {}, child: const Text('Check', style: TextS
                 backgroundColor: const Color(0xFFFFD700),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(23)),
               ),
-              onPressed: () {
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Coins Transferred Successfully!')),
-                );
-              },
-              child: const Text('Transfer', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 15)),
+              onPressed: _isTransferring ? null : _executeTransfer,
+              child: _isTransferring
+                  ? const SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2),
+                    )
+                  : const Text('Transfer', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 15)),
             ),
           ),
         ],
@@ -1299,7 +1464,8 @@ class SellerExchangeSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+
+return Container(
       height: MediaQuery.of(context).size.height * 0.72,
       padding: const EdgeInsets.all(18),
       decoration: const BoxDecoration(
@@ -1329,8 +1495,7 @@ class SellerExchangeSheet extends StatelessWidget {
               ),
               itemBuilder: (ctx, idx) {
                 final item = _exchangeTiers[idx];
-
-return Container(
+                return Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
                     color: const Color(0xFF1A1D2B),
