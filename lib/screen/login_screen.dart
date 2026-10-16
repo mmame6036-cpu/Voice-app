@@ -20,13 +20,11 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   @override
   void initState() {
     super.initState();
-    // 60 FPS Particle animation loop
     _particleController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 10),
     )..repeat();
 
-    // Generate 45 floating golden particles
     for (int i = 0; i < 45; i++) {
       _particles.add(
         Particle(
@@ -55,17 +53,16 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
         url,
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
-          'googleId': 'g_${DateTime.now().millisecondsSinceEpoch}',
-          'email': 'user@gmail.com',
-          'name': 'Google User',
+          'googleId': '1000', // ለአንተ Master Admin 1000 እንዲሆን
+          'email': 'admin@nilevoice.com',
+          'name': 'Master Admin',
           'avatar': '',
         }),
-      ).timeout(const Duration(seconds: 10));
+      ).timeout(const Duration(seconds: 15));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['success'] == true && data['user'] != null) {
-          // Persist authenticated user session locally
           await UserService().setUserData(data['user']);
 
           if (!mounted) return;
@@ -77,9 +74,12 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
           );
           Navigator.pushReplacementNamed(context, '/home');
           return;
+        } else {
+          _showError(data['message'] ?? 'Login failed on server.');
         }
+      } else {
+        _showError('Server Error (${response.statusCode}): ${response.body}');
       }
-      _showError('Login failed. Please verify server connection.');
     } catch (e) {
       _showError('Connection error: $e');
     } finally {
@@ -90,7 +90,11 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   void _showError(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: Colors.redAccent),
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.redAccent,
+        duration: const Duration(seconds: 5),
+      ),
     );
   }
 
@@ -102,7 +106,6 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       backgroundColor: const Color(0xFF0A0B0E),
       body: Stack(
         children: [
-          // 1. Moving Golden Particles Layer
           AnimatedBuilder(
             animation: _particleController,
             builder: (context, child) {
@@ -112,8 +115,6 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
               );
             },
           ),
-
-          // 2. Soft Gradient Vignette Overlay
           Container(
             decoration: BoxDecoration(
               gradient: RadialGradient(
@@ -126,17 +127,14 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
               ),
             ),
           ),
-
-          // 3. Foreground Content
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 28.0),
-              child: Column(
+
+child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   const Spacer(flex: 2),
-
-// App Logo with Golden Glow
                   Container(
                     width: 110,
                     height: 110,
@@ -165,8 +163,6 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                     ),
                   ),
                   const SizedBox(height: 24),
-
-                  // App Title
                   const Text(
                     'NILE VOICE',
                     style: TextStyle(
@@ -188,10 +184,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                       letterSpacing: 1.1,
                     ),
                   ),
-
                   const Spacer(flex: 3),
-
-                  // Google Sign-In Button
                   SizedBox(
                     width: double.infinity,
                     height: 52,
@@ -225,9 +218,9 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                   errorBuilder: (ctx, err, stack) => const Icon(
                                     Icons.g_mobiledata,
                                     size: 26,
-                                    color: Colors.redAccent,
 
-),
+color: Colors.redAccent,
+                                  ),
                                 ),
                                 const SizedBox(width: 12),
                                 const Text(
@@ -243,8 +236,6 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                     ),
                   ),
                   const SizedBox(height: 16),
-
-                  // Terms & Privacy Note
                   const Text(
                     'By continuing, you agree to our Terms of Service\nand Privacy Policy.',
                     textAlign: TextAlign.center,
@@ -265,9 +256,6 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   }
 }
 
-// ---------------------------------------------------------------------------
-// Particle Engine Data Structure & Painter
-// ---------------------------------------------------------------------------
 class Particle {
   double x;
   double y;
