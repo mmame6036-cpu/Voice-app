@@ -274,12 +274,12 @@ app.post('/api/wallet/agent-transfer-coins', async (req, res) => {
       type: 'agent_purchase',
       amount: coinsToTransfer,
       balanceAfter: recipient.coins,
-      description: Received ${coinsToTransfer} coins from Agent ${agent.userId}
+      description:  `Received ${coinsToTransfer} coins from Agent ${agent.userId}`
     });
 
     return res.json({
       success: true,
-      message: Successfully transferred ${coinsToTransfer} coins to User ${recipient.userId},
+      message:  `Successfully transferred ${coinsToTransfer} coins to User ${recipient.userId}`,
       agentCoins: agent.coins
     });
   } catch (err) {
@@ -292,7 +292,7 @@ app.post('/api/recharge-request', async (req, res) => {
   try {
     const { userId, userName, paymentMethod, txId, amountCoins, pricePaid } = req.body;
 
-    if (!userId  !txId  !amountCoins) {
+    if (!userId || !txId  || !amountCoins) {
       return res.status(400).json({ success: false, message: 'Missing required payment fields' });
     }
 
