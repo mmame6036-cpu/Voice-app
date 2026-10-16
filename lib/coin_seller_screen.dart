@@ -15,6 +15,7 @@ class _CoinSellerScreenState extends State<CoinSellerScreen> {
   final UserService _user = UserService();
   final String _sellerLevel = 'Standard Seller';
   String _selectedPaymentMethod = 'Binance Pay';
+  String _greetingMessage = 'Welcome to Nile Voice Official Coin Store!';
 
   final String _telebirrPhone = '0943724560';
   final String _binanceUid = '1059643208';
@@ -35,6 +36,7 @@ class _CoinSellerScreenState extends State<CoinSellerScreen> {
         if (data['user'] != null && mounted) {
           setState(() {
             _user.coins = data['user']['coins'] ?? _user.coins;
+            _user.points = data['user']['points'] ?? _user.points;
           });
         }
       }
@@ -73,7 +75,11 @@ class _CoinSellerScreenState extends State<CoinSellerScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => const SellerExchangeSheet(),
+      builder: (_) => SellerExchangeSheet(
+        userId: _user.userId,
+        currentPoints: _user.points,
+        onExchangeSuccess: _refreshUserData,
+      ),
     );
   }
 
@@ -81,6 +87,116 @@ class _CoinSellerScreenState extends State<CoinSellerScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const AdminPaymentScreen()),
+    );
+  }
+
+  void _showTransactionDetails() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => TransactionDetailsSheet(userId: _user.userId),
+    );
+  }
+
+  void _showLevelUpDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF161824),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: const Row(
+          children: [
+            Icon(Icons.workspace_premium, color: Color(0xFFFFD700)),
+            SizedBox(width: 8),
+            Text('Seller Level', style: TextStyle(color: Colors.white, fontSize: 16)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Current Tier: Standard Seller',
+              style: TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold, fontSize: 14),
+            ),
+            const SizedBox(height: 10),
+            const Text(
+              'To upgrade to Senior Seller:\n• Transfer over 10,000,000 coins monthly\n• Enjoy wholesale discounts & priority verification.',
+              style: TextStyle(color: Colors.white70, fontSize: 13, height: 1.4),
+
+),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('OK', style: TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showGreetingSettings() {
+    final controller = TextEditingController(text: _greetingMessage);
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+        child: Container(
+          padding: const EdgeInsets.all(18),
+          decoration: const BoxDecoration(
+            color: Color(0xFF141620),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            border: Border(top: BorderSide(color: Color(0xFFFFD700), width: 1.2)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Greeting Message Settings',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFFFFD700)),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: controller,
+                maxLines: 3,
+                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(
+                  hintText: 'Enter greeting message for buyers...',
+                  hintStyle: const TextStyle(color: Colors.white38),
+                  filled: true,
+                  fillColor: const Color(0xFF1A1D2B),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                ),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                height: 44,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFFFD700),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+                  ),
+                  onPressed: () {
+                    setState(() => _greetingMessage = controller.text.trim());
+                    Navigator.pop(ctx);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Greeting message saved!'), backgroundColor: Color(0xFF00C9A7)),
+                    );
+                  },
+                  child: const Text('Save Message', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -107,7 +223,8 @@ class _CoinSellerScreenState extends State<CoinSellerScreen> {
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFFFFD700)),
               ),
               const SizedBox(height: 14),
-              ListTile(
+
+ListTile(
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                   side: BorderSide(
@@ -118,8 +235,7 @@ class _CoinSellerScreenState extends State<CoinSellerScreen> {
                 leading: const Icon(Icons.phone_android, color: Color(0xFF00C9A7)),
                 title: const Text('Telebirr', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
                 subtitle: Text('Phone: $_telebirrPhone', style: const TextStyle(color: Colors.white54, fontSize: 12)),
-
-trailing: _selectedPaymentMethod == 'Telebirr' ? const Icon(Icons.check_circle, color: Color(0xFF00C9A7)) : null,
+                trailing: _selectedPaymentMethod == 'Telebirr' ? const Icon(Icons.check_circle, color: Color(0xFF00C9A7)) : null,
                 onTap: () {
                   setState(() => _selectedPaymentMethod = 'Telebirr');
                   Navigator.pop(ctx);
@@ -194,7 +310,8 @@ trailing: _selectedPaymentMethod == 'Telebirr' ? const Icon(Icons.check_circle, 
                 border: Border.all(color: Colors.white10),
                 boxShadow: const [
                   BoxShadow(color: Colors.black45, blurRadius: 10, offset: Offset(0, 4)),
-                ],
+
+],
               ),
               child: Row(
                 children: [
@@ -209,8 +326,7 @@ trailing: _selectedPaymentMethod == 'Telebirr' ? const Icon(Icons.check_circle, 
                       child: Text(
                         _user.userName.isNotEmpty ? _user.userName[0].toUpperCase() : 'S',
                         style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: Colors.black),
-
-),
+                      ),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -239,7 +355,7 @@ trailing: _selectedPaymentMethod == 'Telebirr' ? const Icon(Icons.check_circle, 
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                       elevation: 2,
                     ),
-                    onPressed: () {},
+                    onPressed: _showLevelUpDialog,
                     child: const Text('Level Up', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 11)),
                   ),
                 ],
@@ -277,7 +393,8 @@ trailing: _selectedPaymentMethod == 'Telebirr' ? const Icon(Icons.check_circle, 
                       const Text(
                         'Total Balance',
                         style: TextStyle(fontSize: 13, color: Color(0xFFFFE082), fontWeight: FontWeight.w600),
-                      ),
+
+),
                       const Spacer(),
                       OutlinedButton(
                         style: OutlinedButton.styleFrom(
@@ -285,10 +402,9 @@ trailing: _selectedPaymentMethod == 'Telebirr' ? const Icon(Icons.check_circle, 
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
                         ),
-                        onPressed: _refreshUserData,
+                        onPressed: _showTransactionDetails,
                         child: const Text('Details', style: TextStyle(color: Color(0xFFFFD700), fontSize: 10, fontWeight: FontWeight.bold)),
-
-),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 10),
@@ -351,19 +467,23 @@ trailing: _selectedPaymentMethod == 'Telebirr' ? const Icon(Icons.check_circle, 
               ],
             ),
             const SizedBox(height: 18),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              decoration: BoxDecoration(
-                color: const Color(0xFF141620),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: Colors.white10),
-              ),
-              child: const Row(
-                children: [
-                  Text('Greeting Message Settings', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white)),
-                  Spacer(),
-                  Icon(Icons.arrow_forward_ios, size: 12, color: Colors.white38),
-                ],
+            GestureDetector(
+              onTap: _showGreetingSettings,
+              child: Container(
+
+padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF141620),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: Colors.white10),
+                ),
+                child: const Row(
+                  children: [
+                    Text('Greeting Message Settings', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white)),
+                    Spacer(),
+                    Icon(Icons.arrow_forward_ios, size: 12, color: Colors.white38),
+                  ],
+                ),
               ),
             ),
           ],
@@ -373,8 +493,7 @@ trailing: _selectedPaymentMethod == 'Telebirr' ? const Icon(Icons.check_circle, 
   }
 
   Widget _buildActionItem({required IconData icon, required String label, required VoidCallback onTap}) {
-
-return GestureDetector(
+    return GestureDetector(
       onTap: onTap,
       child: Column(
         children: [
@@ -453,7 +572,8 @@ class _SellerRechargeSheetState extends State<SellerRechargeSheet> {
           ),
         ),
       );
-    } else {
+
+} else {
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -479,8 +599,7 @@ class _SellerRechargeSheetState extends State<SellerRechargeSheet> {
         color: Color(0xFF141620),
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         border: Border(top: BorderSide(color: Color(0xFFFFD700), width: 1.5)),
-
-boxShadow: [
+        boxShadow: [
           BoxShadow(color: Colors.black87, blurRadius: 20, offset: Offset(0, -6)),
         ],
       ),
@@ -548,7 +667,8 @@ boxShadow: [
                           style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.bold,
-                            color: isSelected ? const Color(0xFFFFD700) : Colors.white,
+
+color: isSelected ? const Color(0xFFFFD700) : Colors.white,
                           ),
                         ),
                         const SizedBox(height: 2),
@@ -571,8 +691,7 @@ boxShadow: [
                   onTap: () => setState(() => _payMethod = 'Telebirr'),
                   child: Container(
                     padding: const EdgeInsets.symmetric(vertical: 10),
-
-decoration: BoxDecoration(
+                    decoration: BoxDecoration(
                       color: _payMethod == 'Telebirr' ? const Color(0xFF00C9A7) : const Color(0xFF1E212D),
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(
@@ -655,7 +774,7 @@ class BinancePaymentScreen extends StatelessWidget {
   final String orderAmount;
   final int amountCoins;
 
-  const BinancePaymentScreen({
+const BinancePaymentScreen({
     Key? key,
     required this.userId,
     required this.userName,
@@ -674,8 +793,7 @@ class BinancePaymentScreen extends StatelessWidget {
     try {
       final url = Uri.parse('${UserService.serverUrl}/api/recharge-request');
       final res = await http.post(
-
-url,
+        url,
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'userId': userId,
@@ -753,7 +871,8 @@ url,
                       height: 140,
                       width: 140,
                       fit: BoxFit.contain,
-                      errorBuilder: (ctx, err, stack) => const Icon(
+
+errorBuilder: (ctx, err, stack) => const Icon(
                         Icons.qr_code_2,
                         size: 140,
                         color: Colors.black,
@@ -769,8 +888,7 @@ url,
                         child: Text(
                           orderId,
                           maxLines: 1,
-
-overflow: TextOverflow.ellipsis,
+                          overflow: TextOverflow.ellipsis,
                           style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
                         ),
                       ),
@@ -862,7 +980,7 @@ class TelebirrPaymentScreen extends StatelessWidget {
     required this.amountCoins,
   }) : super(key: key);
 
-  void _copy(BuildContext context, String text, String label) {
+void _copy(BuildContext context, String text, String label) {
     Clipboard.setData(ClipboardData(text: text));
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$label Copied!')));
   }
@@ -875,8 +993,7 @@ class TelebirrPaymentScreen extends StatelessWidget {
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'userId': userId,
-
-'userName': userName,
+          'userName': userName,
           'paymentMethod': 'Telebirr',
           'txId': txId.trim(),
           'amountCoins': amountCoins,
@@ -955,7 +1072,8 @@ class TelebirrPaymentScreen extends StatelessWidget {
                 labelStyle: const TextStyle(color: Colors.white54),
                 filled: true,
                 fillColor: const Color(0xFF161824),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Colors.white12)),
+
+border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Colors.white12)),
               ),
             ),
             const SizedBox(height: 24),
@@ -966,8 +1084,7 @@ class TelebirrPaymentScreen extends StatelessWidget {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF00C9A7),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-
-),
+                ),
                 onPressed: () {
                   if (txController.text.trim().isEmpty) {
                     ScaffoldMessenger.of(context).showSnackBar(
@@ -1069,7 +1186,8 @@ class _AdminPaymentScreenState extends State<AdminPaymentScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF0C0D12),
-      appBar: AppBar(
+
+appBar: AppBar(
         backgroundColor: const Color(0xFF141620),
         elevation: 0,
         title: const Text(
@@ -1085,8 +1203,7 @@ class _AdminPaymentScreenState extends State<AdminPaymentScreen> {
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator(color: Color(0xFFFFD700)))
-
-: _pendingList.isEmpty
+          : _pendingList.isEmpty
               ? const Center(
                   child: Text(
                     'No pending payment requests',
@@ -1148,7 +1265,8 @@ class _AdminPaymentScreenState extends State<AdminPaymentScreen> {
                                   fontWeight: FontWeight.bold,
                                   fontSize: 14,
                                 ),
-                              ),
+
+),
                             ],
                           ),
                           const SizedBox(height: 10),
@@ -1160,8 +1278,7 @@ class _AdminPaymentScreenState extends State<AdminPaymentScreen> {
                           Text(
                             'Coins to add: $coins Coins',
                             style: const TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold, fontSize: 13),
-
-),
+                          ),
                           const SizedBox(height: 6),
                           Row(
                             children: [
@@ -1209,7 +1326,7 @@ class _AdminPaymentScreenState extends State<AdminPaymentScreen> {
 }
 
 // ---------------------------------------------------------------------------
-// 5. TRANSFER SHEET (Now Connected to Live Server Transfer API)
+// 5. TRANSFER SHEET
 // ---------------------------------------------------------------------------
 class SellerTransferSheet extends StatefulWidget {
   final String agentId;
@@ -1234,12 +1351,11 @@ class _SellerTransferSheetState extends State<SellerTransferSheet> {
   bool _isTransferring = false;
   String? _verifiedUserName;
 
-  // የተጠቃሚን መኖር እና ስም የማረጋገጫ ተግባር
   Future<void> _checkRecipient() async {
     final targetId = _idController.text.trim();
     if (targetId.isEmpty) return;
 
-    try {
+try {
       final res = await http.get(
         Uri.parse('${UserService.serverUrl}/api/search-user?userId=$targetId'),
       );
@@ -1253,8 +1369,7 @@ class _SellerTransferSheetState extends State<SellerTransferSheet> {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text('User found: $_verifiedUserName (ID: $targetId)'),
-
-backgroundColor: const Color(0xFF00C9A7),
+                backgroundColor: const Color(0xFF00C9A7),
               ),
             );
           }
@@ -1270,7 +1385,6 @@ backgroundColor: const Color(0xFF00C9A7),
     } catch (_) {}
   }
 
-  // ወደ ሰርቨር ኮይን የማስተላለፊያ እውነተኛ ተግባር
   Future<void> _executeTransfer() async {
     final targetId = _idController.text.trim();
     final amountText = _amountController.text.trim();
@@ -1361,7 +1475,8 @@ backgroundColor: const Color(0xFF00C9A7),
             children: [
               const Text('Transfer Coins', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFFFFD700))),
               const Spacer(),
-              IconButton(icon: const Icon(Icons.close, color: Colors.white54), onPressed: () => Navigator.pop(context)),
+
+IconButton(icon: const Icon(Icons.close, color: Colors.white54), onPressed: () => Navigator.pop(context)),
             ],
           ),
           const SizedBox(height: 12),
@@ -1372,8 +1487,7 @@ backgroundColor: const Color(0xFF00C9A7),
               ChoiceChip(
                 label: const Text('User'),
                 selected: _isTransferToUser,
-
-selectedColor: const Color(0xFFFFD700),
+                selectedColor: const Color(0xFFFFD700),
                 onSelected: (val) => setState(() => _isTransferToUser = true),
               ),
               const SizedBox(width: 8),
@@ -1450,22 +1564,69 @@ selectedColor: const Color(0xFFFFD700),
 }
 
 // ---------------------------------------------------------------------------
-// 6. EXCHANGE SHEET
+// 6. EXCHANGE SHEET (Fully Interactive)
 // ---------------------------------------------------------------------------
-class SellerExchangeSheet extends StatelessWidget {
-  const SellerExchangeSheet({Key? key}) : super(key: key);
+class SellerExchangeSheet extends StatefulWidget {
+  final String userId;
+  final int currentPoints;
+  final VoidCallback onExchangeSuccess;
+
+const SellerExchangeSheet({
+    Key? key,
+    required this.userId,
+    required this.currentPoints,
+    required this.onExchangeSuccess,
+  }) : super(key: key);
+
+  @override
+  State<SellerExchangeSheet> createState() => _SellerExchangeSheetState();
+}
+
+class _SellerExchangeSheetState extends State<SellerExchangeSheet> {
+  int _selectedIndex = 0;
+  bool _isExchanging = false;
 
   final List<Map<String, dynamic>> _exchangeTiers = const [
-    {'coins': '960,000', 'points': '1,000,000', 'level': 'Standard Seller'},
-    {'coins': '1,960,000', 'points': '2,000,000', 'level': 'Standard Seller'},
-    {'coins': '9,800,000', 'points': '10,000,000', 'level': 'Standard Seller'},
-    {'coins': '30,000,000', 'points': '30,000,000', 'level': 'Senior Seller'},
+    {'coins': '960,000', 'points': '1,000,000', 'ptsValue': 1000000, 'coinValue': 960000, 'level': 'Standard Seller'},
+    {'coins': '1,960,000', 'points': '2,000,000', 'ptsValue': 2000000, 'coinValue': 1960000, 'level': 'Standard Seller'},
+    {'coins': '9,800,000', 'points': '10,000,000', 'ptsValue': 10000000, 'coinValue': 9800000, 'level': 'Standard Seller'},
+    {'coins': '30,000,000', 'points': '30,000,000', 'ptsValue': 30000000, 'coinValue': 30000000, 'level': 'Senior Seller'},
   ];
+
+  Future<void> _processExchange() async {
+    final selected = _exchangeTiers[_selectedIndex];
+    final int requiredPts = selected['ptsValue'];
+
+    if (widget.currentPoints < requiredPts) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Insufficient points! You need ${selected['points']} Pts to exchange.'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isExchanging = true);
+    // Simulated Exchange API call
+    await Future.delayed(const Duration(seconds: 1));
+
+    if (mounted) {
+      setState(() => _isExchanging = false);
+      Navigator.pop(context);
+      widget.onExchangeSuccess();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Successfully exchanged ${selected['points']} Pts for ${selected['coins']} Coins!'),
+          backgroundColor: const Color(0xFF00C9A7),
+        ),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-
-return Container(
+    return Container(
       height: MediaQuery.of(context).size.height * 0.72,
       padding: const EdgeInsets.all(18),
       decoration: const BoxDecoration(
@@ -1495,25 +1656,44 @@ return Container(
               ),
               itemBuilder: (ctx, idx) {
                 final item = _exchangeTiers[idx];
-                return Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1A1D2B),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: Colors.white10),
-                  ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(item['level'], style: const TextStyle(fontSize: 9, color: Color(0xFFFFD700), fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 4),
-                      Text(
-                        '${item['coins']} Coins',
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
+                final isSelected = _selectedIndex == idx;
+                return GestureDetector(
+                  onTap: () => setState(() => _selectedIndex = idx),
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: isSelected ? const Color(0xFF2C2619) : const Color(0xFF1A1D2B),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: isSelected ? const Color(0xFFFFD700) : Colors.white10,
+
+width: isSelected ? 1.8 : 1,
                       ),
-                      const SizedBox(height: 2),
-                      Text('${item['points']} Pts', style: const TextStyle(fontSize: 10, color: Colors.white54)),
-                    ],
+                      boxShadow: [
+                        if (isSelected)
+                          BoxShadow(
+                            color: const Color(0xFFFFD700).withOpacity(0.2),
+                            blurRadius: 8,
+                          ),
+                      ],
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(item['level'], style: const TextStyle(fontSize: 9, color: Color(0xFFFFD700), fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 4),
+                        Text(
+                          '${item['coins']} Coins',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: isSelected ? const Color(0xFFFFD700) : Colors.white,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text('${item['points']} Pts', style: const TextStyle(fontSize: 10, color: Colors.white54)),
+                      ],
+                    ),
                   ),
                 );
               },
@@ -1527,8 +1707,96 @@ return Container(
                 backgroundColor: const Color(0xFFFFD700),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(23)),
               ),
-              onPressed: () {},
-              child: const Text('Exchange', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 15)),
+              onPressed: _isExchanging ? null : _processExchange,
+              child: _isExchanging
+                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2))
+                  : const Text('Exchange', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 15)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 7. TRANSACTION DETAILS SHEET
+// ---------------------------------------------------------------------------
+class TransactionDetailsSheet extends StatelessWidget {
+  final String userId;
+
+  const TransactionDetailsSheet({Key? key, required this.userId}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.65,
+      padding: const EdgeInsets.all(18),
+      decoration: const BoxDecoration(
+        color: Color(0xFF141620),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        border: Border(top: BorderSide(color: Color(0xFFFFD700), width: 1.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.receipt_long, color: Color(0xFFFFD700), size: 20),
+              const SizedBox(width: 8),
+              const Text('Transaction Details', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFFFFD700))),
+              const Spacer(),
+              IconButton(icon: const Icon(Icons.close, color: Colors.white54), onPressed: () => Navigator.pop(context)),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Expanded(
+            child: ListView(
+              children: [
+                _buildTxItem('Wholesale Recharge', '+1,980,000 Coins', 'Binance Pay', 'Approved', true),
+                _buildTxItem('Agent Transfer to User 1002', '-10,000 Coins', 'Direct Sale', 'Completed', false),
+                _buildTxItem('Welcome Bonus', '+1,000 Coins', 'System', 'Completed', true),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+Widget _buildTxItem(String title, String amount, String method, String status, bool isPositive) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A1D2B),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white10),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            isPositive ? Icons.arrow_downward : Icons.arrow_upward,
+            color: isPositive ? const Color(0xFF00C9A7) : Colors.redAccent,
+            size: 20,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 2),
+                Text('$method • $status', style: const TextStyle(color: Colors.white54, fontSize: 11)),
+              ],
+            ),
+          ),
+          Text(
+            amount,
+            style: TextStyle(
+              color: isPositive ? const Color(0xFFFFD700) : Colors.white70,
+              fontWeight: FontWeight.bold,
+              fontSize: 13,
             ),
           ),
         ],
