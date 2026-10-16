@@ -216,7 +216,7 @@ app.post('/api/admin/toggle-agent', async (req, res) => {
 
     return res.json({
       success: true,
-      message: Agent status updated to ${user.isAgent},
+      message: `Agent status updated to ${user.isAgent}`,
       user: {
         userId: user.userId,
         name: user.name,
