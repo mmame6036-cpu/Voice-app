@@ -10,14 +10,27 @@ const mongoose = require('mongoose');
 const Room = require('./models/Room');
 const Transaction = require('./models/Transaction');
 
-// Routes
+// Core Routes
 const walletRoutes = require('./routes/wallet');
 const adminRoutes = require('./routes/admin');
+
+// Room Settings Modular Routes (10 Isolated Modules)
+const roomCoverRoutes = require('./routes/room_cover');
+const roomIdRoutes = require('./routes/room_id');
+const roomNameRoutes = require('./routes/room_name');
+const roomDescriptionRoutes = require('./routes/room_description');
+const roomTypeRoutes = require('./routes/room_type');
+const roomBackgroundRoutes = require('./routes/room_background');
+const roomPermissionsRoutes = require('./routes/room_permissions');
+const roomSeatsRoutes = require('./routes/room_seats');
+const roomMicModeRoutes = require('./routes/room_mic_mode');
+const roomBlacklistRoutes = require('./routes/room_blacklist');
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -31,7 +44,7 @@ app.get('/', (req, res) => {
   res.status(200).send('Nile Voice Server is Live and Active');
 });
 
-// --- Agora Dynamic Token Generator ---
+// Agora Dynamic Token Generator
 const AGORA_APP_ID = process.env.AGORA_APP_ID || '1523b6d3b8144281a1a21f28bbbd7fef';
 const AGORA_APP_CERTIFICATE = process.env.AGORA_APP_CERTIFICATE || 'a8a098e8e7bc432d8b5c57a7a4f27657';
 
@@ -66,7 +79,7 @@ const handleTokenGeneration = (req, res) => {
 app.get('/api/get-token', handleTokenGeneration);
 app.get('/rtc-token', handleTokenGeneration);
 
-// 2. MongoDB Database Connection
+// MongoDB Database Connection
 const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://Kedir:euyEPW1wNL1V9u8D@cluster0.mdtjtlb.mongodb.net/nilevoice?retryWrites=true&w=majority&appName=Cluster0';
 
 mongoose.connect(MONGO_URI)
@@ -77,7 +90,7 @@ mongoose.connect(MONGO_URI)
     console.error('MongoDB Connection Error:', err);
   });
 
-// --- MongoDB Schemas & Models ---
+// Schemas & Models
 const counterSchema = new mongoose.Schema({
   id: { type: String, required: true, default: 'user_id' },
   seq: { type: Number, default: 1000 }
@@ -105,7 +118,6 @@ const messageSchema = new mongoose.Schema({
 });
 const Message = mongoose.model('Message', messageSchema);
 
-// Payment Request Schema (For Wholesale Coin Seller Recharge)
 const paymentSchema = new mongoose.Schema({
   userId: { type: String, required: true },
   userName: { type: String, default: 'User' },
@@ -118,21 +130,33 @@ const paymentSchema = new mongoose.Schema({
 });
 const Payment = mongoose.model('Payment', paymentSchema);
 
-// --- Modular Routes ---
+// Mount Routes
 app.use('/api/wallet', walletRoutes);
 app.use('/api/admin', adminRoutes);
-// --- Payment & Recharge Endpoints ---
+
+app.use('/api/room-cover', roomCoverRoutes);
+app.use('/api/room-id', roomIdRoutes);
+app.use('/api/room-name', roomNameRoutes);
+app.use('/api/room-description', roomDescriptionRoutes);
+app.use('/api/room-type', roomTypeRoutes);
+app.use('/api/room-background', roomBackgroundRoutes);
+app.use('/api/room-permissions', roomPermissionsRoutes);
+app.use('/api/room-seats', roomSeatsRoutes);
+app.use('/api/room-mic-mode', roomMicModeRoutes);
+app.use('/api/room-blacklist', roomBlacklistRoutes);
+
+// Payment Requests
 app.post('/api/recharge-request', async (req, res) => {
   try {
     const { userId, userName, paymentMethod, txId, amountCoins, pricePaid } = req.body;
 
-    if (!userId || !txId || !amountCoins) {
+    if (!userId  !txId  !amountCoins) {
       return res.status(400).json({ success: false, message: 'Missing required payment fields' });
     }
 
     const existingTx = await Payment.findOne({ txId: String(txId).trim() });
     if (existingTx) {
-      return res.status(400).json({ success: false, message: 'ይህ የግብይት ቁጥር ቀድሞ ገብቷል!' });
+      return res.status(400).json({ success: false, message: 'Transaction ID already exists' });
     }
 
     const newPayment = new Payment({
@@ -181,7 +205,7 @@ app.post('/api/admin/approve-payment', async (req, res) => {
       type: 'recharge',
       amount: payment.amountCoins,
       balanceAfter: user ? user.coins : 0,
-      description: `Wholesale Recharge via ${payment.paymentMethod} (TxID: ${payment.txId})`
+      description: 'Wholesale Recharge via ' + payment.paymentMethod + ' (TxID: ' + payment.txId + ')'
     });
 
     payment.status = 'approved';
@@ -196,9 +220,8 @@ app.post('/api/admin/approve-payment', async (req, res) => {
     return res.status(500).json({ success: false, message: err.message });
   }
 });
-// --- Agent Management Endpoints ---
 
-// 1. Admin: Toggle or Set Agent Role
+// Admin Toggle Agent
 app.post('/api/admin/toggle-agent', async (req, res) => {
   try {
     const { userId, isAgent } = req.body;
@@ -214,9 +237,9 @@ app.post('/api/admin/toggle-agent', async (req, res) => {
     user.isAgent = (typeof isAgent === 'boolean') ? isAgent : !user.isAgent;
     await user.save();
 
-    return res.json({
+return res.json({
       success: true,
-      message: `Agent status updated to ${user.isAgent}`,
+      message: 'Agent status updated to ' + user.isAgent,
       user: {
         userId: user.userId,
         name: user.name,
@@ -229,13 +252,13 @@ app.post('/api/admin/toggle-agent', async (req, res) => {
   }
 });
 
-// 2. Agent: Transfer Coins to Users (Coin Selling Flow)
+// Agent Transfer Coins
 app.post('/api/wallet/agent-transfer-coins', async (req, res) => {
   try {
     const { agentId, targetUserId, amountCoins } = req.body;
     const coinsToTransfer = Number(amountCoins);
 
-    if (!agentId || !targetUserId || !coinsToTransfer || coinsToTransfer <= 0) {
+    if (!agentId  !targetUserId  !coinsToTransfer || coinsToTransfer <= 0) {
       return res.status(400).json({ success: false, message: 'Invalid transfer details' });
     }
 
@@ -253,20 +276,18 @@ app.post('/api/wallet/agent-transfer-coins', async (req, res) => {
       return res.status(404).json({ success: false, message: 'Recipient user not found' });
     }
 
-    // Deduct from agent, add to recipient
     agent.coins -= coinsToTransfer;
     recipient.coins += coinsToTransfer;
 
     await agent.save();
     await recipient.save();
 
-    // Log Transactions
     await Transaction.create({
       userId: agent.userId,
       type: 'agent_sale',
       amount: -coinsToTransfer,
       balanceAfter: agent.coins,
-      description:  `Soldering ${coinsToTransfer} coins to User ${recipient.userId}`
+      description: 'Sold ' + coinsToTransfer + ' coins to User ' + recipient.userId
     });
 
     await Transaction.create({
@@ -274,12 +295,12 @@ app.post('/api/wallet/agent-transfer-coins', async (req, res) => {
       type: 'agent_purchase',
       amount: coinsToTransfer,
       balanceAfter: recipient.coins,
-      description:  `Received ${coinsToTransfer} coins from Agent ${agent.userId}`
+      description: 'Received ' + coinsToTransfer + ' coins from Agent ' + agent.userId
     });
 
     return res.json({
       success: true,
-      message:  `Successfully transferred ${coinsToTransfer} coins to User ${recipient.userId}`,
+      message: 'Successfully transferred ' + coinsToTransfer + ' coins to User ' + recipient.userId,
       agentCoins: agent.coins
     });
   } catch (err) {
@@ -287,85 +308,7 @@ app.post('/api/wallet/agent-transfer-coins', async (req, res) => {
   }
 });
 
-// --- Payment & Recharge Endpoints ---
-app.post('/api/recharge-request', async (req, res) => {
-  try {
-    const { userId, userName, paymentMethod, txId, amountCoins, pricePaid } = req.body;
-
-    if (!userId || !txId  || !amountCoins) {
-      return res.status(400).json({ success: false, message: 'Missing required payment fields' });
-    }
-
-    const existingTx = await Payment.findOne({ txId: String(txId).trim() });
-    if (existingTx) {
-      return res.status(400).json({ success: false, message: 'ይህ የግብይት ቁጥር (TxID) ቀድሞ ገብቷል!' });
-    }
-
-    const newPayment = new Payment({
-      userId: String(userId),
-      userName: userName || 'User',
-      paymentMethod,
-      txId: String(txId).trim(),
-      amountCoins: Number(amountCoins),
-      pricePaid: String(pricePaid),
-      status: 'pending'
-    });
-
-    await newPayment.save();
-    return res.json({ success: true, message: 'Recharge request submitted successfully' });
-  } catch (err) {
-    return res.status(500).json({ success: false, message: err.message });
-  }
-});
-
-// Admin: View Pending Payments
-app.get('/api/admin/pending-payments', async (req, res) => {
-  try {
-    const pendings = await Payment.find({ status: 'pending' }).sort({ createdAt: -1 });
-    return res.json({ success: true, data: pendings });
-  } catch (err) {
-    return res.status(500).json({ success: false, message: err.message });
-  }
-});
-
-// Admin: Approve Payment & Add Coins
-app.post('/api/admin/approve-payment', async (req, res) => {
-  try {
-    const { paymentId } = req.body;
-
-    const payment = await Payment.findById(paymentId);
-    if (!payment || payment.status !== 'pending') {
-      return res.status(400).json({ success: false, message: 'Invalid or already processed payment' });
-    }
-
-    const user = await User.findOneAndUpdate(
-      { userId: payment.userId },
-      { $inc: { coins: payment.amountCoins } },
-      { new: true }
-    );
-
-    await Transaction.create({
-      userId: payment.userId,
-      type: 'recharge',
-      amount: payment.amountCoins,
-      balanceAfter: user ? user.coins : 0,
-      description:  `Wholesale Recharge via ${payment.paymentMethod} (TxID: ${payment.txId})`
-    });
-
-    payment.status = 'approved';
-    await payment.save();
-
-    return res.json({
-      success: true,
-      message: 'Payment approved and coins added successfully',
-      updatedCoins: user ? user.coins : null
-    });
-  } catch (err) {
-    return res.status(500).json({ success: false, message: err.message });
-  }
-});
-
-// --- Room Management Endpoints ---
+// Room Creation
 app.post('/api/rooms/create', async (req, res) => {
   try {
     const { title, category, hostId, hostName } = req.body;
@@ -375,7 +318,7 @@ app.post('/api/rooms/create', async (req, res) => {
     if (!room) {
       room = new Room({
         roomId: String(roomId),
-        title: title || `${hostName}'s Room`,
+        title: title || (hostName + "'s Room"),
         category: category || 'Chat',
         hostId,
         hostName,
@@ -397,7 +340,7 @@ app.get('/api/rooms', async (req, res) => {
   }
 });
 
-// --- User Registration & Search Endpoints ---
+// Register User
 app.post('/api/register-user', async (req, res) => {
   try {
     const { deviceId, name, isOwner } = req.body;
@@ -427,7 +370,7 @@ app.post('/api/register-user', async (req, res) => {
     const defaultDevice = deviceId ? deviceId : ('dev_' + Date.now());
     const initialCoins = (assignedId === '1000') ? 10000000 : 1000;
 
-    const newUser = new User({
+const newUser = new User({
       userId: assignedId,
       name: defaultName,
       deviceId: defaultDevice,
@@ -453,12 +396,12 @@ app.post('/api/register-user', async (req, res) => {
   }
 });
 
-// --- Google Authentication Endpoint ---
+// Google Auth
 app.post('/api/auth/google', async (req, res) => {
   try {
     const { googleId, email, name, avatar } = req.body;
 
-if (!googleId) {
+    if (!googleId) {
       return res.status(400).json({ success: false, message: 'Google ID is required' });
     }
 
@@ -482,7 +425,7 @@ if (!googleId) {
 
     user = new User({
       userId: assignedId,
-      name: name ||  `User_${assignedId}`,
+      name: name || ('User_' + assignedId),
       deviceId: googleId,
       avatar: avatar || '',
       coins: initialCoins,
@@ -538,7 +481,7 @@ app.get('/api/chat-history', async (req, res) => {
   }
 });
 
-// --- Socket.io Real-time Communication ---
+// Socket.io Real-time
 const roomSeatsState = {};
 
 io.on('connection', (socket) => {
@@ -568,7 +511,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // 1-on-1 Private Call
   socket.on('call_user', async (data) => {
     try {
       const { callerId, callerName, targetUserId } = data;
@@ -579,11 +521,11 @@ io.on('connection', (socket) => {
         return;
       }
 
-      const privateChannel = `call_${callerId}_${targetUserId}_${Date.now()}`;
+const privateChannel = 'call_' + callerId + '_' + targetUserId + '_' + Date.now();
 
       io.to(String(targetUserId)).emit('incoming_call', {
         callerId: callerId,
-        callerName: callerName || `User ${callerId}`,
+        callerName: callerName || ('User ' + callerId),
         channelName: privateChannel
       });
 
@@ -601,7 +543,7 @@ io.on('connection', (socket) => {
     });
   });
 
-socket.on('reject_call', (data) => {
+  socket.on('reject_call', (data) => {
     const { callerId, reason } = data;
     io.to(String(callerId)).emit('call_rejected', {
       reason: reason || 'Call rejected'
@@ -642,7 +584,7 @@ socket.on('reject_call', (data) => {
         type: 'call_fee',
         amount: cost,
         balanceAfter: caller.coins,
-        description: `1-Minute Private Voice Call to User ${receiverId}`
+        description: '1-Minute Private Voice Call to User ' + receiverId
       });
 
       socket.emit('call_coin_deducted', { remainingCoins: caller.coins });
@@ -651,9 +593,8 @@ socket.on('reject_call', (data) => {
     }
   });
 
-  // Audio Rooms & Streaming
   socket.on('join_room', (data) => {
-    const roomId = String(data.room || data.roomId  || '1001');
+    const roomId = String(data.room  data.roomId  '1001');
     socket.currentRoom = roomId;
     socket.join(roomId);
 
@@ -663,7 +604,7 @@ socket.on('reject_call', (data) => {
   });
 
   socket.on('chair_action', (data) => {
-    const roomId = String(data.room || data.roomId  || '1001');
+    const roomId = String(data.room  data.roomId  '1001');
     const chairIndex = data.chairIndex;
     const action = data.action;
 
@@ -724,12 +665,12 @@ socket.on('reject_call', (data) => {
         );
       }
 
-      await Transaction.create({
+await Transaction.create({
         userId: String(senderId),
         type: 'gift_sent',
         amount: cost,
         balanceAfter: sender.coins,
-        description: Sent ${giftName || 'Gift'} to ${receiverId || 'Room'}
+        description: 'Sent ' + (giftName  'Gift') + ' to ' + (receiverId  'Room')
       });
 
       io.to(roomId).emit('gift_sent', {
@@ -745,7 +686,7 @@ socket.on('reject_call', (data) => {
     io.emit('game_win_broadcast', data);
   });
 
-socket.on('disconnect', () => {
+  socket.on('disconnect', () => {
     if (socket.currentRoom && socket.userId) {
       const roomId = socket.currentRoom;
       if (roomSeatsState[roomId]) {
@@ -767,7 +708,7 @@ socket.on('disconnect', () => {
   });
 });
 
-const PORT = process.env.PORT || 3000;
-server.listen(PORT,  '0.0.0.0', () => {
+const PORT = process.env.PORT || 10000;
+server.listen(PORT, '0.0.0.0', () => {
   console.log('Server running on port ' + PORT);
 });
