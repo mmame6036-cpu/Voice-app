@@ -80,8 +80,8 @@ class _TaskScreenState extends State<TaskScreen> {
         return AlertDialog(
           backgroundColor: const Color(0xFF161B26),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: Row(
-            children: const [
+          title: const Row(
+            children: [
               Icon(Icons.face_retouching_natural, color: Colors.cyanAccent),
               SizedBox(width: 8),
               Text(
@@ -90,9 +90,9 @@ class _TaskScreenState extends State<TaskScreen> {
               ),
             ],
           ),
-          content: Column(
+          content: const Column(
             mainAxisSize: MainAxisSize.min,
-            children: const [
+            children: [
               Icon(Icons.camera_front, size: 70, color: Colors.cyanAccent),
               SizedBox(height: 16),
               Text(
