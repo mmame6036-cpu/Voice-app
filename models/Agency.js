@@ -18,6 +18,10 @@ const agencySchema = new mongoose.Schema({
     type: String, 
     default: '' 
   },
+  level: { 
+    type: Number, 
+    default: 1 
+  },
   commissionRate: { 
     type: Number, 
     default: 10 
