@@ -1,5 +1,7 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'chairs_management_screen.dart';
+import 'package:http/http.dart' as http;
+import 'services/user_service.dart';
 
 class TaskScreen extends StatefulWidget {
   final dynamic userId;
@@ -16,14 +18,48 @@ class TaskScreen extends StatefulWidget {
 }
 
 class _TaskScreenState extends State<TaskScreen> {
+  final UserService _user = UserService();
+  bool _isLoading = true;
   bool isFaceVerified = false;
 
-  // የነጥብና የታስክ ሁኔታዎች
   int totalPoints = 0;
-  int streakDays = 0; // ለ 7 ቀን ተከታታይ
-  int liveMinutesToday = 0; // የቀን ላይቭ ደቂቃ
-  int chairMinutesToday = 0; // የወንበር ደቂቃ
-  int giftCoinsReceived = 0; // የተሰጠ/የተቀበለው ስጦታ
+  int streakDays = 0;
+  int liveMinutesToday = 0;
+  int chairMinutesToday = 0;
+  int giftCoinsReceived = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchTaskData();
+  }
+
+  Future<void> _fetchTaskData() async {
+    setState(() => _isLoading = true);
+    final currentUserId = widget.userId?.toString() ?? _user.userId;
+
+    try {
+      final url = UserService.serverUrl + '/api/tasks/today?userId=' + currentUserId;
+      final res = await http.get(Uri.parse(url));
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        if (data['success'] == true) {
+          final t = data['tasks'];
+          setState(() {
+            liveMinutesToday = t['stayDurationMinutes'] ?? 0;
+            chairMinutesToday = t['stayDurationMinutes'] ?? 0;
+            giftCoinsReceived = t['giftSentCount'] ?? 0;
+            streakDays = t['checkInDay'] ?? 1;
+            totalPoints = _user.coins;
+          });
+        }
+      }
+    } catch (_) {}
+
+    if (mounted) {
+      setState(() => _isLoading = false);
+    }
+  }
 
   void _notify(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -36,7 +72,6 @@ class _TaskScreenState extends State<TaskScreen> {
     );
   }
 
-  // የፊት አሻራ ማረጋገጫ Dialog
   void _verifyFaceAndGo() {
     showDialog(
       context: context,
@@ -50,7 +85,7 @@ class _TaskScreenState extends State<TaskScreen> {
               Icon(Icons.face_retouching_natural, color: Colors.cyanAccent),
               SizedBox(width: 8),
               Text(
-                'የፊት አሻራ ማረጋገጫ',
+                'Face Verification',
                 style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
               ),
             ],
@@ -61,7 +96,7 @@ class _TaskScreenState extends State<TaskScreen> {
               Icon(Icons.camera_front, size: 70, color: Colors.cyanAccent),
               SizedBox(height: 16),
               Text(
-                'እባክዎ ፊትዎን ወደ ካሜራው ያሳዩ...',
+                'Please align your face within the frame...',
                 textAlign: TextAlign.center,
                 style: TextStyle(color: Colors.white70, fontSize: 14),
               ),
@@ -70,7 +105,7 @@ class _TaskScreenState extends State<TaskScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('ሰርዝ', style: TextStyle(color: Colors.redAccent)),
+              child: const Text('Cancel', style: TextStyle(color: Colors.redAccent)),
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: Colors.cyanAccent),
@@ -79,15 +114,9 @@ class _TaskScreenState extends State<TaskScreen> {
                 setState(() {
                   isFaceVerified = true;
                 });
-                _notify('የፊት አሻራ ማረጋገጫ ተሳክቷል!');
-
-                // በቀጥታ ወደ ወንበሮቹ ገጽ ይወስዳል
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const ChairsManagementScreen()),
-                );
+                _notify('Face verification successful!');
               },
-              child: const Text('አረጋግጥ', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+              child: const Text('Verify', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
             ),
           ],
         );
@@ -95,101 +124,92 @@ class _TaskScreenState extends State<TaskScreen> {
     );
   }
 
-  // "Go" በተን ሲነካ
   void _onGoPressed() {
     if (!isFaceVerified) {
       _verifyFaceAndGo();
     } else {
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (context) => const ChairsManagementScreen()),
-      );
+      _notify('Redirecting to live room...');
+      Navigator.pop(context);
     }
   }
 
-  @override
+@override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF0F1017),
       appBar: AppBar(
         title: const Text(
-          'የሆስቶች ታስክ ማዕከል (Task Center)',
+          'Host Task Center',
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
         ),
         backgroundColor: const Color(0xFF181926),
         elevation: 0,
         centerTitle: true,
         iconTheme: const IconThemeData(color: Colors.white),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh, color: Colors.cyanAccent),
+            onPressed: _fetchTaskData,
+          ),
+        ],
       ),
-      body: SingleChildScrollView(
-        physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // 1. የነጥብ ማሳያ ካርድ
-            _buildPointsHeader(),
-
-            const SizedBox(height: 20),
-
-// 2. የፊት አሻራ ማረጋገጫ ክፍል
-            _buildFaceVerificationCard(),
-
-            const SizedBox(height: 24),
-
-            const Text(
-              'ዕለታዊና ሳምንታዊ ግቦች',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 0.5,
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator(color: Colors.cyanAccent))
+          : SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _buildPointsHeader(),
+                  const SizedBox(height: 20),
+                  _buildFaceVerificationCard(),
+                  const SizedBox(height: 24),
+                  const Text(
+                    'Daily & Weekly Targets',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  _buildTaskCard(
+                    title: '7-Day Live Streak',
+                    points: '8,000 Points',
+                    requirement: 'Stream 2 hours (120 mins) daily for 7 consecutive days',
+                    progressText: '$streakDays / 7 Days completed',
+                    progressValue: streakDays / 7.0,
+                    icon: Icons.local_fire_department,
+                    accentColor: Colors.deepOrangeAccent,
+                    onGo: _onGoPressed,
+                  ),
+                  const SizedBox(height: 14),
+                  _buildTaskCard(
+                    title: 'Daily Live Streaming',
+                    points: '1,000+ Points',
+                    requirement: 'Stream 1 hour (60 mins) daily in voice room',
+                    progressText: '$liveMinutesToday / 60 Mins completed',
+                    progressValue: (liveMinutesToday / 60.0).clamp(0.0, 1.0),
+                    icon: Icons.videocam,
+                    accentColor: Colors.cyanAccent,
+                    onGo: _onGoPressed,
+                  ),
+                  const SizedBox(height: 14),
+                  _buildTaskCard(
+                    title: 'Golden Chair & Gifts',
+                    points: '1,000 Points',
+                    requirement: 'Take seat for 1 hour + receive 600 coins in gifts',
+                    progressText: 'Seat: $chairMinutesToday/60 mins | Gifts: $giftCoinsReceived/600 coins',
+                    progressValue: ((chairMinutesToday / 60.0) + (giftCoinsReceived / 600.0)) / 2.0,
+                    icon: Icons.event_seat,
+                    accentColor: Colors.amberAccent,
+                    onGo: _onGoPressed,
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 12),
-
-            // ታስክ 1
-            _buildTaskCard(
-              title: 'የ 7 ቀን ተከታታይ ላይቭ (Streak)',
-              points: '8,000 Points',
-              requirement: 'በየቀኑ 2 ሰዓት (120 ደቂቃ) ለ 7 ተከታታይ ቀናት ላይቭ መቆየት',
-              progressText: '$streakDays / 7 ቀናት ተጠናቀቁ',
-              progressValue: streakDays / 7.0,
-              icon: Icons.local_fire_department,
-              accentColor: Colors.deepOrangeAccent,
-              onGo: _onGoPressed,
-            ),
-
-            const SizedBox(height: 14),
-
-            // ታስክ 2
-            _buildTaskCard(
-              title: 'ዕለታዊ የቀጥታ ስርጭት (Daily Live)',
-              points: '1,000+ Points',
-              requirement: 'በየቀኑ 1 ሰዓት (60 ደቂቃ) ላይቭ መቆየት',
-              progressText: '$liveMinutesToday / 60 ደቂቃ ተጠናቀቀ',
-              progressValue: (liveMinutesToday / 60.0).clamp(0.0, 1.0),
-              icon: Icons.videocam,
-              accentColor: Colors.cyanAccent,
-              onGo: _onGoPressed,
-            ),
-
-            const SizedBox(height: 14),
-
-            // ታስክ 3
-            _buildTaskCard(
-              title: 'የወርቃማ ወንበር ቆይታና ስጦታ (Golden Chair)',
-              points: '1,000 Points',
-              requirement: 'በወርቃማ ወንበር ላይ 1 ሰዓት መቆየት + 600 ኮይን ስጦታ',
-              progressText: 'ወንበር: $chairMinutesToday/60 ደቂቃ | ስጦታ: $giftCoinsReceived/600 ኮይን',
-              progressValue: ((chairMinutesToday / 60.0) + (giftCoinsReceived / 600.0)) / 2.0,
-              icon: Icons.event_seat,
-              accentColor: Colors.amberAccent,
-              onGo: _onGoPressed,
-            ),
-          ],
-        ),
-      ),
     );
   }
 
@@ -204,14 +224,15 @@ class _TaskScreenState extends State<TaskScreen> {
         ),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: Colors.purpleAccent.withOpacity(0.3)),
-      ),
+
+),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('ጠቅላላ የተሰበሰበ ነጥብ', style: TextStyle(color: Colors.white70, fontSize: 14)),
+              const Text('Total Points Earned', style: TextStyle(color: Colors.white70, fontSize: 14)),
               const SizedBox(height: 6),
               Text(
                 '$totalPoints',
@@ -244,8 +265,7 @@ class _TaskScreenState extends State<TaskScreen> {
       ),
       child: Row(
         children: [
-
-Container(
+          Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: isFaceVerified ? Colors.greenAccent.withOpacity(0.15) : Colors.tealAccent.withOpacity(0.15),
@@ -263,12 +283,12 @@ Container(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  isFaceVerified ? 'የፊት አሻራ ተረጋግጧል' : 'የፊት አሻራ ማረጋገጫ',
+                  isFaceVerified ? 'Face Verified' : 'Face Verification',
                   style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  isFaceVerified ? 'ማረጋገጫው አልፏል፤ ወንበሮችን መጠቀም ይችላሉ' : 'ወደ ወንበር ለመሄድ አሻራዎን ያረጋግጡ',
+                  isFaceVerified ? 'Verification complete. You can access host seats.' : 'Verify face to unlock host privileges.',
                   style: const TextStyle(color: Colors.white60, fontSize: 12),
                 ),
               ],
@@ -283,7 +303,7 @@ Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               ),
-              child: const Text('አረጋግጥ', style: TextStyle(fontWeight: FontWeight.bold)),
+              child: const Text('Verify', style: TextStyle(fontWeight: FontWeight.bold)),
             ),
         ],
       ),
@@ -312,7 +332,8 @@ Container(
         children: [
           Row(
             children: [
-              Container(
+
+Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
                   color: accentColor.withOpacity(0.15),
@@ -341,8 +362,7 @@ Container(
                   elevation: 0,
                 ),
                 child: const Text('Go', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-
-),
+              ),
             ],
           ),
           const SizedBox(height: 12),
