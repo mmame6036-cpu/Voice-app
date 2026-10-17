@@ -9,8 +9,6 @@ const mongoose = require('mongoose');
 // Models
 const Room = require('./models/Room');
 const Transaction = require('./models/Transaction');
-const Agency = require('./models/Agency');
-const AgencyHost = require('./models/AgencyHost');
 
 // Core Routes
 const walletRoutes = require('./routes/wallet');
@@ -514,7 +512,6 @@ app.get('/api/chat-history', async (req, res) => {
 
 // Socket.io Real-time
 const roomSeatsState = {};
-const seatJoinTimes = {};
 
 io.on('connection', (socket) => {
   socket.on('user_connected', (userId) => {
@@ -645,7 +642,7 @@ if (roomSeatsState[roomId]) {
     }
   });
 
-  socket.on('chair_action', async (data) => {
+  socket.on('chair_action', (data) => {
     let roomId = '1001';
     if (data.room) roomId = String(data.room);
     if (data.roomId) roomId = String(data.roomId);
@@ -667,26 +664,8 @@ if (roomSeatsState[roomId]) {
         userName: data.userName,
         userId: data.userId
       };
-      seatJoinTimes[String(data.userId)] = Date.now();
     } else if (action === 'leave') {
       delete roomSeatsState[roomId][chairIndex];
-
-      const joinTime = seatJoinTimes[String(data.userId)];
-      if (joinTime) {
-        const durationMinutes = Math.floor((Date.now() - joinTime) / 60000);
-        delete seatJoinTimes[String(data.userId)];
-
-        if (durationMinutes >= 1) {
-          const durationHours = parseFloat((durationMinutes / 60).toFixed(2));
-          await AgencyHost.findOneAndUpdate(
-            { userId: String(data.userId), status: 'active' },
-            { 
-              $inc: { validHours: durationHours },
-              $set: { validDays: 1 } 
-            }
-          );
-        }
-      }
     }
 
     const payload = Object.assign({}, data, { room: roomId, roomId: roomId });
@@ -731,32 +710,12 @@ if (roomSeatsState[roomId]) {
           { userId: String(receiverId) },
           { $inc: { points: cost } }
         );
-
-        const hostAgencyRecord = await AgencyHost.findOne({ 
-          userId: String(receiverId), 
-          status: 'active' 
-        });
-
-        if (hostAgencyRecord) {
-          hostAgencyRecord.currentMonthPoints = (hostAgencyRecord.currentMonthPoints ? hostAgencyRecord.currentMonthPoints : 0) + cost;
-          await hostAgencyRecord.save();
-
-          const parentAgency = await Agency.findOne({ agencyId: hostAgencyRecord.agencyId });
-          if (parentAgency) {
-            const rate = parentAgency.commissionRate ? parentAgency.commissionRate : 10;
-            const agencyCommissionPoints = Math.floor(cost * (rate / 100));
-
-            parentAgency.balancePoints = (parentAgency.balancePoints ? parentAgency.balancePoints : 0) + agencyCommissionPoints;
-            parentAgency.totalEarnings = (parentAgency.totalEarnings ? parentAgency.totalEarnings : 0) + agencyCommissionPoints;
-            await parentAgency.save();
-          }
-        }
       }
 
       const defaultGift = giftName ? giftName : 'Gift';
       const defaultTarget = receiverId ? receiverId : 'Room';
 
-await Transaction.create({
+      await Transaction.create({
         userId: String(senderId),
         type: 'gift_sent',
         amount: cost,
@@ -783,7 +742,6 @@ await Transaction.create({
           for (const idx in roomSeatsState[roomId]) {
             if (roomSeatsState[roomId][idx].userId === socket.userId) {
               delete roomSeatsState[roomId][idx];
-              delete seatJoinTimes[String(socket.userId)];
               const defaultName = socket.userName ? socket.userName : 'User';
               io.to(roomId).emit('chair_action', {
                 action: 'leave',
