@@ -9,6 +9,7 @@ import 'points_screen.dart';
 import 'host_center_screen.dart';
 import 'agency_screen.dart';
 import 'coin_seller_screen.dart';
+import 'daily_tasks_screen.dart';
 import 'screen/login_screen.dart';
 
 void main() async {
@@ -787,7 +788,16 @@ MaterialPageRoute(builder: (_) => const HostCenterScreen()),
                     mainAxisSpacing: 16,
                     crossAxisSpacing: 10,
                     children: [
-                      _buildGridMenuItem(icon: Icons.task_alt, label: 'Task'),
+                      InkWell(
+                        borderRadius: BorderRadius.circular(12),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const DailyTasksScreen()),
+                          );
+                        },
+                        child: _buildGridMenuItem(icon: Icons.task_alt, label: 'Task'),
+                      ),
                       _buildGridMenuItem(icon: Icons.person_add_alt, label: 'Invite'),
                       _buildGridMenuItem(icon: Icons.shopping_bag_outlined, label: 'Store'),
                       _buildGridMenuItem(icon: Icons.backpack_outlined, label: 'Backpack'),
@@ -807,7 +817,7 @@ MaterialPageRoute(builder: (_) => const HostCenterScreen()),
     );
   }
 
-  Widget _buildActionItem({required IconData icon, required String label}) {
+Widget _buildActionItem({required IconData icon, required String label}) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -818,7 +828,7 @@ MaterialPageRoute(builder: (_) => const HostCenterScreen()),
     );
   }
 
-Widget _buildGridMenuItem({required IconData icon, required String label}) {
+  Widget _buildGridMenuItem({required IconData icon, required String label}) {
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
