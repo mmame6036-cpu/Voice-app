@@ -1,29 +1,29 @@
 const mongoose = require('mongoose');
 
 const transactionSchema = new mongoose.Schema({
-  userId: { 
-    type: String, 
-    required: true 
+  userId: {
+    type: String,
+    required: true
   },
-  type: { 
-    type: String, 
-    required: true 
+  type: {
+    type: String,
+    required: true
   },
-  amount: { 
-    type: Number, 
-    required: true 
+  amount: {
+    type: Number,
+    required: true
   },
-  balanceAfter: { 
-    type: Number, 
-    default: 0 
+  balanceAfter: {
+    type: Number,
+    default: 0
   },
-  description: { 
-    type: String, 
-    default: '' 
+  description: {
+    type: String,
+    default: ''
   },
-  createdAt: { 
-    type: Date, 
-    default: Date.now 
+  createdAt: {
+    type: Date,
+    default: Date.now
   }
 });
 
