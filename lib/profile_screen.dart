@@ -8,7 +8,6 @@ import 'host_center_screen.dart';
 import 'agency_screen.dart';
 import 'store_screen.dart';
 import 'invite_screen.dart';
-import '../widgets/join_agency_dialog.dart';
 
 class ProfileScreen extends StatelessWidget {
   final String userId;
@@ -113,8 +112,7 @@ class ProfileScreen extends StatelessWidget {
                     child: const Text(
                       '👑 Master Admin',
                       style: TextStyle(
-
-color: Colors.amber,
+                        color: Colors.amber,
                         fontWeight: FontWeight.bold,
                         fontSize: 12,
                       ),
@@ -125,7 +123,7 @@ color: Colors.amber,
           ),
           const SizedBox(height: 25),
 
-          // 👑 Master Admin Panel (Only for userId 1000)
+// 👑 Master Admin Panel (Only for userId 1000)
           if (isMasterAdmin) ...[
             _buildMenuItem(
               icon: Icons.admin_panel_settings,
@@ -155,18 +153,7 @@ color: Colors.amber,
           ),
           const SizedBox(height: 12),
 
-          // 2. Join Agency Dialog
-          _buildMenuItem(
-            icon: Icons.group_add,
-            iconColor: Colors.deepPurpleAccent,
-            title: 'Join Agency',
-            onTap: () {
-              JoinAgencyDialog.show(context, userId: userId);
-            },
-          ),
-          const SizedBox(height: 12),
-
-          // 3. Recharge
+          // 2. Recharge
           _buildMenuItem(
             icon: Icons.account_balance_wallet,
             iconColor: Colors.orangeAccent,
@@ -180,7 +167,7 @@ color: Colors.amber,
           ),
           const SizedBox(height: 12),
 
-          // 4. Coin Seller (Agent Verified Only)
+          // 3. Coin Seller (Agent Verified Only)
           _buildMenuItem(
             icon: Icons.storefront,
             iconColor: Colors.greenAccent,
@@ -189,7 +176,7 @@ color: Colors.amber,
           ),
           const SizedBox(height: 12),
 
-          // 5. Agency
+          // 4. Agency
           _buildMenuItem(
             icon: Icons.business,
             iconColor: Colors.blueAccent,
@@ -203,7 +190,7 @@ color: Colors.amber,
           ),
           const SizedBox(height: 12),
 
-          // 6. Store
+          // 5. Store
           _buildMenuItem(
             icon: Icons.shopping_bag,
             iconColor: Colors.amberAccent,
@@ -217,7 +204,7 @@ color: Colors.amber,
           ),
           const SizedBox(height: 12),
 
-          // 7. Invite Friends
+          // 6. Invite Friends
           _buildMenuItem(
             icon: Icons.person_add_alt_1,
             iconColor: Colors.tealAccent,
@@ -231,7 +218,7 @@ color: Colors.amber,
           ),
           const SizedBox(height: 12),
 
-          // 8. Settings
+          // 7. Settings
           _buildMenuItem(
             icon: Icons.settings,
             iconColor: Colors.grey,
@@ -248,7 +235,7 @@ color: Colors.amber,
     );
   }
 
-Widget _buildMenuItem({
+  Widget _buildMenuItem({
     required IconData icon,
     required Color iconColor,
     required String title,
@@ -372,8 +359,7 @@ class _InAppAdminScreenState extends State<InAppAdminScreen> {
         title: const Text(
           '👑 Master Admin Panel',
           style: TextStyle(color: Colors.white, fontSize: 17),
-
-),
+        ),
         backgroundColor: const Color(0xFF1E1F2E),
         iconTheme: const IconThemeData(color: Colors.white),
         actions: [
@@ -394,7 +380,8 @@ class _InAppAdminScreenState extends State<InAppAdminScreen> {
               padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+
+children: [
                   const Text(
                     'Assign / Revoke Agent (Coin Seller)',
                     style: TextStyle(
@@ -474,8 +461,7 @@ class _InAppAdminScreenState extends State<InAppAdminScreen> {
                 ),
               ),
             )
-
-else
+          else
             ..._pendingPayments.map((p) {
               return Card(
                 color: const Color(0xFF1E1F2E),
@@ -491,7 +477,8 @@ else
                   ),
                   trailing: ElevatedButton(
                     style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-                    onPressed: () => _approvePayment(p['_id']),
+
+onPressed: () => _approvePayment(p['_id']),
                     child: const Text('Approve', style: TextStyle(color: Colors.white)),
                   ),
                 ),
