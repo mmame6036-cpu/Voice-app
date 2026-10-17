@@ -11,11 +11,13 @@ const Room = require('./models/Room');
 const Transaction = require('./models/Transaction');
 const Agency = require('./models/Agency');
 const AgencyHost = require('./models/AgencyHost');
+const UserTask = require('./models/UserTask');
 
 // Core Routes
 const walletRoutes = require('./routes/wallet');
 const adminRoutes = require('./routes/admin');
 const agencyRoutes = require('./routes/agency');
+const taskRoutes = require('./routes/tasks');
 
 // Room Settings Modular Routes (10 Isolated Modules)
 const roomCoverRoutes = require('./routes/room_cover');
@@ -106,7 +108,8 @@ const userSchema = new mongoose.Schema({
   name: { type: String, default: 'User' },
   deviceId: { type: String, unique: true },
   avatar: { type: String, default: '' },
-  coins: { type: Number, default: 1000 },
+
+coins: { type: Number, default: 1000 },
   points: { type: Number, default: 0 },
   isAgent: { type: Boolean, default: false },
   isFrozen: { type: Boolean, default: false },
@@ -138,6 +141,7 @@ const Payment = mongoose.model('Payment', paymentSchema);
 app.use('/api/wallet', walletRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/agency', agencyRoutes);
+app.use('/api/tasks', taskRoutes);
 
 app.use('/api/room-cover', roomCoverRoutes);
 app.use('/api/room-id', roomIdRoutes);
@@ -214,7 +218,7 @@ app.post('/api/admin/approve-payment', async (req, res) => {
       { new: true }
     );
 
-    await Transaction.create({
+await Transaction.create({
       userId: payment.userId,
       type: 'recharge',
       amount: payment.amountCoins,
@@ -225,7 +229,7 @@ app.post('/api/admin/approve-payment', async (req, res) => {
     payment.status = 'approved';
     await payment.save();
 
-return res.json({
+    return res.json({
       success: true,
       message: 'Payment approved and coins added successfully',
       updatedCoins: user ? user.coins : null
@@ -341,11 +345,11 @@ app.post('/api/rooms/create', async (req, res) => {
     const randomRoom = Math.floor(1000 + Math.random() * 9000).toString();
     const roomId = req.body.roomId ? req.body.roomId : randomRoom;
 
-    let room = await Room.findOne({ roomId: String(roomId) });
+let room = await Room.findOne({ roomId: String(roomId) });
     if (!room) {
       const defaultTitle = hostName ? (hostName + "'s Room") : 'Live Room';
 
-room = new Room({
+      room = new Room({
         roomId: String(roomId),
         title: title ? title : defaultTitle,
         category: category ? category : 'Chat',
@@ -482,7 +486,8 @@ app.post('/api/auth/google', async (req, res) => {
 });
 
 app.get('/api/search-user', async (req, res) => {
-  try {
+
+try {
     const userId = req.query.userId;
     if (!userId) {
       return res.status(400).json({ error: 'User ID is required' });
@@ -515,6 +520,12 @@ app.get('/api/chat-history', async (req, res) => {
 // Socket.io Real-time
 const roomSeatsState = {};
 const seatJoinTimes = {};
+const roomUserStayTimes = {};
+
+const getTodayString = () => {
+  const now = new Date();
+  return now.toISOString().split('T')[0];
+};
 
 io.on('connection', (socket) => {
   socket.on('user_connected', (userId) => {
@@ -535,6 +546,16 @@ io.on('connection', (socket) => {
         timestamp: new Date()
       });
       await newMsg.save();
+
+      // Track daily messages sent task
+      if (senderId) {
+        const today = getTodayString();
+        await UserTask.findOneAndUpdate(
+          { userId: String(senderId), date: today },
+          { $inc: { messagesSentCount: 1 } },
+          { upsert: true }
+        );
+      }
 
       io.to(String(receiverId)).emit('receive_direct_message', newMsg);
       socket.emit('message_sent', newMsg);
@@ -602,7 +623,7 @@ io.on('connection', (socket) => {
       const caller = await User.findOne({ userId: String(callerId) });
       if (!caller) return;
 
-      if (caller.coins < cost) {
+if (caller.coins < cost) {
         socket.emit('call_balance_depleted', { message: 'Call ended due to low coin balance.' });
         io.to(String(receiverId)).emit('call_ended');
         return;
@@ -640,7 +661,11 @@ io.on('connection', (socket) => {
     socket.currentRoom = roomId;
     socket.join(roomId);
 
-if (roomSeatsState[roomId]) {
+    if (socket.userId) {
+      roomUserStayTimes[socket.userId] = Date.now();
+    }
+
+    if (roomSeatsState[roomId]) {
       socket.emit('sync_room_seats', roomSeatsState[roomId]);
     }
   });
@@ -726,7 +751,17 @@ if (roomSeatsState[roomId]) {
       sender.coins -= cost;
       await sender.save();
 
-      if (receiverId) {
+      // Track Daily Gift Sent Task
+      if (senderId) {
+        const today = getTodayString();
+        await UserTask.findOneAndUpdate(
+          { userId: String(senderId), date: today },
+          { $inc: { giftSentCount: 1 } },
+          { upsert: true }
+        );
+      }
+
+if (receiverId) {
         await User.findOneAndUpdate(
           { userId: String(receiverId) },
           { $inc: { points: cost } }
@@ -756,7 +791,7 @@ if (roomSeatsState[roomId]) {
       const defaultGift = giftName ? giftName : 'Gift';
       const defaultTarget = receiverId ? receiverId : 'Room';
 
-await Transaction.create({
+      await Transaction.create({
         userId: String(senderId),
         type: 'gift_sent',
         amount: cost,
@@ -775,7 +810,23 @@ await Transaction.create({
     io.emit('game_win_broadcast', data);
   });
 
-  socket.on('disconnect', () => {
+  socket.on('disconnect', async () => {
+    // Record Room Stay Duration for Task
+    if (socket.userId && roomUserStayTimes[socket.userId]) {
+      const stayMs = Date.now() - roomUserStayTimes[socket.userId];
+      const stayMinutes = Math.floor(stayMs / 60000);
+      delete roomUserStayTimes[socket.userId];
+
+      if (stayMinutes >= 1) {
+        const today = getTodayString();
+        await UserTask.findOneAndUpdate(
+          { userId: String(socket.userId), date: today },
+          { $inc: { stayDurationMinutes: stayMinutes } },
+          { upsert: true }
+        );
+      }
+    }
+
     if (socket.currentRoom) {
       if (socket.userId) {
         const roomId = socket.currentRoom;
