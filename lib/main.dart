@@ -7,7 +7,7 @@ import 'messages_screen.dart';
 import 'recharge_screen.dart';
 import 'points_screen.dart';
 import 'host_center_screen.dart';
-import 'agency_screen.dart';
+import 'screens/agency_center_screen.dart';
 import 'coin_seller_screen.dart';
 import 'screen/login_screen.dart';
 
@@ -745,7 +745,7 @@ MaterialPageRoute(builder: (_) => const HostCenterScreen()),
                           onTap: () {
                             Navigator.push(
                               context,
-                              MaterialPageRoute(builder: (_) => const AgencyScreen()),
+                              MaterialPageRoute(builder: (_) => AgencyCenterScreen(userId: _user.userId)),
                             );
                           },
                           child: Padding(
