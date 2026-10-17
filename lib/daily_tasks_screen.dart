@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
-import 'package:share_plus/share_plus.dart';
 import 'services/user_service.dart';
 
 class DailyTasksScreen extends StatefulWidget {
@@ -116,7 +116,18 @@ class _DailyTasksScreenState extends State<DailyTasksScreen> {
   }
 
   void _shareAppInvitation() {
-    Share.share('Join me on Nile Voice! Enjoy voice chat rooms and earn coins daily: https://nilevoice.com');
+    Clipboard.setData(
+      const ClipboardData(
+        text: 'Join me on Nile Voice! Enjoy voice chat rooms and earn coins daily: https://nilevoice.com',
+      ),
+    );
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Invitation link copied to clipboard!'),
+        backgroundColor: Color(0xFF00C9A7),
+        duration: Duration(seconds: 2),
+      ),
+    );
   }
 
   @override
@@ -124,14 +135,14 @@ class _DailyTasksScreenState extends State<DailyTasksScreen> {
     final isCheckedIn = _taskData?['isCheckedIn'] ?? false;
     final int currentDay = _taskData?['checkInDay'] ?? 1;
 
-    final int stayMins = _taskData?['stayDurationMinutes'] ?? 0;
+final int stayMins = _taskData?['stayDurationMinutes'] ?? 0;
     final bool stay10Claimed = _taskData?['stay10Claimed'] ?? false;
     final bool stay30Claimed = _taskData?['stay30Claimed'] ?? false;
 
     final int giftSent = _taskData?['giftSentCount'] ?? 0;
     final bool giftClaimed = _taskData?['giftClaimed'] ?? false;
 
-final int msgsSent = _taskData?['messagesSentCount'] ?? 0;
+    final int msgsSent = _taskData?['messagesSentCount'] ?? 0;
     final bool msgClaimed = _taskData?['messageClaimed'] ?? false;
 
     return Scaffold(
@@ -156,7 +167,6 @@ final int msgsSent = _taskData?['messagesSentCount'] ?? 0;
               child: ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
-                  // 7-Days Check-in Card
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
@@ -203,13 +213,13 @@ final int msgsSent = _taskData?['messagesSentCount'] ?? 0;
                             final isPassed = isCheckedIn && dayNumber <= currentDay;
                             return Column(
                               children: [
-                                CircleAvatar(
+
+CircleAvatar(
                                   radius: 18,
                                   backgroundColor: isPassed
                                       ? const Color(0xFF00C9A7)
                                       : (dayNumber == currentDay ? Colors.amber : Colors.white10),
-
-child: isPassed
+                                  child: isPassed
                                       ? const Icon(Icons.check, color: Colors.black, size: 18)
                                       : Text(
                                           '+${_rewardsMap[index]}',
@@ -235,16 +245,12 @@ child: isPassed
                       ],
                     ),
                   ),
-
                   const SizedBox(height: 22),
-
                   const Text(
                     'Daily Activities',
                     style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
                   ),
                   const SizedBox(height: 12),
-
-                  // 1. Stay 10 Mins
                   _buildActivityTile(
                     icon: Icons.headset_mic,
                     iconColor: Colors.cyanAccent,
@@ -255,8 +261,6 @@ child: isPassed
                     isClaimed: stay10Claimed,
                     onClaim: () => _claimReward('stay10'),
                   ),
-
-                  // 2. Stay 30 Mins
                   _buildActivityTile(
                     icon: Icons.timer,
                     iconColor: Colors.tealAccent,
@@ -267,8 +271,6 @@ child: isPassed
                     isClaimed: stay30Claimed,
                     onClaim: () => _claimReward('stay30'),
                   ),
-
-                  // 3. Send Gift
                   _buildActivityTile(
                     icon: Icons.card_giftcard,
                     iconColor: Colors.pinkAccent,
@@ -279,8 +281,6 @@ child: isPassed
                     isClaimed: giftClaimed,
                     onClaim: () => _claimReward('gift'),
                   ),
-
-                  // 4. Send Messages
                   _buildActivityTile(
                     icon: Icons.chat,
                     iconColor: Colors.purpleAccent,
@@ -291,18 +291,16 @@ child: isPassed
                     isClaimed: msgClaimed,
                     onClaim: () => _claimReward('messages'),
                   ),
-
-                  // 5. Share App
                   _buildActivityTile(
                     icon: Icons.share,
                     iconColor: Colors.orangeAccent,
-                    title: 'Invite Friends / Share App',
-                    subtitle: 'Share Nile Voice with friends',
 
-reward: '+25 Coins',
+title: 'Invite Friends / Share App',
+                    subtitle: 'Share Nile Voice with friends',
+                    reward: '+25 Coins',
                     isDone: true,
                     isClaimed: false,
-                    customBtn: 'Share',
+                    customBtn: 'Copy Link',
                     onClaim: _shareAppInvitation,
                   ),
                 ],
