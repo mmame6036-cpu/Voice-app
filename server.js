@@ -13,6 +13,7 @@ const Transaction = require('./models/Transaction');
 // Core Routes
 const walletRoutes = require('./routes/wallet');
 const adminRoutes = require('./routes/admin');
+const agencyRoutes = require('./routes/agency');
 
 // Room Settings Modular Routes (10 Isolated Modules)
 const roomCoverRoutes = require('./routes/room_cover');
@@ -39,18 +40,19 @@ const io = new Server(server, {
 
 app.set('io', io);
 
-// 1. Health check route
+// Health check route
 app.get('/', (req, res) => {
   res.status(200).send('Nile Voice Server is Live and Active');
 });
 
 // Agora Dynamic Token Generator
-const AGORA_APP_ID = process.env.AGORA_APP_ID || '1523b6d3b8144281a1a21f28bbbd7fef';
-const AGORA_APP_CERTIFICATE = process.env.AGORA_APP_CERTIFICATE || 'a8a098e8e7bc432d8b5c57a7a4f27657';
+const AGORA_APP_ID = process.env.AGORA_APP_ID ? process.env.AGORA_APP_ID : '1523b6d3b8144281a1a21f28bbbd7fef';
+const AGORA_APP_CERTIFICATE = process.env.AGORA_APP_CERTIFICATE ? process.env.AGORA_APP_CERTIFICATE : 'a8a098e8e7bc432d8b5c57a7a4f27657';
 
 const handleTokenGeneration = (req, res) => {
   try {
-    const channelName = String(req.query.channelName || '1001').trim();
+    const rawChannel = req.query.channelName ? req.query.channelName : '1001';
+    const channelName = String(rawChannel).trim();
     const role = RtcRole.PUBLISHER;
     const expireTime = 3600 * 24 * 30;
     const currentTime = Math.floor(Date.now() / 1000);
@@ -80,7 +82,7 @@ app.get('/api/get-token', handleTokenGeneration);
 app.get('/rtc-token', handleTokenGeneration);
 
 // MongoDB Database Connection
-const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://Kedir:euyEPW1wNL1V9u8D@cluster0.mdtjtlb.mongodb.net/nilevoice?retryWrites=true&w=majority&appName=Cluster0';
+const MONGO_URI = process.env.MONGO_URI ? process.env.MONGO_URI : 'mongodb+srv://Kedir:euyEPW1wNL1V9u8D@cluster0.mdtjtlb.mongodb.net/nilevoice?retryWrites=true&w=majority&appName=Cluster0';
 
 mongoose.connect(MONGO_URI)
   .then(() => {
@@ -130,9 +132,10 @@ const paymentSchema = new mongoose.Schema({
 });
 const Payment = mongoose.model('Payment', paymentSchema);
 
-// Mount Routes
+// Mount Modular Routes
 app.use('/api/wallet', walletRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/agency', agencyRoutes);
 
 app.use('/api/room-cover', roomCoverRoutes);
 app.use('/api/room-id', roomIdRoutes);
@@ -150,8 +153,14 @@ app.post('/api/recharge-request', async (req, res) => {
   try {
     const { userId, userName, paymentMethod, txId, amountCoins, pricePaid } = req.body;
 
-    if (!userId  !txId  !amountCoins) {
-      return res.status(400).json({ success: false, message: 'Missing required payment fields' });
+    if (!userId) {
+      return res.status(400).json({ success: false, message: 'Missing user ID' });
+    }
+    if (!txId) {
+      return res.status(400).json({ success: false, message: 'Missing transaction ID' });
+    }
+    if (!amountCoins) {
+      return res.status(400).json({ success: false, message: 'Missing coin amount' });
     }
 
     const existingTx = await Payment.findOne({ txId: String(txId).trim() });
@@ -161,8 +170,8 @@ app.post('/api/recharge-request', async (req, res) => {
 
     const newPayment = new Payment({
       userId: String(userId),
-      userName: userName || 'User',
-      paymentMethod,
+      userName: userName ? userName : 'User',
+      paymentMethod: paymentMethod,
       txId: String(txId).trim(),
       amountCoins: Number(amountCoins),
       pricePaid: String(pricePaid),
@@ -190,8 +199,11 @@ app.post('/api/admin/approve-payment', async (req, res) => {
     const { paymentId } = req.body;
 
     const payment = await Payment.findById(paymentId);
-    if (!payment || payment.status !== 'pending') {
-      return res.status(400).json({ success: false, message: 'Invalid or already processed payment' });
+    if (!payment) {
+      return res.status(400).json({ success: false, message: 'Invalid payment record' });
+    }
+    if (payment.status !== 'pending') {
+      return res.status(400).json({ success: false, message: 'Already processed payment' });
     }
 
     const user = await User.findOneAndUpdate(
@@ -211,7 +223,7 @@ app.post('/api/admin/approve-payment', async (req, res) => {
     payment.status = 'approved';
     await payment.save();
 
-    return res.json({
+return res.json({
       success: true,
       message: 'Payment approved and coins added successfully',
       updatedCoins: user ? user.coins : null
@@ -237,7 +249,7 @@ app.post('/api/admin/toggle-agent', async (req, res) => {
     user.isAgent = (typeof isAgent === 'boolean') ? isAgent : !user.isAgent;
     await user.save();
 
-return res.json({
+    return res.json({
       success: true,
       message: 'Agent status updated to ' + user.isAgent,
       user: {
@@ -258,12 +270,24 @@ app.post('/api/wallet/agent-transfer-coins', async (req, res) => {
     const { agentId, targetUserId, amountCoins } = req.body;
     const coinsToTransfer = Number(amountCoins);
 
-    if (!agentId  !targetUserId  !coinsToTransfer || coinsToTransfer <= 0) {
-      return res.status(400).json({ success: false, message: 'Invalid transfer details' });
+    if (!agentId) {
+      return res.status(400).json({ success: false, message: 'Agent ID is required' });
+    }
+    if (!targetUserId) {
+      return res.status(400).json({ success: false, message: 'Target user ID is required' });
+    }
+    if (!coinsToTransfer) {
+      return res.status(400).json({ success: false, message: 'Invalid coin amount' });
+    }
+    if (coinsToTransfer <= 0) {
+      return res.status(400).json({ success: false, message: 'Transfer amount must be greater than zero' });
     }
 
     const agent = await User.findOne({ userId: String(agentId).trim() });
-    if (!agent || !agent.isAgent) {
+    if (!agent) {
+      return res.status(403).json({ success: false, message: 'Agent not found' });
+    }
+    if (!agent.isAgent) {
       return res.status(403).json({ success: false, message: 'Unauthorized. You are not a registered Agent.' });
     }
 
@@ -312,20 +336,23 @@ app.post('/api/wallet/agent-transfer-coins', async (req, res) => {
 app.post('/api/rooms/create', async (req, res) => {
   try {
     const { title, category, hostId, hostName } = req.body;
-    const roomId = req.body.roomId || Math.floor(1000 + Math.random() * 9000).toString();
+    const randomRoom = Math.floor(1000 + Math.random() * 9000).toString();
+    const roomId = req.body.roomId ? req.body.roomId : randomRoom;
 
     let room = await Room.findOne({ roomId: String(roomId) });
     if (!room) {
-      room = new Room({
+      const defaultTitle = hostName ? (hostName + "'s Room") : 'Live Room';
+
+room = new Room({
         roomId: String(roomId),
-        title: title || (hostName + "'s Room"),
-        category: category || 'Chat',
-        hostId,
-        hostName,
+        title: title ? title : defaultTitle,
+        category: category ? category : 'Chat',
+        hostId: hostId,
+        hostName: hostName,
       });
       await room.save();
     }
-    res.json({ success: true, room });
+    res.json({ success: true, room: room });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -334,7 +361,7 @@ app.post('/api/rooms/create', async (req, res) => {
 app.get('/api/rooms', async (req, res) => {
   try {
     const rooms = await Room.find().sort({ createdAt: -1 });
-    res.json({ success: true, rooms });
+    res.json({ success: true, rooms: rooms });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -370,7 +397,7 @@ app.post('/api/register-user', async (req, res) => {
     const defaultDevice = deviceId ? deviceId : ('dev_' + Date.now());
     const initialCoins = (assignedId === '1000') ? 10000000 : 1000;
 
-const newUser = new User({
+    const newUser = new User({
       userId: assignedId,
       name: defaultName,
       deviceId: defaultDevice,
@@ -405,14 +432,16 @@ app.post('/api/auth/google', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Google ID is required' });
     }
 
-    let user = await User.findOne({ $or: [{ deviceId: googleId }, { userId: googleId }] });
+    let user = await User.findOne({
+      $or: [{ deviceId: googleId }, { userId: googleId }]
+    });
 
     if (user) {
       if (user.userId === '1000') {
         user.coins = 10000000;
         await user.save();
       }
-      return res.json({ success: true, user, isNewUser: false });
+      return res.json({ success: true, user: user, isNewUser: false });
     }
 
     let counter = await Counter.findOneAndUpdate(
@@ -425,9 +454,9 @@ app.post('/api/auth/google', async (req, res) => {
 
     user = new User({
       userId: assignedId,
-      name: name || ('User_' + assignedId),
+      name: name ? name : ('User_' + assignedId),
       deviceId: googleId,
-      avatar: avatar || '',
+      avatar: avatar ? avatar : '',
       coins: initialCoins,
       points: 0,
       isAgent: (assignedId === '1000'),
@@ -444,7 +473,7 @@ app.post('/api/auth/google', async (req, res) => {
       description: 'Google Sign-up Welcome Bonus'
     });
 
-    return res.json({ success: true, user, isNewUser: true });
+    return res.json({ success: true, user: user, isNewUser: true });
   } catch (err) {
     return res.status(500).json({ success: false, error: err.message });
   }
@@ -516,16 +545,21 @@ io.on('connection', (socket) => {
       const { callerId, callerName, targetUserId } = data;
       const caller = await User.findOne({ userId: String(callerId) });
 
-      if (!caller || caller.coins < 20) {
+      if (!caller) {
+        socket.emit('call_error', { message: 'Caller not found' });
+        return;
+      }
+      if (caller.coins < 20) {
         socket.emit('call_error', { message: 'Insufficient coins. You need at least 20 coins to make a call.' });
         return;
       }
 
-const privateChannel = 'call_' + callerId + '_' + targetUserId + '_' + Date.now();
+      const defaultCallerName = callerName ? callerName : ('User ' + callerId);
+      const privateChannel = 'call_' + callerId + '_' + targetUserId + '_' + Date.now();
 
       io.to(String(targetUserId)).emit('incoming_call', {
         callerId: callerId,
-        callerName: callerName || ('User ' + callerId),
+        callerName: defaultCallerName,
         channelName: privateChannel
       });
 
@@ -546,7 +580,7 @@ const privateChannel = 'call_' + callerId + '_' + targetUserId + '_' + Date.now(
   socket.on('reject_call', (data) => {
     const { callerId, reason } = data;
     io.to(String(callerId)).emit('call_rejected', {
-      reason: reason || 'Call rejected'
+      reason: reason ? reason : 'Call rejected'
     });
   });
 
@@ -560,10 +594,12 @@ const privateChannel = 'call_' + callerId + '_' + targetUserId + '_' + Date.now(
   socket.on('call_deduct_coins', async (data) => {
     try {
       const { callerId, receiverId, amount } = data;
-      const cost = Number(amount) || 20;
+      const cost = Number(amount) ? Number(amount) : 20;
 
       const caller = await User.findOne({ userId: String(callerId) });
-      if (!caller || caller.coins < cost) {
+      if (!caller) return;
+
+      if (caller.coins < cost) {
         socket.emit('call_balance_depleted', { message: 'Call ended due to low coin balance.' });
         io.to(String(receiverId)).emit('call_ended');
         return;
@@ -594,17 +630,23 @@ const privateChannel = 'call_' + callerId + '_' + targetUserId + '_' + Date.now(
   });
 
   socket.on('join_room', (data) => {
-    const roomId = String(data.room  data.roomId  '1001');
+    let roomId = '1001';
+    if (data.room) roomId = String(data.room);
+    if (data.roomId) roomId = String(data.roomId);
+
     socket.currentRoom = roomId;
     socket.join(roomId);
 
-    if (roomSeatsState[roomId]) {
+if (roomSeatsState[roomId]) {
       socket.emit('sync_room_seats', roomSeatsState[roomId]);
     }
   });
 
   socket.on('chair_action', (data) => {
-    const roomId = String(data.room  data.roomId  '1001');
+    let roomId = '1001';
+    if (data.room) roomId = String(data.room);
+    if (data.roomId) roomId = String(data.roomId);
+
     const chairIndex = data.chairIndex;
     const action = data.action;
 
@@ -626,31 +668,36 @@ const privateChannel = 'call_' + callerId + '_' + targetUserId + '_' + Date.now(
       delete roomSeatsState[roomId][chairIndex];
     }
 
-    io.to(roomId).emit('chair_action', {
-      ...data,
-      room: roomId,
-      roomId: roomId
-    });
+    const payload = Object.assign({}, data, { room: roomId, roomId: roomId });
+    io.to(roomId).emit('chair_action', payload);
   });
 
   socket.on('chair_speaking', (data) => {
-    const roomId = String(data.room  data.roomId  '1001');
+    let roomId = '1001';
+    if (data.room) roomId = String(data.room);
+    if (data.roomId) roomId = String(data.roomId);
     io.to(roomId).emit('chair_speaking', data);
   });
 
   socket.on('chat_message', (data) => {
-    const roomId = String(data.room  data.roomId  '1001');
+    let roomId = '1001';
+    if (data.room) roomId = String(data.room);
+    if (data.roomId) roomId = String(data.roomId);
     io.to(roomId).emit('chat_message', data);
   });
 
   socket.on('gift_sent', async (data) => {
     try {
       const { senderId, receiverId, giftPrice, room, giftName } = data;
-      const roomId = String(room  data.roomId  '1001');
-      const cost = Number(giftPrice) || 0;
+      let roomId = '1001';
+      if (room) roomId = String(room);
+      if (data.roomId) roomId = String(data.roomId);
+
+      const cost = Number(giftPrice) ? Number(giftPrice) : 0;
 
       const sender = await User.findOne({ userId: String(senderId) });
-      if (!sender || sender.coins < cost) {
+      if (!sender) return;
+      if (sender.coins < cost) {
         socket.emit('gift_error', { message: 'Insufficient coins balance' });
         return;
       }
@@ -665,18 +712,19 @@ const privateChannel = 'call_' + callerId + '_' + targetUserId + '_' + Date.now(
         );
       }
 
-await Transaction.create({
+      const defaultGift = giftName ? giftName : 'Gift';
+      const defaultTarget = receiverId ? receiverId : 'Room';
+
+      await Transaction.create({
         userId: String(senderId),
         type: 'gift_sent',
         amount: cost,
         balanceAfter: sender.coins,
-        description: 'Sent ' + (giftName  'Gift') + ' to ' + (receiverId  'Room')
+        description: 'Sent ' + defaultGift + ' to ' + defaultTarget
       });
 
-      io.to(roomId).emit('gift_sent', {
-        ...data,
-        senderCoins: sender.coins
-      });
+      const payload = Object.assign({}, data, { senderCoins: sender.coins });
+      io.to(roomId).emit('gift_sent', payload);
     } catch (e) {
       console.error('Gift transaction error:', e);
     }
@@ -687,20 +735,23 @@ await Transaction.create({
   });
 
   socket.on('disconnect', () => {
-    if (socket.currentRoom && socket.userId) {
-      const roomId = socket.currentRoom;
-      if (roomSeatsState[roomId]) {
-        for (const idx in roomSeatsState[roomId]) {
-          if (roomSeatsState[roomId][idx].userId === socket.userId) {
-            delete roomSeatsState[roomId][idx];
-            io.to(roomId).emit('chair_action', {
-              action: 'leave',
-              chairIndex: parseInt(idx),
-              userId: socket.userId,
-              userName: socket.userName || 'User',
-              room: roomId,
-              roomId: roomId
-            });
+    if (socket.currentRoom) {
+      if (socket.userId) {
+        const roomId = socket.currentRoom;
+        if (roomSeatsState[roomId]) {
+          for (const idx in roomSeatsState[roomId]) {
+            if (roomSeatsState[roomId][idx].userId === socket.userId) {
+              delete roomSeatsState[roomId][idx];
+              const defaultName = socket.userName ? socket.userName : 'User';
+              io.to(roomId).emit('chair_action', {
+                action: 'leave',
+                chairIndex: parseInt(idx),
+                userId: socket.userId,
+                userName: defaultName,
+                room: roomId,
+                roomId: roomId
+              });
+            }
           }
         }
       }
@@ -708,7 +759,7 @@ await Transaction.create({
   });
 });
 
-const PORT = process.env.PORT || 10000;
+const PORT = process.env.PORT ? process.env.PORT : 10000;
 server.listen(PORT, '0.0.0.0', () => {
   console.log('Server running on port ' + PORT);
 });
