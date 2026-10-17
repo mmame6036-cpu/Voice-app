@@ -1,5 +1,7 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
 import 'services/user_service.dart';
 
 class AgencyScreen extends StatefulWidget {
@@ -13,12 +15,13 @@ class _AgencyScreenState extends State<AgencyScreen> with SingleTickerProviderSt
   final UserService _user = UserService();
   late TabController _tabController;
 
-  // Agency data states
-  final int _last30DaysPoints = 0;
-  final int _commissionRate = 4; // Starts from 4%
-  final int _hostCount = 0;
-  final int _agentsCount = 0;
-  final int _chatroomsCount = 0;
+  bool _isLoading = true;
+  String _agencyId = '';
+  int _last30DaysPoints = 0;
+  int _commissionRate = 4;
+  int _hostCount = 0;
+  int _agentsCount = 0;
+  int _chatroomsCount = 0;
 
   final String _supporterId = '1008149';
   final String _supporterWhatsapp = '+14070000000';
@@ -27,12 +30,40 @@ class _AgencyScreenState extends State<AgencyScreen> with SingleTickerProviderSt
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _fetchDashboardData();
   }
 
   @override
   void dispose() {
     _tabController.dispose();
     super.dispose();
+  }
+
+  Future<void> _fetchDashboardData() async {
+    setState(() => _isLoading = true);
+    try {
+      final url = UserService.serverUrl + '/api/agency/dashboard?ownerId=' + _user.userId;
+      final res = await http.get(Uri.parse(url));
+      final data = jsonDecode(res.body);
+
+      if (data['success'] == true) {
+        final agency = data['agency'];
+        final hosts = data['hosts'] ?? [];
+
+        setState(() {
+          _agencyId = agency['agencyId'] ?? '';
+          _commissionRate = agency['commissionRate'] ?? 4;
+          _last30DaysPoints = agency['totalEarnings'] ?? 0;
+          _hostCount = hosts.length;
+          _isLoading = false;
+        });
+        return;
+      }
+    } catch (_) {}
+
+    if (mounted) {
+      setState(() => _isLoading = false);
+    }
   }
 
   void _copyToClipboard(String text, String label) {
@@ -82,293 +113,286 @@ class _AgencyScreenState extends State<AgencyScreen> with SingleTickerProviderSt
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.notifications_none, color: Colors.white),
-            onPressed: () {},
+            icon: const Icon(Icons.refresh, color: Colors.white),
+            onPressed: _fetchDashboardData,
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Incentive Banner
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFFE65100), Color(0xFFFF8F00)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: const Row(
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator(color: Color(0xFF00C9A7)))
+          : SingleChildScrollView(
+
+padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFFE65100), Color(0xFFFF8F00)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: const Row(
                       children: [
-                        Text(
-                          'Incentive Plan',
-                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Incentive Plan',
+                                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+                              ),
+                              SizedBox(height: 4),
+                              Text(
+                                'Weekly qualification unlocks rewards up to millions in points!',
+                                style: TextStyle(color: Colors.white70, fontSize: 12),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Icon(Icons.workspace_premium, color: Colors.amber, size: 40),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1D1836),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Column(
+                      children: [
+                        Row(
+                          children: [
+                            CircleAvatar(
+                              radius: 26,
+                              backgroundColor: const Color(0xFF00C9A7),
+                              child: Text(
+                                _user.userName.isNotEmpty ? _user.userName[0].toUpperCase() : 'A',
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: Colors.black),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(_user.userName, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                                const SizedBox(height: 3),
+                                Text('ID: ${_user.userId}', style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                                if (_agencyId.isNotEmpty)
+                                  GestureDetector(
+                                    onTap: () => _copyToClipboard(_agencyId, 'Agency ID'),
+                                    child: Row(
+                                      children: [
+                                        Text('Agency: $_agencyId', style: const TextStyle(color: Color(0xFF00C9A7), fontSize: 12)),
+                                        const SizedBox(width: 4),
+                                        const Icon(Icons.copy, size: 12, color: Color(0xFF00C9A7)),
+                                      ],
 
 ),
-                        SizedBox(height: 4),
-                        Text(
-                          'Weekly qualification unlocks rewards up to millions in points!',
-                          style: TextStyle(color: Colors.white70, fontSize: 12),
+                                  ),
+                              ],
+                            ),
+                            const Spacer(),
+                            TextButton(
+                              onPressed: _showRulesDialog,
+                              child: const Row(
+                                children: [
+                                  Text('Details', style: TextStyle(color: Colors.white54, fontSize: 12)),
+                                  Icon(Icons.arrow_forward_ios, color: Colors.white54, size: 12),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const Divider(color: Colors.white10, height: 24),
+                        Row(
+                          children: [
+                            Text('Last 30 Days Points: $_last30DaysPoints', style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            Text('Commission Rate: $_commissionRate%', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                            const Spacer(),
+                            GestureDetector(
+                              onTap: _showRulesDialog,
+                              child: const Text('Rules >', style: TextStyle(color: Colors.white54, fontSize: 12)),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            _buildMilestoneNode('4%', '0', _last30DaysPoints >= 0),
+                            _buildMilestoneLine(_last30DaysPoints >= 2000000),
+                            _buildMilestoneNode('8%', '2M', _last30DaysPoints >= 2000000),
+                            _buildMilestoneLine(_last30DaysPoints >= 10000000),
+                            _buildMilestoneNode('12%', '10M', _last30DaysPoints >= 10000000),
+                            _buildMilestoneLine(_last30DaysPoints >= 50000000),
+                            _buildMilestoneNode('16%', '50M', _last30DaysPoints >= 50000000),
+                            _buildMilestoneLine(_last30DaysPoints >= 150000000),
+                            _buildMilestoneNode('20%', '150M', _last30DaysPoints >= 150000000),
+                          ],
                         ),
                       ],
                     ),
                   ),
-                  Icon(Icons.workspace_premium, color: Colors.amber, size: 40),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // Profile Card & Commission Progress
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: const Color(0xFF1D1836),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Column(
-                children: [
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1D1836),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      children: [
+                        _buildStatItem('Host', '$_hostCount'),
+                        Container(width: 1, height: 28, color: Colors.white10),
+                        _buildStatItem('Agents', '$_agentsCount'),
+                        Container(width: 1, height: 28, color: Colors.white10),
+                        _buildStatItem('Chatrooms', '$_chatroomsCount'),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
                   Row(
                     children: [
-                      CircleAvatar(
-                        radius: 26,
-                        backgroundColor: const Color(0xFF00C9A7),
-                        child: Text(
-                          _user.userName.isNotEmpty ? _user.userName[0].toUpperCase() : 'A',
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: Colors.black),
+
+Expanded(
+                        child: ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF6C4AB6),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                          onPressed: () {
+                            if (_agencyId.isNotEmpty) {
+                              _copyToClipboard(_agencyId, 'Agency ID');
+                            }
+                          },
+                          icon: const Icon(Icons.person_add_alt, size: 18, color: Colors.white),
+                          label: const Text('Invite Host', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
                         ),
                       ),
                       const SizedBox(width: 12),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(_user.userName, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
-                          const SizedBox(height: 3),
-                          Text('ID: ${_user.userId}', style: const TextStyle(color: Colors.white54, fontSize: 12)),
-                        ],
-                      ),
-                      const Spacer(),
-                      TextButton(
-                        onPressed: () {},
-                        child: const Row(
-                          children: [
-                            Text('Details', style: TextStyle(color: Colors.white54, fontSize: 12)),
-                            Icon(Icons.arrow_forward_ios, color: Colors.white54, size: 12),
-                          ],
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF6C4AB6),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                          onPressed: () {
+                            if (_agencyId.isNotEmpty) {
+                              _copyToClipboard(_agencyId, 'Agency ID');
+                            }
+                          },
+                          icon: const Icon(Icons.group_add_outlined, size: 18, color: Colors.white),
+                          label: const Text('Invite Sub-agents', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
                         ),
                       ),
                     ],
                   ),
-                  const Divider(color: Colors.white10, height: 24),
-                  Row(
-                    children: [
-                      Text('Last 30 Days Points: $_last30DaysPoints', style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                  const SizedBox(height: 20),
+                  TabBar(
+                    controller: _tabController,
+                    labelColor: Colors.white,
+                    unselectedLabelColor: Colors.white38,
+                    indicatorColor: const Color(0xFF00C9A7),
+                    indicatorWeight: 3,
+                    labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                    tabs: const [
+                      Tab(text: 'S+ Rewards'),
+                      Tab(text: 'Commission Data'),
                     ],
                   ),
-                  const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      Text('Commission Rate: $_commissionRate%', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
-                      const Spacer(),
-                      GestureDetector(
-                        onTap: _showRulesDialog,
-                        child: const Text('Rules >', style: TextStyle(color: Colors.white54, fontSize: 12)),
-                      ),
-                    ],
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    height: 130,
+                    child: TabBarView(
+                      controller: _tabController,
+                      children: [
+                        _buildRewardsTab(),
+                        _buildCommissionDataTab(),
+                      ],
+                    ),
                   ),
                   const SizedBox(height: 16),
-
-                  // Adjusted Milestones (One zero reduced: 0, 2M, 10M, 50M, 150M)
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      _buildMilestoneNode('4%', '0', true),
-                      _buildMilestoneLine(),
-                      _buildMilestoneNode('8%', '2M', false),
-                      _buildMilestoneLine(),
-                      _buildMilestoneNode('12%', '10M', false),
-
-_buildMilestoneLine(),
-                      _buildMilestoneNode('16%', '50M', false),
-                      _buildMilestoneLine(),
-                      _buildMilestoneNode('20%', '150M', false),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // Statistics Row (Hosts, Agents, Chatrooms)
-            Container(
-              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
-              decoration: BoxDecoration(
-                color: const Color(0xFF1D1836),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  _buildStatItem('Host', '$_hostCount'),
-                  Container(width: 1, height: 28, color: Colors.white10),
-                  _buildStatItem('Agents', '$_agentsCount'),
-                  Container(width: 1, height: 28, color: Colors.white10),
-                  _buildStatItem('Chatrooms', '$_chatroomsCount'),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // Invitation Action Buttons
-            Row(
-              children: [
-                Expanded(
-                  child: ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF6C4AB6),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1D1836),
+                      borderRadius: BorderRadius.circular(16),
                     ),
-                    onPressed: () {},
-                    icon: const Icon(Icons.person_add_alt, size: 18, color: Colors.white),
-                    label: const Text('Invite Host', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF6C4AB6),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                    ),
-                    onPressed: () {},
-                    icon: const Icon(Icons.group_add_outlined, size: 18, color: Colors.white),
-                    label: const Text('Invite Sub-agents', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-
-            // Sub Tab Bar (S+ Rewards & Commission Data)
-            TabBar(
-              controller: _tabController,
-              labelColor: Colors.white,
-              unselectedLabelColor: Colors.white38,
-              indicatorColor: const Color(0xFF00C9A7),
-              indicatorWeight: 3,
-              labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-              tabs: const [
-                Tab(text: 'S+ Rewards'),
-                Tab(text: 'Commission Data'),
-              ],
-            ),
-            const SizedBox(height: 12),
-
-            SizedBox(
-              height: 130,
-              child: TabBarView(
-                controller: _tabController,
-                children: [
-                  _buildRewardsTab(),
-                  _buildCommissionDataTab(),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // Supporter Contact Section
-            Container(
-              padding: const EdgeInsets.all(12),
-
-decoration: BoxDecoration(
-                color: const Color(0xFF1D1836),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    child: Row(
                       children: [
-                        const Text('Supporter', style: TextStyle(color: Colors.white70, fontSize: 11)),
-                        const SizedBox(height: 2),
-                        Text('ID: $_supporterId', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                        const Icon(Icons.support_agent, color: Color(0xFF00C9A7), size: 28),
+                        const SizedBox(width: 12),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('Official Supporter', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                            Text('ID: $_supporterId', style: const TextStyle(color: Colors.white54, fontSize: 12)),
+
+],
+                        ),
+                        const Spacer(),
+                        IconButton(
+                          icon: const Icon(Icons.copy, color: Colors.white70, size: 18),
+                          onPressed: () => _copyToClipboard(_supporterWhatsapp, 'Supporter WhatsApp'),
+                        ),
                       ],
                     ),
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.copy, size: 18, color: Colors.white54),
-                    onPressed: () => _copyToClipboard(_supporterId, 'Supporter ID'),
-                  ),
-                  Container(width: 1, height: 28, color: Colors.white10),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('WhatsApp', style: TextStyle(color: Color(0xFF00E676), fontSize: 11, fontWeight: FontWeight.bold)),
-                        const SizedBox(height: 2),
-                        Text(_supporterWhatsapp, style: const TextStyle(color: Colors.white, fontSize: 12)),
-                      ],
-                    ),
-                  ),
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF00E676),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      minimumSize: Size.zero,
-                    ),
-                    onPressed: () => _copyToClipboard(_supporterWhatsapp, 'WhatsApp number'),
-                    child: const Text('Copy', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 11)),
-                  ),
+                  const SizedBox(height: 24),
                 ],
               ),
             ),
-            const SizedBox(height: 24),
-          ],
-        ),
-      ),
     );
   }
 
-  Widget _buildMilestoneNode(String percent, String target, bool reached) {
+  Widget _buildMilestoneNode(String rate, String target, bool isAchieved) {
     return Column(
       children: [
-        Text(percent, style: TextStyle(fontSize: 10, color: reached ? const Color(0xFF00C9A7) : Colors.white38, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 4),
-        Container(
-          width: 12,
-          height: 12,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: reached ? const Color(0xFF00C9A7) : Colors.transparent,
-            border: Border.all(color: reached ? const Color(0xFF00C9A7) : Colors.white38, width: 2),
+        CircleAvatar(
+          radius: 12,
+          backgroundColor: isAchieved ? const Color(0xFF00C9A7) : Colors.white24,
+          child: Text(
+            rate,
+            style: TextStyle(
+              color: isAchieved ? Colors.black : Colors.white70,
+              fontSize: 9,
+              fontWeight: FontWeight.bold,
+            ),
           ),
         ),
         const SizedBox(height: 4),
-        Text(target, style: const TextStyle(fontSize: 10, color: Colors.white38)),
+        Text(
+          target,
+          style: TextStyle(
+            color: isAchieved ? const Color(0xFF00C9A7) : Colors.white38,
+            fontSize: 10,
+          ),
+        ),
       ],
     );
   }
 
-  Widget _buildMilestoneLine() {
+  Widget _buildMilestoneLine([bool isAchieved = false]) {
     return Expanded(
       child: Container(
         height: 2,
-        color: Colors.white12,
-        margin: const EdgeInsets.only(bottom: 14),
+        color: isAchieved ? const Color(0xFF00C9A7) : Colors.white12,
+        margin: const EdgeInsets.only(bottom: 16),
       ),
     );
   }
@@ -376,9 +400,9 @@ decoration: BoxDecoration(
   Widget _buildStatItem(String label, String value) {
     return Column(
       children: [
-        Text(value, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
-        const SizedBox(height: 3),
-        Text(label, style: const TextStyle(fontSize: 12, color: Colors.white54)),
+        Text(value, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 4),
+        Text(label, style: const TextStyle(color: Colors.white54, fontSize: 12)),
       ],
     );
   }
@@ -387,8 +411,7 @@ decoration: BoxDecoration(
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-
-color: const Color(0xFF1D1836),
+        color: const Color(0xFF1D1836),
         borderRadius: BorderRadius.circular(12),
       ),
       child: const Center(
