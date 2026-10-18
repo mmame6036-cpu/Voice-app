@@ -40,6 +40,8 @@ class _RoomScreenState extends State<RoomScreen> {
   int _currentSeatCount = 25;
   final TextEditingController _msgController = TextEditingController();
 
+  Map<String, String>? _active3DGift;
+
   final List<Map<String, String>> _messages = [
     {
       'user': 'System',
@@ -98,7 +100,7 @@ class _RoomScreenState extends State<RoomScreen> {
       final String? uName = data['userName'];
       final String? uId = data['userId'];
 
-      if (chairIndex == null || chairIndex < 0 || chairIndex >= _seats.length) {
+      if (chairIndex == null  chairIndex < 0  chairIndex >= _seats.length) {
         return;
       }
 
@@ -296,11 +298,44 @@ setState(() {
     });
   }
 
+  String _getGiftImage(String giftName) {
+    final nameLower = giftName.toLowerCase();
+    if (nameLower.contains('lucky')) {
+      return 'https://images.vexels.com/media/users/3/242241/isolated/preview/261899e4f5aa1a547fae3ef24ec441ba-chinese-new-year-lucky-bag-3d.png';
+    } else if (nameLower.contains('crown')) {
+      return 'https://images.vexels.com/media/users/3/242232/isolated/preview/a1f592231ff61a6c0c538cb986161a0f-golden-crown-3d-icon.png';
+    } else if (nameLower.contains('car')) {
+      return 'https://images.vexels.com/media/users/3/242240/isolated/preview/30d2ae15f62f3a61f51390ea0687399a-futuristic-sports-car-3d.png';
+    } else if (nameLower.contains('rocket')) {
+      return 'https://images.vexels.com/media/users/3/242236/isolated/preview/fa9b24da4ec6c6563604f14188f6ba02-space-rocket-launch-3d.png';
+    } else if (nameLower.contains('ring')) {
+      return 'https://images.vexels.com/media/users/3/242233/isolated/preview/e1d5e3c66f6be985ef437dae6c6023e8-diamond-gemstone-ring-3d.png';
+    } else if (nameLower.contains('treasure')) {
+      return 'https://images.vexels.com/media/users/3/242234/isolated/preview/b9dfb273d6bb6c4ae234ffce6f809988-treasure-chest-coins-3d.png';
+    } else if (nameLower.contains('castle')) {
+      return 'https://images.vexels.com/media/users/3/242237/isolated/preview/b7f14170327be63e3d489ae991e44f80-fantasy-floating-castle-3d.png';
+    }
+    return 'https://images.vexels.com/media/users/3/242238/isolated/preview/79dae133c91a0980b67bf919323c21c8-glowing-heart-gem-3d.png';
+  }
+
   void _openGifts() {
     GiftPanel.show(
       context,
       userCoins: _user.coins,
+      seats: _seats,
       onSendGift: (name, price) {
+        setState(() {
+          if (_user.coins >= price) {
+            _user.coins -= price;
+          }
+
+          _active3DGift = {
+            'sender': _user.userName,
+            'gift': name,
+            'image': _getGiftImage(name),
+          };
+        });
+
         final giftText = '${_user.userName} sent a $name! 🎉';
         _socket.sendChatMessage(roomId: widget.roomId, text: giftText);
         setState(() {
@@ -317,10 +352,19 @@ setState(() {
     BasicToolsSheet.show(
       context,
       currentSeats: _currentSeatCount,
+      roomId: widget.roomId,
+      hostId: widget.roomId,
       onSeatsChanged: (newCount) {
         setState(() {
           _currentSeatCount = newCount;
           _initSeats(newCount);
+        });
+      },
+      onToggleAllMics: (isMutedAll) {
+        setState(() {
+          for (var s in _seats) {
+            s['isMuted'] = isMutedAll;
+          }
         });
       },
     );
@@ -343,46 +387,188 @@ setState(() {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: RoomBackground(
-        child: Column(
-          children: [
-            RoomHeader(
-              roomTitle: widget.roomTitle,
-              roomId: widget.roomId,
-              hostName: widget.hostName,
-              onClose: () => Navigator.pop(context),
+
+return Scaffold(
+      body: Stack(
+        children: [
+          RoomBackground(
+            child: Column(
+              children: [
+                RoomHeader(
+                  roomTitle: widget.roomTitle,
+                  roomId: widget.roomId,
+                  hostName: widget.hostName,
+                  onClose: () => Navigator.pop(context),
+                ),
+                Expanded(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      children: [
+                        RoomSeatsGrid(
+                          seats: _seats,
+                          currentSeatCount: _currentSeatCount,
+                          onSeatTap: _handleSeatTap,
+                          onSeatCountChanged: (count) {
+                            setState(() {
+                              _currentSeatCount = count;
+                              _initSeats(count);
+                            });
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                RoomChatFeed(messages: _messages),
+                RoomBottomBar(
+                  controller: _msgController,
+                  isMicMuted: _isMicMuted,
+                  onSendMessage: _sendMessage,
+                  onToggleMic: _toggleMic,
+                  onOpenGifts: _openGifts,
+                  onOpenTools: _openBasicTools,
+                  onOpenGame: () {},
+                ),
+              ],
             ),
-            Expanded(
-              child: SingleChildScrollView(
+          ),
+
+          // 3D Gift Animation Overlay
+          if (_active3DGift != null)
+            _Live3DGiftDisplay(
+              sender: _active3DGift!['sender']!,
+              giftName: _active3DGift!['gift']!,
+              imageUrl: _active3DGift!['image']!,
+              onComplete: () {
+                setState(() => _active3DGift = null);
+              },
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Live3DGiftDisplay extends StatefulWidget {
+  final String sender;
+  final String giftName;
+  final String imageUrl;
+  final VoidCallback onComplete;
+
+  const _Live3DGiftDisplay({
+    Key? key,
+    required this.sender,
+    required this.giftName,
+    required this.imageUrl,
+    required this.onComplete,
+  }) : super(key: key);
+
+  @override
+  State<_Live3DGiftDisplay> createState() => _Live3DGiftDisplayState();
+}
+
+class _Live3DGiftDisplayState extends State<_Live3DGiftDisplay>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _anim;
+  late Animation<double> _scale;
+  late Animation<double> _opacity;
+
+  @override
+  void initState() {
+    super.initState();
+    _anim = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2600),
+    );
+
+    _scale = TweenSequence<double>([
+      TweenSequenceItem(
+        tween: Tween(begin: 0.1, end: 1.2).chain(CurveTween(curve: Curves.elasticOut)),
+        weight: 40,
+      ),
+      TweenSequenceItem(tween: Tween(begin: 1.2, end: 1.0), weight: 30),
+      TweenSequenceItem(tween: Tween(begin: 1.0, end: 1.4), weight: 30),
+    ]).animate(_anim);
+
+    _opacity = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween(begin: 0.0, end: 1.0), weight: 20),
+      TweenSequenceItem(tween: Tween(begin: 1.0, end: 1.0), weight: 60),
+      TweenSequenceItem(tween: Tween(begin: 1.0, end: 0.0), weight: 20),
+    ]).animate(_anim);
+
+    _anim.forward().then((_) => widget.onComplete());
+  }
+
+  @override
+  void dispose() {
+    _anim.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: Center(
+        child: AnimatedBuilder(
+          animation: _anim,
+          builder: (context, child) {
+            return Opacity(
+              opacity: _opacity.value,
+              child: Transform.scale(
+
+scale: _scale.value,
                 child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    RoomSeatsGrid(
-                      seats: _seats,
-                      currentSeatCount: _currentSeatCount,
-                      onSeatTap: _handleSeatTap,
-                      onSeatCountChanged: (count) {
-                        setState(() {
-                          _currentSeatCount = count;
-                          _initSeats(count);
-                        });
-                      },
+                    Container(
+                      width: 220,
+                      height: 220,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFF00C9A7).withOpacity(0.45),
+                            blurRadius: 40,
+                            spreadRadius: 8,
+                          ),
+                        ],
+                      ),
+                      child: Image.network(
+                        widget.imageUrl,
+                        fit: BoxFit.contain,
+                        errorBuilder: (_, , _) => const Icon(
+                          Icons.card_giftcard,
+                          color: Colors.amber,
+                          size: 110,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF00C9A7), Color(0xFF6C5CE7)],
+                        ),
+                        borderRadius: BorderRadius.circular(22),
+                        boxShadow: const [
+                          BoxShadow(color: Colors.black45, blurRadius: 10),
+                        ],
+                      ),
+                      child: Text(
+                        '${widget.sender} sent ${widget.giftName}!',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                        ),
+                      ),
                     ),
                   ],
                 ),
               ),
-            ),
-            RoomChatFeed(messages: _messages),
-            RoomBottomBar(
-              controller: _msgController,
-              isMicMuted: _isMicMuted,
-              onSendMessage: _sendMessage,
-              onToggleMic: _toggleMic,
-              onOpenGifts: _openGifts,
-              onOpenTools: _openBasicTools,
-              onOpenGame: () {},
-            ),
-          ],
+            );
+          },
         ),
       ),
     );
