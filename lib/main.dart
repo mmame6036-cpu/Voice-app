@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'models/user_model.dart';
 import 'services/user_service.dart';
 import 'room_screen.dart';
 import 'messages_screen.dart';
@@ -795,15 +794,7 @@ MaterialPageRoute(builder: (_) => const HostCenterScreen()),
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => DailyTasksScreen(
-                                user: UserModel(
-                                  userId: _user.userId,
-                                  name: _user.userName.isNotEmpty ? _user.userName : 'User_${_user.userId}',
-                                  avatar: _user.avatar,
-                                  coins: _user.coins,
-                                  points: _user.points,
-                                ),
-                              ),
+                              builder: (_) => const DailyTasksScreen(),
                             ),
                           );
                         },
@@ -812,8 +803,7 @@ MaterialPageRoute(builder: (_) => const HostCenterScreen()),
                       _buildGridMenuItem(icon: Icons.person_add_alt, label: 'Invite'),
                       _buildGridMenuItem(icon: Icons.shopping_bag_outlined, label: 'Store'),
                       _buildGridMenuItem(icon: Icons.backpack_outlined, label: 'Backpack'),
-
-_buildGridMenuItem(icon: Icons.military_tech_outlined, label: 'Level'),
+                      _buildGridMenuItem(icon: Icons.military_tech_outlined, label: 'Level'),
                       _buildGridMenuItem(icon: Icons.shield_outlined, label: 'Medal Wall'),
                       _buildGridMenuItem(icon: Icons.headset_mic_outlined, label: 'Support'),
                       _buildGridMenuItem(icon: Icons.tune, label: 'Settings'),
@@ -829,7 +819,7 @@ _buildGridMenuItem(icon: Icons.military_tech_outlined, label: 'Level'),
     );
   }
 
-  Widget _buildActionItem({required IconData icon, required String label}) {
+Widget _buildActionItem({required IconData icon, required String label}) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
