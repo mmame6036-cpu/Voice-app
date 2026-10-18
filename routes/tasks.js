@@ -1,170 +1,170 @@
 const express = require('express');
 const router = express.Router();
-const UserTask = require('../models/UserTask');
 const mongoose = require('mongoose');
+const UserTask = require('../models/UserTask');
+const Transaction = require('../models/Transaction');
 
-const getTodayString = () => {
-  const now = new Date();
-  return now.toISOString().split('T')[0];
-};
+const getTodayStr = () => new Date().toISOString().split('T')[0];
 
-// 1. Get Today Tasks Progress
-router.get('/today', async (req, res) => {
+// Fetch daily status & recalculate tier rates
+router.get('/status/:userId', async (req, res) => {
   try {
-    const userId = req.query.userId;
-    if (!userId) {
-      return res.status(400).json({ success: false, message: 'User ID is required' });
+    const { userId } = req.params;
+    let task = await UserTask.findOne({ userId });
+
+    if (!task) {
+      task = await UserTask.create({ userId, joinedDate: new Date() });
     }
 
-    const today = getTodayString();
-    let taskDoc = await UserTask.findOne({ userId: String(userId), date: today });
+    const today = getTodayStr();
 
-    if (!taskDoc) {
-      taskDoc = new UserTask({
-        userId: String(userId),
-        date: today,
-        checkInDay: 1
-      });
-      await taskDoc.save();
+    if (task.lastActiveDate !== today && task.lastActiveDate !== '') {
+      if (task.normalSeatMinutes >= 60) {
+        task.consecutiveActiveDays += 1;
+        task.consecutiveInactiveDays = 0;
+        task.normalSeatRewardRate += 200;
+      } else {
+        task.consecutiveInactiveDays += 1;
+        task.consecutiveActiveDays = 0;
+        task.normalSeatRewardRate = Math.max(500, task.normalSeatRewardRate - 250);
+      }
+
+      task.normalSeatMinutes = 0;
+      task.crownSeatMinutes = 0;
+      task.crownGiftCoins = 0;
+      task.dailyFollowersCount = 0;
+      task.claimedTasks = [];
+      task.lastActiveDate = today;
+      await task.save();
+    } else if (task.lastActiveDate === '') {
+      task.lastActiveDate = today;
+      await task.save();
     }
 
-    return res.json({
+    const daysSinceJoined = Math.floor((new Date() - new Date(task.joinedDate)) / (1000 * 60 * 60 * 24));
+    const isWithin7Days = daysSinceJoined < 7;
+
+    res.json({
       success: true,
-      tasks: taskDoc
+      data: {
+        isWithin7Days,
+        daysSinceJoined,
+        normalSeatMinutes: task.normalSeatMinutes,
+        normalSeatRewardRate: task.normalSeatRewardRate,
+        crownSeatMinutes: task.crownSeatMinutes,
+        crownGiftCoins: task.crownGiftCoins,
+        dailyFollowersCount: task.dailyFollowersCount,
+        claimedTasks: task.claimedTasks
+      }
     });
   } catch (err) {
-    return res.status(500).json({ success: false, message: err.message });
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 
-// 2. Daily Check-in API
-router.post('/check-in', async (req, res) => {
-  try {
-    const { userId } = req.body;
-    if (!userId) {
-      return res.status(400).json({ success: false, message: 'User ID is required' });
-    }
-
-    const today = getTodayString();
-    let taskDoc = await UserTask.findOne({ userId: String(userId), date: today });
-
-    if (!taskDoc) {
-      taskDoc = new UserTask({ userId: String(userId), date: today });
-    }
-
-    if (taskDoc.isCheckedIn) {
-      return res.status(400).json({ success: false, message: 'Already checked in today' });
-    }
-
-    const dayRewardMap = {
-      1: 20,
-      2: 30,
-      3: 40,
-      4: 50,
-      5: 60,
-      6: 80,
-      7: 100
-    };
-
-    const currentDay = taskDoc.checkInDay ? taskDoc.checkInDay : 1;
-    const coinsReward = dayRewardMap[currentDay] ? dayRewardMap[currentDay] : 20;
-
-    taskDoc.isCheckedIn = true;
-    await taskDoc.save();
-
-    const User = mongoose.models.User;
-    let newBalance = 0;
-    if (User) {
-      const updatedUser = await User.findOneAndUpdate(
-        { userId: String(userId) },
-        { $inc: { coins: coinsReward } },
-        { new: true }
-      );
-      if (updatedUser) newBalance = updatedUser.coins;
-    }
-
-    return res.json({
-      success: true,
-      message: 'Check-in successful',
-      rewardCoins: coinsReward,
-      currentDay: currentDay,
-      newBalance: newBalance
-    });
-  } catch (err) {
-    return res.status(500).json({ success: false, message: err.message });
-  }
-});
-
-// 3. Claim Task Reward API
+// Claim task reward
 router.post('/claim', async (req, res) => {
   try {
-    const { userId, taskType } = req.body;
-    if (!userId) {
-      return res.status(400).json({ success: false, message: 'User ID is required' });
-    }
-    if (!taskType) {
-      return res.status(400).json({ success: false, message: 'Task type is required' });
-    }
+    const { userId, taskId } = req.body;
+    let task = await UserTask.findOne({ userId });
+    if (!task) return res.status(404).json({ success: false, error: 'Task profile not found' });
 
-    const today = getTodayString();
-    const taskDoc = await UserTask.findOne({ userId: String(userId), date: today });
-    if (!taskDoc) {
-      return res.status(404).json({ success: false, message: 'Task record not found' });
+    if (task.claimedTasks.includes(taskId)) {
+      return res.status(400).json({ success: false, message: 'Task already claimed' });
     }
 
-    let rewardCoins = 0;
+    let rewardPoints = 0;
+    let description = '';
 
-    if (taskType === 'stay10') {
-      if (taskDoc.stay10Claimed) return res.status(400).json({ success: false, message: 'Already claimed' });
-      if (taskDoc.stayDurationMinutes < 10) return res.status(400).json({ success: false, message: 'Task not completed' });
-      taskDoc.stay10Claimed = true;
-      rewardCoins = 30;
-    } else if (taskType === 'stay30') {
-      if (taskDoc.stay30Claimed) return res.status(400).json({ success: false, message: 'Already claimed' });
-      if (taskDoc.stayDurationMinutes < 30) return res.status(400).json({ success: false, message: 'Task not completed' });
-      taskDoc.stay30Claimed = true;
-      rewardCoins = 60;
-    } else if (taskType === 'gift') {
-      if (taskDoc.giftClaimed) return res.status(400).json({ success: false, message: 'Already claimed' });
+    // 1. 7-Day New User 2hr Seat (8k Points)
+    if (taskId === 'new_user_7day') {
+      const daysSinceJoined = Math.floor((new Date() - new Date(task.joinedDate)) / (1000 * 60 * 60 * 24));
+      if (daysSinceJoined >= 7) {
+        return res.status(400).json({ success: false, message: '7-day limit expired' });
+      }
+      if (task.normalSeatMinutes < 120) {
+        return res.status(400).json({ success: false, message: 'Requires 120 minutes on seat' });
+      }
+      rewardPoints = 8000;
+      description = '7-Day New User 2hr Seat Reward';
+    }
 
-if (taskDoc.giftSentCount < 1) return res.status(400).json({ success: false, message: 'Task not completed' });
-      taskDoc.giftClaimed = true;
-      rewardCoins = 50;
-    } else if (taskType === 'messages') {
-      if (taskDoc.messageClaimed) return res.status(400).json({ success: false, message: 'Already claimed' });
-      if (taskDoc.messagesSentCount < 5) return res.status(400).json({ success: false, message: 'Task not completed' });
-      taskDoc.messageClaimed = true;
-      rewardCoins = 20;
-    } else if (taskType === 'share') {
-      if (taskDoc.shareClaimed) return res.status(400).json({ success: false, message: 'Already claimed' });
-      if (!taskDoc.shareDone) return res.status(400).json({ success: false, message: 'Task not completed' });
-      taskDoc.shareClaimed = true;
-      rewardCoins = 25;
+    // 2. Daily Normal Seat 1hr (Rate from 500 upwards)
+    else if (taskId === 'normal_seat_daily') {
+      if (task.normalSeatMinutes < 60) {
+        return res.status(400).json({ success: false, message: 'Requires 60 minutes on seat' });
+      }
+      rewardPoints = task.normalSeatRewardRate;
+      description = Daily Normal Seat Reward (${rewardPoints} pts);
+    }
+
+    // 3. Crown Seat 1hr + 600 Gift Coins
+    else if (taskId === 'crown_seat_task') {
+      if (task.crownSeatMinutes < 60 || task.crownGiftCoins < 600) {
+        return res.status(400).json({ success: false, message: 'Requires 60 mins and 600 gift coins' });
+      }
+      rewardPoints = 3000;
+      description = 'Crown Seat 1hr & 600 Gifts Reward';
+    }
+
+    // 4. Gain 3 Followers (1k Points)
+
+else if (taskId === 'followers_task') {
+      if (task.dailyFollowersCount < 3) {
+        return res.status(400).json({ success: false, message: 'Requires 3 new followers' });
+      }
+      rewardPoints = 1000;
+      description = 'Gain 3 Followers Daily Reward';
     } else {
-      return res.status(400).json({ success: false, message: 'Invalid task type' });
+      return res.status(400).json({ success: false, error: 'Unknown task ID' });
     }
 
-    await taskDoc.save();
+    task.claimedTasks.push(taskId);
+    await task.save();
 
-    const User = mongoose.models.User;
-    let newBalance = 0;
-    if (User) {
-      const updatedUser = await User.findOneAndUpdate(
-        { userId: String(userId) },
-        { $inc: { coins: rewardCoins } },
-        { new: true }
-      );
-      if (updatedUser) newBalance = updatedUser.coins;
-    }
+    const User = mongoose.model('User');
+    const updatedUser = await User.findOneAndUpdate(
+      { userId: String(userId) },
+      { $inc: { points: rewardPoints } },
+      { new: true }
+    );
 
-    return res.json({
+    await Transaction.create({
+      userId: String(userId),
+      type: 'task_points_reward',
+      amount: rewardPoints,
+      balanceAfter: updatedUser ? (updatedUser.points || 0) : 0,
+      description
+    });
+
+    res.json({
       success: true,
-      message: 'Reward claimed successfully',
-      rewardCoins: rewardCoins,
-      newBalance: newBalance
+      rewardPoints,
+      message: Successfully claimed ${rewardPoints} points!
     });
   } catch (err) {
-    return res.status(500).json({ success: false, message: err.message });
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Record user activity
+router.post('/record-activity', async (req, res) => {
+  try {
+    const { userId, type, value } = req.body;
+    let task = await UserTask.findOne({ userId });
+    if (!task) task = await UserTask.create({ userId });
+
+    const val = Number(value) || 1;
+
+    if (type === 'normal_seat') task.normalSeatMinutes += val;
+    else if (type === 'crown_seat') task.crownSeatMinutes += val;
+    else if (type === 'crown_gift') task.crownGiftCoins += val;
+    else if (type === 'follow') task.dailyFollowersCount += val;
+
+    await task.save();
+    res.json({ success: true, task });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 
