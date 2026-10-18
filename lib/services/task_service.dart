@@ -1,8 +1,9 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'user_service.dart';
 
 class TaskService {
-  static const String baseUrl = 'https://voice-app-2-jd95.onrender.com/api/tasks';
+  static String get baseUrl => '${UserService.serverUrl}/api/tasks';
 
   // Record activities (normal_seat, crown_seat, crown_gift, follow)
   static Future<void> recordActivity({
