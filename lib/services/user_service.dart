@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
+import 'task_service.dart';
 
 class UserService {
   static final UserService _instance = UserService._internal();
@@ -168,5 +169,36 @@ void _updateFromUserMap(Map<String, dynamic> userMap) {
       debugPrint('Search error: $e');
     }
     return null;
+  }
+
+  // Follow a user and trigger the follower task activity tracker
+  Future<bool> followUser({
+    required String currentUserId,
+    required String targetUserId,
+  }) async {
+    try {
+      final client = HttpClient();
+      client.connectionTimeout = const Duration(seconds: 8);
+      final request = await client.postUrl(Uri.parse('$serverUrl/api/users/follow'));
+      request.headers.set('content-type', 'application/json');
+
+      request.add(utf8.encode(jsonEncode({
+        'userId': currentUserId,
+        'targetUserId': targetUserId,
+      })));
+
+      final response = await request.close();
+      if (response.statusCode == 200) {
+        await TaskService.recordActivity(
+          userId: targetUserId,
+          type: 'follow',
+          value: 1,
+        );
+        return true;
+      }
+    } catch (e) {
+      debugPrint('Follow User Error: $e');
+    }
+    return false;
   }
 }
