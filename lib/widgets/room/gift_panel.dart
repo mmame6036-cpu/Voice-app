@@ -3,20 +3,20 @@ import 'package:flutter/material.dart';
 class GiftPanel extends StatefulWidget {
   final int userCoins;
   final List<Map<String, dynamic>> seats;
-  final Function(String name, int price, String targetUser, IconData icon, Color color) onSendGift;
+  final Function(String name, int price) onSendGift;
 
   const GiftPanel({
     Key? key,
     required this.userCoins,
-    required this.seats,
+    this.seats = const [],
     required this.onSendGift,
   }) : super(key: key);
 
   static void show(
     BuildContext context, {
     required int userCoins,
-    required List<Map<String, dynamic>> seats,
-    required Function(String name, int price, String targetUser, IconData icon, Color color) onSendGift,
+    List<Map<String, dynamic>> seats = const [],
+    required Function(String name, int price) onSendGift,
   }) {
     showModalBottomSheet(
       context: context,
@@ -49,7 +49,6 @@ class _GiftPanelState extends State<GiftPanel> {
 
   @override
   Widget build(BuildContext context) {
-    // ማይክ ላይ የተቀመጡ ሰዎችን ብቻ ለይቶ ማውጣት
     final activeUsers = widget.seats
         .where((s) => s['user'] != null && s['user'].toString().isNotEmpty)
         .map((s) => s['user'].toString())
@@ -61,7 +60,7 @@ class _GiftPanelState extends State<GiftPanel> {
     final bool canAfford = widget.userCoins >= price;
 
     return Container(
-      height: 460,
+      height: 440,
       decoration: const BoxDecoration(
         color: Color(0xFF131826),
         borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
@@ -70,7 +69,6 @@ class _GiftPanelState extends State<GiftPanel> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ርዕስ እና የሳንቲም ቀሪ ሂሳብ
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -108,20 +106,21 @@ class _GiftPanelState extends State<GiftPanel> {
           ),
           const SizedBox(height: 12),
 
-// ተቀባይ መምረጫ (Target Selector)
-          SizedBox(
-            height: 34,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              children: [
-                _buildTargetChip('All Room'),
-                ...activeUsers.map((u) => _buildTargetChip(u)),
-              ],
-            ),
-          ),
-          const SizedBox(height: 14),
+          if (activeUsers.isNotEmpty) ...[
+            SizedBox(
+              height: 34,
+              child: ListView(
 
-          // የስጦታ ዝርዝር ግሪድ
+scrollDirection: Axis.horizontal,
+                children: [
+                  _buildTargetChip('All Room'),
+                  ...activeUsers.map((u) => _buildTargetChip(u)),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+
           Expanded(
             child: GridView.builder(
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -189,7 +188,6 @@ class _GiftPanelState extends State<GiftPanel> {
           ),
           const SizedBox(height: 10),
 
-          // የመላኪያ አዝራር
           SizedBox(
             width: double.infinity,
             height: 46,
@@ -204,16 +202,13 @@ class _GiftPanelState extends State<GiftPanel> {
                       Navigator.pop(context);
                       widget.onSendGift(
                         selectedGift['name'] as String,
-
-price,
-                        _selectedTarget,
-                        selectedGift['icon'] as IconData,
-                        selectedGift['color'] as Color,
+                        price,
                       );
                     }
                   : null,
               child: Text(
-                canAfford ? 'Send to $_selectedTarget ($price Coins)' : 'Insufficient Coins',
+
+canAfford ? 'Send ($price Coins)' : 'Insufficient Coins',
                 style: TextStyle(
                   color: canAfford ? Colors.white : Colors.white38,
                   fontWeight: FontWeight.bold,
