@@ -2,10 +2,10 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'services/user_service.dart';
-import 'services/agora_service.dart';
-import 'services/socket_service.dart';
-import 'services/task_service.dart';
+import '../services/user_service.dart';
+import '../services/agora_service.dart';
+import '../services/socket_service.dart';
+import '../services/task_service.dart';
 
 import 'widgets/room/room_background.dart';
 import 'widgets/room/room_header.dart';
