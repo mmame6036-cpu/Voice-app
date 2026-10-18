@@ -1,11 +1,9 @@
-import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'services/user_service.dart';
 import 'services/agora_service.dart';
 import 'services/socket_service.dart';
-import 'services/task_service.dart';
 
 import 'widgets/room/room_background.dart';
 import 'widgets/room/room_header.dart';
@@ -42,8 +40,6 @@ class _RoomScreenState extends State<RoomScreen> {
   int _currentSeatCount = 25;
   final TextEditingController _msgController = TextEditingController();
 
-  Timer? _seatTimer;
-
   final List<Map<String, String>> _messages = [
     {
       'user': 'System',
@@ -75,22 +71,6 @@ class _RoomScreenState extends State<RoomScreen> {
     );
   }
 
-  void _startSeatTracking(bool isCrownSeat) {
-    _seatTimer?.cancel();
-    _seatTimer = Timer.periodic(const Duration(minutes: 1), (timer) {
-      TaskService.recordActivity(
-        userId: _user.userId,
-        type: isCrownSeat ? 'crown_seat' : 'normal_seat',
-        value: 1,
-      );
-    });
-  }
-
-  void _stopSeatTracking() {
-    _seatTimer?.cancel();
-    _seatTimer = null;
-  }
-
   void _initSocket() {
     _socket.connect();
     _socket.joinRoom(widget.roomId);
@@ -118,7 +98,7 @@ class _RoomScreenState extends State<RoomScreen> {
       final String? uName = data['userName'];
       final String? uId = data['userId'];
 
-      if (chairIndex == null  chairIndex < 0  chairIndex >= _seats.length) {
+      if (chairIndex == null || chairIndex < 0 || chairIndex >= _seats.length) {
         return;
       }
 
@@ -133,8 +113,7 @@ class _RoomScreenState extends State<RoomScreen> {
           }
           _seats[chairIndex]['user'] = uName;
           _seats[chairIndex]['userId'] = uId;
-
-_messages.add({
+          _messages.add({
             'user': 'System',
             'text': '$uName joined seat ${chairIndex + 1}',
           });
@@ -152,7 +131,7 @@ _messages.add({
       });
     };
 
-    _socket.onChatMessageReceived = (data) {
+_socket.onChatMessageReceived = (data) {
       if (!mounted) return;
       final String? sender = data['sender'] ?? data['userName'] ?? 'User';
       final String? text = data['text'] ?? data['message'];
@@ -237,7 +216,6 @@ _messages.add({
                 ),
                 onTap: () async {
                   Navigator.pop(ctx);
-                  _stopSeatTracking();
                   await _agora.leaveMicSeat();
                   _socket.sendChairAction(
                     roomId: widget.roomId,
@@ -262,7 +240,7 @@ _messages.add({
       return;
     }
 
-if (seat['user'] != null && seat['user'].toString().isNotEmpty) {
+    if (seat['user'] != null && seat['user'].toString().isNotEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Seat ${index + 1} is occupied by ${seat['user']}'),
@@ -286,7 +264,7 @@ if (seat['user'] != null && seat['user'].toString().isNotEmpty) {
       action: 'take',
     );
 
-    setState(() {
+setState(() {
       seat['user'] = currentUser;
       seat['userId'] = currentUserId;
       seat['isSpeaking'] = false;
@@ -295,9 +273,6 @@ if (seat['user'] != null && seat['user'].toString().isNotEmpty) {
         'text': '$currentUser joined seat ${index + 1}',
       });
     });
-
-    final bool isCrownSeat = (index == 0);
-    _startSeatTracking(isCrownSeat);
 
     await _agora.joinMicSeat();
 
@@ -328,16 +303,6 @@ if (seat['user'] != null && seat['user'].toString().isNotEmpty) {
       onSendGift: (name, price) {
         final giftText = '${_user.userName} sent a $name! 🎉';
         _socket.sendChatMessage(roomId: widget.roomId, text: giftText);
-
-        final crownSeat = _seats.isNotEmpty ? _seats[0] : null;
-        if (crownSeat != null && crownSeat['userId'] != null) {
-          TaskService.recordActivity(
-            userId: crownSeat['userId'].toString(),
-            type: 'crown_gift',
-            value: price,
-          );
-        }
-
         setState(() {
           _messages.add({
             'user': 'Announcement',
@@ -370,7 +335,6 @@ if (seat['user'] != null && seat['user'].toString().isNotEmpty) {
 
   @override
   void dispose() {
-    _stopSeatTracking();
     _agora.leaveRoom();
     _socket.disconnect();
     _msgController.dispose();
@@ -411,8 +375,7 @@ if (seat['user'] != null && seat['user'].toString().isNotEmpty) {
             RoomChatFeed(messages: _messages),
             RoomBottomBar(
               controller: _msgController,
-
-isMicMuted: _isMicMuted,
+              isMicMuted: _isMicMuted,
               onSendMessage: _sendMessage,
               onToggleMic: _toggleMic,
               onOpenGifts: _openGifts,
