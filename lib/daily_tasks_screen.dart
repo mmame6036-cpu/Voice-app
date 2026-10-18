@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'services/user_service.dart';
+import 'room_screen.dart';
 
 class DailyTasksScreen extends StatefulWidget {
   const DailyTasksScreen({Key? key}) : super(key: key);
@@ -110,6 +111,36 @@ class _DailyTasksScreenState extends State<DailyTasksScreen> with SingleTickerPr
     }
   }
 
+  // Go to personal room or public room to complete task
+  Future<void> _goToRoom() async {
+    try {
+      await http.post(
+        Uri.parse('https://voice-app-2-jd95.onrender.com/api/rooms/create'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'roomId': _user.userId,
+          'title': "${_user.userName}'s Room",
+          'category': 'Party',
+          'hostId': _user.userId,
+          'hostName': _user.userName,
+        }),
+      );
+    } catch (_) {}
+
+    if (!mounted) return;
+
+Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => RoomScreen(
+          roomId: _user.userId,
+          roomTitle: "${_user.userName}'s Room",
+          hostName: _user.userName,
+        ),
+      ),
+    ).then((_) => _fetchTaskStatus());
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -125,8 +156,7 @@ class _DailyTasksScreenState extends State<DailyTasksScreen> with SingleTickerPr
         title: const Text(
           'Task',
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
-
-),
+        ),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(60),
           child: Container(
@@ -190,7 +220,7 @@ class _DailyTasksScreenState extends State<DailyTasksScreen> with SingleTickerPr
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // 1. 7-Day New User Bonus (Always visible)
+          // 1. 7-Day New User Bonus
           _buildTaskCard(
             icon: Icons.mic_none,
             iconColor: Colors.blueAccent,
@@ -200,7 +230,7 @@ class _DailyTasksScreenState extends State<DailyTasksScreen> with SingleTickerPr
             isCompleted: _normalSeatMinutes >= 120,
             isClaimed: _claimedTasks.contains('new_user_7day'),
             onClaim: () => _claimTask('new_user_7day'),
-            onGo: () => Navigator.pop(context),
+            onGo: _goToRoom,
           ),
 
           // 2. Normal Seat Daily Hourly Reward
@@ -209,14 +239,15 @@ class _DailyTasksScreenState extends State<DailyTasksScreen> with SingleTickerPr
             iconColor: Colors.tealAccent,
             title: 'Normal Seat: 1 Hour',
             subtitle: 'Seat Duration: ${_normalSeatMinutes > 60 ? 60 : _normalSeatMinutes}/60 min',
-            rewardText: '$_normalSeatRewardRate Points',
+
+rewardText: '$_normalSeatRewardRate Points',
             isCompleted: _normalSeatMinutes >= 60,
             isClaimed: _claimedTasks.contains('normal_seat_daily'),
             onClaim: () => _claimTask('normal_seat_daily'),
-            onGo: () => Navigator.pop(context),
+            onGo: _goToRoom,
           ),
 
-          // 3. Crown Seat Reward (Changed to 1k Points)
+          // 3. Crown Seat Reward
           _buildTaskCard(
             icon: Icons.military_tech,
             iconColor: Colors.amber,
@@ -226,10 +257,10 @@ class _DailyTasksScreenState extends State<DailyTasksScreen> with SingleTickerPr
             isCompleted: _crownSeatMinutes >= 60 && _crownGiftCoins >= 600,
             isClaimed: _claimedTasks.contains('crown_seat_task'),
             onClaim: () => _claimTask('crown_seat_task'),
-            onGo: () => Navigator.pop(context),
+            onGo: _goToRoom,
           ),
 
-// 4. Crown Room Reward (Changed to 1k Points)
+          // 4. Crown Room Reward (Host Live)
           _buildTaskCard(
             icon: Icons.meeting_room,
             iconColor: Colors.deepPurpleAccent,
@@ -237,9 +268,9 @@ class _DailyTasksScreenState extends State<DailyTasksScreen> with SingleTickerPr
             subtitle: 'Live Duration: ${_crownSeatMinutes > 60 ? 60 : _crownSeatMinutes}/60 min',
             rewardText: '1k Points',
             isCompleted: _crownSeatMinutes >= 60,
-            isClaimed: _crownSeatMinutes >= 60 && _claimedTasks.contains('crown_room_reward'),
+            isClaimed: _claimedTasks.contains('crown_room_reward'),
             onClaim: () => _claimTask('crown_room_reward'),
-            onGo: () => Navigator.pop(context),
+            onGo: _goToRoom,
           ),
 
           // 5. Gain Followers Task
@@ -252,7 +283,7 @@ class _DailyTasksScreenState extends State<DailyTasksScreen> with SingleTickerPr
             isCompleted: _dailyFollowersCount >= 3,
             isClaimed: _claimedTasks.contains('followers_task'),
             onClaim: () => _claimTask('followers_task'),
-            onGo: () => Navigator.pop(context),
+            onGo: _goToRoom,
           ),
         ],
       ),
@@ -263,7 +294,7 @@ class _DailyTasksScreenState extends State<DailyTasksScreen> with SingleTickerPr
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        // 1. Stay in Room Task (Changed to 100 Coins)
+        // 1. Stay in Room Task
         _buildTaskCard(
           icon: Icons.meeting_room_outlined,
           iconColor: Colors.greenAccent,
@@ -273,10 +304,10 @@ class _DailyTasksScreenState extends State<DailyTasksScreen> with SingleTickerPr
           isCompleted: _normalSeatMinutes >= 10,
           isClaimed: _claimedTasks.contains('stay_10_coins'),
           onClaim: () => _claimTask('stay_10_coins'),
-          onGo: () => Navigator.pop(context),
+          onGo: _goToRoom,
         ),
 
-        // 2. Bonus Gifts Sent Flow (100k Coins)
+        // 2. Bonus Gifts Sent Flow (100k)
         _buildTaskCard(
           icon: Icons.card_giftcard,
           iconColor: Colors.pinkAccent,
@@ -286,10 +317,10 @@ class _DailyTasksScreenState extends State<DailyTasksScreen> with SingleTickerPr
           isCompleted: _coinsSent >= 100000,
           isClaimed: _claimedTasks.contains('gift_flow_100k'),
           onClaim: () => _claimTask('gift_flow_100k'),
-          onGo: () => Navigator.pop(context),
+          onGo: _goToRoom,
         ),
 
-        // 3. Game Betting Flow (100k Coins)
+        // 3. Game Betting Flow
         _buildTaskCard(
           icon: Icons.sports_esports,
           iconColor: Colors.purpleAccent,
@@ -299,7 +330,7 @@ class _DailyTasksScreenState extends State<DailyTasksScreen> with SingleTickerPr
           isCompleted: _gameBetting >= 100000,
           isClaimed: _claimedTasks.contains('game_flow_100k'),
           onClaim: () => _claimTask('game_flow_100k'),
-          onGo: () => Navigator.pop(context),
+          onGo: _goToRoom,
         ),
       ],
     );
@@ -309,7 +340,8 @@ class _DailyTasksScreenState extends State<DailyTasksScreen> with SingleTickerPr
     required IconData icon,
     required Color iconColor,
     required String title,
-    required String subtitle,
+
+required String subtitle,
     required String rewardText,
     required bool isCompleted,
     required bool isClaimed,
@@ -330,8 +362,7 @@ class _DailyTasksScreenState extends State<DailyTasksScreen> with SingleTickerPr
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
-
-children: [
+        children: [
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
