@@ -1,6 +1,9 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import '../models/user_model.dart';
+import '../services/user_service.dart';
+import 'daily_tasks_screen.dart';
 import 'settings_screen.dart';
 import 'recharge_screen.dart';
 import 'coin_seller_screen.dart';
@@ -110,7 +113,8 @@ class ProfileScreen extends StatelessWidget {
                       border: Border.all(color: Colors.amber),
                     ),
                     child: const Text(
-                      '👑 Master Admin',
+
+'👑 Master Admin',
                       style: TextStyle(
                         color: Colors.amber,
                         fontWeight: FontWeight.bold,
@@ -123,7 +127,7 @@ class ProfileScreen extends StatelessWidget {
           ),
           const SizedBox(height: 25),
 
-// 👑 Master Admin Panel (Only for userId 1000)
+          // 👑 Master Admin Panel (Only for userId 1000)
           if (isMasterAdmin) ...[
             _buildMenuItem(
               icon: Icons.admin_panel_settings,
@@ -138,6 +142,31 @@ class ProfileScreen extends StatelessWidget {
             ),
             const SizedBox(height: 12),
           ],
+
+          // Daily Tasks & Rewards Button
+          _buildMenuItem(
+            icon: Icons.assignment_turned_in_rounded,
+            iconColor: const Color(0xFF7B4DFF),
+            title: 'Daily Tasks & Rewards',
+            onTap: () {
+              final userObj = UserService();
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => DailyTasksScreen(
+                    user: UserModel(
+                      userId: userId,
+                      name: userObj.userName.isNotEmpty ? userObj.userName : 'User_$userId',
+                      avatar: userObj.avatar,
+                      coins: userObj.coins,
+                      points: userObj.points,
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 12),
 
           // 1. Host Center
           _buildMenuItem(
@@ -207,7 +236,8 @@ class ProfileScreen extends StatelessWidget {
           // 6. Invite Friends
           _buildMenuItem(
             icon: Icons.person_add_alt_1,
-            iconColor: Colors.tealAccent,
+
+iconColor: Colors.tealAccent,
             title: 'Invite Friends',
             onTap: () {
               Navigator.push(
@@ -333,7 +363,8 @@ class _InAppAdminScreenState extends State<InAppAdminScreen> {
         body: jsonEncode({'paymentId': paymentId}),
       );
       final data = jsonDecode(res.body);
-      if (mounted) {
+
+if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(data['message'] ?? 'Payment Approved'),
@@ -380,8 +411,7 @@ class _InAppAdminScreenState extends State<InAppAdminScreen> {
               padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-
-children: [
+                children: [
                   const Text(
                     'Assign / Revoke Agent (Coin Seller)',
                     style: TextStyle(
@@ -440,7 +470,8 @@ children: [
               fontWeight: FontWeight.bold,
             ),
           ),
-          const SizedBox(height: 10),
+
+const SizedBox(height: 10),
           if (_isLoading)
             const Center(
               child: Padding(
@@ -477,8 +508,7 @@ children: [
                   ),
                   trailing: ElevatedButton(
                     style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-
-onPressed: () => _approvePayment(p['_id']),
+                    onPressed: () => _approvePayment(p['_id']),
                     child: const Text('Approve', style: TextStyle(color: Colors.white)),
                   ),
                 ),
