@@ -223,7 +223,7 @@ title: Text(u, style: const TextStyle(color: Colors.white)),
       ),
       child: Column(
         children: [
-          // 1. Header (Hot, Lucky, Luxury, Intimacy + Target + Coins + Backpack)
+          // 1. Header (Hot, Lucky, Luxury, Intimacy + Target + Backpack)
           Padding(
             padding: const EdgeInsets.fromLTRB(10, 10, 14, 0),
             child: Row(
@@ -295,7 +295,6 @@ title: Text(u, style: const TextStyle(color: Colors.white)),
             child: Row(
 
 children: [
-                // የሳንቲም ባጅ
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                   decoration: BoxDecoration(
@@ -411,7 +410,11 @@ return GestureDetector(
                         width: 42,
                         height: 42,
                         fit: BoxFit.contain,
-                        errorBuilder: (_, , _) => const Icon(Icons.card_giftcard, size: 36, color: Colors.pinkAccent),
+                        errorBuilder: (context, error, stackTrace) => const Icon(
+                          Icons.card_giftcard,
+                          size: 36,
+                          color: Colors.pinkAccent,
+                        ),
                       ),
                       const SizedBox(height: 5),
                       Text(
