@@ -6,7 +6,7 @@ class GiftItem {
   final int price;
   final IconData icon;
   final Color color;
-  final String? tag; // e.g., '4%', 'For You #1'
+  final String? tag;
 
   const GiftItem({
     required this.id,
@@ -21,7 +21,7 @@ class GiftItem {
 class GiftPanel extends StatefulWidget {
   final int userCoins;
   final List<Map<String, dynamic>> seats;
-  final Function(String name, int price, int count, String targetUser, IconData icon, Color color) onSendGift;
+  final Function(String name, int price) onSendGift;
 
   const GiftPanel({
     Key? key,
@@ -34,7 +34,7 @@ class GiftPanel extends StatefulWidget {
     BuildContext context, {
     required int userCoins,
     List<Map<String, dynamic>> seats = const [],
-    required Function(String name, int price, int count, String targetUser, IconData icon, Color color) onSendGift,
+    required Function(String name, int price) onSendGift,
   }) {
     showModalBottomSheet(
       context: context,
@@ -87,13 +87,12 @@ class _GiftPanelState extends State<GiftPanel> with SingleTickerProviderStateMix
   // 3. Flag Gifts
   final List<GiftItem> _flagGifts = const [
     GiftItem(id: 'et_flag', name: 'ET Flag', price: 100000, icon: Icons.flag, color: Colors.green),
-
-GiftItem(id: 'eg_flag', name: 'EG Flag', price: 100000, icon: Icons.flag, color: Colors.redAccent),
+    GiftItem(id: 'eg_flag', name: 'EG Flag', price: 100000, icon: Icons.flag, color: Colors.redAccent),
     GiftItem(id: 'de_flag', name: 'DE Flag', price: 100000, icon: Icons.flag, color: Colors.amber),
     GiftItem(id: 'br_flag', name: 'BR Flag', price: 100000, icon: Icons.flag, color: Colors.yellow),
   ];
 
-  // 4. Classic Gifts
+// 4. Classic Gifts
   final List<GiftItem> _classicGifts = const [
     GiftItem(id: 'sweet_crush', name: 'Sweet Crush', price: 200, icon: Icons.favorite, color: Colors.redAccent),
     GiftItem(id: 'love_band', name: 'Love Band', price: 500, icon: Icons.panorama_fish_eye, color: Colors.pinkAccent),
@@ -190,9 +189,7 @@ GiftItem(id: 'eg_flag', name: 'EG Flag', price: 100000, icon: Icons.flag, color:
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       child: Column(
-
-children: [
-          // 1. Header (Tabs + Target + Coins)
+        children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
             child: Row(
@@ -202,7 +199,8 @@ children: [
                     controller: _tabController,
                     isScrollable: true,
                     indicatorColor: const Color(0xFF7B4DFF),
-                    indicatorWeight: 3,
+
+indicatorWeight: 3,
                     indicatorSize: TabBarIndicatorSize.label,
                     labelColor: Colors.white,
                     unselectedLabelColor: Colors.white54,
@@ -249,8 +247,6 @@ children: [
               ],
             ),
           ),
-
-          // 2. Banner info / Subtext
           Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
@@ -266,8 +262,6 @@ children: [
               ],
             ),
           ),
-
-          // 3. Grid View for each Tab
           Expanded(
             child: TabBarView(
               controller: _tabController,
@@ -279,15 +273,12 @@ children: [
               ],
             ),
           ),
-
-          // 4. Bottom Send Bar
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             decoration: const BoxDecoration(
               color: Color(0xFF161A2B),
               border: Border(top: BorderSide(color: Colors.white10)),
-
-),
+            ),
             child: Row(
               children: [
                 if (_selectedGift != null) ...[
@@ -300,7 +291,8 @@ children: [
                     ),
                     child: Icon(_selectedGift!.icon, color: _selectedGift!.color, size: 24),
                   ),
-                  const SizedBox(width: 10),
+
+const SizedBox(width: 10),
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
@@ -351,12 +343,10 @@ children: [
                       ? () {
                           Navigator.pop(context);
                           widget.onSendGift(
-                            _selectedGift!.name,
-                            _selectedGift!.price,
-                            _sendCount,
-                            _selectedTarget,
-                            _selectedGift!.icon,
-                            _selectedGift!.color,
+                            _sendCount > 1
+                                ? '${_selectedGift!.name} x$_sendCount'
+                                : _selectedGift!.name,
+                            totalPrice,
                           );
                         }
                       : null,
@@ -378,8 +368,7 @@ children: [
   }
 
   Widget _buildGiftGrid(List<GiftItem> list) {
-
-return GridView.builder(
+    return GridView.builder(
       padding: const EdgeInsets.all(12),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 4,
@@ -397,7 +386,8 @@ return GridView.builder(
           child: Stack(
             children: [
               AnimatedContainer(
-                duration: const Duration(milliseconds: 150),
+
+duration: const Duration(milliseconds: 150),
                 decoration: BoxDecoration(
                   color: isSelected ? const Color(0xFF2A2054) : const Color(0xFF181E2F),
                   borderRadius: BorderRadius.circular(14),
