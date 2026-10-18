@@ -15,7 +15,6 @@ class _DailyTasksScreenState extends State<DailyTasksScreen> with SingleTickerPr
   late TabController _tabController;
   bool _isLoading = true;
 
-  bool _isWithin7Days = false;
   int _normalSeatMinutes = 0;
   int _normalSeatRewardRate = 1000;
   int _crownSeatMinutes = 0;
@@ -49,7 +48,6 @@ class _DailyTasksScreenState extends State<DailyTasksScreen> with SingleTickerPr
           final data = resData['data'];
           if (mounted) {
             setState(() {
-              _isWithin7Days = data['isWithin7Days'] ?? false;
               _normalSeatMinutes = data['normalSeatMinutes'] ?? 0;
               _normalSeatRewardRate = data['normalSeatRewardRate'] ?? 1000;
               _crownSeatMinutes = data['crownSeatMinutes'] ?? 0;
@@ -123,12 +121,12 @@ class _DailyTasksScreenState extends State<DailyTasksScreen> with SingleTickerPr
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios, color: Colors.white, size: 20),
           onPressed: () => Navigator.pop(context),
-
-),
+        ),
         title: const Text(
           'Task',
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
-        ),
+
+),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(60),
           child: Container(
@@ -192,19 +190,18 @@ class _DailyTasksScreenState extends State<DailyTasksScreen> with SingleTickerPr
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // 1. New User 7-Day Bonus (Show only if within 7 days)
-          if (_isWithin7Days)
-            _buildTaskCard(
-              icon: Icons.mic_none,
-              iconColor: Colors.blueAccent,
-              title: '7-Day New User Reward',
-              subtitle: 'Seat Duration: ${_normalSeatMinutes > 120 ? 120 : _normalSeatMinutes}/120 min',
-              rewardText: '8k Points',
-              isCompleted: _normalSeatMinutes >= 120,
-              isClaimed: _claimedTasks.contains('new_user_7day'),
-              onClaim: () => _claimTask('new_user_7day'),
-              onGo: () => Navigator.pop(context),
-            ),
+          // 1. 7-Day New User Bonus (Always visible)
+          _buildTaskCard(
+            icon: Icons.mic_none,
+            iconColor: Colors.blueAccent,
+            title: '7-Day New User Reward',
+            subtitle: 'Seat Duration: ${_normalSeatMinutes > 120 ? 120 : _normalSeatMinutes}/120 min',
+            rewardText: '8k Points',
+            isCompleted: _normalSeatMinutes >= 120,
+            isClaimed: _claimedTasks.contains('new_user_7day'),
+            onClaim: () => _claimTask('new_user_7day'),
+            onGo: () => Navigator.pop(context),
+          ),
 
           // 2. Normal Seat Daily Hourly Reward
           _buildTaskCard(
@@ -219,29 +216,28 @@ class _DailyTasksScreenState extends State<DailyTasksScreen> with SingleTickerPr
             onGo: () => Navigator.pop(context),
           ),
 
-          // 3. Crown Seat Reward
+          // 3. Crown Seat Reward (Changed to 1k Points)
           _buildTaskCard(
             icon: Icons.military_tech,
             iconColor: Colors.amber,
             title: 'Crown Seat: 1 Hour',
             subtitle: 'Crown Duration: ${_crownSeatMinutes > 60 ? 60 : _crownSeatMinutes}/60 min\nGift Coins: ${_crownGiftCoins > 600 ? 600 : _crownGiftCoins}/600',
-
-rewardText: '3k Points',
+            rewardText: '1k Points',
             isCompleted: _crownSeatMinutes >= 60 && _crownGiftCoins >= 600,
             isClaimed: _claimedTasks.contains('crown_seat_task'),
             onClaim: () => _claimTask('crown_seat_task'),
             onGo: () => Navigator.pop(context),
           ),
 
-          // 4. Crown Room Reward (Host Live)
+// 4. Crown Room Reward (Changed to 1k Points)
           _buildTaskCard(
             icon: Icons.meeting_room,
             iconColor: Colors.deepPurpleAccent,
             title: 'Crown Room Reward',
             subtitle: 'Live Duration: ${_crownSeatMinutes > 60 ? 60 : _crownSeatMinutes}/60 min',
-            rewardText: '5k Points',
+            rewardText: '1k Points',
             isCompleted: _crownSeatMinutes >= 60,
-            isClaimed: _claimedTasks.contains('crown_room_reward'),
+            isClaimed: _crownSeatMinutes >= 60 && _claimedTasks.contains('crown_room_reward'),
             onClaim: () => _claimTask('crown_room_reward'),
             onGo: () => Navigator.pop(context),
           ),
@@ -267,20 +263,20 @@ rewardText: '3k Points',
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        // 1. Stay in Room Task
+        // 1. Stay in Room Task (Changed to 100 Coins)
         _buildTaskCard(
           icon: Icons.meeting_room_outlined,
           iconColor: Colors.greenAccent,
           title: 'Stay in a Room for 10 Minutes',
           subtitle: 'Total time spent: ${_normalSeatMinutes > 10 ? 10 : _normalSeatMinutes}/10 min',
-          rewardText: '1k Coins',
+          rewardText: '100 Coins',
           isCompleted: _normalSeatMinutes >= 10,
           isClaimed: _claimedTasks.contains('stay_10_coins'),
           onClaim: () => _claimTask('stay_10_coins'),
           onGo: () => Navigator.pop(context),
         ),
 
-        // 2. Bonus Gifts Sent Flow (100k)
+        // 2. Bonus Gifts Sent Flow (100k Coins)
         _buildTaskCard(
           icon: Icons.card_giftcard,
           iconColor: Colors.pinkAccent,
@@ -293,7 +289,7 @@ rewardText: '3k Points',
           onGo: () => Navigator.pop(context),
         ),
 
-        // 3. Game Betting Flow
+        // 3. Game Betting Flow (100k Coins)
         _buildTaskCard(
           icon: Icons.sports_esports,
           iconColor: Colors.purpleAccent,
@@ -328,14 +324,14 @@ rewardText: '3k Points',
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.all(14),
-
-decoration: BoxDecoration(
+      decoration: BoxDecoration(
         color: const Color(0xFF1E1742),
         borderRadius: BorderRadius.circular(16),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+
+children: [
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
