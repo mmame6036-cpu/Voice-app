@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'services/user_service.dart';
 
@@ -11,328 +10,339 @@ class DailyTasksScreen extends StatefulWidget {
   State<DailyTasksScreen> createState() => _DailyTasksScreenState();
 }
 
-class _DailyTasksScreenState extends State<DailyTasksScreen> {
+class _DailyTasksScreenState extends State<DailyTasksScreen> with SingleTickerProviderStateMixin {
   final UserService _user = UserService();
+  late TabController _tabController;
   bool _isLoading = true;
-  Map<String, dynamic>? _taskData;
 
-  final List<int> _rewardsMap = [20, 30, 40, 50, 60, 80, 100];
+  bool _isWithin7Days = false;
+  int _normalSeatMinutes = 0;
+  int _normalSeatRewardRate = 1000;
+  int _crownSeatMinutes = 0;
+  int _crownGiftCoins = 0;
+  int _dailyFollowersCount = 0;
+  int _coinsSent = 0;
+  int _gameBetting = 0;
+  List<String> _claimedTasks = [];
 
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 2, vsync: this);
     _fetchTaskStatus();
   }
 
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
   Future<void> _fetchTaskStatus() async {
-    setState(() => _isLoading = true);
     try {
-      final url = UserService.serverUrl + '/api/tasks/today?userId=' + _user.userId;
-      final response = await http.get(Uri.parse(url));
+      final url = Uri.parse('${UserService.serverUrl}/api/tasks/status/${_user.userId}');
+      final response = await http.get(url);
+
       if (response.statusCode == 200) {
-        final decoded = jsonDecode(response.body);
-        if (decoded['success'] == true) {
-          setState(() {
-            _taskData = decoded['tasks'];
-            _isLoading = false;
-          });
+        final resData = jsonDecode(response.body);
+        if (resData['success'] == true) {
+          final data = resData['data'];
+          if (mounted) {
+            setState(() {
+              _isWithin7Days = data['isWithin7Days'] ?? false;
+              _normalSeatMinutes = data['normalSeatMinutes'] ?? 0;
+              _normalSeatRewardRate = data['normalSeatRewardRate'] ?? 1000;
+              _crownSeatMinutes = data['crownSeatMinutes'] ?? 0;
+              _crownGiftCoins = data['crownGiftCoins'] ?? 0;
+              _dailyFollowersCount = data['dailyFollowersCount'] ?? 0;
+              _coinsSent = data['coinsSent'] ?? 0;
+              _gameBetting = data['gameBetting'] ?? 0;
+              _claimedTasks = List<String>.from(data['claimedTasks'] ?? []);
+              _isLoading = false;
+            });
+          }
           return;
         }
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('Error fetching status: $e');
+    }
 
     if (mounted) {
       setState(() => _isLoading = false);
     }
   }
 
-  Future<void> _checkIn() async {
+  Future<void> _claimTask(String taskId) async {
     try {
-      final url = UserService.serverUrl + '/api/tasks/check-in';
+      final url = Uri.parse('${UserService.serverUrl}/api/tasks/claim');
       final response = await http.post(
-        Uri.parse(url),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'userId': _user.userId}),
-      );
-      final decoded = jsonDecode(response.body);
-
-      if (decoded['success'] == true) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Daily bonus collected! +${decoded['rewardCoins']} Coins'),
-            backgroundColor: Colors.green,
-          ),
-        );
-        _fetchTaskStatus();
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(decoded['message'] ?? 'Check-in failed'),
-            backgroundColor: Colors.redAccent,
-          ),
-        );
-      }
-    } catch (err) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $err'), backgroundColor: Colors.redAccent),
-      );
-    }
-  }
-
-  Future<void> _claimReward(String taskType) async {
-    try {
-      final url = UserService.serverUrl + '/api/tasks/claim';
-      final response = await http.post(
-        Uri.parse(url),
+        url,
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'userId': _user.userId,
-          'taskType': taskType,
+          'taskId': taskId,
         }),
       );
-      final decoded = jsonDecode(response.body);
 
-      if (decoded['success'] == true) {
+      final resData = jsonDecode(response.body);
+      if (resData['success'] == true) {
+        setState(() {
+          _claimedTasks.add(taskId);
+        });
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Reward claimed! +${decoded['rewardCoins']} Coins'),
-            backgroundColor: Colors.green,
+            content: Text(resData['message'] ?? 'Claim successful!'),
+            backgroundColor: const Color(0xFF10B981),
           ),
         );
-        _fetchTaskStatus();
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(decoded['message'] ?? 'Claim failed'),
-            backgroundColor: Colors.redAccent,
+            content: Text(resData['message'] ?? 'Requirement not met'),
+            backgroundColor: Colors.orange,
           ),
         );
       }
-    } catch (err) {
+    } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $err'), backgroundColor: Colors.redAccent),
+        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
       );
     }
-  }
-
-  void _shareAppInvitation() {
-    Clipboard.setData(
-      const ClipboardData(
-        text: 'Join me on Nile Voice! Enjoy voice chat rooms and earn coins daily: https://nilevoice.com',
-      ),
-    );
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Invitation link copied to clipboard!'),
-        backgroundColor: Color(0xFF00C9A7),
-        duration: Duration(seconds: 2),
-      ),
-    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final isCheckedIn = _taskData?['isCheckedIn'] ?? false;
-    final int currentDay = _taskData?['checkInDay'] ?? 1;
-
-final int stayMins = _taskData?['stayDurationMinutes'] ?? 0;
-    final bool stay10Claimed = _taskData?['stay10Claimed'] ?? false;
-    final bool stay30Claimed = _taskData?['stay30Claimed'] ?? false;
-
-    final int giftSent = _taskData?['giftSentCount'] ?? 0;
-    final bool giftClaimed = _taskData?['giftClaimed'] ?? false;
-
-    final int msgsSent = _taskData?['messagesSentCount'] ?? 0;
-    final bool msgClaimed = _taskData?['messageClaimed'] ?? false;
-
     return Scaffold(
-      backgroundColor: const Color(0xFF0F141C),
+      backgroundColor: const Color(0xFF110E27),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF161B26),
+        backgroundColor: const Color(0xFF110E27),
         elevation: 0,
+        centerTitle: true,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20),
+          icon: const Icon(Icons.arrow_back_ios, color: Colors.white, size: 20),
           onPressed: () => Navigator.pop(context),
-        ),
+
+),
         title: const Text(
-          'Daily Tasks & Rewards',
+          'Task',
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+        ),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(60),
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: const Color(0xFF231B4D),
+              borderRadius: BorderRadius.circular(25),
+            ),
+            child: TabBar(
+              controller: _tabController,
+              indicator: BoxDecoration(
+                color: const Color(0xFF7B4DFF),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              labelColor: Colors.white,
+              unselectedLabelColor: Colors.white60,
+              labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              tabs: const [
+                Tab(
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.diamond_outlined, size: 16, color: Colors.purpleAccent),
+                      SizedBox(width: 8),
+                      Text('Points'),
+                    ],
+                  ),
+                ),
+                Tab(
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.monetization_on, size: 16, color: Colors.amber),
+                      SizedBox(width: 8),
+                      Text('Coins'),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFF00C9A7)))
-          : RefreshIndicator(
-              onRefresh: _fetchTaskStatus,
-              color: const Color(0xFF00C9A7),
-              child: ListView(
-                padding: const EdgeInsets.all(16),
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF2C1958), Color(0xFF161B26)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Colors.purpleAccent.withOpacity(0.3)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text(
-                              '7-Day Check-in',
-                              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
-                            ),
-                            ElevatedButton(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: isCheckedIn ? Colors.grey.shade700 : const Color(0xFF00C9A7),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                              ),
-                              onPressed: isCheckedIn ? null : _checkIn,
-                              child: Text(
-                                isCheckedIn ? 'Completed' : 'Check In',
-                                style: TextStyle(
-                                  color: isCheckedIn ? Colors.white54 : Colors.black,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 14),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: List.generate(7, (index) {
-                            final dayNumber = index + 1;
-                            final isPassed = isCheckedIn && dayNumber <= currentDay;
-                            return Column(
-                              children: [
-
-CircleAvatar(
-                                  radius: 18,
-                                  backgroundColor: isPassed
-                                      ? const Color(0xFF00C9A7)
-                                      : (dayNumber == currentDay ? Colors.amber : Colors.white10),
-                                  child: isPassed
-                                      ? const Icon(Icons.check, color: Colors.black, size: 18)
-                                      : Text(
-                                          '+${_rewardsMap[index]}',
-                                          style: TextStyle(
-                                            color: dayNumber == currentDay ? Colors.black : Colors.white70,
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                ),
-                                const SizedBox(height: 6),
-                                Text(
-                                  'D$dayNumber',
-                                  style: TextStyle(
-                                    color: dayNumber == currentDay ? Colors.amber : Colors.white38,
-                                    fontSize: 11,
-                                  ),
-                                ),
-                              ],
-                            );
-                          }),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 22),
-                  const Text(
-                    'Daily Activities',
-                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
-                  ),
-                  const SizedBox(height: 12),
-                  _buildActivityTile(
-                    icon: Icons.headset_mic,
-                    iconColor: Colors.cyanAccent,
-                    title: 'Listen in Room for 10 Mins',
-                    subtitle: 'Progress: $stayMins/10 mins',
-                    reward: '+30 Coins',
-                    isDone: stayMins >= 10,
-                    isClaimed: stay10Claimed,
-                    onClaim: () => _claimReward('stay10'),
-                  ),
-                  _buildActivityTile(
-                    icon: Icons.timer,
-                    iconColor: Colors.tealAccent,
-                    title: 'Listen in Room for 30 Mins',
-                    subtitle: 'Progress: $stayMins/30 mins',
-                    reward: '+60 Coins',
-                    isDone: stayMins >= 30,
-                    isClaimed: stay30Claimed,
-                    onClaim: () => _claimReward('stay30'),
-                  ),
-                  _buildActivityTile(
-                    icon: Icons.card_giftcard,
-                    iconColor: Colors.pinkAccent,
-                    title: 'Send 1 Gift to Host',
-                    subtitle: 'Progress: $giftSent/1 sent',
-                    reward: '+50 Coins',
-                    isDone: giftSent >= 1,
-                    isClaimed: giftClaimed,
-                    onClaim: () => _claimReward('gift'),
-                  ),
-                  _buildActivityTile(
-                    icon: Icons.chat,
-                    iconColor: Colors.purpleAccent,
-                    title: 'Send 5 Direct Messages',
-                    subtitle: 'Progress: $msgsSent/5 sent',
-                    reward: '+20 Coins',
-                    isDone: msgsSent >= 5,
-                    isClaimed: msgClaimed,
-                    onClaim: () => _claimReward('messages'),
-                  ),
-                  _buildActivityTile(
-                    icon: Icons.share,
-                    iconColor: Colors.orangeAccent,
-
-title: 'Invite Friends / Share App',
-                    subtitle: 'Share Nile Voice with friends',
-                    reward: '+25 Coins',
-                    isDone: true,
-                    isClaimed: false,
-                    customBtn: 'Copy Link',
-                    onClaim: _shareAppInvitation,
-                  ),
-                ],
-              ),
+          ? const Center(child: CircularProgressIndicator(color: Color(0xFF7B4DFF)))
+          : TabBarView(
+              controller: _tabController,
+              children: [
+                _buildPointsTab(),
+                _buildCoinsTab(),
+              ],
             ),
     );
   }
 
-  Widget _buildActivityTile({
+  Widget _buildPointsTab() {
+    return RefreshIndicator(
+      onRefresh: _fetchTaskStatus,
+      color: const Color(0xFF7B4DFF),
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          // 1. New User 7-Day Bonus (Show only if within 7 days)
+          if (_isWithin7Days)
+            _buildTaskCard(
+              icon: Icons.mic_none,
+              iconColor: Colors.blueAccent,
+              title: '7-Day New User Reward',
+              subtitle: 'Seat Duration: ${_normalSeatMinutes > 120 ? 120 : _normalSeatMinutes}/120 min',
+              rewardText: '8k Points',
+              isCompleted: _normalSeatMinutes >= 120,
+              isClaimed: _claimedTasks.contains('new_user_7day'),
+              onClaim: () => _claimTask('new_user_7day'),
+              onGo: () => Navigator.pop(context),
+            ),
+
+          // 2. Normal Seat Daily Hourly Reward
+          _buildTaskCard(
+            icon: Icons.timer,
+            iconColor: Colors.tealAccent,
+            title: 'Normal Seat: 1 Hour',
+            subtitle: 'Seat Duration: ${_normalSeatMinutes > 60 ? 60 : _normalSeatMinutes}/60 min',
+            rewardText: '$_normalSeatRewardRate Points',
+            isCompleted: _normalSeatMinutes >= 60,
+            isClaimed: _claimedTasks.contains('normal_seat_daily'),
+            onClaim: () => _claimTask('normal_seat_daily'),
+            onGo: () => Navigator.pop(context),
+          ),
+
+          // 3. Crown Seat Reward
+          _buildTaskCard(
+            icon: Icons.military_tech,
+            iconColor: Colors.amber,
+            title: 'Crown Seat: 1 Hour',
+            subtitle: 'Crown Duration: ${_crownSeatMinutes > 60 ? 60 : _crownSeatMinutes}/60 min\nGift Coins: ${_crownGiftCoins > 600 ? 600 : _crownGiftCoins}/600',
+
+rewardText: '3k Points',
+            isCompleted: _crownSeatMinutes >= 60 && _crownGiftCoins >= 600,
+            isClaimed: _claimedTasks.contains('crown_seat_task'),
+            onClaim: () => _claimTask('crown_seat_task'),
+            onGo: () => Navigator.pop(context),
+          ),
+
+          // 4. Crown Room Reward (Host Live)
+          _buildTaskCard(
+            icon: Icons.meeting_room,
+            iconColor: Colors.deepPurpleAccent,
+            title: 'Crown Room Reward',
+            subtitle: 'Live Duration: ${_crownSeatMinutes > 60 ? 60 : _crownSeatMinutes}/60 min',
+            rewardText: '5k Points',
+            isCompleted: _crownSeatMinutes >= 60,
+            isClaimed: _claimedTasks.contains('crown_room_reward'),
+            onClaim: () => _claimTask('crown_room_reward'),
+            onGo: () => Navigator.pop(context),
+          ),
+
+          // 5. Gain Followers Task
+          _buildTaskCard(
+            icon: Icons.favorite_border,
+            iconColor: Colors.pinkAccent,
+            title: 'Gain Followers',
+            subtitle: 'Received Followers: ${_dailyFollowersCount > 3 ? 3 : _dailyFollowersCount}/3',
+            rewardText: '1k Points',
+            isCompleted: _dailyFollowersCount >= 3,
+            isClaimed: _claimedTasks.contains('followers_task'),
+            onClaim: () => _claimTask('followers_task'),
+            onGo: () => Navigator.pop(context),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCoinsTab() {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        // 1. Stay in Room Task
+        _buildTaskCard(
+          icon: Icons.meeting_room_outlined,
+          iconColor: Colors.greenAccent,
+          title: 'Stay in a Room for 10 Minutes',
+          subtitle: 'Total time spent: ${_normalSeatMinutes > 10 ? 10 : _normalSeatMinutes}/10 min',
+          rewardText: '1k Coins',
+          isCompleted: _normalSeatMinutes >= 10,
+          isClaimed: _claimedTasks.contains('stay_10_coins'),
+          onClaim: () => _claimTask('stay_10_coins'),
+          onGo: () => Navigator.pop(context),
+        ),
+
+        // 2. Bonus Gifts Sent Flow (100k)
+        _buildTaskCard(
+          icon: Icons.card_giftcard,
+          iconColor: Colors.pinkAccent,
+          title: 'Bonus Gifts: Sent 100k Coins',
+          subtitle: 'Lucky Gift Flow: ${_coinsSent > 100000 ? 100000 : _coinsSent}/100k',
+          rewardText: '1k Coins',
+          isCompleted: _coinsSent >= 100000,
+          isClaimed: _claimedTasks.contains('gift_flow_100k'),
+          onClaim: () => _claimTask('gift_flow_100k'),
+          onGo: () => Navigator.pop(context),
+        ),
+
+        // 3. Game Betting Flow
+        _buildTaskCard(
+          icon: Icons.sports_esports,
+          iconColor: Colors.purpleAccent,
+          title: 'Game: Bet 100k Coins',
+          subtitle: 'Game Flow: ${_gameBetting > 100000 ? 100000 : _gameBetting}/100k',
+          rewardText: '1k Coins',
+          isCompleted: _gameBetting >= 100000,
+          isClaimed: _claimedTasks.contains('game_flow_100k'),
+          onClaim: () => _claimTask('game_flow_100k'),
+          onGo: () => Navigator.pop(context),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTaskCard({
     required IconData icon,
     required Color iconColor,
     required String title,
     required String subtitle,
-    required String reward,
-    required bool isDone,
+    required String rewardText,
+    required bool isCompleted,
     required bool isClaimed,
     required VoidCallback onClaim,
-    String? customBtn,
+    required VoidCallback onGo,
   }) {
+    String buttonText = isClaimed ? 'Claimed' : (isCompleted ? 'Claim' : 'Go');
+    Color btnColor = isClaimed
+        ? Colors.grey[800]!
+        : (isCompleted ? const Color(0xFF10B981) : const Color(0xFF6B46C1));
+
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0xFF161B26),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white10),
+
+decoration: BoxDecoration(
+        color: const Color(0xFF1E1742),
+        borderRadius: BorderRadius.circular(16),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          CircleAvatar(
-            backgroundColor: iconColor.withOpacity(0.15),
-            child: Icon(icon, color: iconColor, size: 22),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: iconColor.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, color: iconColor, size: 26),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -343,40 +353,36 @@ title: 'Invite Friends / Share App',
                   title,
                   style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
                 ),
-                const SizedBox(height: 3),
-                Text(
-                  subtitle,
-                  style: const TextStyle(color: Colors.white54, fontSize: 11),
-                ),
                 const SizedBox(height: 4),
                 Text(
-                  reward,
-                  style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: 12),
+                  subtitle,
+                  style: const TextStyle(color: Colors.white60, fontSize: 12, height: 1.3),
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    const Icon(Icons.circle, size: 8, color: Colors.amber),
+                    const SizedBox(width: 6),
+                    Text(
+                      rewardText,
+                      style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: 13),
+                    ),
+                  ],
                 ),
               ],
             ),
           ),
           ElevatedButton(
+            onPressed: isClaimed ? null : (isCompleted ? onClaim : onGo),
             style: ElevatedButton.styleFrom(
-              backgroundColor: isClaimed
-                  ? Colors.grey.shade800
-                  : (isDone ? const Color(0xFF00C9A7) : Colors.white12),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-              minimumSize: Size.zero,
+              backgroundColor: btnColor,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+              elevation: 0,
             ),
-            onPressed: isClaimed ? null : (isDone ? onClaim : null),
             child: Text(
-              isClaimed
-                  ? 'Claimed'
-                  : (customBtn ?? (isDone ? 'Claim' : 'Go')),
-              style: TextStyle(
-                color: isClaimed
-                    ? Colors.white38
-                    : (isDone ? Colors.black : Colors.white38),
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-              ),
+              buttonText,
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
             ),
           ),
         ],
