@@ -56,61 +56,62 @@ class GiftPanel extends StatefulWidget {
 class _GiftPanelState extends State<GiftPanel> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   late int _coins;
-  String _selectedGiftId = 'lucky_bag';
+  String _selectedGiftId = 'sports_car';
   int _sendCount = 1;
   String _selectedTarget = 'All';
 
   final List<GiftItem> _hotGifts = const [
     GiftItem(
+      id: 'sports_car',
+      name: 'Super Car',
+      price: 500,
+      imageUrl: 'assets/gifts/car.png',
+      badge: 'Hot',
+    ),
+    GiftItem(
       id: 'lucky_bag',
       name: 'Lucky Bag',
       price: 10,
-      imageUrl: 'https://images.vexels.com/media/users/3/242241/isolated/preview/261899e4f5aa1a547fae3ef24ec441ba-chinese-new-year-lucky-bag-3d.png',
+      imageUrl: 'assets/gifts/car.png',
       badge: '20倍',
     ),
     GiftItem(
       id: 'crown',
       name: 'Crown',
       price: 100,
-      imageUrl: 'https://images.vexels.com/media/users/3/242232/isolated/preview/a1f592231ff61a6c0c538cb986161a0f-golden-crown-3d-icon.png',
+      imageUrl: 'assets/gifts/car.png',
       badge: '310倍',
-    ),
-    GiftItem(
-      id: 'sports_car',
-      name: 'Super Car',
-      price: 500,
-      imageUrl: 'https://images.vexels.com/media/users/3/242240/isolated/preview/30d2ae15f62f3a61f51390ea0687399a-futuristic-sports-car-3d.png',
     ),
     GiftItem(
       id: 'rocket',
       name: 'Gold Rocket',
       price: 1000,
-      imageUrl: 'https://images.vexels.com/media/users/3/242236/isolated/preview/fa9b24da4ec6c6563604f14188f6ba02-space-rocket-launch-3d.png',
+      imageUrl: 'assets/gifts/car.png',
       badge: '25倍',
     ),
     GiftItem(
       id: 'diamond_ring',
       name: 'CP Ring',
       price: 2000,
-      imageUrl: 'https://images.vexels.com/media/users/3/242233/isolated/preview/e1d5e3c66f6be985ef437dae6c6023e8-diamond-gemstone-ring-3d.png',
+      imageUrl: 'assets/gifts/car.png',
     ),
     GiftItem(
       id: 'treasure_chest',
       name: 'Treasure',
       price: 5000,
-      imageUrl: 'https://images.vexels.com/media/users/3/242234/isolated/preview/b9dfb273d6bb6c4ae234ffce6f809988-treasure-chest-coins-3d.png',
+      imageUrl: 'assets/gifts/car.png',
     ),
     GiftItem(
       id: 'heart_balloon',
       name: 'Love Heart',
       price: 50,
-      imageUrl: 'https://images.vexels.com/media/users/3/242238/isolated/preview/79dae133c91a0980b67bf919323c21c8-glowing-heart-gem-3d.png',
+      imageUrl: 'assets/gifts/car.png',
     ),
     GiftItem(
       id: 'magic_castle',
       name: 'Dream Castle',
       price: 10000,
-      imageUrl: 'https://images.vexels.com/media/users/3/242237/isolated/preview/b7f14170327be63e3d489ae991e44f80-fantasy-floating-castle-3d.png',
+      imageUrl: 'assets/gifts/car.png',
     ),
   ];
 
@@ -130,8 +131,7 @@ class _GiftPanelState extends State<GiftPanel> with SingleTickerProviderStateMix
   void _showCountPicker() {
     final counts = [1, 10, 66, 99, 520, 1314];
     showModalBottomSheet(
-
-context: context,
+      context: context,
       backgroundColor: const Color(0xFF131722),
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
       builder: (ctx) {
@@ -156,7 +156,8 @@ context: context,
     final amounts = [1000, 5000, 10000, 50000];
 
     showModalBottomSheet(
-      context: context,
+
+context: context,
       backgroundColor: const Color(0xFF131724),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
@@ -233,7 +234,7 @@ context: context,
     );
   }
 
-@override
+  @override
   Widget build(BuildContext context) {
     return Container(
       height: MediaQuery.of(context).size.height * 0.60,
@@ -254,7 +255,8 @@ context: context,
                     indicatorColor: Colors.transparent,
                     labelColor: Colors.white,
                     unselectedLabelColor: Colors.white54,
-                    labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+
+labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                     unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.normal, fontSize: 15),
                     tabs: const [
                       Tab(text: 'Hot'),
@@ -331,8 +333,7 @@ context: context,
   }
 
   Widget _buildGiftGrid(List<GiftItem> list) {
-
-return GridView.builder(
+    return GridView.builder(
       physics: const BouncingScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(10, 4, 10, 16),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -355,7 +356,8 @@ return GridView.builder(
             });
           },
           child: Stack(
-            clipBehavior: Clip.none,
+
+clipBehavior: Clip.none,
             children: [
               AnimatedContainer(
                 duration: const Duration(milliseconds: 180),
@@ -372,13 +374,16 @@ return GridView.builder(
                   children: [
                     Expanded(
                       child: Center(
-                        child: Image.network(
-                          item.imageUrl,
-                          fit: BoxFit.contain,
-                          errorBuilder: (context, error, stackTrace) => const Icon(
-                            Icons.card_giftcard,
-                            size: 40,
-                            color: Colors.pinkAccent,
+                        child: Padding(
+                          padding: const EdgeInsets.all(6.0),
+                          child: Image.asset(
+                            item.imageUrl,
+                            fit: BoxFit.contain,
+                            errorBuilder: (context, error, stackTrace) => const Icon(
+                              Icons.directions_car,
+                              size: 40,
+                              color: Colors.pinkAccent,
+                            ),
                           ),
                         ),
                       ),
@@ -422,8 +427,7 @@ return GridView.builder(
                             });
                             Navigator.pop(context);
                             widget.onSendGift(
-
-_sendCount > 1 ? '${item.name} x$_sendCount' : item.name,
+                              _sendCount > 1 ? '${item.name} x$_sendCount' : item.name,
                               totalPrice,
                             );
                           } else {
@@ -435,7 +439,8 @@ _sendCount > 1 ? '${item.name} x$_sendCount' : item.name,
                         child: Container(
                           margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                           padding: const EdgeInsets.symmetric(vertical: 4),
-                          width: double.infinity,
+
+width: double.infinity,
                           decoration: BoxDecoration(
                             gradient: const LinearGradient(
                               colors: [Color(0xFF00C9A7), Color(0xFF00E676)],
