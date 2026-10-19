@@ -1,4 +1,7 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import '../../services/user_service.dart';
 
 class GiftItem {
   final String id;
@@ -52,6 +55,7 @@ class GiftPanel extends StatefulWidget {
 
 class _GiftPanelState extends State<GiftPanel> with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  late int _coins;
   String _selectedGiftId = 'lucky_bag';
   int _sendCount = 1;
   String _selectedTarget = 'All';
@@ -113,6 +117,7 @@ class _GiftPanelState extends State<GiftPanel> with SingleTickerProviderStateMix
   @override
   void initState() {
     super.initState();
+    _coins = widget.userCoins;
     _tabController = TabController(length: 4, vsync: this);
   }
 
@@ -125,11 +130,11 @@ class _GiftPanelState extends State<GiftPanel> with SingleTickerProviderStateMix
   void _showCountPicker() {
     final counts = [1, 10, 66, 99, 520, 1314];
     showModalBottomSheet(
-      context: context,
+
+context: context,
       backgroundColor: const Color(0xFF131722),
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
-
-builder: (ctx) {
+      builder: (ctx) {
         return ListView(
           shrinkWrap: true,
           children: counts.map((c) {
@@ -142,6 +147,122 @@ builder: (ctx) {
               },
             );
           }).toList(),
+        );
+      },
+    );
+  }
+
+  void _showRechargeSheet() {
+    final amounts = [1000, 5000, 10000, 50000];
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF131724),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      builder: (ctx) {
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.monetization_on, color: Colors.amber, size: 24),
+                  SizedBox(width: 8),
+                  Text(
+                    'Recharge Coins',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 18,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  childAspectRatio: 2.3,
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 12,
+                ),
+                itemCount: amounts.length,
+                itemBuilder: (context, i) {
+                  final amt = amounts[i];
+                  return GestureDetector(
+                    onTap: () async {
+                      Navigator.pop(ctx);
+                      try {
+                        final res = await http.post(
+                          Uri.parse('${UserService.serverUrl}/api/user/recharge'),
+                          headers: {'Content-Type': 'application/json'},
+                          body: jsonEncode({
+                            'userId': UserService().userId,
+                            'amount': amt,
+                          }),
+                        );
+                        final data = jsonDecode(res.body);
+                        if (data['success'] == true && data['coins'] != null) {
+                          setState(() {
+                            _coins = data['coins'];
+                            UserService().coins = data['coins'];
+                          });
+                        } else {
+                          setState(() {
+                            _coins += amt;
+                            UserService().coins += amt;
+                          });
+                        }
+                      } catch (_) {
+                        setState(() {
+                          _coins += amt;
+                          UserService().coins += amt;
+                        });
+                      }
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('+$amt ሳንቲም ተሞልቷል! 🪙'),
+
+backgroundColor: const Color(0xFF00C9A7),
+                        ),
+                      );
+                    },
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1E2436),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: const Color(0xFF00C9A7).withOpacity(0.4)),
+                      ),
+                      child: Center(
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.monetization_on, color: Colors.amber, size: 18),
+                            const SizedBox(width: 6),
+                            Text(
+                              '+$amt',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 15,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(height: 10),
+            ],
+          ),
         );
       },
     );
@@ -178,24 +299,33 @@ builder: (ctx) {
                     ],
                   ),
                 ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1C2230),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: const Color(0xFF00C9A7).withOpacity(0.5)),
-                  ),
-                  child: Row(
-                    children: [
-                      Text(_selectedTarget, style: const TextStyle(color: Color(0xFF00C9A7), fontSize: 12, fontWeight: FontWeight.bold)),
-                      const SizedBox(width: 2),
-                      const Icon(Icons.arrow_drop_down, color: Color(0xFF00C9A7), size: 16),
-                    ],
+                GestureDetector(
+                  onTap: _showRechargeSheet,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1C2230),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: Colors.amber.withOpacity(0.5)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.monetization_on, color: Colors.amber, size: 14),
+                        const SizedBox(width: 4),
+                        Text(
+                          '$_coins',
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                        ),
+                        const SizedBox(width: 4),
+                        const Icon(Icons.add_circle, color: Color(0xFF00C9A7), size: 14),
+                      ],
+                    ),
                   ),
                 ),
                 const SizedBox(width: 8),
                 const Icon(Icons.backpack_outlined, color: Colors.white70, size: 22),
-              ],
+
+],
             ),
           ),
           Container(
@@ -236,7 +366,7 @@ builder: (ctx) {
     );
   }
 
-Widget _buildGiftGrid(List<GiftItem> list) {
+  Widget _buildGiftGrid(List<GiftItem> list) {
     return GridView.builder(
       physics: const BouncingScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(10, 4, 10, 16),
@@ -251,7 +381,7 @@ Widget _buildGiftGrid(List<GiftItem> list) {
         final item = list[index];
         final isSelected = _selectedGiftId == item.id;
         final int totalPrice = item.price * _sendCount;
-        final bool canAfford = widget.userCoins >= totalPrice;
+        final bool canAfford = _coins >= totalPrice;
 
         return GestureDetector(
           onTap: () {
@@ -298,7 +428,8 @@ Widget _buildGiftGrid(List<GiftItem> list) {
                                 child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF00C9A7)),
                               ),
                             );
-                          },
+
+},
                           errorBuilder: (context, error, stackTrace) => const Icon(
                             Icons.card_giftcard,
                             size: 40,
@@ -325,8 +456,7 @@ Widget _buildGiftGrid(List<GiftItem> list) {
                             ),
                             child: const Center(
                               child: Text('T', style: TextStyle(color: Colors.black, fontSize: 7, fontWeight: FontWeight.bold)),
-
-),
+                            ),
                           ),
                           const SizedBox(width: 4),
                           Text(
@@ -341,6 +471,10 @@ Widget _buildGiftGrid(List<GiftItem> list) {
                       GestureDetector(
                         onTap: () {
                           if (canAfford) {
+                            setState(() {
+                              _coins -= totalPrice;
+                              UserService().coins = _coins;
+                            });
                             Navigator.pop(context);
                             widget.onSendGift(
                               _sendCount > 1 ? '${item.name} x$_sendCount' : item.name,
@@ -374,7 +508,8 @@ Widget _buildGiftGrid(List<GiftItem> list) {
                               style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 11),
                             ),
                           ),
-                        ),
+
+),
                       )
                     else
                       Padding(
@@ -408,8 +543,7 @@ Widget _buildGiftGrid(List<GiftItem> list) {
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-
-Text('x$_sendCount', style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold)),
+                            Text('x$_sendCount', style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold)),
                             const Icon(Icons.arrow_drop_down, color: Colors.white, size: 10),
                           ],
                         ),
