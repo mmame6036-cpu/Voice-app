@@ -56,62 +56,17 @@ class GiftPanel extends StatefulWidget {
 class _GiftPanelState extends State<GiftPanel> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   late int _coins;
-  String _selectedGiftId = 'sports_car';
+  String _selectedGiftId = 'rocket';
   int _sendCount = 1;
   String _selectedTarget = 'All';
 
   final List<GiftItem> _hotGifts = const [
     GiftItem(
-      id: 'sports_car',
-      name: 'Super Car',
-      price: 500,
-      imageUrl: 'assets/gifts/car.png',
-      badge: 'Hot',
-    ),
-    GiftItem(
-      id: 'lucky_bag',
-      name: 'Lucky Bag',
-      price: 10,
-      imageUrl: 'assets/gifts/car.png',
-      badge: '20倍',
-    ),
-    GiftItem(
-      id: 'crown',
-      name: 'Crown',
-      price: 100,
-      imageUrl: 'assets/gifts/car.png',
-      badge: '310倍',
-    ),
-    GiftItem(
       id: 'rocket',
       name: 'Gold Rocket',
       price: 1000,
-      imageUrl: 'assets/gifts/car.png',
+      imageUrl: 'assets/gifts/3d-rocket.png',
       badge: '25倍',
-    ),
-    GiftItem(
-      id: 'diamond_ring',
-      name: 'CP Ring',
-      price: 2000,
-      imageUrl: 'assets/gifts/car.png',
-    ),
-    GiftItem(
-      id: 'treasure_chest',
-      name: 'Treasure',
-      price: 5000,
-      imageUrl: 'assets/gifts/car.png',
-    ),
-    GiftItem(
-      id: 'heart_balloon',
-      name: 'Love Heart',
-      price: 50,
-      imageUrl: 'assets/gifts/car.png',
-    ),
-    GiftItem(
-      id: 'magic_castle',
-      name: 'Dream Castle',
-      price: 10000,
-      imageUrl: 'assets/gifts/car.png',
     ),
   ];
 
@@ -156,8 +111,7 @@ class _GiftPanelState extends State<GiftPanel> with SingleTickerProviderStateMix
     final amounts = [1000, 5000, 10000, 50000];
 
     showModalBottomSheet(
-
-context: context,
+      context: context,
       backgroundColor: const Color(0xFF131724),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
@@ -182,7 +136,8 @@ context: context,
               const SizedBox(height: 18),
               GridView.builder(
                 shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
+
+physics: const NeverScrollableScrollPhysics(),
                 gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: 2,
                   childAspectRatio: 2.3,
@@ -255,8 +210,7 @@ context: context,
                     indicatorColor: Colors.transparent,
                     labelColor: Colors.white,
                     unselectedLabelColor: Colors.white54,
-
-labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                     unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.normal, fontSize: 15),
                     tabs: const [
                       Tab(text: 'Hot'),
@@ -276,7 +230,8 @@ labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                       border: Border.all(color: Colors.amber.withOpacity(0.5)),
                     ),
                     child: Row(
-                      children: [
+
+children: [
                         const Icon(Icons.monetization_on, color: Colors.amber, size: 14),
                         const SizedBox(width: 4),
                         Text(
@@ -356,8 +311,7 @@ labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
             });
           },
           child: Stack(
-
-clipBehavior: Clip.none,
+            clipBehavior: Clip.none,
             children: [
               AnimatedContainer(
                 duration: const Duration(milliseconds: 180),
@@ -379,10 +333,11 @@ clipBehavior: Clip.none,
                           child: Image.asset(
                             item.imageUrl,
                             fit: BoxFit.contain,
-                            errorBuilder: (context, error, stackTrace) => const Icon(
-                              Icons.directions_car,
+
+errorBuilder: (context, error, stackTrace) => const Icon(
+                              Icons.rocket_launch,
                               size: 40,
-                              color: Colors.pinkAccent,
+                              color: Colors.cyanAccent,
                             ),
                           ),
                         ),
@@ -439,8 +394,7 @@ clipBehavior: Clip.none,
                         child: Container(
                           margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                           padding: const EdgeInsets.symmetric(vertical: 4),
-
-width: double.infinity,
+                          width: double.infinity,
                           decoration: BoxDecoration(
                             gradient: const LinearGradient(
                               colors: [Color(0xFF00C9A7), Color(0xFF00E676)],
@@ -460,7 +414,8 @@ width: double.infinity,
                         padding: const EdgeInsets.symmetric(horizontal: 4),
                         child: Text(
                           item.name,
-                          style: const TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.w500),
+
+style: const TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.w500),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
