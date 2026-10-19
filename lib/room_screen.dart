@@ -38,6 +38,7 @@ class _RoomScreenState extends State<RoomScreen> {
 
   bool _isMicMuted = false;
   int _currentSeatCount = 25;
+  int _hostDiamonds = 0; // የሆስቱ የተሰበሰበ ዳይመንድ ቆጣሪ
   final TextEditingController _msgController = TextEditingController();
 
   Map<String, String>? _active3DGift;
@@ -69,6 +70,7 @@ class _RoomScreenState extends State<RoomScreen> {
         'userId': index == 0 ? widget.roomId : null,
         'isSpeaking': false,
         'isMuted': false,
+        'diamonds': 0,
       },
     );
   }
@@ -300,22 +302,14 @@ setState(() {
 
   String _getGiftImage(String giftName) {
     final nameLower = giftName.toLowerCase();
-    if (nameLower.contains('lucky')) {
-      return 'https://images.vexels.com/media/users/3/242241/isolated/preview/261899e4f5aa1a547fae3ef24ec441ba-chinese-new-year-lucky-bag-3d.png';
+    if (nameLower.contains('car')) {
+      return 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/luxury-ball.png'; // አስተማማኝ ፈጣን ምስል
     } else if (nameLower.contains('crown')) {
-      return 'https://images.vexels.com/media/users/3/242232/isolated/preview/a1f592231ff61a6c0c538cb986161a0f-golden-crown-3d-icon.png';
-    } else if (nameLower.contains('car')) {
-      return 'https://images.vexels.com/media/users/3/242240/isolated/preview/30d2ae15f62f3a61f51390ea0687399a-futuristic-sports-car-3d.png';
-    } else if (nameLower.contains('rocket')) {
-      return 'https://images.vexels.com/media/users/3/242236/isolated/preview/fa9b24da4ec6c6563604f14188f6ba02-space-rocket-launch-3d.png';
+      return 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/kings-rock.png';
     } else if (nameLower.contains('ring')) {
-      return 'https://images.vexels.com/media/users/3/242233/isolated/preview/e1d5e3c66f6be985ef437dae6c6023e8-diamond-gemstone-ring-3d.png';
-    } else if (nameLower.contains('treasure')) {
-      return 'https://images.vexels.com/media/users/3/242234/isolated/preview/b9dfb273d6bb6c4ae234ffce6f809988-treasure-chest-coins-3d.png';
-    } else if (nameLower.contains('castle')) {
-      return 'https://images.vexels.com/media/users/3/242237/isolated/preview/b7f14170327be63e3d489ae991e44f80-fantasy-floating-castle-3d.png';
+      return 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/shiny-stone.png';
     }
-    return 'https://images.vexels.com/media/users/3/242238/isolated/preview/79dae133c91a0980b67bf919323c21c8-glowing-heart-gem-3d.png';
+    return 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/master-ball.png';
   }
 
   void _openGifts() {
@@ -329,6 +323,13 @@ setState(() {
             _user.coins -= price;
           }
 
+          // 1. የሆስቱ ዳይመንድ ቆጣሪ ይጨምራል
+          _hostDiamonds += price;
+          if (_seats.isNotEmpty) {
+            _seats[0]['diamonds'] = (_seats[0]['diamonds'] ?? 0) + price;
+          }
+
+          // 2. በስክሪኑ መሃል አኒሜሽኑ እንዲታይ
           _active3DGift = {
             'sender': _user.userName,
             'gift': name,
@@ -336,7 +337,7 @@ setState(() {
           };
         });
 
-        final giftText = '${_user.userName} sent a $name! 🎉';
+        final giftText = '${_user.userName} sent a $name! (+${price} 💎)';
         _socket.sendChatMessage(roomId: widget.roomId, text: giftText);
         setState(() {
           _messages.add({
@@ -387,8 +388,7 @@ setState(() {
 
   @override
   Widget build(BuildContext context) {
-
-return Scaffold(
+    return Scaffold(
       body: Stack(
         children: [
           RoomBackground(
@@ -400,6 +400,34 @@ return Scaffold(
                   hostName: widget.hostName,
                   onClose: () => Navigator.pop(context),
                 ),
+                
+                // የተሰበሰበው ዳይመንድ ማሳያ ባጅ (Host Diamonds Counter)
+                Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+
+decoration: BoxDecoration(
+                    color: Colors.black45,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.cyanAccent.withOpacity(0.5)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.diamond, color: Colors.cyanAccent, size: 16),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Room Diamonds: $_hostDiamonds',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
                 Expanded(
                   child: SingleChildScrollView(
                     child: Column(
@@ -505,7 +533,7 @@ class _Live3DGiftDisplayState extends State<_Live3DGiftDisplay>
     super.dispose();
   }
 
-  @override
+@override
   Widget build(BuildContext context) {
     return IgnorePointer(
       child: Center(
@@ -515,8 +543,7 @@ class _Live3DGiftDisplayState extends State<_Live3DGiftDisplay>
             return Opacity(
               opacity: _opacity.value,
               child: Transform.scale(
-
-scale: _scale.value,
+                scale: _scale.value,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -536,11 +563,6 @@ scale: _scale.value,
                       child: Image.network(
                         widget.imageUrl,
                         fit: BoxFit.contain,
-                        errorBuilder: (context, error, stackTrace) => const Icon(
-                          Icons.card_giftcard,
-                          color: Colors.amber,
-                          size: 110,
-                        ),
                       ),
                     ),
                     const SizedBox(height: 12),
