@@ -65,8 +65,15 @@ class _GiftPanelState extends State<GiftPanel> with SingleTickerProviderStateMix
       id: 'rocket',
       name: 'Gold Rocket',
       price: 1000,
-      imageUrl: 'assets/gifts/3d-rocket.png',
+      imageUrl: 'assets/gifts/icons8-rocket-94.png',
       badge: '25倍',
+    ),
+    GiftItem(
+      id: 'sports_car',
+      name: 'Super Car',
+      price: 500,
+      imageUrl: 'assets/gifts/3d-car.png',
+      badge: 'Hot',
     ),
   ];
 
@@ -130,14 +137,14 @@ class _GiftPanelState extends State<GiftPanel> with SingleTickerProviderStateMix
                   Text(
                     'Recharge Coins',
                     style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
-                  ),
+
+),
                 ],
               ),
               const SizedBox(height: 18),
               GridView.builder(
                 shrinkWrap: true,
-
-physics: const NeverScrollableScrollPhysics(),
+                physics: const NeverScrollableScrollPhysics(),
                 gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: 2,
                   childAspectRatio: 2.3,
@@ -227,11 +234,11 @@ physics: const NeverScrollableScrollPhysics(),
                     decoration: BoxDecoration(
                       color: const Color(0xFF1C2230),
                       borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: Colors.amber.withOpacity(0.5)),
+
+border: Border.all(color: Colors.amber.withOpacity(0.5)),
                     ),
                     child: Row(
-
-children: [
+                      children: [
                         const Icon(Icons.monetization_on, color: Colors.amber, size: 14),
                         const SizedBox(width: 4),
                         Text(
@@ -330,11 +337,11 @@ children: [
                       child: Center(
                         child: Padding(
                           padding: const EdgeInsets.all(6.0),
-                          child: Image.asset(
+
+child: Image.asset(
                             item.imageUrl,
                             fit: BoxFit.contain,
-
-errorBuilder: (context, error, stackTrace) => const Icon(
+                            errorBuilder: (context, error, stackTrace) => const Icon(
                               Icons.rocket_launch,
                               size: 40,
                               color: Colors.cyanAccent,
@@ -412,10 +419,10 @@ errorBuilder: (context, error, stackTrace) => const Icon(
                     else
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 4),
-                        child: Text(
-                          item.name,
 
-style: const TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.w500),
+child: Text(
+                          item.name,
+                          style: const TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.w500),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
