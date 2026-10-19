@@ -158,9 +158,7 @@ context: context,
     showModalBottomSheet(
       context: context,
       backgroundColor: const Color(0xFF131724),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
-      ),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(22))),
       builder: (ctx) {
         return Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
@@ -174,11 +172,7 @@ context: context,
                   SizedBox(width: 8),
                   Text(
                     'Recharge Coins',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 18,
-                    ),
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
                   ),
                 ],
               ),
@@ -198,39 +192,12 @@ context: context,
                   return GestureDetector(
                     onTap: () async {
                       Navigator.pop(ctx);
-                      try {
-                        final res = await http.post(
-                          Uri.parse('${UserService.serverUrl}/api/user/recharge'),
-                          headers: {'Content-Type': 'application/json'},
-                          body: jsonEncode({
-                            'userId': UserService().userId,
-                            'amount': amt,
-                          }),
-                        );
-                        final data = jsonDecode(res.body);
-                        if (data['success'] == true && data['coins'] != null) {
-                          setState(() {
-                            _coins = data['coins'];
-                            UserService().coins = data['coins'];
-                          });
-                        } else {
-                          setState(() {
-                            _coins += amt;
-                            UserService().coins += amt;
-                          });
-                        }
-                      } catch (_) {
-                        setState(() {
-                          _coins += amt;
-                          UserService().coins += amt;
-                        });
-                      }
+                      setState(() {
+                        _coins += amt;
+                        UserService().coins += amt;
+                      });
                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('+$amt ሳንቲም ተሞልቷል! 🪙'),
-
-backgroundColor: const Color(0xFF00C9A7),
-                        ),
+                        SnackBar(content: Text('+$amt ሳንቲም ተሞልቷል! 🪙'), backgroundColor: const Color(0xFF00C9A7)),
                       );
                     },
                     child: Container(
@@ -245,14 +212,7 @@ backgroundColor: const Color(0xFF00C9A7),
                           children: [
                             const Icon(Icons.monetization_on, color: Colors.amber, size: 18),
                             const SizedBox(width: 6),
-                            Text(
-                              '+$amt',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 15,
-                              ),
-                            ),
+                            Text('+$amt', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
                           ],
                         ),
                       ),
@@ -269,7 +229,8 @@ backgroundColor: const Color(0xFF00C9A7),
   }
 
   @override
-  Widget build(BuildContext context) {
+
+Widget build(BuildContext context) {
     return Container(
       height: MediaQuery.of(context).size.height * 0.60,
       decoration: const BoxDecoration(
@@ -324,8 +285,7 @@ backgroundColor: const Color(0xFF00C9A7),
                 ),
                 const SizedBox(width: 8),
                 const Icon(Icons.backpack_outlined, color: Colors.white70, size: 22),
-
-],
+              ],
             ),
           ),
           Container(
@@ -368,7 +328,8 @@ backgroundColor: const Color(0xFF00C9A7),
 
   Widget _buildGiftGrid(List<GiftItem> list) {
     return GridView.builder(
-      physics: const BouncingScrollPhysics(),
+
+physics: const BouncingScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(10, 4, 10, 16),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 4,
@@ -401,15 +362,6 @@ backgroundColor: const Color(0xFF00C9A7),
                     color: isSelected ? const Color(0xFF00C9A7) : Colors.transparent,
                     width: 2,
                   ),
-                  boxShadow: isSelected
-                      ? [
-                          BoxShadow(
-                            color: const Color(0xFF00C9A7).withOpacity(0.3),
-                            blurRadius: 10,
-                            spreadRadius: 1,
-                          ),
-                        ]
-                      : [],
                 ),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -419,17 +371,6 @@ backgroundColor: const Color(0xFF00C9A7),
                         child: Image.network(
                           item.imageUrl,
                           fit: BoxFit.contain,
-                          loadingBuilder: (context, child, progress) {
-                            if (progress == null) return child;
-                            return const Center(
-                              child: SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF00C9A7)),
-                              ),
-                            );
-
-},
                           errorBuilder: (context, error, stackTrace) => const Icon(
                             Icons.card_giftcard,
                             size: 40,
@@ -478,7 +419,8 @@ backgroundColor: const Color(0xFF00C9A7),
                             Navigator.pop(context);
                             widget.onSendGift(
                               _sendCount > 1 ? '${item.name} x$_sendCount' : item.name,
-                              totalPrice,
+
+totalPrice,
                             );
                           } else {
                             ScaffoldMessenger.of(context).showSnackBar(
@@ -495,12 +437,6 @@ backgroundColor: const Color(0xFF00C9A7),
                               colors: [Color(0xFF00C9A7), Color(0xFF00E676)],
                             ),
                             borderRadius: BorderRadius.circular(12),
-                            boxShadow: [
-                              BoxShadow(
-                                color: const Color(0xFF00C9A7).withOpacity(0.4),
-                                blurRadius: 6,
-                              ),
-                            ],
                           ),
                           child: const Center(
                             child: Text(
@@ -508,8 +444,7 @@ backgroundColor: const Color(0xFF00C9A7),
                               style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 11),
                             ),
                           ),
-
-),
+                        ),
                       )
                     else
                       Padding(
@@ -538,7 +473,6 @@ backgroundColor: const Color(0xFF00C9A7),
                         decoration: BoxDecoration(
                           gradient: const LinearGradient(colors: [Color(0xFFFF3366), Color(0xFFFF5252)]),
                           borderRadius: BorderRadius.circular(10),
-                          boxShadow: const [BoxShadow(color: Colors.black38, blurRadius: 4)],
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
@@ -548,25 +482,6 @@ backgroundColor: const Color(0xFF00C9A7),
                           ],
                         ),
                       ),
-                    ),
-                  ),
-                ),
-              if (item.badge != null && !isSelected)
-                Positioned(
-                  top: 0,
-                  right: 0,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                    decoration: const BoxDecoration(
-                      gradient: LinearGradient(colors: [Color(0xFFFF3366), Color(0xFFFF5252)]),
-                      borderRadius: BorderRadius.only(
-                        topRight: Radius.circular(16),
-                        bottomLeft: Radius.circular(8),
-                      ),
-                    ),
-                    child: Text(
-                      item.badge!,
-                      style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
                     ),
                   ),
                 ),
