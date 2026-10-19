@@ -536,7 +536,7 @@ scale: _scale.value,
                       child: Image.network(
                         widget.imageUrl,
                         fit: BoxFit.contain,
-                        errorBuilder: (_, , _) => const Icon(
+                        errorBuilder: (context, error, stackTrace) => const Icon(
                           Icons.card_giftcard,
                           color: Colors.amber,
                           size: 110,
