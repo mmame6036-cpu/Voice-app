@@ -56,7 +56,6 @@ class _GiftPanelState extends State<GiftPanel> with SingleTickerProviderStateMix
   int _sendCount = 1;
   String _selectedTarget = 'All';
 
-  // 1. በእውነተኛ 3D ምስሎች የተዘጋጁ የ Hot ስጦታዎች
   final List<GiftItem> _hotGifts = const [
     GiftItem(
       id: 'lucky_bag',
@@ -158,7 +157,6 @@ builder: (ctx) {
       ),
       child: Column(
         children: [
-          // Header Bar
           Padding(
             padding: const EdgeInsets.fromLTRB(10, 10, 14, 0),
             child: Row(
@@ -200,8 +198,6 @@ builder: (ctx) {
               ],
             ),
           ),
-
-          // Sub-banner
           Container(
             width: double.infinity,
             margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
@@ -224,8 +220,6 @@ builder: (ctx) {
               ],
             ),
           ),
-
-          // 3D Gift Grid
           Expanded(
             child: TabBarView(
               controller: _tabController,
@@ -290,7 +284,6 @@ Widget _buildGiftGrid(List<GiftItem> list) {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    // 3D Image with Glow
                     Expanded(
                       child: Center(
                         child: Image.network(
@@ -314,8 +307,6 @@ Widget _buildGiftGrid(List<GiftItem> list) {
                         ),
                       ),
                     ),
-
-                    // Price Badge (T Coin)
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
                       decoration: BoxDecoration(
@@ -346,8 +337,6 @@ Widget _buildGiftGrid(List<GiftItem> list) {
                       ),
                     ),
                     const SizedBox(height: 3),
-
-                    // In-Card Action: Send Button or Name
                     if (isSelected)
                       GestureDetector(
                         onTap: () {
@@ -401,8 +390,6 @@ Widget _buildGiftGrid(List<GiftItem> list) {
                   ],
                 ),
               ),
-
-              // Multiplier Pill (x1 ∨)
               if (isSelected)
                 Positioned(
                   top: -6,
@@ -419,10 +406,10 @@ Widget _buildGiftGrid(List<GiftItem> list) {
                           boxShadow: const [BoxShadow(color: Colors.black38, blurRadius: 4)],
                         ),
                         child: Row(
-
-mainAxisSize: MainAxisSize.min,
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            Text('x$_sendCount', style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold)),
+
+Text('x$_sendCount', style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold)),
                             const Icon(Icons.arrow_drop_down, color: Colors.white, size: 10),
                           ],
                         ),
@@ -430,8 +417,6 @@ mainAxisSize: MainAxisSize.min,
                     ),
                   ),
                 ),
-
-              // Top Right Badge (20倍, 310倍)
               if (item.badge != null && !isSelected)
                 Positioned(
                   top: 0,
