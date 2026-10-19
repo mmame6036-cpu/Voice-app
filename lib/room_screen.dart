@@ -102,7 +102,7 @@ class _RoomScreenState extends State<RoomScreen> {
       final String? uName = data['userName'];
       final String? uId = data['userId'];
 
-      if (chairIndex == null || chairIndex < 0 ||  chairIndex >= _seats.length) {
+      if (chairIndex == null  chairIndex < 0  chairIndex >= _seats.length) {
         return;
       }
 
@@ -301,15 +301,8 @@ setState(() {
   }
 
   String _getGiftImage(String giftName) {
-    final nameLower = giftName.toLowerCase();
-    if (nameLower.contains('car')) {
-      return 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/luxury-ball.png'; // አስተማማኝ ፈጣን ምስል
-    } else if (nameLower.contains('crown')) {
-      return 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/kings-rock.png';
-    } else if (nameLower.contains('ring')) {
-      return 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/shiny-stone.png';
-    }
-    return 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/master-ball.png';
+    // በ assets/gifts ፎልደር ውስጥ ያለውን ምስል በቀጥታ ይጠቀማል
+    return 'assets/gifts/car.png';
   }
 
   void _openGifts() {
@@ -323,13 +316,11 @@ setState(() {
             _user.coins -= price;
           }
 
-          // 1. የሆስቱ ዳይመንድ ቆጣሪ ይጨምራል
           _hostDiamonds += price;
           if (_seats.isNotEmpty) {
             _seats[0]['diamonds'] = (_seats[0]['diamonds'] ?? 0) + price;
           }
 
-          // 2. በስክሪኑ መሃል አኒሜሽኑ እንዲታይ
           _active3DGift = {
             'sender': _user.userName,
             'gift': name,
@@ -400,13 +391,10 @@ setState(() {
                   hostName: widget.hostName,
                   onClose: () => Navigator.pop(context),
                 ),
-                
-                // የተሰበሰበው ዳይመንድ ማሳያ ባጅ (Host Diamonds Counter)
                 Container(
                   margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-
-decoration: BoxDecoration(
+                  decoration: BoxDecoration(
                     color: Colors.black45,
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(color: Colors.cyanAccent.withOpacity(0.5)),
@@ -420,14 +408,14 @@ decoration: BoxDecoration(
                         'Room Diamonds: $_hostDiamonds',
                         style: const TextStyle(
                           color: Colors.white,
-                          fontWeight: FontWeight.bold,
+
+fontWeight: FontWeight.bold,
                           fontSize: 13,
                         ),
                       ),
                     ],
                   ),
                 ),
-
                 Expanded(
                   child: SingleChildScrollView(
                     child: Column(
@@ -460,8 +448,6 @@ decoration: BoxDecoration(
               ],
             ),
           ),
-
-          // 3D Gift Animation Overlay
           if (_active3DGift != null)
             _Live3DGiftDisplay(
               sender: _active3DGift!['sender']!,
@@ -533,7 +519,7 @@ class _Live3DGiftDisplayState extends State<_Live3DGiftDisplay>
     super.dispose();
   }
 
-@override
+  @override
   Widget build(BuildContext context) {
     return IgnorePointer(
       child: Center(
@@ -548,7 +534,8 @@ class _Live3DGiftDisplayState extends State<_Live3DGiftDisplay>
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Container(
-                      width: 220,
+
+width: 220,
                       height: 220,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
@@ -560,9 +547,16 @@ class _Live3DGiftDisplayState extends State<_Live3DGiftDisplay>
                           ),
                         ],
                       ),
-                      child: Image.network(
+                      child: Image.asset(
                         widget.imageUrl,
                         fit: BoxFit.contain,
+                        errorBuilder: (context, error, stackTrace) {
+                          return const Icon(
+                            Icons.card_giftcard,
+                            color: Colors.amberAccent,
+                            size: 100,
+                          );
+                        },
                       ),
                     ),
                     const SizedBox(height: 12),
