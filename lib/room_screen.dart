@@ -102,7 +102,7 @@ class _RoomScreenState extends State<RoomScreen> {
       final String? uName = data['userName'];
       final String? uId = data['userId'];
 
-      if (chairIndex == null ||  chairIndex < 0 || chairIndex >= _seats.length) {
+      if (chairIndex == null || chairIndex < 0 || chairIndex >= _seats.length) {
         return;
       }
 
@@ -303,7 +303,7 @@ setState(() {
   String _getGiftImage(String giftName) {
     final nameLower = giftName.toLowerCase();
     if (nameLower.contains('rocket')) {
-      return 'assets/gifts/3d-rocket.png';
+      return 'assets/gifts/icons8-rocket-94.png';
     } else if (nameLower.contains('car')) {
       return 'assets/gifts/3d-car.png';
     }
