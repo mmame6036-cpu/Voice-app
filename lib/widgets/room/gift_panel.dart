@@ -158,7 +158,9 @@ context: context,
     showModalBottomSheet(
       context: context,
       backgroundColor: const Color(0xFF131724),
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(22))),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
       builder: (ctx) {
         return Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
@@ -197,7 +199,10 @@ context: context,
                         UserService().coins += amt;
                       });
                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('+$amt ሳንቲም ተሞልቷል! 🪙'), backgroundColor: const Color(0xFF00C9A7)),
+                        SnackBar(
+                          content: Text('+$amt ሳንቲም ተሞልቷል! 🪙'),
+                          backgroundColor: const Color(0xFF00C9A7),
+                        ),
                       );
                     },
                     child: Container(
@@ -228,9 +233,8 @@ context: context,
     );
   }
 
-  @override
-
-Widget build(BuildContext context) {
+@override
+  Widget build(BuildContext context) {
     return Container(
       height: MediaQuery.of(context).size.height * 0.60,
       decoration: const BoxDecoration(
@@ -327,9 +331,9 @@ Widget build(BuildContext context) {
   }
 
   Widget _buildGiftGrid(List<GiftItem> list) {
-    return GridView.builder(
 
-physics: const BouncingScrollPhysics(),
+return GridView.builder(
+      physics: const BouncingScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(10, 4, 10, 16),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 4,
@@ -418,9 +422,9 @@ physics: const BouncingScrollPhysics(),
                             });
                             Navigator.pop(context);
                             widget.onSendGift(
-                              _sendCount > 1 ? '${item.name} x$_sendCount' : item.name,
 
-totalPrice,
+_sendCount > 1 ? '${item.name} x$_sendCount' : item.name,
+                              totalPrice,
                             );
                           } else {
                             ScaffoldMessenger.of(context).showSnackBar(
