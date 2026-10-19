@@ -38,7 +38,7 @@ class _RoomScreenState extends State<RoomScreen> {
 
   bool _isMicMuted = false;
   int _currentSeatCount = 25;
-  int _hostDiamonds = 0; // የሆስቱ የተሰበሰበ ዳይመንድ ቆጣሪ
+  int _hostDiamonds = 0;
   final TextEditingController _msgController = TextEditingController();
 
   Map<String, String>? _active3DGift;
@@ -102,7 +102,7 @@ class _RoomScreenState extends State<RoomScreen> {
       final String? uName = data['userName'];
       final String? uId = data['userId'];
 
-      if (chairIndex == null || chairIndex < 0 || chairIndex >= _seats.length) {
+      if (chairIndex == null ||  chairIndex < 0 || chairIndex >= _seats.length) {
         return;
       }
 
@@ -301,8 +301,7 @@ setState(() {
   }
 
   String _getGiftImage(String giftName) {
-    // በ assets/gifts ፎልደር ውስጥ ያለውን ምስል በቀጥታ ይጠቀማል
-    return 'assets/gifts/car.png';
+    return 'assets/gifts/3d-car.png';
   }
 
   void _openGifts() {
@@ -408,9 +407,9 @@ setState(() {
                         'Room Diamonds: $_hostDiamonds',
                         style: const TextStyle(
                           color: Colors.white,
+                          fontWeight: FontWeight.bold,
 
-fontWeight: FontWeight.bold,
-                          fontSize: 13,
+fontSize: 13,
                         ),
                       ),
                     ],
@@ -534,10 +533,10 @@ class _Live3DGiftDisplayState extends State<_Live3DGiftDisplay>
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Container(
-
-width: 220,
+                      width: 220,
                       height: 220,
-                      decoration: BoxDecoration(
+
+decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         boxShadow: [
                           BoxShadow(
