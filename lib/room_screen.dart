@@ -102,7 +102,7 @@ class _RoomScreenState extends State<RoomScreen> {
       final String? uName = data['userName'];
       final String? uId = data['userId'];
 
-      if (chairIndex == null ||  chairIndex < 0 || chairIndex >= _seats.length) {
+      if (chairIndex == null  chairIndex < 0  chairIndex >= _seats.length) {
         return;
       }
 
@@ -301,6 +301,12 @@ setState(() {
   }
 
   String _getGiftImage(String giftName) {
+    final nameLower = giftName.toLowerCase();
+    if (nameLower.contains('rocket')) {
+      return 'assets/gifts/3d-rocket.png';
+    } else if (nameLower.contains('car')) {
+      return 'assets/gifts/3d-car.png';
+    }
     return 'assets/gifts/3d-car.png';
   }
 
@@ -403,13 +409,13 @@ setState(() {
                     children: [
                       const Icon(Icons.diamond, color: Colors.cyanAccent, size: 16),
                       const SizedBox(width: 6),
-                      Text(
+
+Text(
                         'Room Diamonds: $_hostDiamonds',
                         style: const TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.bold,
-
-fontSize: 13,
+                          fontSize: 13,
                         ),
                       ),
                     ],
@@ -528,15 +534,15 @@ class _Live3DGiftDisplayState extends State<_Live3DGiftDisplay>
             return Opacity(
               opacity: _opacity.value,
               child: Transform.scale(
-                scale: _scale.value,
+
+scale: _scale.value,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Container(
                       width: 220,
                       height: 220,
-
-decoration: BoxDecoration(
+                      decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         boxShadow: [
                           BoxShadow(
