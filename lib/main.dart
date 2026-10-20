@@ -12,6 +12,14 @@ import 'coin_seller_screen.dart';
 import 'daily_tasks_screen.dart';
 import 'screen/login_screen.dart';
 
+// Integrated Modules
+import 'store_screen.dart';
+import 'backpack_screen.dart';
+import 'level_screen.dart';
+import 'support_screen.dart';
+import 'settings_screen.dart';
+import 'invite_screen.dart';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await UserService().initializeUser();
@@ -35,6 +43,11 @@ class NileVoiceApp extends StatelessWidget {
       routes: {
         '/login': (context) => const LoginScreen(),
         '/home': (context) => const MainNavigationScreen(),
+        '/store': (context) => const StoreScreen(),
+        '/backpack': (context) => const BackpackScreen(),
+        '/level': (context) => const LevelScreen(),
+        '/support': (context) => const SupportScreen(),
+        '/settings': (context) => const SettingsScreen(),
       },
     );
   }
@@ -121,7 +134,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _fetchRooms();
   }
 
-  List<Map<String, dynamic>> _getDefaultRooms() {
+List<Map<String, dynamic>> _getDefaultRooms() {
     return [
       {
         'roomId': '2001',
@@ -144,7 +157,7 @@ class _HomeScreenState extends State<HomeScreen> {
     ];
   }
 
-Future<void> _fetchRooms() async {
+  Future<void> _fetchRooms() async {
     try {
       final response = await http
           .get(Uri.parse('https://voice-app-2-jd95.onrender.com/api/rooms'))
@@ -241,7 +254,8 @@ Future<void> _fetchRooms() async {
     try {
       await http.post(
         Uri.parse('https://voice-app-2-jd95.onrender.com/api/rooms/create'),
-        headers: {'Content-Type': 'application/json'},
+
+headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'roomId': _user.userId,
           'title': "${_user.userName}'s Room",
@@ -266,7 +280,7 @@ Future<void> _fetchRooms() async {
     ).then((_) => _fetchRooms());
   }
 
-@override
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
@@ -338,7 +352,8 @@ Future<void> _fetchRooms() async {
                                 style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
                               ),
                               const SizedBox(height: 4),
-                              Text(
+
+Text(
                                 b['subtitle'],
                                 style: const TextStyle(fontSize: 12, color: Colors.white70),
                               ),
@@ -355,8 +370,7 @@ Future<void> _fetchRooms() async {
             const SizedBox(height: 18),
             SizedBox(
               height: 38,
-
-child: ListView.separated(
+              child: ListView.separated(
                 scrollDirection: Axis.horizontal,
                 itemCount: _categories.length,
                 separatorBuilder: (_, __) => const SizedBox(width: 8),
@@ -442,7 +456,8 @@ child: ListView.separated(
             builder: (_) => RoomScreen(
               roomId: roomId,
               roomTitle: title,
-              hostName: host,
+
+hostName: host,
             ),
           ),
         );
@@ -463,8 +478,7 @@ child: ListView.separated(
                   radius: 26,
                   backgroundColor: Color(0xFF00C9A7),
                   child: Icon(Icons.headset, color: Colors.black, size: 26),
-
-),
+                ),
                 Positioned(
                   bottom: 0,
                   right: 0,
@@ -558,7 +572,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     const SizedBox(width: 14),
                     Expanded(
                       child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+
+crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
                             _user.userName,
@@ -570,8 +585,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                             decoration: BoxDecoration(
-
-color: const Color(0xFF161B26),
+                              color: const Color(0xFF161B26),
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(color: Colors.white12),
                             ),
@@ -585,7 +599,12 @@ color: const Color(0xFF161B26),
                     ),
                     IconButton(
                       icon: const Icon(Icons.settings_outlined, color: Colors.white70),
-                      onPressed: () {},
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                        );
+                      },
                     ),
                   ],
                 ),
@@ -631,7 +650,8 @@ color: const Color(0xFF161B26),
                     Expanded(
                       child: GestureDetector(
                         onTap: () async {
-                          await Navigator.push(
+
+await Navigator.push(
                             context,
                             MaterialPageRoute(builder: (_) => const RechargeScreen()),
                           );
@@ -649,8 +669,7 @@ color: const Color(0xFF161B26),
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
-
-children: [
+                                  children: [
                                     const Text('Coins', style: TextStyle(color: Colors.white60, fontSize: 12)),
                                     const SizedBox(height: 6),
                                     Text(
@@ -707,7 +726,8 @@ children: [
                                 backgroundColor: Color(0xFF38B29C),
                                 child: Icon(Icons.diamond, color: Colors.white, size: 18),
                               ),
-                            ],
+
+],
                           ),
                         ),
                       ),
@@ -730,8 +750,7 @@ children: [
                           onTap: () {
                             Navigator.push(
                               context,
-
-MaterialPageRoute(builder: (_) => const HostCenterScreen()),
+                              MaterialPageRoute(builder: (_) => const HostCenterScreen()),
                             );
                           },
                           child: Padding(
@@ -788,6 +807,7 @@ MaterialPageRoute(builder: (_) => const HostCenterScreen()),
                     mainAxisSpacing: 16,
                     crossAxisSpacing: 10,
                     children: [
+                      // 1. Task
                       InkWell(
                         borderRadius: BorderRadius.circular(12),
                         onTap: () {
@@ -800,13 +820,100 @@ MaterialPageRoute(builder: (_) => const HostCenterScreen()),
                         },
                         child: _buildGridMenuItem(icon: Icons.task_alt, label: 'Task'),
                       ),
-                      _buildGridMenuItem(icon: Icons.person_add_alt, label: 'Invite'),
-                      _buildGridMenuItem(icon: Icons.shopping_bag_outlined, label: 'Store'),
-                      _buildGridMenuItem(icon: Icons.backpack_outlined, label: 'Backpack'),
-                      _buildGridMenuItem(icon: Icons.military_tech_outlined, label: 'Level'),
-                      _buildGridMenuItem(icon: Icons.shield_outlined, label: 'Medal Wall'),
-                      _buildGridMenuItem(icon: Icons.headset_mic_outlined, label: 'Support'),
-                      _buildGridMenuItem(icon: Icons.tune, label: 'Settings'),
+
+// 2. Invite
+                      InkWell(
+                        borderRadius: BorderRadius.circular(12),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => InviteScreen(
+                                userId: _user.userId,
+                                userName: _user.userName.isNotEmpty ? _user.userName : 'User_${_user.userId}',
+                                onRewardClaimed: (bonusCoins) {
+                                  _user.coins += bonusCoins;
+                                  _refreshProfile();
+                                },
+                              ),
+                            ),
+                          );
+                        },
+                        child: _buildGridMenuItem(icon: Icons.person_add_alt, label: 'Invite'),
+                      ),
+
+                      // 3. Store
+                      InkWell(
+                        borderRadius: BorderRadius.circular(12),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const StoreScreen()),
+                          );
+                        },
+                        child: _buildGridMenuItem(icon: Icons.shopping_bag_outlined, label: 'Store'),
+                      ),
+
+                      // 4. Backpack
+                      InkWell(
+                        borderRadius: BorderRadius.circular(12),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const BackpackScreen()),
+                          );
+                        },
+                        child: _buildGridMenuItem(icon: Icons.backpack_outlined, label: 'Backpack'),
+                      ),
+
+                      // 5. Level
+                      InkWell(
+                        borderRadius: BorderRadius.circular(12),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const LevelScreen()),
+                          );
+                        },
+                        child: _buildGridMenuItem(icon: Icons.military_tech_outlined, label: 'Level'),
+                      ),
+
+                      // 6. Medal Wall
+                      InkWell(
+                        borderRadius: BorderRadius.circular(12),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const InternalMedalWallScreen()),
+                          );
+                        },
+                        child: _buildGridMenuItem(icon: Icons.shield_outlined, label: 'Medal Wall'),
+                      ),
+
+                      // 7. Support
+                      InkWell(
+                        borderRadius: BorderRadius.circular(12),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const SupportScreen()),
+                          );
+                        },
+                        child: _buildGridMenuItem(icon: Icons.headset_mic_outlined, label: 'Support'),
+                      ),
+
+                      // 8. Settings
+                      InkWell(
+                        borderRadius: BorderRadius.circular(12),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+
+MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                          );
+                        },
+                        child: _buildGridMenuItem(icon: Icons.tune, label: 'Settings'),
+                      ),
                     ],
                   ),
                 ),
@@ -819,7 +926,7 @@ MaterialPageRoute(builder: (_) => const HostCenterScreen()),
     );
   }
 
-Widget _buildActionItem({required IconData icon, required String label}) {
+  Widget _buildActionItem({required IconData icon, required String label}) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
