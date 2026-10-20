@@ -59,7 +59,6 @@ class _GiftPanelState extends State<GiftPanel> with SingleTickerProviderStateMix
   String _selectedGiftId = 'lollipop';
   int _sendCount = 1;
 
-  // የሀላ (Hala) ቁጥሮች
   final List<int> _presetCounts = const [500, 200, 100, 77, 33, 10, 1];
 
   final List<GiftItem> _gifts = const [
@@ -103,64 +102,58 @@ class _GiftPanelState extends State<GiftPanel> with SingleTickerProviderStateMix
   }
 
   void _showCountMenu(BuildContext ctx) {
-    showDialog(
+    showModalBottomSheet(
       context: ctx,
-      backgroundColor: Colors.transparent,
+      backgroundColor: const Color(0xFF131724),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
       builder: (context) {
-        return Stack(
-          children: [
-            Positioned(
-              right: 80,
-              bottom: 60,
-              child: Material(
-                color: Colors.transparent,
-                child: Container(
-                  width: 90,
-                  decoration: BoxDecoration(
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 12),
+                child: Text(
+                  'የስጦታ ብዛት ምረጥ',
+                  style: TextStyle(
                     color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 10)],
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: _presetCounts.map((c) {
-                      final isSel = _sendCount == c;
-                      return InkWell(
-                        onTap: () {
-                          setState(() => _sendCount = c);
-                          Navigator.pop(context);
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                          width: double.infinity,
-                          decoration: BoxDecoration(
-                            color: isSel ? const Color(0xFF00C9A7).withOpacity(0.2) : Colors.transparent,
-                            borderRadius: BorderRadius.circular(8),
-
-),
-                          child: Text(
-                            '$c',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: isSel ? const Color(0xFF00C9A7) : Colors.black87,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14,
-                            ),
-                          ),
-                        ),
-                      );
-                    }).toList(),
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
                   ),
                 ),
               ),
-            ),
-          ],
+              const Divider(color: Colors.white12, height: 1),
+              ..._presetCounts.map((c) {
+                final isSel = _sendCount == c;
+                return ListTile(
+                  title: Text(
+                    'x$c',
+                    style: TextStyle(
+                      color: isSel ? const Color(0xFF00C9A7) : Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                    ),
+                  ),
+                  trailing: isSel
+                      ? const Icon(Icons.check_circle, color: Color(0xFF00C9A7))
+                      : null,
+                  onTap: () {
+                    setState(() => _sendCount = c);
+                    Navigator.pop(context);
+                  },
+                );
+              }).toList(),
+              const SizedBox(height: 8),
+            ],
+          ),
         );
       },
     );
   }
 
-  @override
+@override
   Widget build(BuildContext context) {
     final selectedGift = _gifts.firstWhere(
       (g) => g.id == _selectedGiftId,
@@ -243,8 +236,7 @@ class _GiftPanelState extends State<GiftPanel> with SingleTickerProviderStateMix
                   onTap: () => _showCountMenu(context),
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-
-decoration: BoxDecoration(
+                    decoration: BoxDecoration(
                       color: const Color(0xFF1E2638),
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(color: Colors.white24),
@@ -256,7 +248,8 @@ decoration: BoxDecoration(
                           style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
                         ),
                         const SizedBox(width: 4),
-                        const Icon(Icons.arrow_drop_up, color: Colors.white70, size: 18),
+
+const Icon(Icons.arrow_drop_up, color: Colors.white70, size: 18),
                       ],
                     ),
                   ),
@@ -341,8 +334,7 @@ decoration: BoxDecoration(
                       fit: BoxFit.contain,
                       errorBuilder: (context, error, stackTrace) => const Icon(
                         Icons.card_giftcard,
-
-size: 38,
+                        size: 38,
                         color: Colors.amberAccent,
                       ),
                     ),
@@ -358,7 +350,8 @@ size: 38,
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     const Icon(Icons.monetization_on, color: Colors.amber, size: 11),
-                    const SizedBox(width: 3),
+
+const SizedBox(width: 3),
                     Text(
                       '${item.price}',
                       style: const TextStyle(color: Colors.white70, fontSize: 11),
