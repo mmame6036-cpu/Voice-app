@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'services/user_service.dart';
@@ -42,6 +43,7 @@ class _RoomScreenState extends State<RoomScreen> {
   final TextEditingController _msgController = TextEditingController();
 
   Map<String, String>? _active3DGift;
+  String? _jackpotBannerText;
 
   final List<Map<String, String>> _messages = [
     {
@@ -302,7 +304,9 @@ setState(() {
 
   String _getGiftImage(String giftName) {
     final nameLower = giftName.toLowerCase();
-    if (nameLower.contains('rocket')) {
+    if (nameLower.contains('lollipop')) {
+      return 'assets/gifts/3d-lollipop.png';
+    } else if (nameLower.contains('rocket')) {
       return 'assets/gifts/icons8-rocket-94.png';
     } else if (nameLower.contains('car')) {
       return 'assets/gifts/3d-car.png';
@@ -315,25 +319,54 @@ setState(() {
       context,
       userCoins: _user.coins,
       seats: _seats,
-      onSendGift: (name, price) {
-        setState(() {
-          if (_user.coins >= price) {
-            _user.coins -= price;
-          }
+      onSendGift: (name, price, count, isLucky) {
+        final int totalCost = price * count;
+        final int diamondReward = (totalCost * 0.70).round();
 
-          _hostDiamonds += price;
+        setState(() {
+          _hostDiamonds += diamondReward;
           if (_seats.isNotEmpty) {
-            _seats[0]['diamonds'] = (_seats[0]['diamonds'] ?? 0) + price;
+            _seats[0]['diamonds'] = (_seats[0]['diamonds'] ?? 0) + diamondReward;
           }
 
           _active3DGift = {
             'sender': _user.userName,
-            'gift': name,
+            'gift': count > 1 ? '$name x$count' : name,
             'image': _getGiftImage(name),
           };
         });
 
-        final giftText = '${_user.userName} sent a $name! (+${price} 💎)';
+        // የጋምብል / የዕድል ብዜት (Lucky Multiplier)
+        if (isLucky) {
+          final rand = Random().nextInt(100);
+          int multiplier = 0;
+
+          if (rand < 5) {
+            multiplier = 250; // 5% ዕድል ለ 250x
+          } else if (rand < 15) {
+            multiplier = 50;  // 10% ዕድል ለ 50x
+          } else if (rand < 35) {
+            multiplier = 25;  // 20% ዕድል ለ 25x
+          }
+
+          if (multiplier > 0) {
+            final int winCoins = price * multiplier;
+            _user.coins += winCoins;
+
+            final bannerMsg = '${_user.userName} so lucky and won ${multiplier}x the prize ($winCoins Coins)!';
+            setState(() {
+              _jackpotBannerText = bannerMsg;
+            });
+
+            _socket.sendChatMessage(roomId: widget.roomId, text: '🎉 $bannerMsg');
+
+            Future.delayed(const Duration(seconds: 4), () {
+              if (mounted) setState(() => _jackpotBannerText = null);
+            });
+          }
+        }
+
+        final giftText = '${_user.userName} sent $name x$count! (+${diamondReward} 💎)';
         _socket.sendChatMessage(roomId: widget.roomId, text: giftText);
         setState(() {
           _messages.add({
@@ -382,7 +415,7 @@ setState(() {
     super.dispose();
   }
 
-  @override
+@override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Stack(
@@ -409,8 +442,7 @@ setState(() {
                     children: [
                       const Icon(Icons.diamond, color: Colors.cyanAccent, size: 16),
                       const SizedBox(width: 6),
-
-Text(
+                      Text(
                         'Room Diamonds: $_hostDiamonds',
                         style: const TextStyle(
                           color: Colors.white,
@@ -453,6 +485,42 @@ Text(
               ],
             ),
           ),
+          if (_jackpotBannerText != null)
+            Positioned(
+              top: 80,
+              left: 20,
+              right: 20,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFFFFB300), Color(0xFFFF6F00)],
+                  ),
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: const [
+                    BoxShadow(color: Colors.black45, blurRadius: 10, offset: Offset(0, 4)),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.emoji_events, color: Colors.white, size: 22),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _jackpotBannerText!,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+
+),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           if (_active3DGift != null)
             _Live3DGiftDisplay(
               sender: _active3DGift!['sender']!,
@@ -534,8 +602,7 @@ class _Live3DGiftDisplayState extends State<_Live3DGiftDisplay>
             return Opacity(
               opacity: _opacity.value,
               child: Transform.scale(
-
-scale: _scale.value,
+                scale: _scale.value,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -568,7 +635,8 @@ scale: _scale.value,
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                       decoration: BoxDecoration(
-                        gradient: const LinearGradient(
+
+gradient: const LinearGradient(
                           colors: [Color(0xFF00C9A7), Color(0xFF6C5CE7)],
                         ),
                         borderRadius: BorderRadius.circular(22),
