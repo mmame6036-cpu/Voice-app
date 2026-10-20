@@ -117,6 +117,14 @@ coins: { type: Number, default: 1000 },
 });
 const User = mongoose.model('User', userSchema);
 
+const luckyPoolSchema = new mongoose.Schema({
+  poolName: { type: String, default: 'lucky_pool', unique: true },
+  balance: { type: Number, default: 50000 },
+  totalIn: { type: Number, default: 0 },
+  totalOut: { type: Number, default: 0 }
+});
+const LuckyPool = mongoose.model('LuckyPool', luckyPoolSchema);
+
 const messageSchema = new mongoose.Schema({
   senderId: { type: String, required: true },
   receiverId: { type: String, required: true },
@@ -212,13 +220,13 @@ app.post('/api/admin/approve-payment', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Already processed payment' });
     }
 
-    const user = await User.findOneAndUpdate(
+const user = await User.findOneAndUpdate(
       { userId: payment.userId },
       { $inc: { coins: payment.amountCoins } },
       { new: true }
     );
 
-await Transaction.create({
+    await Transaction.create({
       userId: payment.userId,
       type: 'recharge',
       amount: payment.amountCoins,
@@ -345,7 +353,7 @@ app.post('/api/rooms/create', async (req, res) => {
     const randomRoom = Math.floor(1000 + Math.random() * 9000).toString();
     const roomId = req.body.roomId ? req.body.roomId : randomRoom;
 
-let room = await Room.findOne({ roomId: String(roomId) });
+    let room = await Room.findOne({ roomId: String(roomId) });
     if (!room) {
       const defaultTitle = hostName ? (hostName + "'s Room") : 'Live Room';
 
@@ -486,8 +494,7 @@ app.post('/api/auth/google', async (req, res) => {
 });
 
 app.get('/api/search-user', async (req, res) => {
-
-try {
+  try {
     const userId = req.query.userId;
     if (!userId) {
       return res.status(400).json({ error: 'User ID is required' });
@@ -547,7 +554,6 @@ io.on('connection', (socket) => {
       });
       await newMsg.save();
 
-      // Track daily messages sent task
       if (senderId) {
         const today = getTodayString();
         await UserTask.findOneAndUpdate(
@@ -732,26 +738,29 @@ if (caller.coins < cost) {
     io.to(roomId).emit('chat_message', data);
   });
 
+  // Gift Engine with Sustainable Server Lucky Pool Logic
   socket.on('gift_sent', async (data) => {
     try {
-      const { senderId, receiverId, giftPrice, room, giftName } = data;
+      const { senderId, receiverId, giftPrice, room, giftName, count, isLucky } = data;
       let roomId = '1001';
       if (room) roomId = String(room);
       if (data.roomId) roomId = String(data.roomId);
 
-      const cost = Number(giftPrice) ? Number(giftPrice) : 0;
+      const giftCount = Number(count) ? Number(count) : 1;
+      const unitPrice = Number(giftPrice) ? Number(giftPrice) : 0;
+      const totalCost = unitPrice * giftCount;
 
       const sender = await User.findOne({ userId: String(senderId) });
       if (!sender) return;
-      if (sender.coins < cost) {
+      if (sender.coins < totalCost) {
         socket.emit('gift_error', { message: 'Insufficient coins balance' });
         return;
       }
 
-      sender.coins -= cost;
+      sender.coins -= totalCost;
       await sender.save();
 
-      // Track Daily Gift Sent Task
+// Track Daily Gift Sent Task
       if (senderId) {
         const today = getTodayString();
         await UserTask.findOneAndUpdate(
@@ -761,10 +770,12 @@ if (caller.coins < cost) {
         );
       }
 
-if (receiverId) {
+      // 70% to Receiver Diamonds/Points
+      const diamondReward = Math.round(totalCost * 0.70);
+      if (receiverId) {
         await User.findOneAndUpdate(
           { userId: String(receiverId) },
-          { $inc: { points: cost } }
+          { $inc: { points: diamondReward } }
         );
 
         const hostAgencyRecord = await AgencyHost.findOne({ 
@@ -773,13 +784,13 @@ if (receiverId) {
         });
 
         if (hostAgencyRecord) {
-          hostAgencyRecord.currentMonthPoints = (hostAgencyRecord.currentMonthPoints ? hostAgencyRecord.currentMonthPoints : 0) + cost;
+          hostAgencyRecord.currentMonthPoints = (hostAgencyRecord.currentMonthPoints ? hostAgencyRecord.currentMonthPoints : 0) + diamondReward;
           await hostAgencyRecord.save();
 
           const parentAgency = await Agency.findOne({ agencyId: hostAgencyRecord.agencyId });
           if (parentAgency) {
             const rate = parentAgency.commissionRate ? parentAgency.commissionRate : 10;
-            const agencyCommissionPoints = Math.floor(cost * (rate / 100));
+            const agencyCommissionPoints = Math.floor(diamondReward * (rate / 100));
 
             parentAgency.balancePoints = (parentAgency.balancePoints ? parentAgency.balancePoints : 0) + agencyCommissionPoints;
             parentAgency.totalEarnings = (parentAgency.totalEarnings ? parentAgency.totalEarnings : 0) + agencyCommissionPoints;
@@ -794,12 +805,79 @@ if (receiverId) {
       await Transaction.create({
         userId: String(senderId),
         type: 'gift_sent',
-        amount: cost,
+        amount: totalCost,
         balanceAfter: sender.coins,
-        description: 'Sent ' + defaultGift + ' to ' + defaultTarget
+        description: 'Sent ' + defaultGift + ' x' + giftCount + ' to ' + defaultTarget
       });
 
-      const payload = Object.assign({}, data, { senderCoins: sender.coins });
+      // House Edge Pool Logic for Lucky Multipliers
+      let wonMultiplier = 0;
+      let wonCoins = 0;
+
+      if (isLucky) {
+        const poolTax = Math.round(totalCost * 0.20);
+        let pool = await LuckyPool.findOneAndUpdate(
+          { poolName: 'lucky_pool' },
+          { $inc: { balance: poolTax, totalIn: poolTax } },
+          { new: true, upsert: true }
+        );
+
+        const rand = Math.floor(Math.random() * 100);
+        let targetMultiplier = 0;
+
+        if (rand < 2) {
+          targetMultiplier = 250;
+        } else if (rand < 7) {
+          targetMultiplier = 50;
+        } else if (rand < 20) {
+          targetMultiplier = 25;
+        }
+
+        if (targetMultiplier > 0) {
+          const potentialWin = unitPrice * targetMultiplier;
+          if (pool && pool.balance >= potentialWin) {
+            wonMultiplier = targetMultiplier;
+            wonCoins = potentialWin;
+
+            pool.balance -= wonCoins;
+            pool.totalOut += wonCoins;
+            await pool.save();
+
+            sender.coins += wonCoins;
+            await sender.save();
+
+            await Transaction.create({
+              userId: String(senderId),
+              type: 'lucky_win',
+              amount: wonCoins,
+              balanceAfter: sender.coins,
+              description: 'Won ' + wonMultiplier + 'x lucky prize on ' + defaultGift
+            });
+
+            const bannerText = sender.name + ' so lucky and won ' + wonMultiplier + 'x the prize (' + wonCoins + ' Coins)!';
+            io.to(roomId).emit('chat_message', {
+              room: roomId,
+              roomId: roomId,
+              sender: 'Jackpot',
+              text: '🎉 ' + bannerText
+            });
+
+            io.to(roomId).emit('jackpot_win_broadcast', {
+              senderName: sender.name,
+              multiplier: wonMultiplier,
+              coins: wonCoins,
+              giftName: defaultGift
+            });
+          }
+        }
+      }
+
+const payload = Object.assign({}, data, {
+        senderCoins: sender.coins,
+        wonMultiplier: wonMultiplier,
+        wonCoins: wonCoins,
+        diamondReward: diamondReward
+      });
       io.to(roomId).emit('gift_sent', payload);
     } catch (e) {
       console.error('Gift transaction error:', e);
@@ -811,7 +889,6 @@ if (receiverId) {
   });
 
   socket.on('disconnect', async () => {
-    // Record Room Stay Duration for Task
     if (socket.userId && roomUserStayTimes[socket.userId]) {
       const stayMs = Date.now() - roomUserStayTimes[socket.userId];
       const stayMinutes = Math.floor(stayMs / 60000);
