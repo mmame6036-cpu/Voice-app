@@ -13,6 +13,7 @@ import 'invite_screen.dart';
 import 'wallet_screen.dart';
 import 'backpack_screen.dart';
 import 'level_screen.dart';
+import 'medal_wall_screen.dart';
 
 class ProfileScreen extends StatelessWidget {
   final String userId;
@@ -113,9 +114,9 @@ class ProfileScreen extends StatelessWidget {
                       border: Border.all(color: Colors.amber),
                     ),
                     child: const Text(
-                      '👑 Master Admin',
 
-style: TextStyle(
+'👑 Master Admin',
+                      style: TextStyle(
                         color: Colors.amber,
                         fontWeight: FontWeight.bold,
                         fontSize: 12,
@@ -179,6 +180,19 @@ style: TextStyle(
           const SizedBox(height: 12),
 
           _buildMenuItem(
+            icon: Icons.shield_outlined,
+            iconColor: Colors.cyanAccent,
+            title: 'Medal Wall',
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const MedalWallScreen()),
+              );
+            },
+          ),
+          const SizedBox(height: 12),
+
+          _buildMenuItem(
             icon: Icons.mic_external_on,
             iconColor: Colors.purpleAccent,
             title: 'Host Center',
@@ -225,7 +239,7 @@ style: TextStyle(
           ),
           const SizedBox(height: 12),
 
-          _buildMenuItem(
+_buildMenuItem(
             icon: Icons.shopping_bag,
             iconColor: Colors.amberAccent,
             title: 'Store',
@@ -239,8 +253,7 @@ style: TextStyle(
           const SizedBox(height: 12),
 
           _buildMenuItem(
-
-icon: Icons.inventory_2_outlined,
+            icon: Icons.inventory_2_outlined,
             iconColor: Colors.deepOrangeAccent,
             title: 'Backpack',
             onTap: () {
@@ -355,7 +368,8 @@ class _InAppAdminScreenState extends State<InAppAdminScreen> {
       final res = await http.post(
         Uri.parse('https://voice-app-backend.onrender.com/api/admin/toggle-agent'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'userId': targetId, 'isAgent': isAgent}),
+
+body: jsonEncode({'userId': targetId, 'isAgent': isAgent}),
       );
       final data = jsonDecode(res.body);
       if (mounted) {
@@ -376,7 +390,7 @@ class _InAppAdminScreenState extends State<InAppAdminScreen> {
     }
   }
 
-Future<void> _approvePayment(String paymentId) async {
+  Future<void> _approvePayment(String paymentId) async {
     try {
       final res = await http.post(
         Uri.parse('https://voice-app-backend.onrender.com/api/admin/approve-payment'),
@@ -463,7 +477,8 @@ Future<void> _approvePayment(String paymentId) async {
                           style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
                           onPressed: () => _toggleAgent(true),
                           child: const Text('Make Agent', style: TextStyle(color: Colors.white)),
-                        ),
+
+),
                       ),
                       const SizedBox(width: 8),
                       Expanded(
@@ -481,7 +496,7 @@ Future<void> _approvePayment(String paymentId) async {
           ),
           const SizedBox(height: 20),
 
-const Text(
+          const Text(
             'Pending Recharge Requests',
             style: TextStyle(
               color: Colors.white,
