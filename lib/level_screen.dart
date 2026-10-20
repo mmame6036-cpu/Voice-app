@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'services/user_service.dart';
 
 class LevelScreen extends StatefulWidget {
   const LevelScreen({super.key});
@@ -9,6 +10,7 @@ class LevelScreen extends StatefulWidget {
 
 class _LevelScreenState extends State<LevelScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  final UserService _userService = UserService();
 
   final List<Map<String, dynamic>> levels = [
     {'range': 'Lv.1-9', 'tagVal': '1', 'color': Colors.grey, 'hasMedal': false},
@@ -28,13 +30,42 @@ class _LevelScreenState extends State<LevelScreen> with SingleTickerProviderStat
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     _tabController.addListener(() {
-      setState(() {});
+      if (mounted) setState(() {});
     });
   }
 
   @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  int _calculateLevel(int value) {
+    if (value <= 0) return 1;
+    int calculated = (value / 5000).floor() + 1;
+    return calculated > 99 ? 99 : calculated;
+  }
+
+  double _calculateProgress(int value) {
+    int currentLevelBase = ((value / 5000).floor()) * 5000;
+    int remainder = value - currentLevelBase;
+    double progress = remainder / 5000.0;
+    return progress.clamp(0.0, 1.0);
+  }
+
+  int _calculateNeeded(int value) {
+    int nextLevelTarget = (((value / 5000).floor()) + 1) * 5000;
+    return nextLevelTarget - value;
+  }
+
+  @override
   Widget build(BuildContext context) {
-    bool isWealth = _tabController.index == 0;
+    final bool isWealth = _tabController.index == 0;
+    final int userWealthValue = _userService.coins;
+    final int userCharmValue = _userService.points;
+
+    final int currentWealthLv = _calculateLevel(userWealthValue);
+    final int currentCharmLv = _calculateLevel(userCharmValue);
 
     return Scaffold(
       backgroundColor: const Color(0xFF0F0F14),
@@ -42,7 +73,7 @@ class _LevelScreenState extends State<LevelScreen> with SingleTickerProviderStat
         backgroundColor: const Color(0xFF161822),
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: Colors.white, size: 20),
+          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
         title: TabBar(
@@ -63,21 +94,22 @@ class _LevelScreenState extends State<LevelScreen> with SingleTickerProviderStat
         children: [
           _buildLevelTab(
             isWealth: true,
-            titleValue: 'Wealth Value: 26000',
-            currentLv: 'Lv.13',
-            nextLv: 'Lv.14',
-            needed: 'Need 58,000 coins for the upgrade',
-            progress: 0.35,
-            levelDesc: 'Wealth level is based on total coins recharged.',
+            titleValue: 'Wealth Value: $userWealthValue',
+            currentLv: 'Lv.$currentWealthLv',
+            nextLv: 'Lv.${currentWealthLv + 1}',
+
+needed: 'Need ${_calculateNeeded(userWealthValue)} coins for upgrade',
+            progress: _calculateProgress(userWealthValue),
+            levelDesc: 'Wealth level is determined by the total coins spent and recharged.',
           ),
           _buildLevelTab(
             isWealth: false,
-            titleValue: 'Char Value: 3032',
-            currentLv: 'Lv.1',
-            nextLv: 'Lv.2',
-            needed: 'Need 6,968 points for the upgrade',
-            progress: 0.15,
-            levelDesc: 'Charm level is determined by points received.',
+            titleValue: 'Charm Value: $userCharmValue',
+            currentLv: 'Lv.$currentCharmLv',
+            nextLv: 'Lv.${currentCharmLv + 1}',
+            needed: 'Need ${_calculateNeeded(userCharmValue)} points for upgrade',
+            progress: _calculateProgress(userCharmValue),
+            levelDesc: 'Charm level is determined by gifts and points received in rooms.',
           ),
         ],
       ),
@@ -93,16 +125,16 @@ class _LevelScreenState extends State<LevelScreen> with SingleTickerProviderStat
     required double progress,
     required String levelDesc,
   }) {
+    final String displayName = _userService.userName.isNotEmpty ? _userService.userName : 'User_${_userService.userId}';
+
     return ListView(
       padding: const EdgeInsets.all(16.0),
       children: [
-        // 1. User Header Section
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             gradient: LinearGradient(
-
-colors: isWealth
+              colors: isWealth
                   ? [const Color(0xFF3A2E12), const Color(0xFF1C1917)]
                   : [const Color(0xFF331730), const Color(0xFF19121E)],
               begin: Alignment.topCenter,
@@ -116,19 +148,23 @@ colors: isWealth
             children: [
               Row(
                 children: [
-                  const CircleAvatar(
+                  CircleAvatar(
                     radius: 26,
-                    backgroundColor: Colors.white24,
-                    child: Icon(Icons.person, color: Colors.white, size: 30),
+                    backgroundColor: isWealth ? Colors.amber.withOpacity(0.2) : Colors.purpleAccent.withOpacity(0.2),
+                    child: Icon(
+                      isWealth ? Icons.monetization_on : Icons.favorite,
+                      color: isWealth ? Colors.amber : Colors.purpleAccent,
+                      size: 28,
+                    ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'Kedir oumer',
-                          style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                        Text(
+                          displayName,
+                          style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
                         ),
                         const SizedBox(height: 4),
                         Text(
@@ -154,16 +190,14 @@ colors: isWealth
                 value: progress,
                 backgroundColor: Colors.white10,
                 color: isWealth ? Colors.amber : Colors.purpleAccent,
-                minHeight: 5,
+
+minHeight: 6,
                 borderRadius: BorderRadius.circular(5),
               ),
             ],
           ),
         ),
-
         const SizedBox(height: 16),
-
-        // 2. Info Description
         Text(
           isWealth ? 'Wealth Level' : 'Charm Level',
           style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
@@ -174,8 +208,6 @@ colors: isWealth
           style: const TextStyle(color: Colors.white54, fontSize: 12),
         ),
         const SizedBox(height: 14),
-
-        // 3. Level Cards List (Lv.1-9 up to Lv.90-99)
         ...levels.map((item) {
           return Container(
             margin: const EdgeInsets.only(bottom: 12),
@@ -195,11 +227,9 @@ colors: isWealth
                 const SizedBox(height: 10),
                 Row(
                   children: [
-                    // Wealth / Charm Tag Button
                     Expanded(
                       child: Container(
-
-padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
                         decoration: BoxDecoration(
                           color: const Color(0xFF252836),
                           borderRadius: BorderRadius.circular(20),
@@ -237,17 +267,16 @@ padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
                         ),
                       ),
                     ),
-                    const SizedBox(width: 12),
-
-                    // Medal Details Section
                     if (item['hasMedal']) ...[
+                      const SizedBox(width: 12),
                       Expanded(
                         child: Container(
                           padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
                           decoration: BoxDecoration(
                             color: const Color(0xFF252836),
                             borderRadius: BorderRadius.circular(20),
-                          ),
+
+),
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
