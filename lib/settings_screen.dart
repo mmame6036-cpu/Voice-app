@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'services/user_service.dart';
+import 'wallet_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({Key? key}) : super(key: key);
@@ -64,15 +65,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
-          'Setting',
+          'Settings',
           style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 18),
         ),
       ),
       body: ListView(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         children: [
-          // Section 1: Account, Language, Privacy, Blocklist
+          // Section 1: Wallet, Account, Language, Privacy, Blocklist
           _buildGroupCard([
+            _buildTile(
+              title: 'Wallet & Top-up',
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.monetization_on, color: Colors.amber, size: 16),
+                  const SizedBox(width: 4),
+                  Text(
+                    '${_user.coins}',
+                    style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.bold, fontSize: 14),
+                  ),
+                ],
+              ),
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const WalletScreen())),
+            ),
+            const Divider(height: 1, indent: 16, endIndent: 16),
             _buildTile(
               title: 'Account Management',
               onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AccountManagementScreen())),
@@ -83,7 +100,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const LanguageScreen())),
             ),
             const Divider(height: 1, indent: 16, endIndent: 16),
-            _buildTile(
+
+_buildTile(
               title: 'Privacy',
               onTap: () {
                 ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Privacy settings are default.')));
@@ -103,8 +121,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               title: 'Clear cache',
               trailing: Text(
                 _cacheSizeMB > 0 ? '${_cacheSizeMB.toStringAsFixed(2)}MB' : '0.00MB',
-
-style: const TextStyle(color: Colors.black54, fontSize: 14),
+                style: const TextStyle(color: Colors.black54, fontSize: 14),
               ),
               onTap: _clearCache,
             ),
@@ -187,7 +204,6 @@ class AccountManagementScreen extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         children: [
-          // Security Shield Indicator
           Center(
             child: Column(
               children: [
@@ -198,7 +214,8 @@ class AccountManagementScreen extends StatelessWidget {
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     gradient: const LinearGradient(colors: [Color(0xFF6C5CE7), Color(0xFFA29BFE)]),
-                    boxShadow: [
+
+boxShadow: [
                       BoxShadow(color: const Color(0xFF6C5CE7).withOpacity(0.3), blurRadius: 16, spreadRadius: 2),
                     ],
                   ),
@@ -213,12 +230,9 @@ class AccountManagementScreen extends StatelessWidget {
               ],
             ),
           ),
-
-          // Security Actions
           Container(
             decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
-
-child: Column(
+            child: Column(
               children: [
                 _buildActionTile(context, 'Change Email'),
                 const Divider(height: 1, indent: 16, endIndent: 16),
@@ -231,8 +245,6 @@ child: Column(
             ),
           ),
           const SizedBox(height: 14),
-
-          // Delete Account
           Container(
             decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
             child: ListTile(
@@ -273,17 +285,17 @@ class _LanguageScreenState extends State<LanguageScreen> {
   final List<String> _languages = [
     'Follow system',
     'English',
-    '繁體中文',
-    'العربية',
-    'አማርኛ',
-    'Español',
-    'Français',
-    'မြန်မာ',
-    'नेपाली',
-    'Português',
-    'Русский',
-    'Türkçe',
-    'Tiếng Việt',
+    'Chinese',
+    'Arabic',
+    'Amharic',
+    'Spanish',
+    'French',
+    'Myanmar',
+    'Nepali',
+    'Portuguese',
+    'Russian',
+    'Turkish',
+    'Vietnamese',
   ];
 
   @override
@@ -307,7 +319,8 @@ class _LanguageScreenState extends State<LanguageScreen> {
                 SnackBar(content: Text('Language saved: $_selectedLang'), backgroundColor: const Color(0xFF6C5CE7)),
               );
             },
-            child: const Text('Save', style: TextStyle(color: Color(0xFF6C5CE7), fontWeight: FontWeight.bold, fontSize: 16)),
+
+child: const Text('Save', style: TextStyle(color: Color(0xFF6C5CE7), fontWeight: FontWeight.bold, fontSize: 16)),
           ),
         ],
       ),
@@ -406,7 +419,8 @@ class DeleteAccountScreen extends StatelessWidget {
             const SizedBox(height: 20),
             const Text('Account Asset Cleared', style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold, fontSize: 15)),
             const SizedBox(height: 4),
-            const Text('All information on Nile Voice will be cleared, including profile and transaction history.', style: TextStyle(color: Colors.black45, fontSize: 13)),
+
+const Text('All information on Nile Voice will be cleared, including profile and transaction history.', style: TextStyle(color: Colors.black45, fontSize: 13)),
             const SizedBox(height: 16),
             const Text('Pre-Cancellation Period', style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold, fontSize: 15)),
             const SizedBox(height: 4),
@@ -417,8 +431,7 @@ class DeleteAccountScreen extends StatelessWidget {
               height: 46,
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6C5CE7), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24))),
-
-onPressed: () => Navigator.pop(context),
+                onPressed: () => Navigator.pop(context),
                 child: const Text('Cancel', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
               ),
             ),
