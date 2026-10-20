@@ -12,6 +12,7 @@ import 'store_screen.dart';
 import 'invite_screen.dart';
 import 'wallet_screen.dart';
 import 'backpack_screen.dart';
+import 'level_screen.dart';
 
 class ProfileScreen extends StatelessWidget {
   final String userId;
@@ -113,9 +114,9 @@ class ProfileScreen extends StatelessWidget {
                     ),
                     child: const Text(
                       '👑 Master Admin',
-                      style: TextStyle(
 
-color: Colors.amber,
+style: TextStyle(
+                        color: Colors.amber,
                         fontWeight: FontWeight.bold,
                         fontSize: 12,
                       ),
@@ -159,6 +160,19 @@ color: Colors.amber,
                     ),
                   ),
                 ),
+              );
+            },
+          ),
+          const SizedBox(height: 12),
+
+          _buildMenuItem(
+            icon: Icons.military_tech,
+            iconColor: Colors.amberAccent,
+            title: 'Level & Privileges',
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const LevelScreen()),
               );
             },
           ),
@@ -225,7 +239,8 @@ color: Colors.amber,
           const SizedBox(height: 12),
 
           _buildMenuItem(
-            icon: Icons.inventory_2_outlined,
+
+icon: Icons.inventory_2_outlined,
             iconColor: Colors.deepOrangeAccent,
             title: 'Backpack',
             onTap: () {
@@ -239,8 +254,7 @@ color: Colors.amber,
 
           _buildMenuItem(
             icon: Icons.person_add_alt_1,
-
-iconColor: Colors.tealAccent,
+            iconColor: Colors.tealAccent,
             title: 'Invite Friends',
             onTap: () {
               Navigator.push(
@@ -362,7 +376,7 @@ class _InAppAdminScreenState extends State<InAppAdminScreen> {
     }
   }
 
-  Future<void> _approvePayment(String paymentId) async {
+Future<void> _approvePayment(String paymentId) async {
     try {
       final res = await http.post(
         Uri.parse('https://voice-app-backend.onrender.com/api/admin/approve-payment'),
@@ -371,7 +385,7 @@ class _InAppAdminScreenState extends State<InAppAdminScreen> {
       );
       final data = jsonDecode(res.body);
 
-if (mounted) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(data['message'] ?? 'Payment Approved'),
@@ -467,7 +481,7 @@ if (mounted) {
           ),
           const SizedBox(height: 20),
 
-          const Text(
+const Text(
             'Pending Recharge Requests',
             style: TextStyle(
               color: Colors.white,
@@ -478,8 +492,7 @@ if (mounted) {
           const SizedBox(height: 10),
           if (_isLoading)
             const Center(
-
-child: Padding(
+              child: Padding(
                 padding: EdgeInsets.all(20),
                 child: CircularProgressIndicator(color: Colors.amber),
               ),
