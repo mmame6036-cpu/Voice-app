@@ -5,7 +5,14 @@ import 'package:http/http.dart' as http;
 import 'services/user_service.dart';
 import 'services/agora_service.dart';
 import 'services/socket_service.dart';
+
 import 'settings_screen.dart';
+import 'store_screen.dart';
+import 'backpack_screen.dart';
+import 'level_screen.dart';
+import 'medal_wall_screen.dart';
+import 'support_screen.dart';
+import 'invite_screen.dart';
 
 import 'widgets/room/room_background.dart';
 import 'widgets/room/room_header.dart';
@@ -123,7 +130,8 @@ class _RoomScreenState extends State<RoomScreen> {
           _messages.add({
             'user': 'System',
             'text': '$uName joined seat ${chairIndex + 1}',
-          });
+
+});
         } else if (action == 'leave') {
           if (_seats[chairIndex]['userId'] == uId) {
             _seats[chairIndex]['user'] = null;
@@ -138,7 +146,7 @@ class _RoomScreenState extends State<RoomScreen> {
       });
     };
 
-_socket.onChatMessageReceived = (data) {
+    _socket.onChatMessageReceived = (data) {
       if (!mounted) return;
       final String? sender = data['sender'] ?? data['userName'] ?? 'User';
       final String? text = data['text'] ?? data['message'];
@@ -247,7 +255,7 @@ _socket.onChatMessageReceived = (data) {
       return;
     }
 
-    if (seat['user'] != null && seat['user'].toString().isNotEmpty) {
+if (seat['user'] != null && seat['user'].toString().isNotEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Seat ${index + 1} is occupied by ${seat['user']}'),
@@ -271,7 +279,7 @@ _socket.onChatMessageReceived = (data) {
       action: 'take',
     );
 
-setState(() {
+    setState(() {
       seat['user'] = currentUser;
       seat['userId'] = currentUserId;
       seat['isSpeaking'] = false;
@@ -400,6 +408,158 @@ setState(() {
     );
   }
 
+void _openRoomQuickMenu() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF161826),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: Colors.white24,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const Text(
+                'Room Menu & Quick Navigation',
+                style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 20),
+              GridView.count(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                crossAxisCount: 4,
+                mainAxisSpacing: 16,
+                crossAxisSpacing: 12,
+                childAspectRatio: 0.85,
+                children: [
+                  _buildQuickActionItem(
+                    icon: Icons.shopping_bag,
+                    color: Colors.amberAccent,
+                    title: 'Store',
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => const StoreScreen()));
+                    },
+                  ),
+                  _buildQuickActionItem(
+                    icon: Icons.inventory_2_outlined,
+                    color: Colors.deepOrangeAccent,
+                    title: 'Backpack',
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => const BackpackScreen()));
+                    },
+                  ),
+                  _buildQuickActionItem(
+                    icon: Icons.military_tech,
+                    color: Colors.amber,
+                    title: 'Level',
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => const LevelScreen()));
+                    },
+                  ),
+                  _buildQuickActionItem(
+                    icon: Icons.shield_outlined,
+                    color: Colors.cyanAccent,
+                    title: 'Medal Wall',
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => const MedalWallScreen()));
+                    },
+                  ),
+                  _buildQuickActionItem(
+                    icon: Icons.person_add_alt_1,
+                    color: Colors.tealAccent,
+                    title: 'Invite',
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => InviteScreen(
+                            userId: _user.userId,
+                            userName: _user.userName.isNotEmpty ? _user.userName : 'User_${_user.userId}',
+                            onRewardClaimed: (bonusCoins) {
+                              _user.coins += bonusCoins;
+                            },
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                  _buildQuickActionItem(
+
+icon: Icons.support_agent,
+                    color: const Color(0xFF904BE6),
+                    title: 'Support',
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => const SupportScreen()));
+                    },
+                  ),
+                  _buildQuickActionItem(
+                    icon: Icons.settings,
+                    color: Colors.blueGrey,
+                    title: 'Settings',
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen()));
+                    },
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildQuickActionItem({
+    required IconData icon,
+    required Color color,
+    required String title,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.15),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: color, size: 24),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w500),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _toggleMic() async {
     final muted = await _agora.toggleMute();
     setState(() {
@@ -417,8 +577,7 @@ setState(() {
 
   @override
   Widget build(BuildContext context) {
-
-return Scaffold(
+    return Scaffold(
       body: Stack(
         children: [
           RoomBackground(
@@ -437,14 +596,9 @@ return Scaffold(
                       right: 48,
                       top: 6,
                       child: IconButton(
-                        icon: const Icon(Icons.settings, color: Colors.white, size: 22),
-                        tooltip: 'Settings',
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (_) => const SettingsScreen()),
-                          );
-                        },
+                        icon: const Icon(Icons.dashboard_customize_outlined, color: Colors.white, size: 22),
+                        tooltip: 'Room Menu',
+                        onPressed: _openRoomQuickMenu,
                       ),
                     ),
                   ],
@@ -464,7 +618,8 @@ return Scaffold(
                       const SizedBox(width: 6),
                       Text(
                         'Room Diamonds: $_hostDiamonds',
-                        style: const TextStyle(
+
+style: const TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.bold,
                           fontSize: 13,
@@ -516,8 +671,7 @@ return Scaffold(
                   gradient: const LinearGradient(
                     colors: [Color(0xFFFFB300), Color(0xFFFF6F00)],
                   ),
-
-borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.circular(20),
                   boxShadow: const [
                     BoxShadow(color: Colors.black45, blurRadius: 10, offset: Offset(0, 4)),
                   ],
@@ -588,7 +742,7 @@ class _Live3DGiftDisplayState extends State<_Live3DGiftDisplay>
       duration: const Duration(milliseconds: 2600),
     );
 
-    _scale = TweenSequence<double>([
+_scale = TweenSequence<double>([
       TweenSequenceItem(
         tween: Tween(begin: 0.1, end: 1.2).chain(CurveTween(curve: Curves.elasticOut)),
         weight: 40,
@@ -638,8 +792,7 @@ class _Live3DGiftDisplayState extends State<_Live3DGiftDisplay>
                             spreadRadius: 8,
                           ),
                         ],
-
-),
+                      ),
                       child: Image.asset(
                         widget.imageUrl,
                         fit: BoxFit.contain,
