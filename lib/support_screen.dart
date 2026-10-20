@@ -1,4 +1,7 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'services/user_service.dart';
 
 class SupportScreen extends StatefulWidget {
   const SupportScreen({super.key});
@@ -8,9 +11,11 @@ class SupportScreen extends StatefulWidget {
 }
 
 class _SupportScreenState extends State<SupportScreen> {
+  final UserService _userService = UserService();
   String selectedCategory = 'Common Questions';
+  String _searchQuery = '';
+  final TextEditingController _searchController = TextEditingController();
 
-  // የእያንዳንዱ ምድብ ጥያቄዎችና መልሶች ዳታ
   final Map<String, List<Map<String, String>>> faqData = {
     'Common Questions': [
       {'q': 'How to protect account security?', 'a': 'Never share your password or verification codes with anyone.'},
@@ -46,9 +51,9 @@ class _SupportScreenState extends State<SupportScreen> {
     ],
     'Rooms & Crown Seats': [
       {'q': 'How to invite users into a room', 'a': 'Tap the invite button inside the room and select online friends or share the room link.'},
-      {'q': 'How to change a voice room theme, seat count, mic-on mode, and language', 'a': 'Open room settings at the top right to customize layout and access rights.'},
 
-{'q': 'How to set a room admin', 'a': 'Tap on a user profile in the room and assign them moderator/admin privileges.'},
+{'q': 'How to change a voice room theme, seat count, mic-on mode, and language', 'a': 'Open room settings at the top right to customize layout and access rights.'},
+      {'q': 'How to set a room admin', 'a': 'Tap on a user profile in the room and assign them moderator/admin privileges.'},
       {'q': 'Maximum number of room admins', 'a': 'Standard rooms permit up to 5 concurrent administrators.'},
       {'q': 'How to lock a room seat', 'a': 'Long press an empty microphone seat and tap Lock Seat.'},
       {'q': 'Condition for a Crown Seat to appear in a room', 'a': 'The highest contributor or VIP tier holder automatically claims the Crown Seat.'},
@@ -82,8 +87,178 @@ class _SupportScreenState extends State<SupportScreen> {
   ];
 
   @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _openFeedbackDialog() {
+    final TextEditingController descController = TextEditingController();
+    final TextEditingController txController = TextEditingController();
+    String issueType = selectedCategory;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom,
+                left: 20,
+                right: 20,
+                top: 20,
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Submit Feedback',
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87),
+
+),
+                        IconButton(
+                          icon: const Icon(Icons.close, color: Colors.black54),
+                          onPressed: () => Navigator.pop(context),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    const Text('Category', style: TextStyle(color: Colors.black54, fontSize: 13, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF3EDF9),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          isExpanded: true,
+                          value: issueType,
+                          items: categories.map((cat) {
+                            return DropdownMenuItem(value: cat, child: Text(cat, style: const TextStyle(fontSize: 14)));
+                          }).toList(),
+                          onChanged: (val) {
+                            if (val != null) {
+                              setModalState(() => issueType = val);
+                            }
+                          },
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    const Text('Transaction ID / Order ID (Optional)', style: TextStyle(color: Colors.black54, fontSize: 13, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 6),
+                    TextField(
+                      controller: txController,
+                      decoration: InputDecoration(
+                        hintText: 'e.g. TX123456789',
+                        hintStyle: const TextStyle(color: Colors.black26, fontSize: 13),
+                        filled: true,
+                        fillColor: const Color(0xFFF3EDF9),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    const Text('Describe your issue', style: TextStyle(color: Colors.black54, fontSize: 13, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 6),
+                    TextField(
+                      controller: descController,
+                      maxLines: 4,
+                      decoration: InputDecoration(
+                        hintText: 'Please detail what happened...',
+                        hintStyle: const TextStyle(color: Colors.black26, fontSize: 13),
+                        filled: true,
+                        fillColor: const Color(0xFFF3EDF9),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 46,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF904BE6),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        onPressed: () async {
+                          final text = descController.text.trim();
+                          if (text.isEmpty) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Please describe your issue first')),
+                            );
+                            return;
+                          }
+
+                          Navigator.pop(context);
+
+try {
+                            await http.post(
+                              Uri.parse('https://voice-app-backend.onrender.com/api/feedback'),
+                              headers: {'Content-Type': 'application/json'},
+                              body: jsonEncode({
+                                'userId': _userService.userId,
+                                'category': issueType,
+                                'txId': txController.text.trim(),
+                                'description': text,
+                              }),
+                            );
+                          } catch (_) {}
+
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Feedback submitted successfully! Our team will review it shortly.'),
+                                backgroundColor: Color(0xFF904BE6),
+                              ),
+                            );
+                          }
+                        },
+                        child: const Text('Submit Ticket', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  List<Map<String, String>> _getFilteredFaqs() {
+    if (_searchQuery.trim().isEmpty) {
+      return faqData[selectedCategory] ?? [];
+    }
+    final q = _searchQuery.toLowerCase();
+    List<Map<String, String>> result = [];
+    faqData.forEach((_, list) {
+      for (var item in list) {
+        if (item['q']!.toLowerCase().contains(q) || item['a']!.toLowerCase().contains(q)) {
+          result.add(item);
+        }
+      }
+    });
+    return result;
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final currentFaqs = faqData[selectedCategory] ?? [];
+    final currentFaqs = _getFilteredFaqs();
 
     return Scaffold(
       backgroundColor: const Color(0xFFF3EDF9),
@@ -101,12 +276,8 @@ class _SupportScreenState extends State<SupportScreen> {
         centerTitle: true,
         actions: [
           TextButton(
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('No previous records found.')),
-              );
-            },
-            child: const Text('Record', style: TextStyle(color: Colors.black87, fontSize: 15)),
+            onPressed: _openFeedbackDialog,
+            child: const Text('Ticket', style: TextStyle(color: Color(0xFF904BE6), fontSize: 15, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -116,122 +287,146 @@ class _SupportScreenState extends State<SupportScreen> {
             child: ListView(
               padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
               children: [
-                // 1. Search Bar
+                // 1. Live Search Bar
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 14),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(25),
                   ),
-
-child: const TextField(
+                  child: TextField(
+                    controller: _searchController,
+                    onChanged: (val) {
+                      setState(() {
+                        _searchQuery = val;
+                      });
+                    },
                     decoration: InputDecoration(
-                      icon: Icon(Icons.search, color: Colors.grey),
-                      hintText: 'Search',
-                      hintStyle: TextStyle(color: Colors.black38),
-                      border: InputBorder.none,
+                      icon: const Icon(Icons.search, color: Colors.grey),
+                      hintText: 'Search questions or keywords...',
+                      hintStyle: const TextStyle(color: Colors.black38, fontSize: 14),
+
+border: InputBorder.none,
+                      suffixIcon: _searchQuery.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(Icons.clear, color: Colors.grey, size: 18),
+                              onPressed: () {
+                                _searchController.clear();
+                                setState(() => _searchQuery = '');
+                              },
+                            )
+                          : null,
                     ),
                   ),
                 ),
                 const SizedBox(height: 18),
 
-                // 2. Issue types Header
-                const Text(
-                  'Issue types',
-                  style: TextStyle(color: Colors.black87, fontSize: 16, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 12),
-
-                // 3. Category Buttons (Grid of 2 columns)
-                GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    mainAxisSpacing: 10,
-                    crossAxisSpacing: 10,
-                    childAspectRatio: 2.8,
+                if (_searchQuery.isEmpty) ...[
+                  // 2. Issue types Header
+                  const Text(
+                    'Issue types',
+                    style: TextStyle(color: Colors.black87, fontSize: 16, fontWeight: FontWeight.bold),
                   ),
-                  itemCount: categories.length,
-                  itemBuilder: (context, index) {
-                    final cat = categories[index];
-                    final isSelected = selectedCategory == cat;
-                    return InkWell(
-                      onTap: () {
-                        setState(() {
-                          selectedCategory = cat;
-                        });
-                      },
-                      child: Container(
-                        alignment: Alignment.center,
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                        decoration: BoxDecoration(
-                          color: isSelected ? const Color(0xFF904BE6) : Colors.white,
-                          borderRadius: BorderRadius.circular(12),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.03),
-                              blurRadius: 4,
-                              offset: const Offset(0, 2),
+                  const SizedBox(height: 12),
+
+                  // 3. Category Buttons Grid
+                  GridView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2,
+                      mainAxisSpacing: 10,
+                      crossAxisSpacing: 10,
+                      childAspectRatio: 2.8,
+                    ),
+                    itemCount: categories.length,
+                    itemBuilder: (context, index) {
+                      final cat = categories[index];
+                      final isSelected = selectedCategory == cat;
+                      return InkWell(
+                        onTap: () {
+                          setState(() {
+                            selectedCategory = cat;
+                          });
+                        },
+                        child: Container(
+                          alignment: Alignment.center,
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          decoration: BoxDecoration(
+                            color: isSelected ? const Color(0xFF904BE6) : Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.03),
+                                blurRadius: 4,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: Text(
+                            cat,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: isSelected ? Colors.white : Colors.black87,
+                              fontSize: 13,
+                              fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
                             ),
-                          ],
-                        ),
-                        child: Text(
-                          cat,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: isSelected ? Colors.white : Colors.black87,
-                            fontSize: 13,
-                            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
                           ),
                         ),
-                      ),
-                    );
-                  },
-                ),
-                const SizedBox(height: 22),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 22),
+                ],
 
-                // 4. Questions & Answers Header
-                const Text(
-                  'Questions & Answers',
-                  style: TextStyle(color: Colors.black87, fontSize: 16, fontWeight: FontWeight.bold),
+                // 4. Questions Header
+                Text(
+                  _searchQuery.isEmpty ? 'Questions & Answers' : 'Search Results (${currentFaqs.length})',
+                  style: const TextStyle(color: Colors.black87, fontSize: 16, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 10),
 
                 // 5. Expandable FAQ List
-                ...currentFaqs.map((faq) {
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Theme(
-                      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-                      child: ExpansionTile(
-                        iconColor: Colors.black54,
-                        collapsedIconColor: Colors.black54,
-                        title: Text(
+                if (currentFaqs.isEmpty)
+                  Container(
+                    padding: const EdgeInsets.all(24),
+                    alignment: Alignment.center,
+                    child: const Text('No matching questions found.', style: TextStyle(color: Colors.black45)),
 
-faq['q']!,
-                          style: const TextStyle(color: Colors.black87, fontSize: 14, fontWeight: FontWeight.w500),
-                        ),
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.only(left: 16, right: 16, bottom: 14),
-                            child: Align(
-                              alignment: Alignment.centerLeft,
-                              child: Text(
-                                faq['a']!,
-                                style: const TextStyle(color: Colors.black54, fontSize: 13, height: 1.4),
+)
+                else
+                  ...currentFaqs.map((faq) {
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Theme(
+                        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                        child: ExpansionTile(
+                          iconColor: const Color(0xFF904BE6),
+                          collapsedIconColor: Colors.black54,
+                          title: Text(
+                            faq['q']!,
+                            style: const TextStyle(color: Colors.black87, fontSize: 14, fontWeight: FontWeight.w500),
+                          ),
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.only(left: 16, right: 16, bottom: 14),
+                              child: Align(
+                                alignment: Alignment.centerLeft,
+                                child: Text(
+                                  faq['a']!,
+                                  style: const TextStyle(color: Colors.black54, fontSize: 13, height: 1.4),
+                                ),
                               ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
-                  );
-                }).toList(),
+                    );
+                  }).toList(),
                 const SizedBox(height: 20),
               ],
             ),
@@ -253,24 +448,22 @@ faq['q']!,
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
-                  'Still need help?',
-                  style: TextStyle(color: Colors.black87, fontSize: 15, fontWeight: FontWeight.w500),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: const [
+                    Text('Still need help?', style: TextStyle(color: Colors.black87, fontSize: 15, fontWeight: FontWeight.bold)),
+                    Text('Official CS is online 24/7', style: TextStyle(color: Colors.black38, fontSize: 12)),
+                  ],
                 ),
-                ElevatedButton(
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Feedback form opening...')),
-                    );
-                  },
+                ElevatedButton.icon(
+                  icon: const Icon(Icons.edit_note, color: Colors.white, size: 20),
+                  label: const Text('Feedback', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                  onPressed: _openFeedbackDialog,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF904BE6),
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                  ),
-                  child: const Text(
-                    'Feedback',
-                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
                   ),
                 ),
               ],
