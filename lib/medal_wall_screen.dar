@@ -1,0 +1,130 @@
+import 'package:flutter/material.dart';
+import 'services/user_service.dart';
+
+class MedalItem {
+  final String id;
+  final String title;
+  final String description;
+  final String category;
+  final IconData icon;
+  final Color color;
+  final bool isUnlocked;
+  final String requirement;
+
+  MedalItem({
+    required this.id,
+    required this.title,
+    required this.description,
+    required this.category,
+    required this.icon,
+    required this.color,
+    required this.isUnlocked,
+    required this.requirement,
+  });
+}
+
+class MedalWallScreen extends StatefulWidget {
+  const MedalWallScreen({super.key});
+
+  @override
+  State<MedalWallScreen> createState() => _MedalWallScreenState();
+}
+
+class _MedalWallScreenState extends State<MedalWallScreen> with SingleTickerProviderStateMixin {
+  final UserService _userService = UserService();
+  late TabController _tabController;
+  String _equippedMedalId = 'm1';
+
+  final List<String> _categories = ['All', 'Gifting', 'Host', 'Social', 'Events'];
+
+  late List<MedalItem> _allMedals;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: _categories.length, vsync: this);
+    _initMedals();
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  void _initMedals() {
+    _allMedals = [
+      // Gifting
+      MedalItem(
+        id: 'm1',
+        title: 'First Gifter',
+        description: 'Sent the first gift in a voice room.',
+        category: 'Gifting',
+        icon: Icons.card_giftcard,
+        color: Colors.amber,
+        isUnlocked: true,
+        requirement: 'Send any gift in any live voice room.',
+      ),
+      MedalItem(
+        id: 'm2',
+        title: 'Big Spender',
+        description: 'Spent over 100,000 coins on gifts.',
+        category: 'Gifting',
+        icon: Icons.diamond,
+        color: Colors.purpleAccent,
+        isUnlocked: _userService.coins >= 100000,
+        requirement: 'Send 100,000 coins worth of gifts.',
+      ),
+      MedalItem(
+        id: 'm3',
+        title: 'Lucky Striker',
+        description: 'Hit a major multiplier on Lucky Gifts.',
+        category: 'Gifting',
+        icon: Icons.casino,
+        color: Colors.orangeAccent,
+        isUnlocked: true,
+        requirement: 'Win a multiplier higher than 50x in Lucky Gifts.',
+      ),
+
+      // Host
+      MedalItem(
+        id: 'm4',
+        title: 'Rising Star',
+        description: 'Streamed for over 10 active hours.',
+        category: 'Host',
+        icon: Icons.mic,
+        color: Colors.tealAccent,
+        isUnlocked: true,
+        requirement: 'Host voice rooms for more than 10 hours.',
+      ),
+      MedalItem(
+        id: 'm5',
+        title: 'Diamond Magnet',
+        description: 'Collected over 500,000 diamonds.',
+        category: 'Host',
+        icon: Icons.workspace_premium,
+        color: Colors.lightBlueAccent,
+        isUnlocked: false,
+        requirement: 'Accumulate 500,000 diamonds as a room host.',
+      ),
+
+      // Social
+      MedalItem(
+        id: 'm6',
+        title: 'Super Ambassador',
+        description: 'Successfully invited 10 active friends.',
+        category: 'Social',
+        icon: Icons.people,
+        color: Colors.greenAccent,
+        isUnlocked: true,
+        requirement: 'Invite 10 users through your invitation code.',
+      ),
+      MedalItem(
+        id: 'm7',
+        title: 'Loyal Guardian',
+        description: 'Active for 30 consecutive days.',
+        category: 'Social',
+        icon: Icons.verified_user,
+        color: Colors.amberAccent,
+        isUnlocked: false,
+        requirement
