@@ -21,7 +21,6 @@ class _InviteScreenState extends State<InviteScreen> with SingleTickerProviderSt
   late TabController _tabController;
   final TextEditingController _redeemController = TextEditingController();
 
-  // የግብዣ ዳሽቦርድ መረጃዎች (Dashboard Data)
   int _totalInvited = 3;
   int _totalEarnedCoins = 1500;
   bool _hasRedeemedCode = false;
@@ -36,6 +35,13 @@ class _InviteScreenState extends State<InviteScreen> with SingleTickerProviderSt
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    _redeemController.dispose();
+    super.dispose();
   }
 
   void _copyToClipboard(String text, String message) {
@@ -62,14 +68,14 @@ class _InviteScreenState extends State<InviteScreen> with SingleTickerProviderSt
 
     if (_hasRedeemedCode) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('ቀደም ሲል የግብዣ ኮድ ተጠቅመዋል!'), backgroundColor: Colors.redAccent),
+        const SnackBar(content: Text('You have already redeemed an invitation code!'), backgroundColor: Colors.redAccent),
       );
       return;
     }
 
     if (code == "NILE-${widget.userId}") {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('የራስዎን ኮድ መጠቀም አይችሉም!'), backgroundColor: Colors.orangeAccent),
+        const SnackBar(content: Text('You cannot use your own invitation code!'), backgroundColor: Colors.orangeAccent),
       );
       return;
     }
@@ -77,7 +83,7 @@ class _InviteScreenState extends State<InviteScreen> with SingleTickerProviderSt
     setState(() {
       _hasRedeemedCode = true;
     });
-    _claimReward(200); // አዲስ ተጠቃሚ በኮድ ሲገባ የሚሰጠው 200 ቦነስ
+    _claimReward(200);
     _redeemController.clear();
 
     showDialog(
@@ -89,18 +95,18 @@ class _InviteScreenState extends State<InviteScreen> with SingleTickerProviderSt
           children: [
             Icon(Icons.celebration, color: Colors.amber),
             SizedBox(width: 8),
-            Text('እንኳን ደስ አለዎት! 🎉', style: TextStyle(color: Colors.white, fontSize: 18)),
+            Text('Congratulations! 🎉', style: TextStyle(color: Colors.white, fontSize: 18)),
           ],
         ),
         content: const Text(
-          'በተሳካ ሁኔታ የጓደኛዎን ኮድ አስገብተዋል! 200 Nile Coins ቦነስ ወደ ቦርሳዎ ገብቷል።',
+          'Successfully redeemed invitation code! 200 Nile Coins bonus has been added to your wallet.',
           style: TextStyle(color: Colors.white70),
         ),
         actions: [
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00C9A7)),
             onPressed: () => Navigator.pop(context),
-            child: const Text('እሺ', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+            child: const Text('OK', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -116,11 +122,11 @@ class _InviteScreenState extends State<InviteScreen> with SingleTickerProviderSt
     return Scaffold(
       backgroundColor: const Color(0xFF0D111A),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF161B26),
+
+backgroundColor: const Color(0xFF161B26),
         elevation: 0,
         title: const Text('Invite & Earn 🎁', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-
-leading: IconButton(
+        leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.pop(context),
         ),
@@ -138,10 +144,7 @@ leading: IconButton(
       body: TabBarView(
         controller: _tabController,
         children: [
-          // 1. መደበኛ የተጠቃሚዎች ግብዣ (User Tab)
           _buildUserInviteTab(myReferralCode, shareLink),
-
-          // 2. የኤጀንሲ እና የሆስት ምልመላ ግብዣ (Agency Tab)
           _buildAgencyInviteTab(myAgencyCode),
         ],
       ),
@@ -154,7 +157,6 @@ leading: IconButton(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Banner
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
@@ -173,27 +175,24 @@ leading: IconButton(
               ],
             ),
             child: Column(
-              children: [
-                const Icon(Icons.card_giftcard, size: 50, color: Colors.amber),
-                const SizedBox(height: 10),
-                const Text(
-                  'ጓደኞችህን ጋብዝ እና ሳንቲም አግኝ!',
+              children: const [
+                Icon(Icons.card_giftcard, size: 50, color: Colors.amber),
+                SizedBox(height: 10),
+                Text(
+                  'Invite Friends & Earn Coins!',
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
                   textAlign: TextAlign.center,
                 ),
-                const SizedBox(height: 8),
-                const Text(
-                  'ለእያንዳንዱ ለሚጋብዙት ጓደኛ 500 Nile Coins ያግኙ፤ ተጋባዡም 200 Coins ቦነስ ይሰጠዋል!',
+                SizedBox(height: 8),
+                Text(
+                  'Earn 500 Nile Coins for every invited friend; your friend receives 200 Coins welcome bonus!',
                   style: TextStyle(fontSize: 13, color: Colors.white70),
                   textAlign: TextAlign.center,
                 ),
               ],
             ),
           ),
-
           const SizedBox(height: 20),
-
-          // ክፍል 1፦ የእኔ መለያ ኮድ እና ሊንክ (Referral Code & Link)
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -204,7 +203,7 @@ leading: IconButton(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('የእርስዎ ልዩ የግብዣ ኮድ (My Code)', style: TextStyle(color: Colors.white54, fontSize: 13)),
+                const Text('My Invitation Code', style: TextStyle(color: Colors.white54, fontSize: 13)),
                 const SizedBox(height: 10),
                 Row(
                   children: [
@@ -235,14 +234,13 @@ fontWeight: FontWeight.bold,
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
-                      onPressed: () => _copyToClipboard(referralCode, 'የግብዣ ኮዱ ተገልብጧል!'),
+                      onPressed: () => _copyToClipboard(referralCode, 'Invitation code copied!'),
                       icon: const Icon(Icons.copy, color: Colors.black, size: 18),
                       label: const Text('Copy', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
                     ),
                   ],
                 ),
                 const SizedBox(height: 14),
-                // የሊንክ ማጋሪያ ቁልፍ (Share Link)
                 ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF1E2838),
@@ -250,19 +248,16 @@ fontWeight: FontWeight.bold,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
                   onPressed: () => _copyToClipboard(
-                    "ሰላም! በ Nile Voice አፕሊኬሽን የቀጥታ ድምፅ ክፍሎች ይግቡ እና አብረን እናውራ! በኮዴ ይመዝገቡ: $referralCode ሊንክ: $shareLink",
-                    'የግብዣ ሊንኩ ለመላክ ተዘጋጅቷል!',
+                    "Hello! Join live voice rooms on Nile Voice app and chat with us! Register with my code: $referralCode Link: $shareLink",
+                    'Share message copied to clipboard!',
                   ),
                   icon: const Icon(Icons.share, color: Colors.amber, size: 20),
-                  label: const Text('ግብዣውን በቴሌግራም/ዋትስአፕ አጋራ (Share Link)', style: TextStyle(color: Colors.white)),
+                  label: const Text('Share Link', style: TextStyle(color: Colors.white)),
                 ),
               ],
             ),
           ),
-
           const SizedBox(height: 20),
-
-          // ክፍል 2፦ የግብዣ ኮድ መመዝገቢያ (የጓደኛ ኮድ ማስገቢያ)
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -273,7 +268,7 @@ fontWeight: FontWeight.bold,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('የጓደኛዎን የግብዣ ኮድ ያስገቡ (200 Coins ቦነስ ያግኙ)', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                const Text('Enter Friend Invitation Code (Get 200 Coins)', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 10),
                 Row(
                   children: [
@@ -283,7 +278,7 @@ fontWeight: FontWeight.bold,
                         enabled: !_hasRedeemedCode,
                         style: const TextStyle(color: Colors.white),
                         decoration: InputDecoration(
-                          hintText: _hasRedeemedCode ? 'ተጠቅመዋል' : 'ምሳሌ: NILE-1001',
+                          hintText: _hasRedeemedCode ? 'Already Redeemed' : 'Example: NILE-1001',
                           hintStyle: const TextStyle(color: Colors.white38),
                           filled: true,
                           fillColor: const Color(0xFF0D111A),
@@ -297,20 +292,17 @@ fontWeight: FontWeight.bold,
                         backgroundColor: _hasRedeemedCode ? Colors.grey : Colors.amber,
                         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
 
-),
-                      onPressed: _hasRedeemedCode ? null : _redeemFriendCode,
-                      child: const Text('ተቀበል', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+onPressed: _hasRedeemedCode ? null : _redeemFriendCode,
+                      child: const Text('Claim', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
                     ),
                   ],
                 ),
               ],
             ),
           ),
-
           const SizedBox(height: 20),
-
-          // ክፍል 4፦ የተጋባዦች ሰሌዳ እና ገቢ (Dashboard)
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -324,7 +316,7 @@ fontWeight: FontWeight.bold,
                   children: [
                     Column(
                       children: [
-                        const Text('የተጋበዙ ሰዎች', style: TextStyle(color: Colors.white54, fontSize: 13)),
+                        const Text('Invited Users', style: TextStyle(color: Colors.white54, fontSize: 13)),
                         const SizedBox(height: 4),
                         Text('$_totalInvited', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white)),
                       ],
@@ -332,7 +324,7 @@ fontWeight: FontWeight.bold,
                     Container(height: 35, width: 1, color: Colors.white12),
                     Column(
                       children: [
-                        const Text('የተገኘ ሳንቲም', style: TextStyle(color: Colors.white54, fontSize: 13)),
+                        const Text('Coins Earned', style: TextStyle(color: Colors.white54, fontSize: 13)),
                         const SizedBox(height: 4),
                         Row(
                           children: [
@@ -348,7 +340,7 @@ fontWeight: FontWeight.bold,
                 const Divider(color: Colors.white12, height: 28),
                 const Align(
                   alignment: Alignment.centerLeft,
-                  child: Text('የቅርብ ጊዜ ተጋባዦች (Invited History)', style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.bold)),
+                  child: Text('Invited History', style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.bold)),
                 ),
                 const SizedBox(height: 10),
                 ..._invitedUsers.map((item) => Padding(
@@ -385,8 +377,7 @@ fontWeight: FontWeight.bold,
     );
   }
 
-// ክፍል 3፦ የኤጀንሲ እና የሆስት ምልመላ ገጽ (Agency Tab)
-  Widget _buildAgencyInviteTab(String agencyCode) {
+Widget _buildAgencyInviteTab(String agencyCode) {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -401,17 +392,17 @@ fontWeight: FontWeight.bold,
               borderRadius: BorderRadius.circular(20),
             ),
             child: Column(
-              children: [
-                const Icon(Icons.workspace_premium, size: 50, color: Colors.amberAccent),
-                const SizedBox(height: 10),
-                const Text(
-                  'የኤጀንሲ ሆስቶች ምልመላ (Agency Portal)',
+              children: const [
+                Icon(Icons.workspace_premium, size: 50, color: Colors.amberAccent),
+                SizedBox(height: 10),
+                Text(
+                  'Agency Host Recruitment Portal',
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
                   textAlign: TextAlign.center,
                 ),
-                const SizedBox(height: 6),
-                const Text(
-                  'ሆስቶችን በኤጀንሲ ኮድዎ ስር በማስመዝገብ ከስርጭት ሰዓታቸውና ከሚያገኙት ስጦታ ቋሚ የኤጀንሲ ኮሚሽን ያግኙ!',
+                SizedBox(height: 6),
+                Text(
+                  'Recruit hosts under your agency code and earn continuous commission from their broadcast hours and gifts received!',
                   style: TextStyle(fontSize: 12, color: Colors.white70),
                   textAlign: TextAlign.center,
                 ),
@@ -429,7 +420,7 @@ fontWeight: FontWeight.bold,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('የኤጀንሲ መለያ ኮድ (Agency Code)', style: TextStyle(color: Colors.white54, fontSize: 13)),
+                const Text('Agency Referral Code', style: TextStyle(color: Colors.white54, fontSize: 13)),
                 const SizedBox(height: 10),
                 Row(
                   children: [
@@ -459,14 +450,17 @@ fontWeight: FontWeight.bold,
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
-                      onPressed: () => _copyToClipboard(agencyCode, 'የኤጀንሲ ኮድ ተገልብጧል!'),
+                      onPressed: () => _copyToClipboard(agencyCode, 'Agency code copied!'),
                       child: const Text('Copy', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                     ),
                   ],
                 ),
                 const SizedBox(height: 16),
                 const Text(
-                  '📌 አሰራር፦\n1. አዲሱ ሆስት በ Nile Voice አፕሊኬሽን ሲመዘገብ ይህንን የኤጀንሲ ኮድ ያስገባል።\n2. ሆስቱ በቀጥታ በእርስዎ ኤጀንሲ ሰሌዳ ስር ይመደባል።\n3. የሆስቱ ሳምንታዊ የስራ ሰዓት እና ያገኘው የነጥብ መጠን በቀጥታ ለኤጀንሲው ሪፖርት ይደረጋል።',
+                  'Rules & Procedure:\n'
+                  '1. New hosts enter this agency code upon registration.\n'
+                  '2. The host is linked directly under your agency management dashboard.\n'
+                  '3. Host broadcast hours and diamond targets automatically report to your agency balance.',
                   style: TextStyle(color: Colors.white70, fontSize: 12, height: 1.5),
                 ),
               ],
