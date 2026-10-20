@@ -14,10 +14,23 @@ class UserService {
   String userId = '';
   String userName = '';
   String avatar = '';
-  int coins = 0;
-  int points = 0;
+  int _coins = 0;
+  int _points = 0;
   bool isOwner = false;
   bool isInitialized = false;
+
+  int get coins => _coins;
+  set coins(int value) {
+    _coins = value;
+    _saveToStorage();
+    _syncBalanceToServer();
+  }
+
+  int get points => _points;
+  set points(int value) {
+    _points = value;
+    _saveToStorage();
+  }
 
   Future<File> _getStorageFile() async {
     final dir = Directory.systemTemp;
@@ -41,8 +54,8 @@ class UserService {
           userId = localData['userId'].toString();
           userName = localData['name'] ?? 'User_$userId';
           avatar = localData['avatar'] ?? '';
-          coins = localData['coins'] ?? 0;
-          points = localData['points'] ?? 0;
+          _coins = localData['coins'] ?? 0;
+          _points = localData['points'] ?? 0;
           isOwner = (userId == '1000');
           isInitialized = true;
 
@@ -87,8 +100,8 @@ class UserService {
       final randomUnique = Random().nextInt(8999) + 1001;
       userId = randomUnique.toString();
       userName = 'User_$userId';
-      coins = 1000;
-      points = 0;
+      _coins = 1000;
+      _points = 0;
       isOwner = false;
       await _saveToStorage();
     }
@@ -112,7 +125,8 @@ class UserService {
         Uri.parse('$serverUrl/api/search-user?userId=${userId.trim()}'),
       );
       final response = await request.close();
-      if (response.statusCode == 200) {
+
+if (response.statusCode == 200) {
         final body = await response.transform(utf8.decoder).join();
         final data = jsonDecode(body);
         if (data['success'] == true && data['user'] != null) {
@@ -125,12 +139,12 @@ class UserService {
     }
   }
 
-void _updateFromUserMap(Map<String, dynamic> userMap) {
+  void _updateFromUserMap(Map<String, dynamic> userMap) {
     userId = userMap['userId'].toString();
     userName = userMap['name'] ?? 'User_$userId';
     avatar = userMap['avatar'] ?? '';
-    coins = (userMap['coins'] is num) ? (userMap['coins'] as num).toInt() : 0;
-    points = (userMap['points'] is num) ? (userMap['points'] as num).toInt() : 0;
+    _coins = (userMap['coins'] is num) ? (userMap['coins'] as num).toInt() : 0;
+    _points = (userMap['points'] is num) ? (userMap['points'] as num).toInt() : 0;
     isOwner = (userId == '1000');
   }
 
@@ -141,12 +155,27 @@ void _updateFromUserMap(Map<String, dynamic> userMap) {
         'userId': userId,
         'name': userName,
         'avatar': avatar,
-        'coins': coins,
-        'points': points,
+        'coins': _coins,
+        'points': _points,
       }));
     } catch (e) {
       debugPrint('Storage write error: $e');
     }
+  }
+
+  Future<void> _syncBalanceToServer() async {
+    if (userId.isEmpty) return;
+    try {
+      final client = HttpClient();
+      client.connectionTimeout = const Duration(seconds: 4);
+      final request = await client.postUrl(Uri.parse('$serverUrl/api/wallet/sync-balance'));
+      request.headers.set('content-type', 'application/json');
+      request.add(utf8.encode(jsonEncode({
+        'userId': userId,
+        'coins': _coins,
+      })));
+      await request.close();
+    } catch (_) {}
   }
 
   Future<Map<String, dynamic>?> searchUser(String queryId) async {
