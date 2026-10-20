@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../services/user_service.dart';
+import '../../wallet_screen.dart';
 
 class GiftItem {
   final String id;
@@ -75,7 +76,7 @@ class _GiftPanelState extends State<GiftPanel> with SingleTickerProviderStateMix
       name: 'Gold Rocket',
       price: 1000,
       imageUrl: 'assets/gifts/icons8-rocket-94.png',
-      badge: '25倍',
+      badge: '25x',
       isLucky: true,
     ),
     GiftItem(
@@ -101,6 +102,16 @@ class _GiftPanelState extends State<GiftPanel> with SingleTickerProviderStateMix
     super.dispose();
   }
 
+  void _openWallet() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const WalletScreen()),
+    );
+    setState(() {
+      _coins = UserService().coins;
+    });
+  }
+
   void _showCountMenu(BuildContext ctx) {
     showModalBottomSheet(
       context: ctx,
@@ -116,7 +127,7 @@ class _GiftPanelState extends State<GiftPanel> with SingleTickerProviderStateMix
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 12),
                 child: Text(
-                  'የስጦታ ብዛት ምረጥ',
+                  'Select Gift Count',
                   style: TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.bold,
@@ -133,7 +144,8 @@ class _GiftPanelState extends State<GiftPanel> with SingleTickerProviderStateMix
                     style: TextStyle(
                       color: isSel ? const Color(0xFF00C9A7) : Colors.white,
                       fontWeight: FontWeight.bold,
-                      fontSize: 15,
+
+fontSize: 15,
                     ),
                   ),
                   trailing: isSel
@@ -153,7 +165,7 @@ class _GiftPanelState extends State<GiftPanel> with SingleTickerProviderStateMix
     );
   }
 
-@override
+  @override
   Widget build(BuildContext context) {
     final selectedGift = _gifts.firstWhere(
       (g) => g.id == _selectedGiftId,
@@ -191,22 +203,34 @@ class _GiftPanelState extends State<GiftPanel> with SingleTickerProviderStateMix
                     ],
                   ),
                 ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1C2230),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.amber.withOpacity(0.5)),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.monetization_on, color: Colors.amber, size: 16),
-                      const SizedBox(width: 4),
-                      Text(
-                        '$_coins',
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
-                      ),
-                    ],
+                GestureDetector(
+                  onTap: _openWallet,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1C2230),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.amber.withOpacity(0.5)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.monetization_on, color: Colors.amber, size: 16),
+                        const SizedBox(width: 4),
+                        Text(
+                          '$_coins',
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                        ),
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.all(2),
+                          decoration: const BoxDecoration(
+                            color: Color(0xFF00C9A7),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.add, color: Colors.black, size: 12),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ],
@@ -225,7 +249,8 @@ class _GiftPanelState extends State<GiftPanel> with SingleTickerProviderStateMix
           ),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: const BoxDecoration(
+
+decoration: const BoxDecoration(
               color: Color(0xFF0A0D18),
               border: Border(top: BorderSide(color: Colors.white10)),
             ),
@@ -248,8 +273,7 @@ class _GiftPanelState extends State<GiftPanel> with SingleTickerProviderStateMix
                           style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
                         ),
                         const SizedBox(width: 4),
-
-const Icon(Icons.arrow_drop_up, color: Colors.white70, size: 18),
+                        const Icon(Icons.arrow_drop_up, color: Colors.white70, size: 18),
                       ],
                     ),
                   ),
@@ -271,7 +295,14 @@ const Icon(Icons.arrow_drop_up, color: Colors.white70, size: 18),
                       );
                     } else {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('ሳንቲም አልበቃም!'), duration: Duration(seconds: 1)),
+                        SnackBar(
+                          content: const Text('Insufficient coins! Please recharge.'),
+                          action: SnackBarAction(
+                            label: 'Recharge',
+                            textColor: const Color(0xFF00C9A7),
+                            onPressed: _openWallet,
+                          ),
+                        ),
                       );
                     }
                   },
@@ -317,7 +348,8 @@ const Icon(Icons.arrow_drop_up, color: Colors.white70, size: 18),
           child: Container(
             decoration: BoxDecoration(
               color: isSelected ? const Color(0xFF1E1B3A) : const Color(0xFF141929),
-              borderRadius: BorderRadius.circular(14),
+
+borderRadius: BorderRadius.circular(14),
               border: Border.all(
                 color: isSelected ? const Color(0xFF00C9A7) : Colors.transparent,
                 width: 2,
@@ -350,8 +382,7 @@ const Icon(Icons.arrow_drop_up, color: Colors.white70, size: 18),
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     const Icon(Icons.monetization_on, color: Colors.amber, size: 11),
-
-const SizedBox(width: 3),
+                    const SizedBox(width: 3),
                     Text(
                       '${item.price}',
                       style: const TextStyle(color: Colors.white70, fontSize: 11),
