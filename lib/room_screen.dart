@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'services/user_service.dart';
 import 'services/agora_service.dart';
 import 'services/socket_service.dart';
+import 'settings_screen.dart';
 
 import 'widgets/room/room_background.dart';
 import 'widgets/room/room_header.dart';
@@ -336,17 +337,16 @@ setState(() {
           };
         });
 
-        // የጋምብል / የዕድል ብዜት (Lucky Multiplier)
         if (isLucky) {
           final rand = Random().nextInt(100);
           int multiplier = 0;
 
           if (rand < 5) {
-            multiplier = 250; // 5% ዕድል ለ 250x
+            multiplier = 250;
           } else if (rand < 15) {
-            multiplier = 50;  // 10% ዕድል ለ 50x
+            multiplier = 50;
           } else if (rand < 35) {
-            multiplier = 25;  // 20% ዕድል ለ 25x
+            multiplier = 25;
           }
 
           if (multiplier > 0) {
@@ -415,19 +415,39 @@ setState(() {
     super.dispose();
   }
 
-@override
+  @override
   Widget build(BuildContext context) {
-    return Scaffold(
+
+return Scaffold(
       body: Stack(
         children: [
           RoomBackground(
             child: Column(
               children: [
-                RoomHeader(
-                  roomTitle: widget.roomTitle,
-                  roomId: widget.roomId,
-                  hostName: widget.hostName,
-                  onClose: () => Navigator.pop(context),
+                Stack(
+                  alignment: Alignment.centerRight,
+                  children: [
+                    RoomHeader(
+                      roomTitle: widget.roomTitle,
+                      roomId: widget.roomId,
+                      hostName: widget.hostName,
+                      onClose: () => Navigator.pop(context),
+                    ),
+                    Positioned(
+                      right: 48,
+                      top: 6,
+                      child: IconButton(
+                        icon: const Icon(Icons.settings, color: Colors.white, size: 22),
+                        tooltip: 'Settings',
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
                 ),
                 Container(
                   margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -496,7 +516,8 @@ setState(() {
                   gradient: const LinearGradient(
                     colors: [Color(0xFFFFB300), Color(0xFFFF6F00)],
                   ),
-                  borderRadius: BorderRadius.circular(20),
+
+borderRadius: BorderRadius.circular(20),
                   boxShadow: const [
                     BoxShadow(color: Colors.black45, blurRadius: 10, offset: Offset(0, 4)),
                   ],
@@ -512,8 +533,7 @@ setState(() {
                           color: Colors.white,
                           fontWeight: FontWeight.bold,
                           fontSize: 13,
-
-),
+                        ),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
@@ -618,7 +638,8 @@ class _Live3DGiftDisplayState extends State<_Live3DGiftDisplay>
                             spreadRadius: 8,
                           ),
                         ],
-                      ),
+
+),
                       child: Image.asset(
                         widget.imageUrl,
                         fit: BoxFit.contain,
@@ -635,8 +656,7 @@ class _Live3DGiftDisplayState extends State<_Live3DGiftDisplay>
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                       decoration: BoxDecoration(
-
-gradient: const LinearGradient(
+                        gradient: const LinearGradient(
                           colors: [Color(0xFF00C9A7), Color(0xFF6C5CE7)],
                         ),
                         borderRadius: BorderRadius.circular(22),
