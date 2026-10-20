@@ -5,21 +5,19 @@ import '../models/user_model.dart';
 import '../services/user_service.dart';
 import 'daily_tasks_screen.dart';
 import 'settings_screen.dart';
-import 'recharge_screen.dart';
 import 'coin_seller_screen.dart';
 import 'host_center_screen.dart';
 import 'agency_screen.dart';
 import 'store_screen.dart';
 import 'invite_screen.dart';
+import 'wallet_screen.dart';
 
 class ProfileScreen extends StatelessWidget {
   final String userId;
 
   const ProfileScreen({super.key, required this.userId});
 
-  // Verify Agent Role from Server
   Future<void> _checkAndOpenCoinSeller(BuildContext context) async {
-    // Owner (1000) always has direct access
     if (userId.trim() == '1000') {
       Navigator.push(
         context,
@@ -69,6 +67,7 @@ class ProfileScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bool isMasterAdmin = (userId.trim() == '1000');
+    final userObj = UserService();
 
     return Scaffold(
       backgroundColor: const Color(0xFF13141C),
@@ -81,7 +80,6 @@ class ProfileScreen extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.all(16.0),
         children: [
-          // Profile Header
           Center(
             child: Column(
               children: [
@@ -113,8 +111,7 @@ class ProfileScreen extends StatelessWidget {
                       border: Border.all(color: Colors.amber),
                     ),
                     child: const Text(
-
-'👑 Master Admin',
+                      '👑 Master Admin',
                       style: TextStyle(
                         color: Colors.amber,
                         fontWeight: FontWeight.bold,
@@ -127,8 +124,7 @@ class ProfileScreen extends StatelessWidget {
           ),
           const SizedBox(height: 25),
 
-          // 👑 Master Admin Panel (Only for userId 1000)
-          if (isMasterAdmin) ...[
+if (isMasterAdmin) ...[
             _buildMenuItem(
               icon: Icons.admin_panel_settings,
               iconColor: Colors.amber,
@@ -143,13 +139,11 @@ class ProfileScreen extends StatelessWidget {
             const SizedBox(height: 12),
           ],
 
-          // Daily Tasks & Rewards Button
           _buildMenuItem(
             icon: Icons.assignment_turned_in_rounded,
             iconColor: const Color(0xFF7B4DFF),
             title: 'Daily Tasks & Rewards',
             onTap: () {
-              final userObj = UserService();
               Navigator.push(
                 context,
                 MaterialPageRoute(
@@ -168,7 +162,6 @@ class ProfileScreen extends StatelessWidget {
           ),
           const SizedBox(height: 12),
 
-          // 1. Host Center
           _buildMenuItem(
             icon: Icons.mic_external_on,
             iconColor: Colors.purpleAccent,
@@ -182,21 +175,19 @@ class ProfileScreen extends StatelessWidget {
           ),
           const SizedBox(height: 12),
 
-          // 2. Recharge
           _buildMenuItem(
             icon: Icons.account_balance_wallet,
             iconColor: Colors.orangeAccent,
-            title: 'Recharge Coins',
+            title: 'Wallet & Recharge',
             onTap: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => const RechargeScreen()),
+                MaterialPageRoute(builder: (context) => const WalletScreen()),
               );
             },
           ),
           const SizedBox(height: 12),
 
-          // 3. Coin Seller (Agent Verified Only)
           _buildMenuItem(
             icon: Icons.storefront,
             iconColor: Colors.greenAccent,
@@ -205,7 +196,6 @@ class ProfileScreen extends StatelessWidget {
           ),
           const SizedBox(height: 12),
 
-          // 4. Agency
           _buildMenuItem(
             icon: Icons.business,
             iconColor: Colors.blueAccent,
@@ -219,7 +209,6 @@ class ProfileScreen extends StatelessWidget {
           ),
           const SizedBox(height: 12),
 
-          // 5. Store
           _buildMenuItem(
             icon: Icons.shopping_bag,
             iconColor: Colors.amberAccent,
@@ -233,25 +222,31 @@ class ProfileScreen extends StatelessWidget {
           ),
           const SizedBox(height: 12),
 
-          // 6. Invite Friends
           _buildMenuItem(
             icon: Icons.person_add_alt_1,
-
-iconColor: Colors.tealAccent,
+            iconColor: Colors.tealAccent,
             title: 'Invite Friends',
             onTap: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => const InviteScreen()),
+                MaterialPageRoute(
+                  builder: (context) => InviteScreen(
+                    userId: userId,
+                    userName: userObj.userName.isNotEmpty ? userObj.userName : 'User_$userId',
+                    onRewardClaimed: (bonusCoins) {
+                      userObj.coins += bonusCoins;
+                    },
+                  ),
+                ),
               );
             },
           ),
           const SizedBox(height: 12),
 
-          // 7. Settings
           _buildMenuItem(
             icon: Icons.settings,
-            iconColor: Colors.grey,
+
+iconColor: Colors.grey,
             title: 'Settings',
             onTap: () {
               Navigator.push(
@@ -289,9 +284,6 @@ iconColor: Colors.tealAccent,
   }
 }
 
-// ========================================================
-// 👑 In-App Master Admin Screen (Only for User ID 1000)
-// ========================================================
 class InAppAdminScreen extends StatefulWidget {
   const InAppAdminScreen({super.key});
 
@@ -364,7 +356,7 @@ class _InAppAdminScreenState extends State<InAppAdminScreen> {
       );
       final data = jsonDecode(res.body);
 
-if (mounted) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(data['message'] ?? 'Payment Approved'),
@@ -386,7 +378,8 @@ if (mounted) {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF13141C),
-      appBar: AppBar(
+
+appBar: AppBar(
         title: const Text(
           '👑 Master Admin Panel',
           style: TextStyle(color: Colors.white, fontSize: 17),
@@ -403,7 +396,6 @@ if (mounted) {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // Agent Assignment Card
           Card(
             color: const Color(0xFF1E1F2E),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -461,7 +453,6 @@ if (mounted) {
           ),
           const SizedBox(height: 20),
 
-          // Pending Payments Section
           const Text(
             'Pending Recharge Requests',
             style: TextStyle(
@@ -470,8 +461,7 @@ if (mounted) {
               fontWeight: FontWeight.bold,
             ),
           ),
-
-const SizedBox(height: 10),
+          const SizedBox(height: 10),
           if (_isLoading)
             const Center(
               child: Padding(
@@ -488,7 +478,8 @@ const SizedBox(height: 10),
                   child: Text(
                     'No pending recharge requests found.',
                     style: TextStyle(color: Colors.white54),
-                  ),
+
+),
                 ),
               ),
             )
