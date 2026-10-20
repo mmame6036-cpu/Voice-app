@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
+import 'services/user_service.dart';
+import 'wallet_screen.dart';
 
 class StoreItem {
   final String id;
   final String title;
   final int price;
   final String category;
-  final String? badge; // 'HOT' or 'NEW'
+  final String? badge;
   final IconData icon;
   final Color accentColor;
 
@@ -21,13 +23,13 @@ class StoreItem {
 }
 
 class StoreScreen extends StatefulWidget {
-  final int userCoins;
-  final Function(int) onCoinsUpdated;
+  final int? userCoins;
+  final Function(int)? onCoinsUpdated;
 
   const StoreScreen({
     Key? key,
-    required this.userCoins,
-    required this.onCoinsUpdated,
+    this.userCoins,
+    this.onCoinsUpdated,
   }) : super(key: key);
 
   @override
@@ -35,8 +37,14 @@ class StoreScreen extends StatefulWidget {
 }
 
 class _StoreScreenState extends State<StoreScreen> {
-  int _selectedCategoryIndex = 3; // በዲፎልት 'Special ID' ላይ ይከፈታል
+  final UserService _userService = UserService();
+  int _selectedCategoryIndex = 3;
   late int _currentCoins;
+
+  // Active User Inventory / Backpack
+  final List<StoreItem> _purchasedItems = [];
+  String _equippedFrame = 'None';
+  String _equippedEntry = 'None';
 
   final List<String> categories = [
     'Popular',
@@ -55,7 +63,7 @@ class _StoreScreenState extends State<StoreScreen> {
   @override
   void initState() {
     super.initState();
-    _currentCoins = widget.userCoins;
+    _currentCoins = widget.userCoins ?? _userService.coins;
     _initStoreData();
   }
 
@@ -83,9 +91,9 @@ class _StoreScreenState extends State<StoreScreen> {
 
       // 4. Special ID
       StoreItem(id: 'id_1166', title: '1166', price: 800000, category: 'Special ID', badge: 'HOT', icon: Icons.badge, accentColor: Colors.deepPurpleAccent),
-      StoreItem(id: 'id_1177', title: '1177', price: 800000, category: 'Special ID', badge: 'HOT', icon: Icons.badge, accentColor: Colors.deepPurpleAccent),
 
-StoreItem(id: 'id_1149', title: '1149', price: 800000, category: 'Special ID', icon: Icons.diamond, accentColor: Colors.blue),
+StoreItem(id: 'id_1177', title: '1177', price: 800000, category: 'Special ID', badge: 'HOT', icon: Icons.badge, accentColor: Colors.deepPurpleAccent),
+      StoreItem(id: 'id_1149', title: '1149', price: 800000, category: 'Special ID', icon: Icons.diamond, accentColor: Colors.blue),
       StoreItem(id: 'id_1138', title: '1138', price: 800000, category: 'Special ID', icon: Icons.diamond, accentColor: Colors.blue),
       StoreItem(id: 'id_1139', title: '1139', price: 800000, category: 'Special ID', icon: Icons.diamond, accentColor: Colors.blue),
       StoreItem(id: 'id_1140', title: '1140', price: 800000, category: 'Special ID', icon: Icons.diamond, accentColor: Colors.blue),
@@ -152,29 +160,153 @@ StoreItem(id: 'id_1149', title: '1149', price: 800000, category: 'Special ID', i
     ];
   }
 
-void _purchaseItem(StoreItem item) {
+void _openWallet() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const WalletScreen()),
+    );
+    setState(() {
+      _currentCoins = _userService.coins;
+    });
+    if (widget.onCoinsUpdated != null) {
+      widget.onCoinsUpdated!(_currentCoins);
+    }
+  }
+
+  void _openBackpack() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF131724),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Container(
+              padding: const EdgeInsets.all(16),
+              height: MediaQuery.of(context).size.height * 0.55,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'My Backpack',
+                        style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close, color: Colors.white54),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ],
+                  ),
+                  const Divider(color: Colors.white12),
+                  if (_purchasedItems.isEmpty)
+                    const Expanded(
+                      child: Center(
+                        child: Text(
+                          'Your backpack is empty.\nPurchase luxury items from the store!',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: Colors.white54, fontSize: 14),
+                        ),
+                      ),
+                    )
+                  else
+                    Expanded(
+                      child: ListView.separated(
+                        itemCount: _purchasedItems.length,
+                        separatorBuilder: (_, __) => const Divider(color: Colors.white10),
+                        itemBuilder: (context, idx) {
+                          final item = _purchasedItems[idx];
+                          final isEquipped = (item.category == 'Frame' && _equippedFrame == item.title) ||
+                              (item.category == 'Entry' && _equippedEntry == item.title);
+
+                          return ListTile(
+                            leading: CircleAvatar(
+                              backgroundColor: item.accentColor.withOpacity(0.2),
+                              child: Icon(item.icon, color: item.accentColor),
+                            ),
+                            title: Text(item.title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                            subtitle: Text(item.category, style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                            trailing: ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: isEquipped ? Colors.grey : const Color(0xFF00C9A7),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                              ),
+                              onPressed: () {
+                                setState(() {
+                                  if (item.category == 'Frame') {
+                                    _equippedFrame = isEquipped ? 'None' : item.title;
+                                  } else if (item.category == 'Entry') {
+                                    _equippedEntry = isEquipped ? 'None' : item.title;
+
+}
+                                });
+                                setModalState(() {});
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(isEquipped ? 'Unequipped ${item.title}' : 'Equipped ${item.title}!'),
+                                    backgroundColor: const Color(0xFF00C9A7),
+                                  ),
+                                );
+                              },
+                              child: Text(
+                                isEquipped ? 'In Use' : 'Equip',
+                                style: TextStyle(color: isEquipped ? Colors.white : Colors.black, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _purchaseItem(StoreItem item) {
+    final canAfford = _currentCoins >= item.price;
+
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: Colors.white,
+        backgroundColor: const Color(0xFF161B26),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text('Purchase ${item.title}?', style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+        title: Text('Purchase ${item.title}?', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Item: ${item.title}'),
-            const SizedBox(height: 8),
+            Center(
+              child: Container(
+                width: 70,
+                height: 70,
+                decoration: BoxDecoration(
+                  color: item.accentColor.withOpacity(0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(item.icon, size: 38, color: item.accentColor),
+              ),
+            ),
+            const SizedBox(height: 14),
+            Text('Item: ${item.title}', style: const TextStyle(color: Colors.white70)),
+            const SizedBox(height: 6),
             Row(
               children: [
-                const Text('Price: ', style: TextStyle(fontWeight: FontWeight.bold)),
+                const Text('Price: ', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold)),
                 const Icon(Icons.monetization_on, color: Colors.amber, size: 18),
                 const SizedBox(width: 4),
-                Text('${item.price}', style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.bold)),
+                Text('${item.price} Coins', style: const TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold)),
               ],
             ),
-            const SizedBox(height: 8),
-            Text('Your Balance: $_currentCoins Coins', style: const TextStyle(color: Colors.grey)),
+            const SizedBox(height: 6),
+            Text('Your Balance: $_currentCoins Coins', style: const TextStyle(color: Colors.white38, fontSize: 13)),
           ],
         ),
         actions: [
@@ -186,27 +318,37 @@ void _purchaseItem(StoreItem item) {
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00C9A7)),
             onPressed: () {
               Navigator.pop(ctx);
-              if (_currentCoins >= item.price) {
+              if (canAfford) {
                 setState(() {
                   _currentCoins -= item.price;
+                  _userService.coins = _currentCoins;
+                  _purchasedItems.add(item);
                 });
-                widget.onCoinsUpdated(_currentCoins);
+                if (widget.onCoinsUpdated != null) {
+                  widget.onCoinsUpdated!(_currentCoins);
+                }
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text('Successfully purchased ${item.title}! Added to your backpack.'),
-                    backgroundColor: Colors.green,
+                    backgroundColor: const Color(0xFF00C9A7),
                   ),
                 );
               } else {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Insufficient Coins! Please recharge in Admin or Wallet.'),
-                    backgroundColor: Colors.red,
+
+ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: const Text('Insufficient Coins! Please recharge in Wallet.'),
+                    backgroundColor: Colors.redAccent,
+                    action: SnackBarAction(
+                      label: 'Recharge',
+                      textColor: Colors.amber,
+                      onPressed: _openWallet,
+                    ),
                   ),
                 );
               }
             },
-            child: const Text('Confirm', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            child: const Text('Confirm', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -230,26 +372,43 @@ void _purchaseItem(StoreItem item) {
         centerTitle: true,
         title: const Text('Store', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 20)),
         actions: [
+          GestureDetector(
+            onTap: _openWallet,
+            child: Container(
+              margin: const EdgeInsets.symmetric(vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: Colors.black26,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.monetization_on, color: Colors.amber, size: 16),
+                  const SizedBox(width: 4),
+                  Text(
+                    '$_currentCoins',
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                  ),
+                  const SizedBox(width: 4),
+                  const Icon(Icons.add_circle, color: Colors.white, size: 14),
+                ],
+              ),
+            ),
+          ),
           IconButton(
             icon: const Icon(Icons.backpack_outlined, color: Colors.white, size: 26),
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Backpack opened! Purchased items are ready.')),
-              );
-            },
+            onPressed: _openBackpack,
           ),
         ],
       ),
       body: Column(
         children: [
-          // 1. ወደ ጎን የሚንሸራተት የታብ ባር (Horizontal Tab Bar)
           Container(
             height: 48,
             margin: const EdgeInsets.symmetric(vertical: 4),
             child: ListView.builder(
               scrollDirection: Axis.horizontal,
-
-padding: const EdgeInsets.symmetric(horizontal: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 12),
               itemCount: categories.length,
               itemBuilder: (context, index) {
                 final isSelected = _selectedCategoryIndex == index;
@@ -271,7 +430,8 @@ padding: const EdgeInsets.symmetric(horizontal: 12),
                         categories[index],
                         style: TextStyle(
                           color: isSelected ? const Color(0xFF00C9A7) : Colors.white.withOpacity(0.9),
-                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+
+fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                           fontSize: 14,
                         ),
                       ),
@@ -281,8 +441,6 @@ padding: const EdgeInsets.symmetric(horizontal: 12),
               },
             ),
           ),
-
-          // 2. ወደ ታች እና ወደ ላይ የሚንቀሳቀስ የእቃዎች ግሪድ (Vertical Scrolling Grid)
           Expanded(
             child: Container(
               decoration: const BoxDecoration(
@@ -336,22 +494,19 @@ padding: const EdgeInsets.symmetric(horizontal: 12),
         ),
         child: Stack(
           children: [
-            // ካርዱ ውስጥ ያለው ይዘት
             Padding(
               padding: const EdgeInsets.all(12.0),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   const Spacer(),
-                  // እቃው የሚታይበት ዲዛይን (ስፔሻል አይዲ ወይም ምስል)
                   if (item.category == 'Special ID')
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
                           colors: [item.accentColor, const Color(0xFF5D5FEF)],
-
-),
+                        ),
                         borderRadius: BorderRadius.circular(30),
                         boxShadow: [
                           BoxShadow(color: item.accentColor.withOpacity(0.3), blurRadius: 6),
@@ -379,7 +534,8 @@ padding: const EdgeInsets.symmetric(horizontal: 12),
                       ),
                       child: Icon(item.icon, size: 38, color: item.accentColor),
                     ),
-                  const Spacer(),
+
+const Spacer(),
                   Text(
                     item.title,
                     maxLines: 1,
@@ -388,7 +544,7 @@ padding: const EdgeInsets.symmetric(horizontal: 12),
                   ),
                   const SizedBox(height: 6),
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
                       const Icon(Icons.monetization_on, color: Colors.amber, size: 15),
                       const SizedBox(width: 4),
@@ -401,8 +557,6 @@ padding: const EdgeInsets.symmetric(horizontal: 12),
                 ],
               ),
             ),
-
-            // ባጅ (HOT ወይም NEW)
             if (item.badge != null)
               Positioned(
                 top: 8,
