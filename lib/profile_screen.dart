@@ -11,6 +11,7 @@ import 'agency_screen.dart';
 import 'store_screen.dart';
 import 'invite_screen.dart';
 import 'wallet_screen.dart';
+import 'backpack_screen.dart';
 
 class ProfileScreen extends StatelessWidget {
   final String userId;
@@ -113,7 +114,8 @@ class ProfileScreen extends StatelessWidget {
                     child: const Text(
                       '👑 Master Admin',
                       style: TextStyle(
-                        color: Colors.amber,
+
+color: Colors.amber,
                         fontWeight: FontWeight.bold,
                         fontSize: 12,
                       ),
@@ -124,7 +126,7 @@ class ProfileScreen extends StatelessWidget {
           ),
           const SizedBox(height: 25),
 
-if (isMasterAdmin) ...[
+          if (isMasterAdmin) ...[
             _buildMenuItem(
               icon: Icons.admin_panel_settings,
               iconColor: Colors.amber,
@@ -223,8 +225,22 @@ if (isMasterAdmin) ...[
           const SizedBox(height: 12),
 
           _buildMenuItem(
+            icon: Icons.inventory_2_outlined,
+            iconColor: Colors.deepOrangeAccent,
+            title: 'Backpack',
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const BackpackScreen()),
+              );
+            },
+          ),
+          const SizedBox(height: 12),
+
+          _buildMenuItem(
             icon: Icons.person_add_alt_1,
-            iconColor: Colors.tealAccent,
+
+iconColor: Colors.tealAccent,
             title: 'Invite Friends',
             onTap: () {
               Navigator.push(
@@ -245,8 +261,7 @@ if (isMasterAdmin) ...[
 
           _buildMenuItem(
             icon: Icons.settings,
-
-iconColor: Colors.grey,
+            iconColor: Colors.grey,
             title: 'Settings',
             onTap: () {
               Navigator.push(
@@ -356,7 +371,7 @@ class _InAppAdminScreenState extends State<InAppAdminScreen> {
       );
       final data = jsonDecode(res.body);
 
-      if (mounted) {
+if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(data['message'] ?? 'Payment Approved'),
@@ -378,8 +393,7 @@ class _InAppAdminScreenState extends State<InAppAdminScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF13141C),
-
-appBar: AppBar(
+      appBar: AppBar(
         title: const Text(
           '👑 Master Admin Panel',
           style: TextStyle(color: Colors.white, fontSize: 17),
@@ -464,7 +478,8 @@ appBar: AppBar(
           const SizedBox(height: 10),
           if (_isLoading)
             const Center(
-              child: Padding(
+
+child: Padding(
                 padding: EdgeInsets.all(20),
                 child: CircularProgressIndicator(color: Colors.amber),
               ),
@@ -478,8 +493,7 @@ appBar: AppBar(
                   child: Text(
                     'No pending recharge requests found.',
                     style: TextStyle(color: Colors.white54),
-
-),
+                  ),
                 ),
               ),
             )
