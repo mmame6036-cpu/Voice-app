@@ -14,6 +14,7 @@ import 'wallet_screen.dart';
 import 'backpack_screen.dart';
 import 'level_screen.dart';
 import 'medal_wall_screen.dart';
+import 'support_screen.dart';
 
 class ProfileScreen extends StatelessWidget {
   final String userId;
@@ -113,9 +114,9 @@ class ProfileScreen extends StatelessWidget {
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(color: Colors.amber),
                     ),
-                    child: const Text(
 
-'👑 Master Admin',
+child: const Text(
+                      '👑 Master Admin',
                       style: TextStyle(
                         color: Colors.amber,
                         fontWeight: FontWeight.bold,
@@ -287,6 +288,19 @@ _buildMenuItem(
           const SizedBox(height: 12),
 
           _buildMenuItem(
+            icon: Icons.support_agent,
+            iconColor: const Color(0xFF904BE6),
+            title: 'Help & Support',
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const SupportScreen()),
+              );
+            },
+          ),
+          const SizedBox(height: 12),
+
+          _buildMenuItem(
             icon: Icons.settings,
             iconColor: Colors.grey,
             title: 'Settings',
@@ -364,12 +378,11 @@ class _InAppAdminScreenState extends State<InAppAdminScreen> {
     final targetId = _agentIdController.text.trim();
     if (targetId.isEmpty) return;
 
-    try {
+try {
       final res = await http.post(
         Uri.parse('https://voice-app-backend.onrender.com/api/admin/toggle-agent'),
         headers: {'Content-Type': 'application/json'},
-
-body: jsonEncode({'userId': targetId, 'isAgent': isAgent}),
+        body: jsonEncode({'userId': targetId, 'isAgent': isAgent}),
       );
       final data = jsonDecode(res.body);
       if (mounted) {
@@ -475,10 +488,10 @@ body: jsonEncode({'userId': targetId, 'isAgent': isAgent}),
                       Expanded(
                         child: ElevatedButton(
                           style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-                          onPressed: () => _toggleAgent(true),
-                          child: const Text('Make Agent', style: TextStyle(color: Colors.white)),
 
-),
+onPressed: () => _toggleAgent(true),
+                          child: const Text('Make Agent', style: TextStyle(color: Colors.white)),
+                        ),
                       ),
                       const SizedBox(width: 8),
                       Expanded(
