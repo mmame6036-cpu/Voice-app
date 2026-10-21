@@ -14,7 +14,7 @@ class CoinSellerScreen extends StatefulWidget {
 class _CoinSellerScreenState extends State<CoinSellerScreen> {
   final UserService _user = UserService();
   final String _sellerLevel = 'Standard Seller';
-  String _selectedPaymentMethod = 'Binance Pay';
+  String _selectedPaymentMethod = 'Telebirr';
   String _greetingMessage = 'Welcome to Nile Voice Official Coin Store!';
 
   final String _telebirrPhone = '0943724560';
@@ -114,16 +114,16 @@ class _CoinSellerScreenState extends State<CoinSellerScreen> {
             Text('Seller Level', style: TextStyle(color: Colors.white, fontSize: 16)),
           ],
         ),
-        content: Column(
+        content: const Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
+            Text(
               'Current Tier: Standard Seller',
               style: TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold, fontSize: 14),
             ),
-            const SizedBox(height: 10),
-            const Text(
+            SizedBox(height: 10),
+            Text(
               'To upgrade to Senior Seller:\n• Transfer over 10,000,000 coins monthly\n• Enjoy wholesale discounts & priority verification.',
 
 style: TextStyle(color: Colors.white70, fontSize: 13, height: 1.4),
@@ -525,7 +525,7 @@ padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
 }
 
 // ---------------------------------------------------------------------------
-// 1. RECHARGE SHEET
+// 1. RECHARGE SHEET (Prices in USD Only)
 // ---------------------------------------------------------------------------
 class SellerRechargeSheet extends StatefulWidget {
   final String telebirrPhone;
@@ -549,13 +549,13 @@ class SellerRechargeSheet extends StatefulWidget {
 
 class _SellerRechargeSheetState extends State<SellerRechargeSheet> {
   int _selectedTierIndex = 0;
-  String _payMethod = 'Binance';
+  String _payMethod = 'Telebirr';
 
   final List<Map<String, dynamic>> _wholesaleTiers = const [
-    {'coins': '1,980,000', 'priceUsd': '\$200', 'priceEtb': '24,000 ETB', 'badge': 'Standard Seller', 'amountUsd': 200, 'amountCoins': 1980000},
-    {'coins': '9,900,000', 'priceUsd': '\$1000', 'priceEtb': '120,000 ETB', 'badge': 'Standard Seller', 'amountUsd': 1000, 'amountCoins': 9900000},
-    {'coins': '14,850,000', 'priceUsd': '\$1500', 'priceEtb': '180,000 ETB', 'badge': 'Senior Seller', 'amountUsd': 1500, 'amountCoins': 14850000},
-    {'coins': '30,000,000', 'priceUsd': '\$3000', 'priceEtb': '360,000 ETB', 'badge': 'Senior Seller', 'amountUsd': 3000, 'amountCoins': 30000000},
+    {'coins': '1,980,000', 'priceUsd': '\$200', 'badge': 'Standard Seller', 'amountUsd': 200, 'amountCoins': 1980000},
+    {'coins': '9,900,000', 'priceUsd': '\$1,000', 'badge': 'Standard Seller', 'amountUsd': 1000, 'amountCoins': 9900000},
+    {'coins': '14,850,000', 'priceUsd': '\$1,500', 'badge': 'Senior Seller', 'amountUsd': 1500, 'amountCoins': 14850000},
+    {'coins': '30,000,000', 'priceUsd': '\$3,000', 'badge': 'Senior Seller', 'amountUsd': 3000, 'amountCoins': 30000000},
   ];
 
   void _proceedToPayment() async {
@@ -572,11 +572,11 @@ class _SellerRechargeSheetState extends State<SellerRechargeSheet> {
             coinQuantity: selectedTier['coins'],
             priceUsd: selectedTier['priceUsd'],
             orderAmount: selectedTier['amountCoins'].toString(),
-
-amountCoins: selectedTier['amountCoins'],
+            amountCoins: selectedTier['amountCoins'],
           ),
         ),
-      );
+
+);
     } else {
       await Navigator.push(
         context,
@@ -585,7 +585,7 @@ amountCoins: selectedTier['amountCoins'],
             userId: widget.userId,
             userName: widget.userName,
             telebirrPhone: widget.telebirrPhone,
-            priceEtb: selectedTier['priceEtb'],
+            priceUsd: selectedTier['priceUsd'],
             coinQuantity: selectedTier['coins'],
             amountCoins: selectedTier['amountCoins'],
           ),
@@ -669,17 +669,17 @@ amountCoins: selectedTier['amountCoins'],
                         const SizedBox(height: 3),
                         Text(
                           item['coins'],
-
-style: TextStyle(
+                          style: TextStyle(
                             fontSize: 11,
-                            fontWeight: FontWeight.bold,
+
+fontWeight: FontWeight.bold,
                             color: isSelected ? const Color(0xFFFFD700) : Colors.white,
                           ),
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          _payMethod == 'Telebirr' ? item['priceEtb'] : item['priceUsd'],
-                          style: const TextStyle(fontSize: 9, color: Colors.white54),
+                          item['priceUsd'],
+                          style: const TextStyle(fontSize: 10, color: Colors.white70, fontWeight: FontWeight.bold),
                         ),
                       ],
                     ),
@@ -705,7 +705,7 @@ style: TextStyle(
                     ),
                     child: Center(
                       child: Text(
-                        'Telebirr',
+                        'Telebirr (ETB Rate)',
                         style: TextStyle(
                           color: _payMethod == 'Telebirr' ? Colors.black : Colors.white70,
                           fontWeight: FontWeight.bold,
@@ -769,7 +769,8 @@ style: TextStyle(
 }
 
 // ---------------------------------------------------------------------------
-// 2. BINANCE PAYMENT SCREEN (Fully Fixed & Interactive)
+// 2. BINANCE PAYMENT SCREEN (USD Only)
+
 // ---------------------------------------------------------------------------
 class BinancePaymentScreen extends StatefulWidget {
   final String userId;
@@ -873,7 +874,7 @@ class _BinancePaymentScreenState extends State<BinancePaymentScreen> {
           onPressed: () => Navigator.pop(context),
         ),
         centerTitle: true,
-        title: const Text('Binance', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+        title: const Text('Binance Pay', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
@@ -885,18 +886,18 @@ class _BinancePaymentScreenState extends State<BinancePaymentScreen> {
                 color: const Color(0xFF161824),
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(color: const Color(0xFFFFD700).withOpacity(0.3)),
-
-boxShadow: const [
+                boxShadow: const [
                   BoxShadow(color: Colors.black54, blurRadius: 10, offset: Offset(0, 4)),
-                ],
+
+],
               ),
               child: Column(
                 children: [
                   const Icon(Icons.currency_bitcoin, color: Color(0xFFFFD700), size: 36),
                   const SizedBox(height: 6),
-                  const Text('Binance', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
+                  const Text('Binance Pay', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
                   const SizedBox(height: 2),
-                  const Text('Scan to pay', style: TextStyle(fontSize: 12, color: Colors.white54)),
+                  const Text('Scan to pay (USDT)', style: TextStyle(fontSize: 12, color: Colors.white54)),
                   const SizedBox(height: 16),
                   Container(
                     padding: const EdgeInsets.all(12),
@@ -954,11 +955,9 @@ boxShadow: const [
                 children: [
                   _buildDetailRow('User ID', widget.userId),
                   const Divider(color: Colors.white10, height: 16),
-                  _buildDetailRow('Quantity', widget.priceUsd),
+                  _buildDetailRow('Price (USD)', widget.priceUsd),
                   const Divider(color: Colors.white10, height: 16),
-                  _buildDetailRow('Order Amount', widget.orderAmount, isGold: true),
-                  const Divider(color: Colors.white10, height: 16),
-                  _buildDetailRow('Date', '2026-10-15 05:48:03'),
+                  _buildDetailRow('Coins to Receive', widget.coinQuantity, isGold: true),
                 ],
               ),
             ),
@@ -970,12 +969,12 @@ boxShadow: const [
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF6C5CE7),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-
-elevation: 4,
+                  elevation: 4,
                 ),
                 onPressed: _isSubmitting ? null : _submitBinancePayment,
                 child: _isSubmitting
-                    ? const SizedBox(
+
+? const SizedBox(
                         height: 22,
                         width: 22,
                         child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
@@ -1008,13 +1007,13 @@ elevation: 4,
 }
 
 // ---------------------------------------------------------------------------
-// 3. TELEBIRR PAYMENT SCREEN (Fully Fixed with Dynamic ID & Feedback)
+// 3. TELEBIRR PAYMENT SCREEN (Prices in USD with Live Rate Notice)
 // ---------------------------------------------------------------------------
 class TelebirrPaymentScreen extends StatefulWidget {
   final String userId;
   final String userName;
   final String telebirrPhone;
-  final String priceEtb;
+  final String priceUsd;
   final String coinQuantity;
   final int amountCoins;
 
@@ -1023,7 +1022,7 @@ class TelebirrPaymentScreen extends StatefulWidget {
     required this.userId,
     required this.userName,
     required this.telebirrPhone,
-    required this.priceEtb,
+    required this.priceUsd,
     required this.coinQuantity,
     required this.amountCoins,
   }) : super(key: key);
@@ -1038,7 +1037,7 @@ class _TelebirrPaymentScreenState extends State<TelebirrPaymentScreen> {
 
   void _copy(BuildContext context, String text, String label) {
     Clipboard.setData(ClipboardData(text: text));
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$label Copied!')));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$label ተገልብጧል (Copied)!')));
   }
 
   Future<void> _submitTelebirrPayment(String txId) async {
@@ -1055,7 +1054,7 @@ class _TelebirrPaymentScreenState extends State<TelebirrPaymentScreen> {
           'paymentMethod': 'Telebirr',
           'txId': txId.trim(),
           'amountCoins': widget.amountCoins,
-          'pricePaid': widget.priceEtb,
+          'pricePaid': widget.priceUsd, // ዋጋው በዶላር ብቻ ይመዘገባል
         }),
       ).timeout(const Duration(seconds: 15));
 
@@ -1066,7 +1065,7 @@ class _TelebirrPaymentScreenState extends State<TelebirrPaymentScreen> {
           Navigator.pop(context);
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('የቴሌብር ክፍያ ጥያቄዎ በተሳካ ሁኔታ ተልኳል! በአጭር ጊዜ ውስጥ ይረጋገጣል።'),
+              content: Text('የቴሌብር ክፍያ ጥያቄዎ በተሳካ ሁኔታ ተልኳል! በደቂቃዎች ውስጥ ይረጋገጣል።'),
               backgroundColor: Color(0xFF00C9A7),
               duration: Duration(seconds: 4),
             ),
@@ -1094,9 +1093,10 @@ class _TelebirrPaymentScreenState extends State<TelebirrPaymentScreen> {
     }
   }
 
-@override
+  @override
   Widget build(BuildContext context) {
-    return Scaffold(
+
+return Scaffold(
       backgroundColor: const Color(0xFF0C0D12),
       appBar: AppBar(
         backgroundColor: const Color(0xFF141620),
@@ -1106,7 +1106,7 @@ class _TelebirrPaymentScreenState extends State<TelebirrPaymentScreen> {
           onPressed: () => Navigator.pop(context),
         ),
         centerTitle: true,
-        title: const Text('Telebirr Payment', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+        title: const Text('Telebirr Wholesale', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
@@ -1122,22 +1122,44 @@ class _TelebirrPaymentScreenState extends State<TelebirrPaymentScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Payment Details', style: TextStyle(color: Color(0xFF00C9A7), fontSize: 14, fontWeight: FontWeight.bold)),
+                  const Text('የቴሌብር የጅምላ ክፍያ ዝርዝር', style: TextStyle(color: Color(0xFF00C9A7), fontSize: 14, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 12),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text('Receiver: ${widget.telebirrPhone}', style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
+                      Text('የተቀባይ ቴሌብር: ${widget.telebirrPhone}', style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
                       IconButton(
                         icon: const Icon(Icons.copy, color: Color(0xFF00C9A7), size: 18),
-                        onPressed: () => _copy(context, widget.telebirrPhone, 'Phone Number'),
+                        onPressed: () => _copy(context, widget.telebirrPhone, 'ስልክ ቁጥር'),
                       ),
                     ],
                   ),
                   const SizedBox(height: 6),
-                  Text('Amount: ${widget.priceEtb}', style: const TextStyle(color: Color(0xFFFFD700), fontSize: 14, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 4),
-                  Text('Coins to receive: ${widget.coinQuantity}', style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                  Text('ዋጋ በዶላር: ${widget.priceUsd}', style: const TextStyle(color: Color(0xFFFFD700), fontSize: 16, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 6),
+                  Text('የሚደርስዎት ሳንቲም: ${widget.coinQuantity} Coins', style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                  const Divider(color: Colors.white10, height: 20),
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.amber.withOpacity(0.4)),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(Icons.info_outline, color: Colors.amber, size: 18),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'ማሳሰቢያ፦ የዶላር ዋጋው (${widget.priceUsd}) በወቅቱ የምንዛሬ ተመን ተባዝቶ በቴሌብር ይላካል።',
+                            style: const TextStyle(color: Colors.amber, fontSize: 11, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -1146,11 +1168,12 @@ class _TelebirrPaymentScreenState extends State<TelebirrPaymentScreen> {
               controller: txController,
               style: const TextStyle(color: Colors.white),
               decoration: InputDecoration(
-                labelText: 'Transaction ID / የግብይት ቁጥር',
+                labelText: 'Transaction ID / የቴሌብር ግብይት ቁጥር',
                 labelStyle: const TextStyle(color: Colors.white54),
-                hintText: 'ለምሳሌ፦ TB${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}',
+                hintText: 'ለምሳሌ፦ CL84920231...',
                 hintStyle: const TextStyle(color: Colors.white24, fontSize: 12),
-                filled: true,
+
+filled: true,
                 fillColor: const Color(0xFF161824),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Colors.white12)),
               ),
@@ -1169,11 +1192,10 @@ class _TelebirrPaymentScreenState extends State<TelebirrPaymentScreen> {
                     : () {
                         if (txController.text.trim().isEmpty) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Please enter transaction ID')),
+                            const SnackBar(content: Text('እባክዎ የግብይት ቁጥር (TxID) ያስገቡ')),
                           );
                           return;
-
-}
+                        }
                         _submitTelebirrPayment(txController.text);
                       },
                 child: _isSubmitting
@@ -1182,7 +1204,7 @@ class _TelebirrPaymentScreenState extends State<TelebirrPaymentScreen> {
                         width: 22,
                         child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2),
                       )
-                    : const Text('Confirm Payment', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 15)),
+                    : const Text('ክፍያውን አረጋግጥ (Confirm)', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 15)),
               ),
             ),
           ],
@@ -1193,7 +1215,7 @@ class _TelebirrPaymentScreenState extends State<TelebirrPaymentScreen> {
 }
 
 // ---------------------------------------------------------------------------
-// 4. ADMIN PAYMENT SCREEN (With Instant Approval & Coin Crediting)
+// 4. ADMIN PAYMENT SCREEN
 // ---------------------------------------------------------------------------
 class AdminPaymentScreen extends StatefulWidget {
   const AdminPaymentScreen({Key? key}) : super(key: key);
@@ -1269,7 +1291,7 @@ class _AdminPaymentScreenState extends State<AdminPaymentScreen> {
     }
   }
 
-  void _copyToClipboard(String text, String label) {
+void _copyToClipboard(String text, String label) {
     Clipboard.setData(ClipboardData(text: text));
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('$label copied to clipboard')),
@@ -1290,8 +1312,7 @@ class _AdminPaymentScreenState extends State<AdminPaymentScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh, color: Color(0xFFFFD700)),
-
-onPressed: _fetchPendingPayments,
+            onPressed: _fetchPendingPayments,
           ),
         ],
       ),
@@ -1352,7 +1373,8 @@ onPressed: _fetchPendingPayments,
                                 ),
                               ),
                               const Spacer(),
-                              Text(
+
+Text(
                                 price,
                                 style: const TextStyle(
                                   color: Colors.white,
@@ -1366,8 +1388,7 @@ onPressed: _fetchPendingPayments,
                           Text(
                             'User: $userName (ID: $userId)',
                             style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13),
-
-),
+                          ),
                           const SizedBox(height: 4),
                           Text(
                             'Coins to add: $coins Coins',
@@ -1445,7 +1466,7 @@ class _SellerTransferSheetState extends State<SellerTransferSheet> {
   bool _isTransferring = false;
   String? _verifiedUserName;
 
-  Future<void> _checkRecipient() async {
+Future<void> _checkRecipient() async {
     final targetId = _idController.text.trim();
     if (targetId.isEmpty) return;
 
@@ -1458,8 +1479,7 @@ class _SellerTransferSheetState extends State<SellerTransferSheet> {
         if (data['user'] != null) {
           setState(() {
             _verifiedUserName = data['user']['name'] ?? 'User';
-
-});
+          });
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
@@ -1569,7 +1589,8 @@ class _SellerTransferSheetState extends State<SellerTransferSheet> {
           Row(
             children: [
               const Text('Transfer Coins', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFFFFD700))),
-              const Spacer(),
+
+const Spacer(),
               IconButton(icon: const Icon(Icons.close, color: Colors.white54), onPressed: () => Navigator.pop(context)),
             ],
           ),
@@ -1577,8 +1598,7 @@ class _SellerTransferSheetState extends State<SellerTransferSheet> {
           Row(
             children: [
               const Text('Sales Method: ', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white70, fontSize: 12)),
-
-const SizedBox(width: 8),
+              const SizedBox(width: 8),
               ChoiceChip(
                 label: const Text('User'),
                 selected: _isTransferToUser,
@@ -1666,7 +1686,7 @@ class SellerExchangeSheet extends StatefulWidget {
   final int currentPoints;
   final VoidCallback onExchangeSuccess;
 
-  const SellerExchangeSheet({
+const SellerExchangeSheet({
     Key? key,
     required this.userId,
     required this.currentPoints,
@@ -1681,7 +1701,7 @@ class _SellerExchangeSheetState extends State<SellerExchangeSheet> {
   int _selectedIndex = 0;
   bool _isExchanging = false;
 
-final List<Map<String, dynamic>> _exchangeTiers = const [
+  final List<Map<String, dynamic>> _exchangeTiers = const [
     {'coins': '960,000', 'points': '1,000,000', 'ptsValue': 1000000, 'coinValue': 960000, 'level': 'Standard Seller'},
     {'coins': '1,960,000', 'points': '2,000,000', 'ptsValue': 2000000, 'coinValue': 1960000, 'level': 'Standard Seller'},
     {'coins': '9,800,000', 'points': '10,000,000', 'ptsValue': 10000000, 'coinValue': 9800000, 'level': 'Standard Seller'},
@@ -1761,7 +1781,8 @@ final List<Map<String, dynamic>> _exchangeTiers = const [
                       border: Border.all(
                         color: isSelected ? const Color(0xFFFFD700) : Colors.white10,
                         width: isSelected ? 1.8 : 1,
-                      ),
+
+),
                       boxShadow: [
                         if (isSelected)
                           BoxShadow(
@@ -1771,8 +1792,7 @@ final List<Map<String, dynamic>> _exchangeTiers = const [
                       ],
                     ),
                     child: Column(
-
-mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Text(item['level'], style: const TextStyle(fontSize: 9, color: Color(0xFFFFD700), fontWeight: FontWeight.bold)),
                         const SizedBox(height: 4),
@@ -1847,7 +1867,7 @@ class TransactionDetailsSheet extends StatelessWidget {
           Expanded(
             child: ListView(
               children: [
-                _buildTxItem('Wholesale Recharge', '+1,980,000 Coins', 'Binance Pay', 'Approved', true),
+                _buildTxItem('Wholesale Recharge', '+1,980,000 Coins', 'Telebirr', 'Approved', true),
                 _buildTxItem('Agent Transfer to User 1002', '-10,000 Coins', 'Direct Sale', 'Completed', false),
                 _buildTxItem('Welcome Bonus', '+1,000 Coins', 'System', 'Completed', true),
               ],
@@ -1858,14 +1878,13 @@ class TransactionDetailsSheet extends StatelessWidget {
     );
   }
 
-  Widget _buildTxItem(String title, String amount, String method, String status, bool isPositive) {
+Widget _buildTxItem(String title, String amount, String method, String status, bool isPositive) {
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: const Color(0xFF1A1D2B),
-
-borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: Colors.white10),
       ),
       child: Row(
