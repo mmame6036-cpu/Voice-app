@@ -3,17 +3,19 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../models/user_model.dart';
 import '../services/user_service.dart';
+import 'face_verification_screen.dart';
 
 class DailyTasksScreen extends StatefulWidget {
-  final UserModel user;
+  final UserModel? user;
 
-  const DailyTasksScreen({Key? key, required this.user}) : super(key: key);
+  const DailyTasksScreen({Key? key, this.user}) : super(key: key);
 
   @override
   State<DailyTasksScreen> createState() => _DailyTasksScreenState();
 }
 
 class _DailyTasksScreenState extends State<DailyTasksScreen> with SingleTickerProviderStateMixin {
+  final UserService _user = UserService();
   late TabController _tabController;
   bool _isLoading = true;
 
@@ -27,11 +29,17 @@ class _DailyTasksScreenState extends State<DailyTasksScreen> with SingleTickerPr
   int _gameBetting = 0;
   List<String> _claimedTasks = [];
 
+  String get _currentUserId => widget.user?.userId ?? _user.userId;
+
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
-    _fetchTaskStatus();
+    if (_user.isFaceVerified) {
+      _fetchTaskStatus();
+    } else {
+      setState(() => _isLoading = false);
+    }
   }
 
   @override
@@ -41,8 +49,13 @@ class _DailyTasksScreenState extends State<DailyTasksScreen> with SingleTickerPr
   }
 
   Future<void> _fetchTaskStatus() async {
+    if (!_user.isFaceVerified) {
+      if (mounted) setState(() => _isLoading = false);
+      return;
+    }
+
     try {
-      final url = Uri.parse('${UserService.serverUrl}/api/tasks/status/${widget.user.userId}');
+      final url = Uri.parse('${UserService.serverUrl}/api/tasks/status/$_currentUserId');
       final response = await http.get(url);
 
       if (response.statusCode == 200) {
@@ -75,14 +88,34 @@ class _DailyTasksScreenState extends State<DailyTasksScreen> with SingleTickerPr
     }
   }
 
+  Future<void> _openFaceVerification() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const FaceVerificationScreen()),
+    );
+
+    if (result == true && mounted) {
+      setState(() {
+        _user.setFaceVerified(true);
+        _isLoading = true;
+      });
+      _fetchTaskStatus();
+    }
+  }
+
   Future<void> _claimTask(String taskId) async {
+    if (!_user.isFaceVerified) {
+      _openFaceVerification();
+      return;
+    }
+
     try {
       final url = Uri.parse('${UserService.serverUrl}/api/tasks/claim');
       final response = await http.post(
         url,
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
-          'userId': widget.user.userId,
+          'userId': _currentUserId,
           'taskId': taskId,
         }),
       );
@@ -97,7 +130,8 @@ class _DailyTasksScreenState extends State<DailyTasksScreen> with SingleTickerPr
           SnackBar(
             content: Text(resData['message'] ?? 'Claim successful!'),
             backgroundColor: const Color(0xFF10B981),
-          ),
+
+),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -116,6 +150,8 @@ class _DailyTasksScreenState extends State<DailyTasksScreen> with SingleTickerPr
 
   @override
   Widget build(BuildContext context) {
+    final bool isVerified = _user.isFaceVerified;
+
     return Scaffold(
       backgroundColor: const Color(0xFF110E27),
       appBar: AppBar(
@@ -124,11 +160,10 @@ class _DailyTasksScreenState extends State<DailyTasksScreen> with SingleTickerPr
         centerTitle: true,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios, color: Colors.white, size: 20),
-
-onPressed: () => Navigator.pop(context),
+          onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
-          'Task',
+          'Task Center',
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
         ),
         bottom: PreferredSize(
@@ -175,15 +210,81 @@ onPressed: () => Navigator.pop(context),
           ),
         ),
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFF7B4DFF)))
-          : TabBarView(
-              controller: _tabController,
-              children: [
-                _buildPointsTab(),
-                _buildCoinsTab(),
-              ],
+      body: !isVerified
+          ? _buildLockedTasksView()
+          : _isLoading
+              ? const Center(child: CircularProgressIndicator(color: Color(0xFF7B4DFF)))
+              : TabBarView(
+                  controller: _tabController,
+                  children: [
+                    _buildPointsTab(),
+                    _buildCoinsTab(),
+                  ],
+                ),
+    );
+  }
+
+  Widget _buildLockedTasksView() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 28),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(26),
+              decoration: BoxDecoration(
+                color: const Color(0xFF231B4D),
+                shape: BoxShape.circle,
+                border: Border.all(color: const Color(0xFF7B4DFF), width: 2),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF7B4DFF).withOpacity(0.3),
+                    blurRadius: 24,
+                  ),
+                ],
+
+),
+              child: const Icon(
+                Icons.lock_person,
+                size: 64,
+                color: Color(0xFF00C9A7),
+              ),
             ),
+            const SizedBox(height: 24),
+            const Text(
+              'Tasks are Locked',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 10),
+            const Text(
+              'You must complete 3D Face Verification before task counters start tracking duration and earning coins.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.white70, fontSize: 14, height: 1.4),
+            ),
+            const SizedBox(height: 28),
+            ElevatedButton.icon(
+              onPressed: _openFaceVerification,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF00C9A7),
+                foregroundColor: Colors.black,
+                padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                elevation: 4,
+              ),
+              icon: const Icon(Icons.face_retouching_natural, color: Colors.black),
+              label: const Text(
+                'Verify Face to Unlock',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -194,7 +295,6 @@ onPressed: () => Navigator.pop(context),
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // 1. New User 7-Day Bonus (Show only if within 7 days)
           if (_isWithin7Days)
             _buildTaskCard(
               icon: Icons.mic_none,
@@ -207,8 +307,6 @@ onPressed: () => Navigator.pop(context),
               onClaim: () => _claimTask('new_user_7day'),
               onGo: () => Navigator.pop(context),
             ),
-
-          // 2. Normal Seat Daily Hourly Reward
           _buildTaskCard(
             icon: Icons.timer,
             iconColor: Colors.tealAccent,
@@ -220,35 +318,29 @@ onPressed: () => Navigator.pop(context),
             onClaim: () => _claimTask('normal_seat_daily'),
             onGo: () => Navigator.pop(context),
           ),
-
-          // 3. Crown Seat Reward
           _buildTaskCard(
             icon: Icons.military_tech,
             iconColor: Colors.amber,
             title: 'Crown Seat: 1 Hour',
             subtitle: 'Crown Duration: ${_crownSeatMinutes > 60 ? 60 : _crownSeatMinutes}/60 min\nGift Coins: ${_crownGiftCoins > 600 ? 600 : _crownGiftCoins}/600',
-
-rewardText: '3k Points',
+            rewardText: '3k Points',
             isCompleted: _crownSeatMinutes >= 60 && _crownGiftCoins >= 600,
             isClaimed: _claimedTasks.contains('crown_seat_task'),
             onClaim: () => _claimTask('crown_seat_task'),
             onGo: () => Navigator.pop(context),
           ),
-
-          // 4. Crown Room Reward (Host Live)
           _buildTaskCard(
             icon: Icons.meeting_room,
             iconColor: Colors.deepPurpleAccent,
             title: 'Crown Room Reward',
             subtitle: 'Live Duration: ${_crownSeatMinutes > 60 ? 60 : _crownSeatMinutes}/60 min',
             rewardText: '5k Points',
-            isCompleted: _crownSeatMinutes >= 60,
+
+isCompleted: _crownSeatMinutes >= 60,
             isClaimed: _claimedTasks.contains('crown_room_reward'),
             onClaim: () => _claimTask('crown_room_reward'),
             onGo: () => Navigator.pop(context),
           ),
-
-          // 5. Gain Followers Task
           _buildTaskCard(
             icon: Icons.favorite_border,
             iconColor: Colors.pinkAccent,
@@ -269,7 +361,6 @@ rewardText: '3k Points',
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        // 1. Stay in Room Task
         _buildTaskCard(
           icon: Icons.meeting_room_outlined,
           iconColor: Colors.greenAccent,
@@ -281,8 +372,6 @@ rewardText: '3k Points',
           onClaim: () => _claimTask('stay_10_coins'),
           onGo: () => Navigator.pop(context),
         ),
-
-        // 2. Bonus Gifts Sent Flow (100k)
         _buildTaskCard(
           icon: Icons.card_giftcard,
           iconColor: Colors.pinkAccent,
@@ -294,8 +383,6 @@ rewardText: '3k Points',
           onClaim: () => _claimTask('gift_flow_100k'),
           onGo: () => Navigator.pop(context),
         ),
-
-        // 3. Game Betting Flow
         _buildTaskCard(
           icon: Icons.sports_esports,
           iconColor: Colors.purpleAccent,
@@ -330,8 +417,7 @@ rewardText: '3k Points',
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.all(14),
-
-decoration: BoxDecoration(
+      decoration: BoxDecoration(
         color: const Color(0xFF1E1742),
         borderRadius: BorderRadius.circular(16),
       ),
@@ -354,7 +440,8 @@ decoration: BoxDecoration(
                 Text(
                   title,
                   style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
-                ),
+
+),
                 const SizedBox(height: 4),
                 Text(
                   subtitle,
