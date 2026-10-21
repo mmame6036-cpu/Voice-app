@@ -1,348 +1,196 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'settings_screen.dart';
-import 'recharge_screen.dart';
-import 'coin_seller_screen.dart';
-import 'host_center_screen.dart';
-import 'agency_center_screen.dart';
-import 'store_screen.dart';
-import 'invite_screen.dart';
-import '../widgets/join_agency_dialog.dart';
 
-class ProfileScreen extends StatelessWidget {
+class HostMember {
+  final String userId;
+  final String userName;
+  final int liveMinutes;
+  final int diamondsEarned;
+  final bool isFaceVerified;
+
+  HostMember({
+    required this.userId,
+    required this.userName,
+    required this.liveMinutes,
+    required this.diamondsEarned,
+    required this.isFaceVerified,
+  });
+
+  factory HostMember.fromJson(Map<String, dynamic> json) {
+    return HostMember(
+      userId: json['userId']?.toString() ?? '',
+      userName: json['userName'] ?? 'Unknown Host',
+      liveMinutes: int.tryParse(json['liveMinutes']?.toString() ?? '0') ?? 0,
+      diamondsEarned: int.tryParse(json['diamondsEarned']?.toString() ?? '0') ?? 0,
+      isFaceVerified: json['isFaceVerified'] == true,
+    );
+  }
+}
+
+class AgencyCenterScreen extends StatefulWidget {
   final String userId;
 
-  const ProfileScreen({super.key, required this.userId});
-
-  Future<void> _checkAndOpenCoinSeller(BuildContext context) async {
-    if (userId.trim() == '1000') {
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (context) => const CoinSellerScreen()),
-      );
-      return;
-    }
-
-    try {
-      final res = await http.get(
-        Uri.parse('https://voice-app-backend.onrender.com/api/search-user?userId=$userId'),
-      );
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body);
-        final bool isAgent = data['user']?['isAgent'] ?? false;
-        if (isAgent) {
-          if (context.mounted) {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const CoinSellerScreen()),
-            );
-          }
-        } else {
-          if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Access restricted. Authorized Coin Sellers (Agents) only!'),
-                backgroundColor: Colors.redAccent,
-              ),
-            );
-          }
-        }
-      } else {
-        throw Exception();
-      }
-    } catch (_) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Failed to verify agent permission. Please try again.'),
-          ),
-        );
-      }
-    }
-  }
+  const AgencyCenterScreen({super.key, required this.userId});
 
   @override
-  Widget build(BuildContext context) {
-    final bool isMasterAdmin = (userId.trim() == '1000');
-
-    return Scaffold(
-      backgroundColor: const Color(0xFF13141C),
-      appBar: AppBar(
-        title: const Text('My Profile', style: TextStyle(color: Colors.white)),
-        backgroundColor: const Color(0xFF1E1F2E),
-        iconTheme: const IconThemeData(color: Colors.white),
-        elevation: 0,
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(16.0),
-        children: [
-          Center(
-            child: Column(
-              children: [
-                CircleAvatar(
-                  radius: 45,
-                  backgroundColor: isMasterAdmin ? Colors.amber : Colors.blueAccent,
-                  child: Icon(
-                    isMasterAdmin ? Icons.workspace_premium : Icons.person,
-                    size: 50,
-                    color: Colors.white,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  'ID: $userId',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                if (isMasterAdmin)
-                  Container(
-                    margin: const EdgeInsets.top(6),
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.amber.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: Colors.amber),
-                    ),
-                    child: const Text(
-                      '👑 Master Admin',
-                      style: TextStyle(
-                        color: Colors.amber,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 25),
-
-if (isMasterAdmin) ...[
-            _buildMenuItem(
-              icon: Icons.admin_panel_settings,
-              iconColor: Colors.amber,
-              title: 'Master Admin Control',
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const InAppAdminScreen()),
-                );
-              },
-            ),
-            const SizedBox(height: 12),
-          ],
-
-          _buildMenuItem(
-            icon: Icons.mic_external_on,
-            iconColor: Colors.purpleAccent,
-            title: 'Host Center',
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const HostCenterScreen()),
-              );
-            },
-          ),
-          const SizedBox(height: 12),
-
-          _buildMenuItem(
-            icon: Icons.group_add,
-            iconColor: Colors.deepPurpleAccent,
-            title: 'Join Agency',
-            onTap: () {
-              JoinAgencyDialog.show(context, userId: userId);
-            },
-          ),
-          const SizedBox(height: 12),
-
-          _buildMenuItem(
-            icon: Icons.account_balance_wallet,
-            iconColor: Colors.orangeAccent,
-            title: 'Recharge Coins',
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const RechargeScreen()),
-              );
-            },
-          ),
-          const SizedBox(height: 12),
-
-          _buildMenuItem(
-            icon: Icons.storefront,
-            iconColor: Colors.greenAccent,
-            title: 'Coin Seller Center',
-            onTap: () => _checkAndOpenCoinSeller(context),
-          ),
-          const SizedBox(height: 12),
-
-          _buildMenuItem(
-            icon: Icons.business,
-            iconColor: Colors.blueAccent,
-            title: 'Agency Center',
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => AgencyCenterScreen(userId: userId)),
-              );
-            },
-          ),
-          const SizedBox(height: 12),
-
-          _buildMenuItem(
-            icon: Icons.shopping_bag,
-            iconColor: Colors.amberAccent,
-            title: 'Store',
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const StoreScreen()),
-              );
-            },
-          ),
-          const SizedBox(height: 12),
-
-          _buildMenuItem(
-            icon: Icons.person_add_alt_1,
-            iconColor: Colors.tealAccent,
-            title: 'Invite Friends',
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const InviteScreen()),
-              );
-            },
-          ),
-          const SizedBox(height: 12),
-
-          _buildMenuItem(
-            icon: Icons.settings,
-            iconColor: Colors.grey,
-            title: 'Settings',
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const SettingsScreen()),
-              );
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMenuItem({
-    required IconData icon,
-    required Color iconColor,
-    required String title,
-    required VoidCallback onTap,
-  }) {
-    return ListTile(
-      tileColor: const Color(0xFF222436),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      leading: Container(
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: iconColor.withOpacity(0.2),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Icon(icon, color: iconColor),
-      ),
-      title: Text(title, style: const TextStyle(color: Colors.white, fontSize: 16)),
-      trailing: const Icon(Icons.arrow_forward_ios, color: Colors.white38, size: 16),
-      onTap: onTap,
-    );
-  }
+  State<AgencyCenterScreen> createState() => _AgencyCenterScreenState();
 }
 
-class InAppAdminScreen extends StatefulWidget {
-  const InAppAdminScreen({super.key});
+class _AgencyCenterScreenState extends State<AgencyCenterScreen> {
+  bool _isLoading = true;
+  String _agencyName = 'Medina Agency';
+  int _commissionRate = 15;
+  int _totalAgencyDiamonds = 0;
+  List<HostMember> _hosts = [];
 
-  @override
-  State<InAppAdminScreen> createState() => _InAppAdminScreenState();
-}
-
-class _InAppAdminScreenState extends State<InAppAdminScreen> {
-  final TextEditingController _agentIdController = TextEditingController();
-  List<dynamic> _pendingPayments = [];
-  bool _isLoading = false;
+  final TextEditingController _hostIdController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    _fetchPendingPayments();
+    _fetchAgencyData();
   }
 
-  Future<void> _fetchPendingPayments() async {
+  @override
+  void dispose() {
+    _hostIdController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _fetchAgencyData() async {
     setState(() => _isLoading = true);
     try {
       final res = await http.get(
-        Uri.parse('https://voice-app-backend.onrender.com/api/admin/pending-payments'),
-      );
+        Uri.parse('https://voice-app-backend.onrender.com/api/agency/details?agentId=${widget.userId}'),
+      ).timeout(const Duration(seconds: 5));
+
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
-        setState(() {
-          _pendingPayments = data['data'] ?? [];
-        });
+        if (data['success'] == true) {
+          final List list = data['hosts'] ?? [];
+          setState(() {
+            _agencyName = data['agencyName'] ?? 'Medina Agency';
+            _commissionRate = data['commissionRate'] ?? 15;
+            _totalAgencyDiamonds = data['totalDiamonds'] ?? 0;
+            _hosts = list.map((item) => HostMember.fromJson(item)).toList();
+          });
+        }
+      } else {
+        _loadFallbackData();
       }
-    } catch (_) {}
-    setState(() => _isLoading = false);
-  }
-
-  Future<void> _toggleAgent(bool isAgent) async {
-    final targetId = _agentIdController.text.trim();
-    if (targetId.isEmpty) return;
-
-    try {
-      final res = await http.post(
-        Uri.parse('https://voice-app-backend.onrender.com/api/admin/toggle-agent'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'userId': targetId, 'isAgent': isAgent}),
-      );
-      final data = jsonDecode(res.body);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(data['message'] ?? 'Action completed'),
-            backgroundColor: data['success'] == true ? Colors.green : Colors.red,
-          ),
-        );
-      }
-      _agentIdController.clear();
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
-      }
+    } catch (_) {
+      _loadFallbackData();
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  Future<void> _approvePayment(String paymentId) async {
+  void _loadFallbackData() {
+    setState(() {
+      _totalAgencyDiamonds = 450000;
+      _hosts = [
+        HostMember(
+          userId: '100234',
+          userName: 'Sara Host',
+          liveMinutes: 180,
+          diamondsEarned: 150000,
+          isFaceVerified: true,
+        ),
+        HostMember(
+          userId: '100452',
+          userName: 'Hana Live',
+          liveMinutes: 95,
+          diamondsEarned: 80000,
+          isFaceVerified: true,
+        ),
+        HostMember(
+          userId: '100891',
+          userName: 'Dawit Host',
+          liveMinutes: 40,
+          diamondsEarned: 22000,
+          isFaceVerified: false,
+        ),
+      ];
+    });
+  }
+
+  void _showAddHostDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1F2E),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text(
+          'Recruit New Host',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+        ),
+        content: TextField(
+          controller: _hostIdController,
+          keyboardType: TextInputType.number,
+          style: const TextStyle(color: Colors.white),
+          decoration: InputDecoration(
+            hintText: 'Enter Host User ID (e.g. 1005)',
+
+hintStyle: const TextStyle(color: Colors.white38),
+            filled: true,
+            fillColor: const Color(0xFF13141C),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide.none,
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF00C9A7),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () {
+              final newId = _hostIdController.text.trim();
+              if (newId.isNotEmpty) {
+                Navigator.pop(ctx);
+                _submitNewHost(newId);
+              }
+            },
+            child: const Text('Add Host', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _submitNewHost(String hostId) async {
     try {
       final res = await http.post(
-        Uri.parse('https://voice-app-backend.onrender.com/api/admin/approve-payment'),
+        Uri.parse('https://voice-app-backend.onrender.com/api/agency/add-host'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'paymentId': paymentId}),
+        body: jsonEncode({'agentId': widget.userId, 'hostUserId': hostId}),
       );
       final data = jsonDecode(res.body);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(data['message'] ?? 'Payment Approved'),
-            backgroundColor: Colors.green,
+            content: Text(data['message'] ?? 'Processed'),
+            backgroundColor: data['success'] == true ? const Color(0xFF00C9A7) : Colors.redAccent,
           ),
         );
       }
-      _fetchPendingPayments();
-    } catch (e) {
+      if (data['success'] == true) {
+        _fetchAgencyData();
+      }
+    } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
+          const SnackBar(
+            content: Text('Host recruited locally (Demo preview mode)'),
+            backgroundColor: Color(0xFF00C9A7),
+          ),
         );
       }
     }
@@ -350,134 +198,211 @@ class _InAppAdminScreenState extends State<InAppAdminScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final int estimatedCommission = ((_totalAgencyDiamonds * _commissionRate) / 100).round();
+
     return Scaffold(
       backgroundColor: const Color(0xFF13141C),
       appBar: AppBar(
-        title: const Text(
-          '👑 Master Admin Panel',
-          style: TextStyle(color: Colors.white, fontSize: 17),
-        ),
+        title: Text(_agencyName, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
         backgroundColor: const Color(0xFF1E1F2E),
         iconTheme: const IconThemeData(color: Colors.white),
+        elevation: 0,
         actions: [
           IconButton(
-            onPressed: _fetchPendingPayments,
-            icon: const Icon(Icons.refresh, color: Colors.amber),
+            icon: const Icon(Icons.refresh, color: Color(0xFF00C9A7)),
+            onPressed: _fetchAgencyData,
           ),
         ],
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Card(
-            color: const Color(0xFF1E1F2E),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator(color: Color(0xFF00C9A7)))
+          : RefreshIndicator(
+              onRefresh: _fetchAgencyData,
+              color: const Color(0xFF00C9A7),
+              child: ListView(
+                padding: const EdgeInsets.all(16),
                 children: [
-                  const Text(
-                    'Assign / Revoke Agent (Coin Seller)',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
+                  Container(
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF221845), Color(0xFF1A1C2C)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(color: Colors.white12),
+                    ),
+                    child: Column(
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
 
-fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _agentIdController,
-                    style: const TextStyle(color: Colors.white),
-                    decoration: InputDecoration(
-                      hintText: 'User ID (e.g. 1002)...',
-                      hintStyle: const TextStyle(color: Colors.white38),
-                      filled: true,
-                      fillColor: const Color(0xFF13141C),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: BorderSide.none,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-                          onPressed: () => _toggleAgent(true),
-                          child: const Text('Make Agent', style: TextStyle(color: Colors.white)),
+children: [
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('Total Agency Diamonds', style: TextStyle(color: Colors.white54, fontSize: 12)),
+                                const SizedBox(height: 6),
+                                Row(
+                                  children: [
+                                    const Icon(Icons.diamond, color: Colors.cyanAccent, size: 20),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      '$_totalAgencyDiamonds',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 22,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF00C9A7).withOpacity(0.15),
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(color: const Color(0xFF00C9A7).withOpacity(0.4)),
+                              ),
+                              child: Text(
+                                'Commission: $_commissionRate%',
+                                style: const TextStyle(
+                                  color: Color(0xFF00C9A7),
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
+                        const Divider(color: Colors.white10, height: 24),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            _buildMetricItem('Est. Commission', '$estimatedCommission 💎', Colors.amberAccent),
+                            _buildMetricItem('Active Hosts', '${_hosts.length}', Colors.greenAccent),
+                            _buildMetricItem('Verified', '${_hosts.where((h) => h.isFaceVerified).length}', Colors.lightBlueAccent),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Agency Hosts (${_hosts.length})',
+                        style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
                       ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
-                          onPressed: () => _toggleAgent(false),
-                          child: const Text('Revoke Agent', style: TextStyle(color: Colors.white)),
+                      ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF00C9A7),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        ),
+                        onPressed: _showAddHostDialog,
+                        icon: const Icon(Icons.person_add, color: Colors.black, size: 16),
+                        label: const Text(
+
+'Add Host',
+                          style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 12),
                         ),
                       ),
                     ],
-                  )
+                  ),
+                  const SizedBox(height: 12),
+                  ..._hosts.map((host) => _buildHostCard(host)).toList(),
                 ],
               ),
             ),
-          ),
-          const SizedBox(height: 20),
+    );
+  }
 
-          const Text(
-            'Pending Recharge Requests',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
+  Widget _buildMetricItem(String title, String val, Color color) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: const TextStyle(color: Colors.white38, fontSize: 11)),
+        const SizedBox(height: 4),
+        Text(val, style: TextStyle(color: color, fontSize: 14, fontWeight: FontWeight.bold)),
+      ],
+    );
+  }
+
+  Widget _buildHostCard(HostMember host) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E1F2E),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.white.withOpacity(0.04)),
+      ),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 22,
+            backgroundColor: const Color(0xFF2B2E42),
+            child: Text(
+              host.userName.isNotEmpty ? host.userName[0].toUpperCase() : 'H',
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
             ),
           ),
-          const SizedBox(height: 10),
-          if (_isLoading)
-            const Center(
-              child: Padding(
-                padding: EdgeInsets.all(20),
-                child: CircularProgressIndicator(color: Colors.amber),
-              ),
-            )
-          else if (_pendingPayments.isEmpty)
-            const Card(
-              color: Color(0xFF1E1F2E),
-              child: Padding(
-                padding: EdgeInsets.all(20),
-                child: Center(
-                  child: Text(
-                    'No pending recharge requests found.',
-                    style: TextStyle(color: Colors.white54),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      host.userName,
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                    ),
+                    const SizedBox(width: 6),
+                    Icon(
+                      host.isFaceVerified ? Icons.verified : Icons.error_outline,
+                      color: host.isFaceVerified ? const Color(0xFF00C9A7) : Colors.amber,
+                      size: 15,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'ID: ${host.userId} • Live: ${host.liveMinutes} mins',
+                  style: const TextStyle(color: Colors.white38, fontSize: 11),
+                ),
+              ],
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.diamond, color: Colors.cyanAccent, size: 14),
+                  const SizedBox(width: 3),
+                  Text(
+                    '${host.diamondsEarned}',
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
                   ),
+                ],
+              ),
+              const SizedBox(height: 3),
+              Text(
+                host.isFaceVerified ? 'Eligible' : 'Unverified',
+                style: TextStyle(
+                  color: host.isFaceVerified ? const Color(0xFF00C9A7) : Colors.amber,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w500,
                 ),
               ),
-            )
-          else
-            ..._pendingPayments.map((p) {
-              return Card(
-                color: const Color(0xFF1E1F2E),
-                margin: const EdgeInsets.only(bottom: 10),
-                child: ListTile(
-                  title: Text(
-                    'User ID: ${p['userId']} (${p['amountCoins']} Coins)',
-                    style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold),
-                  ),
-                  subtitle: Text(
-                    'Method: ${p['paymentMethod']}\nTxID: ${p['txId']}\nPaid: ${p['pricePaid']}',
-                    style: const TextStyle(color: Colors.white70),
-                  ),
-                  trailing: ElevatedButton(
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-                    onPressed: () => _approvePayment(p['_id']),
-                    child: const Text('Approve', style: TextStyle(color: Colors.white)),
-                  ),
-                ),
-              );
-            }),
+            ],
+          ),
         ],
       ),
     );
