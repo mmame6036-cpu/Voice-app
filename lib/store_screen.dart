@@ -1,15 +1,13 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'services/user_service.dart';
 
 class StoreItem {
   final String id;
   final String name;
-  final String category; // 'Popular', 'Frame', 'Entry', 'Special ID', 'Theme'
+  final String category;
   final int price;
   final String imageUrl;
-  final String badge; // 'HOT', 'NEW', or ''
+  final String badge;
   final Color? glowColor;
 
   StoreItem({
@@ -138,13 +136,13 @@ class _StoreScreenState extends State<StoreScreen> with SingleTickerProviderStat
         glowColor: Colors.redAccent,
       ),
       StoreItem(
-
-id: 'f6',
+        id: 'f6',
         name: 'Mecha Spirit',
         category: 'Frame',
         price: 299999,
         imageUrl: 'https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?w=300&q=80',
-        badge: 'NEW',
+
+badge: 'NEW',
         glowColor: Colors.purpleAccent,
       ),
       StoreItem(
@@ -166,7 +164,7 @@ id: 'f6',
         glowColor: Colors.tealAccent,
       ),
 
-      // 3. ENTRY (Vehicles & Beasts)
+      // 3. ENTRY
       StoreItem(
         id: 'e1',
         name: 'Violet Phantom',
@@ -287,7 +285,7 @@ id: 'f6',
         glowColor: Colors.tealAccent,
       ),
 
-// 5. THEME (Room Backgrounds)
+// 5. THEME
       StoreItem(
         id: 't1',
         name: 'Cherry Blossom',
@@ -372,7 +370,11 @@ id: 'f6',
                     )
                   : ClipRRect(
                       borderRadius: BorderRadius.circular(14),
-                      child: Image.network(item.imageUrl, fit: BoxFit.cover),
+                      child: Image.network(
+                        item.imageUrl,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) => const Icon(Icons.stars, color: Colors.amber, size: 48),
+                      ),
                     ),
             ),
             const SizedBox(height: 16),
@@ -391,14 +393,14 @@ id: 'f6',
           TextButton(
             onPressed: () => Navigator.pop(ctx),
             child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
-          ),
+
+),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF904BE6),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-
-),
-            onPressed: () async {
+            ),
+            onPressed: () {
               if (_user.coins < item.price) {
                 Navigator.pop(ctx);
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -477,7 +479,6 @@ id: 'f6',
       ),
       body: Column(
         children: [
-          // Luxury Floating VIP Entry Banner
           Container(
             margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
@@ -495,13 +496,13 @@ id: 'f6',
               ],
               border: Border.all(color: Colors.amberAccent.withOpacity(0.5), width: 1.2),
             ),
-            child: Row(
+
+child: Row(
               children: [
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
-
-gradient: const LinearGradient(colors: [Colors.amber, Colors.orangeAccent]),
+                    gradient: const LinearGradient(colors: [Colors.amber, Colors.orangeAccent]),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: const Text('VIP 6', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 11)),
@@ -518,8 +519,6 @@ gradient: const LinearGradient(colors: [Colors.amber, Colors.orangeAccent]),
               ],
             ),
           ),
-
-          // Items Grid View
           Expanded(
             child: TabBarView(
               controller: _tabController,
@@ -557,7 +556,6 @@ gradient: const LinearGradient(colors: [Colors.amber, Colors.orangeAccent]),
                         ),
                         child: Stack(
                           children: [
-                            // Main content
                             Padding(
                               padding: const EdgeInsets.all(12),
                               child: Column(
@@ -576,9 +574,9 @@ gradient: const LinearGradient(colors: [Colors.amber, Colors.orangeAccent]),
                                                 boxShadow: [
                                                   BoxShadow(
                                                     color: Colors.purpleAccent.withOpacity(0.4),
-                                                    blurRadius: 8,
 
-),
+blurRadius: 8,
+                                                  ),
                                                 ],
                                               ),
                                               child: Row(
@@ -617,7 +615,11 @@ gradient: const LinearGradient(colors: [Colors.amber, Colors.orangeAccent]),
                                                   fit: BoxFit.cover,
                                                   width: 86,
                                                   height: 86,
-                                                  errorBuilder: (_, , _) => const Icon(Icons.stars, color: Colors.amber, size: 50),
+                                                  errorBuilder: (context, error, stackTrace) => const Icon(
+                                                    Icons.stars,
+                                                    color: Colors.amber,
+                                                    size: 50,
+                                                  ),
                                                 ),
                                               ),
                                             ),
@@ -631,12 +633,12 @@ gradient: const LinearGradient(colors: [Colors.amber, Colors.orangeAccent]),
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                   const SizedBox(height: 6),
-                                  Row(
+
+Row(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
                                       const Icon(Icons.monetization_on, color: Colors.amber, size: 14),
-
-const SizedBox(width: 4),
+                                      const SizedBox(width: 4),
                                       Text(
                                         '${item.price}',
                                         style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: 12),
@@ -646,8 +648,6 @@ const SizedBox(width: 4),
                                 ],
                               ),
                             ),
-
-                            // Badge
                             if (item.badge.isNotEmpty)
                               Positioned(
                                 top: 8,
