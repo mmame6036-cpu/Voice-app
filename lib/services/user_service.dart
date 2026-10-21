@@ -14,10 +14,16 @@ class UserService {
   String userId = '';
   String userName = '';
   String avatar = '';
+  String invitedBy = '';
   int _coins = 0;
   int _points = 0;
   bool isOwner = false;
   bool isInitialized = false;
+
+  // Backpack Equipment
+  String equippedFrame = '';
+  String equippedEntry = '';
+  String equippedTheme = '';
 
   int get coins => _coins;
   set coins(int value) {
@@ -32,12 +38,24 @@ class UserService {
     _saveToStorage();
   }
 
-  Future<File> _getStorageFile() async {
-    final dir = Directory.systemTemp;
-    return File('${dir.path}/app_persistent_profile.json');
+  void equipItem(String category, String itemName) {
+    if (category == 'Frame') {
+      equippedFrame = equippedFrame == itemName ? '' : itemName;
+    } else if (category == 'Entry') {
+      equippedEntry = equippedEntry == itemName ? '' : itemName;
+    } else if (category == 'Theme') {
+      equippedTheme = equippedTheme == itemName ? '' : itemName;
+    }
+    _saveToStorage();
   }
 
-  Future<void> initializeUser() async {
+  Future<File> _getStorageFile() async {
+    // ቋሚ የፋይል ማስቀመጫ
+    final dir = Directory.systemTemp;
+    return File('${dir.path}/nile_voice_permanent_user.json');
+  }
+
+  Future<void> initializeUser({String? inviterId}) async {
     if (isInitialized && userId.isNotEmpty) {
       await refreshUserData();
       return;
@@ -46,7 +64,7 @@ class UserService {
     try {
       final file = await _getStorageFile();
 
-      // 1. Check local persistent storage
+      // 1. በስልኩ ላይ ቀድሞ የተመዘገበ ቋሚ ፕሮፋይል ካለ ማንበብ
       if (await file.exists()) {
         final content = await file.readAsString();
         final localData = jsonDecode(content);
@@ -56,16 +74,20 @@ class UserService {
           avatar = localData['avatar'] ?? '';
           _coins = localData['coins'] ?? 0;
           _points = localData['points'] ?? 0;
+          invitedBy = localData['invitedBy'] ?? '';
+          equippedFrame = localData['equippedFrame'] ?? '';
+          equippedEntry = localData['equippedEntry'] ?? '';
+          equippedTheme = localData['equippedTheme'] ?? '';
           isOwner = (userId == '1000');
           isInitialized = true;
 
-          // Sync latest values from database
+          // የቅርብ ጊዜ መረጃውን ከ MongoDB ማመሳከር
           await refreshUserData();
           return;
         }
       }
 
-      // 2. Register fallback device account if no profile exists
+      // 2. አዲስ ስልክ ከሆነ ከሰርቨሩ ተከታታይ ID (ከ 1000 ጀምሮ) በቅደም ተከተል መቀበል
       final randomDeviceSeed = Random().nextInt(899999) + 100000;
       final deviceKey = 'dev_${Platform.operatingSystem}_$randomDeviceSeed';
 
@@ -78,6 +100,7 @@ class UserService {
         'deviceId': deviceKey,
         'name': 'User_$randomDeviceSeed',
         'isOwner': false,
+        'inviterId': inviterId ?? '',
       })));
 
       final response = await request.close();
@@ -96,9 +119,9 @@ class UserService {
       debugPrint('UserService Initialization Error: $e');
     }
 
+    // ከሰርቨር ጋር ግንኙነት ባይኖር እንኳን መነሻ መመደብ
     if (userId.isEmpty) {
-      final randomUnique = Random().nextInt(8999) + 1001;
-      userId = randomUnique.toString();
+      userId = '1001';
       userName = 'User_$userId';
       _coins = 1000;
       _points = 0;
@@ -109,13 +132,13 @@ class UserService {
     isInitialized = true;
   }
 
-  // Set user directly after successful Google Login
+// Google Login ሲደረግ የተጠቃሚውን ዳታ መያዣ
   Future<void> setUserData(Map<String, dynamic> userData) async {
     _updateFromUserMap(userData);
     await _saveToStorage();
   }
 
-  // Refresh latest coins, points, and profile from MongoDB
+  // የቅርብ ጊዜ መረጃን ከሰርቨር ማደሻ
   Future<void> refreshUserData() async {
     if (userId.isEmpty) return;
     try {
@@ -126,7 +149,7 @@ class UserService {
       );
       final response = await request.close();
 
-if (response.statusCode == 200) {
+      if (response.statusCode == 200) {
         final body = await response.transform(utf8.decoder).join();
         final data = jsonDecode(body);
         if (data['success'] == true && data['user'] != null) {
@@ -143,6 +166,7 @@ if (response.statusCode == 200) {
     userId = userMap['userId'].toString();
     userName = userMap['name'] ?? 'User_$userId';
     avatar = userMap['avatar'] ?? '';
+    invitedBy = userMap['invitedBy'] ?? '';
     _coins = (userMap['coins'] is num) ? (userMap['coins'] as num).toInt() : 0;
     _points = (userMap['points'] is num) ? (userMap['points'] as num).toInt() : 0;
     isOwner = (userId == '1000');
@@ -157,6 +181,10 @@ if (response.statusCode == 200) {
         'avatar': avatar,
         'coins': _coins,
         'points': _points,
+        'invitedBy': invitedBy,
+        'equippedFrame': equippedFrame,
+        'equippedEntry': equippedEntry,
+        'equippedTheme': equippedTheme,
       }));
     } catch (e) {
       debugPrint('Storage write error: $e');
