@@ -113,6 +113,7 @@ coins: { type: Number, default: 1000 },
   points: { type: Number, default: 0 },
   isAgent: { type: Boolean, default: false },
   isFrozen: { type: Boolean, default: false },
+  invitedBy: { type: String, default: '' },
   createdAt: { type: Date, default: Date.now }
 });
 const User = mongoose.model('User', userSchema);
@@ -212,7 +213,7 @@ app.post('/api/admin/approve-payment', async (req, res) => {
   try {
     const { paymentId } = req.body;
 
-    const payment = await Payment.findById(paymentId);
+const payment = await Payment.findById(paymentId);
     if (!payment) {
       return res.status(400).json({ success: false, message: 'Invalid payment record' });
     }
@@ -220,7 +221,7 @@ app.post('/api/admin/approve-payment', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Already processed payment' });
     }
 
-const user = await User.findOneAndUpdate(
+    const user = await User.findOneAndUpdate(
       { userId: payment.userId },
       { $inc: { coins: payment.amountCoins } },
       { new: true }
@@ -336,7 +337,7 @@ app.post('/api/wallet/agent-transfer-coins', async (req, res) => {
       description: 'Received ' + coinsToTransfer + ' coins from Agent ' + agent.userId
     });
 
-    return res.json({
+return res.json({
       success: true,
       message: 'Successfully transferred ' + coinsToTransfer + ' coins to User ' + recipient.userId,
       agentCoins: agent.coins
@@ -381,32 +382,44 @@ app.get('/api/rooms', async (req, res) => {
   }
 });
 
-// Register User
+// Helper function to assign next sequential ID (Starts at 1000)
+async function getNextUserId(isOwner = false) {
+  if (isOwner) return '1000';
+
+  let counter = await Counter.findOne({ id: 'user_id' });
+  if (!counter) {
+    // Check if user 1000 already exists
+    const ownerExists = await User.findOne({ userId: '1000' });
+    const startSeq = ownerExists ? 1001 : 1000;
+    counter = await Counter.create({ id: 'user_id', seq: startSeq });
+    return String(counter.seq);
+  }
+
+  counter = await Counter.findOneAndUpdate(
+    { id: 'user_id' },
+    { $inc: { seq: 1 } },
+    { new: true, upsert: true }
+  );
+  return String(counter.seq);
+}
+
+// Register User (Sequential Auto-Increment + Referral)
 app.post('/api/register-user', async (req, res) => {
   try {
-    const { deviceId, name, isOwner } = req.body;
+    const { deviceId, name, isOwner, inviterId } = req.body;
 
-    let existingUser = await User.findOne({ deviceId: deviceId });
-    if (existingUser) {
-      if (existingUser.userId === '1000') {
-        existingUser.coins = 10000000;
-        await existingUser.save();
+    if (deviceId) {
+      let existingUser = await User.findOne({ deviceId: deviceId });
+      if (existingUser) {
+        if (existingUser.userId === '1000') {
+          existingUser.coins = 10000000;
+          await existingUser.save();
+        }
+        return res.json({ success: true, user: existingUser });
       }
-      return res.json({ success: true, user: existingUser });
     }
 
-    let assignedId = '1000';
-    if (isOwner) {
-      assignedId = '1000';
-    } else {
-      let counter = await Counter.findOneAndUpdate(
-        { id: 'user_id' },
-        { $inc: { seq: 1 } },
-        { new: true, upsert: true }
-      );
-      assignedId = String(counter.seq);
-    }
-
+    const assignedId = await getNextUserId(isOwner === true);
     const defaultName = name ? name : ('User_' + assignedId);
     const defaultDevice = deviceId ? deviceId : ('dev_' + Date.now());
     const initialCoins = (assignedId === '1000') ? 10000000 : 1000;
@@ -418,10 +431,28 @@ app.post('/api/register-user', async (req, res) => {
       coins: initialCoins,
       points: 0,
       isAgent: (assignedId === '1000'),
-      isFrozen: false
+      isFrozen: false,
+      invitedBy: inviterId ? String(inviterId).trim() : ''
     });
 
     await newUser.save();
+
+    // Reward Inviter
+    if (inviterId) {
+      const inviter = await User.findOne({ userId: String(inviterId).trim() });
+      if (inviter) {
+        inviter.coins += 500;
+        await inviter.save();
+
+        await Transaction.create({
+          userId: inviter.userId,
+          type: 'referral_bonus',
+          amount: 500,
+          balanceAfter: inviter.coins,
+          description: 'Referral Bonus for inviting User ' + assignedId
+        });
+      }
+    }
 
     await Transaction.create({
       userId: assignedId,
@@ -437,12 +468,12 @@ app.post('/api/register-user', async (req, res) => {
   }
 });
 
-// Google Auth
+// Google Auth (Sequential Auto-Increment + Referral)
 app.post('/api/auth/google', async (req, res) => {
   try {
-    const { googleId, email, name, avatar } = req.body;
+    const { googleId, email, name, avatar, inviterId } = req.body;
 
-    if (!googleId) {
+if (!googleId) {
       return res.status(400).json({ success: false, message: 'Google ID is required' });
     }
 
@@ -458,12 +489,7 @@ app.post('/api/auth/google', async (req, res) => {
       return res.json({ success: true, user: user, isNewUser: false });
     }
 
-    let counter = await Counter.findOneAndUpdate(
-      { id: 'user_id' },
-      { $inc: { seq: 1 } },
-      { new: true, upsert: true }
-    );
-    const assignedId = String(counter.seq);
+    const assignedId = await getNextUserId(false);
     const initialCoins = (assignedId === '1000') ? 10000000 : 1000;
 
     user = new User({
@@ -474,10 +500,28 @@ app.post('/api/auth/google', async (req, res) => {
       coins: initialCoins,
       points: 0,
       isAgent: (assignedId === '1000'),
-      isFrozen: false
+      isFrozen: false,
+      invitedBy: inviterId ? String(inviterId).trim() : ''
     });
 
     await user.save();
+
+    // Reward Inviter
+    if (inviterId) {
+      const inviter = await User.findOne({ userId: String(inviterId).trim() });
+      if (inviter) {
+        inviter.coins += 500;
+        await inviter.save();
+
+        await Transaction.create({
+          userId: inviter.userId,
+          type: 'referral_bonus',
+          amount: 500,
+          balanceAfter: inviter.coins,
+          description: 'Referral Bonus for inviting User ' + assignedId
+        });
+      }
+    }
 
     await Transaction.create({
       userId: assignedId,
@@ -488,6 +532,28 @@ app.post('/api/auth/google', async (req, res) => {
     });
 
     return res.json({ success: true, user: user, isNewUser: true });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Referral Stats Route
+app.get('/api/referral/my-team', async (req, res) => {
+  try {
+    const { userId } = req.query;
+    if (!userId) {
+      return res.status(400).json({ success: false, message: 'Missing userId' });
+    }
+
+    const invitedMembers = await User.find({ invitedBy: String(userId).trim() })
+      .select('userId name avatar createdAt')
+      .sort({ createdAt: -1 });
+
+    return res.json({
+      success: true,
+      totalInvited: invitedMembers.length,
+      members: invitedMembers
+    });
   } catch (err) {
     return res.status(500).json({ success: false, error: err.message });
   }
@@ -554,7 +620,7 @@ io.on('connection', (socket) => {
       });
       await newMsg.save();
 
-      if (senderId) {
+if (senderId) {
         const today = getTodayString();
         await UserTask.findOneAndUpdate(
           { userId: String(senderId), date: today },
@@ -629,7 +695,7 @@ io.on('connection', (socket) => {
       const caller = await User.findOne({ userId: String(callerId) });
       if (!caller) return;
 
-if (caller.coins < cost) {
+      if (caller.coins < cost) {
         socket.emit('call_balance_depleted', { message: 'Call ended due to low coin balance.' });
         io.to(String(receiverId)).emit('call_ended');
         return;
@@ -688,7 +754,7 @@ if (caller.coins < cost) {
       roomSeatsState[roomId] = {};
     }
 
-    if (action === 'take') {
+if (action === 'take') {
       for (const idx in roomSeatsState[roomId]) {
         if (roomSeatsState[roomId][idx].userId === data.userId) {
           delete roomSeatsState[roomId][idx];
@@ -760,7 +826,7 @@ if (caller.coins < cost) {
       sender.coins -= totalCost;
       await sender.save();
 
-// Track Daily Gift Sent Task
+      // Track Daily Gift Sent Task
       if (senderId) {
         const today = getTodayString();
         await UserTask.findOneAndUpdate(
@@ -802,7 +868,7 @@ if (caller.coins < cost) {
       const defaultGift = giftName ? giftName : 'Gift';
       const defaultTarget = receiverId ? receiverId : 'Room';
 
-      await Transaction.create({
+await Transaction.create({
         userId: String(senderId),
         type: 'gift_sent',
         amount: totalCost,
@@ -872,7 +938,7 @@ if (caller.coins < cost) {
         }
       }
 
-const payload = Object.assign({}, data, {
+      const payload = Object.assign({}, data, {
         senderCoins: sender.coins,
         wonMultiplier: wonMultiplier,
         wonCoins: wonCoins,
