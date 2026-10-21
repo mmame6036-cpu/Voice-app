@@ -10,9 +10,9 @@ import 'host_center_screen.dart';
 import 'agency_screen.dart';
 import 'coin_seller_screen.dart';
 import 'daily_tasks_screen.dart';
+import 'face_verification_screen.dart';
 import 'screen/login_screen.dart';
 
-// Integrated Modules
 import 'store_screen.dart';
 import 'backpack_screen.dart';
 import 'level_screen.dart';
@@ -43,6 +43,7 @@ class NileVoiceApp extends StatelessWidget {
       routes: {
         '/login': (context) => const LoginScreen(),
         '/home': (context) => const MainNavigationScreen(),
+        '/face_verification': (context) => const FaceVerificationScreen(),
         '/store': (context) => const StoreScreen(),
         '/backpack': (context) => const BackpackScreen(),
         '/level': (context) => const LevelScreen(),
@@ -160,7 +161,7 @@ List<Map<String, dynamic>> _getDefaultRooms() {
   Future<void> _fetchRooms() async {
     try {
       final response = await http
-          .get(Uri.parse('https://voice-app-2-jd95.onrender.com/api/rooms'))
+          .get(Uri.parse('${UserService.serverUrl}/api/rooms'))
           .timeout(const Duration(seconds: 5));
 
       if (response.statusCode == 200) {
@@ -175,7 +176,7 @@ List<Map<String, dynamic>> _getDefaultRooms() {
         }
       }
     } catch (e) {
-      debugPrint("Fetch rooms error: $e");
+      debugPrint('Fetch rooms error: $e');
     }
 
     if (mounted) {
@@ -235,8 +236,8 @@ List<Map<String, dynamic>> _getDefaultRooms() {
                     MaterialPageRoute(
                       builder: (_) => RoomScreen(
                         roomId: targetId,
-                        roomTitle: "Room $targetId",
-                        hostName: "Host",
+                        roomTitle: 'Room $targetId',
+                        hostName: 'Host',
                       ),
                     ),
                   );
@@ -253,9 +254,8 @@ List<Map<String, dynamic>> _getDefaultRooms() {
   Future<void> _openMyPersonalRoom() async {
     try {
       await http.post(
-        Uri.parse('https://voice-app-2-jd95.onrender.com/api/rooms/create'),
-
-headers: {'Content-Type': 'application/json'},
+        Uri.parse('${UserService.serverUrl}/api/rooms/create'),
+        headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'roomId': _user.userId,
           'title': "${_user.userName}'s Room",
@@ -266,7 +266,7 @@ headers: {'Content-Type': 'application/json'},
       );
     } catch (_) {}
 
-    if (!mounted) return;
+if (!mounted) return;
 
     Navigator.push(
       context,
@@ -352,15 +352,15 @@ headers: {'Content-Type': 'application/json'},
                                 style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
                               ),
                               const SizedBox(height: 4),
-
-Text(
+                              Text(
                                 b['subtitle'],
                                 style: const TextStyle(fontSize: 12, color: Colors.white70),
                               ),
                             ],
                           ),
                         ),
-                        Icon(b['icon'] as IconData, size: 48, color: Colors.white.withOpacity(0.85)),
+
+Icon(b['icon'] as IconData, size: 48, color: Colors.white.withOpacity(0.85)),
                       ],
                     ),
                   );
@@ -456,8 +456,7 @@ Text(
             builder: (_) => RoomScreen(
               roomId: roomId,
               roomTitle: title,
-
-hostName: host,
+              hostName: host,
             ),
           ),
         );
@@ -468,7 +467,8 @@ hostName: host,
           color: const Color(0xFF161B26),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: Colors.white10),
-        ),
+
+),
         child: Row(
           children: [
             Stack(
@@ -545,8 +545,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (mounted) setState(() {});
   }
 
+  Future<void> _openFaceVerification() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const FaceVerificationScreen()),
+    );
+    if (result == true && mounted) {
+      await _refreshProfile();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final bool isVerified = _user.isFaceVerified;
+
     return Scaffold(
       backgroundColor: const Color(0xFF0F141C),
       body: SafeArea(
@@ -572,9 +584,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     const SizedBox(width: 14),
                     Expanded(
                       child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
 
-crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
+children: [
                           Text(
                             _user.userName,
                             style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
@@ -582,17 +594,56 @@ crossAxisAlignment: CrossAxisAlignment.start,
                             overflow: TextOverflow.ellipsis,
                           ),
                           const SizedBox(height: 6),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF161B26),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: Colors.white12),
-                            ),
-                            child: Text(
-                              'ID: ${_user.userId}',
-                              style: const TextStyle(color: Color(0xFF00C9A7), fontWeight: FontWeight.bold, fontSize: 12),
-                            ),
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF161B26),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: Colors.white12),
+                                ),
+                                child: Text(
+                                  'ID: ${_user.userId}',
+                                  style: const TextStyle(color: Color(0xFF00C9A7), fontWeight: FontWeight.bold, fontSize: 12),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              GestureDetector(
+                                onTap: isVerified ? null : _openFaceVerification,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: isVerified
+                                        ? const Color(0xFF00C9A7).withOpacity(0.18)
+                                        : Colors.orangeAccent.withOpacity(0.18),
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: isVerified ? const Color(0xFF00C9A7) : Colors.orangeAccent,
+                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        isVerified ? Icons.verified : Icons.error_outline,
+                                        color: isVerified ? const Color(0xFF00C9A7) : Colors.orangeAccent,
+                                        size: 13,
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        isVerified ? 'Verified' : 'Verify Face',
+                                        style: TextStyle(
+                                          color: isVerified ? const Color(0xFF00C9A7) : Colors.orangeAccent,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 11,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
@@ -603,7 +654,8 @@ crossAxisAlignment: CrossAxisAlignment.start,
                         Navigator.push(
                           context,
                           MaterialPageRoute(builder: (_) => const SettingsScreen()),
-                        );
+
+);
                       },
                     ),
                   ],
@@ -650,8 +702,7 @@ crossAxisAlignment: CrossAxisAlignment.start,
                     Expanded(
                       child: GestureDetector(
                         onTap: () async {
-
-await Navigator.push(
+                          await Navigator.push(
                             context,
                             MaterialPageRoute(builder: (_) => const RechargeScreen()),
                           );
@@ -681,7 +732,8 @@ await Navigator.push(
                               ),
                               const CircleAvatar(
                                 radius: 16,
-                                backgroundColor: Colors.amber,
+
+backgroundColor: Colors.amber,
                                 child: Icon(Icons.monetization_on, color: Colors.black, size: 20),
                               ),
                             ],
@@ -706,28 +758,27 @@ await Navigator.push(
                             borderRadius: BorderRadius.circular(14),
                             border: Border.all(color: Colors.white10),
                           ),
-                          child: const Row(
+                          child: Row(
                             children: [
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text('Points', style: TextStyle(color: Colors.white60, fontSize: 12)),
-                                    SizedBox(height: 6),
+                                    const Text('Points', style: TextStyle(color: Colors.white60, fontSize: 12)),
+                                    const SizedBox(height: 6),
                                     Text(
-                                      '0',
-                                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+                                      '${_user.points}',
+                                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
                                     ),
                                   ],
                                 ),
                               ),
-                              CircleAvatar(
+                              const CircleAvatar(
                                 radius: 16,
                                 backgroundColor: Color(0xFF38B29C),
                                 child: Icon(Icons.diamond, color: Colors.white, size: 18),
                               ),
-
-],
+                            ],
                           ),
                         ),
                       ),
@@ -764,7 +815,8 @@ await Navigator.push(
                           borderRadius: BorderRadius.circular(12),
                           onTap: () {
                             Navigator.push(
-                              context,
+
+context,
                               MaterialPageRoute(builder: (_) => const AgencyScreen()),
                             );
                           },
@@ -807,7 +859,6 @@ await Navigator.push(
                     mainAxisSpacing: 16,
                     crossAxisSpacing: 10,
                     children: [
-                      // 1. Task
                       InkWell(
                         borderRadius: BorderRadius.circular(12),
                         onTap: () {
@@ -820,8 +871,6 @@ await Navigator.push(
                         },
                         child: _buildGridMenuItem(icon: Icons.task_alt, label: 'Task'),
                       ),
-
-// 2. Invite
                       InkWell(
                         borderRadius: BorderRadius.circular(12),
                         onTap: () {
@@ -841,8 +890,6 @@ await Navigator.push(
                         },
                         child: _buildGridMenuItem(icon: Icons.person_add_alt, label: 'Invite'),
                       ),
-
-                      // 3. Store
                       InkWell(
                         borderRadius: BorderRadius.circular(12),
                         onTap: () {
@@ -852,9 +899,8 @@ await Navigator.push(
                           );
                         },
                         child: _buildGridMenuItem(icon: Icons.shopping_bag_outlined, label: 'Store'),
-                      ),
 
-                      // 4. Backpack
+),
                       InkWell(
                         borderRadius: BorderRadius.circular(12),
                         onTap: () {
@@ -865,8 +911,6 @@ await Navigator.push(
                         },
                         child: _buildGridMenuItem(icon: Icons.backpack_outlined, label: 'Backpack'),
                       ),
-
-                      // 5. Level
                       InkWell(
                         borderRadius: BorderRadius.circular(12),
                         onTap: () {
@@ -877,8 +921,6 @@ await Navigator.push(
                         },
                         child: _buildGridMenuItem(icon: Icons.military_tech_outlined, label: 'Level'),
                       ),
-
-                      // 6. Medal Wall
                       InkWell(
                         borderRadius: BorderRadius.circular(12),
                         onTap: () {
@@ -889,8 +931,6 @@ await Navigator.push(
                         },
                         child: _buildGridMenuItem(icon: Icons.shield_outlined, label: 'Medal Wall'),
                       ),
-
-                      // 7. Support
                       InkWell(
                         borderRadius: BorderRadius.circular(12),
                         onTap: () {
@@ -901,15 +941,12 @@ await Navigator.push(
                         },
                         child: _buildGridMenuItem(icon: Icons.headset_mic_outlined, label: 'Support'),
                       ),
-
-                      // 8. Settings
                       InkWell(
                         borderRadius: BorderRadius.circular(12),
                         onTap: () {
                           Navigator.push(
                             context,
-
-MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                            MaterialPageRoute(builder: (_) => const SettingsScreen()),
                           );
                         },
                         child: _buildGridMenuItem(icon: Icons.tune, label: 'Settings'),
