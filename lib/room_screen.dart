@@ -272,6 +272,7 @@ if (seat['user'] != null && seat['user'].toString().isNotEmpty) {
       }
     }
 
+    // Users can take seat and speak freely, pass face verification state for task tracking
     _socket.sendChairAction(
       roomId: widget.roomId,
       chairIndex: index,
@@ -290,10 +291,15 @@ if (seat['user'] != null && seat['user'].toString().isNotEmpty) {
 
     await _agora.joinMicSeat();
 
+    final bool isVerified = _user.isFaceVerified;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('You took seat ${index + 1} 🎤'),
-        backgroundColor: const Color(0xFF00C9A7),
+        content: Text(
+          isVerified
+              ? 'Seat ${index + 1} taken! Task counter active.'
+              : 'Seat ${index + 1} taken! (Face unverified: Task counter paused)',
+        ),
+        backgroundColor: isVerified ? const Color(0xFF00C9A7) : const Color(0xFF4A5568),
       ),
     );
   }
@@ -385,7 +391,7 @@ if (seat['user'] != null && seat['user'].toString().isNotEmpty) {
     );
   }
 
-  void _openBasicTools() {
+void _openBasicTools() {
     BasicToolsSheet.show(
       context,
       currentSeats: _currentSeatCount,
@@ -407,7 +413,7 @@ if (seat['user'] != null && seat['user'].toString().isNotEmpty) {
     );
   }
 
-void _openRoomQuickMenu() {
+  void _openRoomQuickMenu() {
     showModalBottomSheet(
       context: context,
       backgroundColor: const Color(0xFF161826),
@@ -488,7 +494,8 @@ void _openRoomQuickMenu() {
                         context,
                         MaterialPageRoute(
                           builder: (_) => InviteScreen(
-                            userId: _user.userId,
+
+userId: _user.userId,
                             userName: _user.userName.isNotEmpty ? _user.userName : 'User_${_user.userId}',
                             onRewardClaimed: (bonusCoins) {
                               _user.coins += bonusCoins;
@@ -499,8 +506,7 @@ void _openRoomQuickMenu() {
                     },
                   ),
                   _buildQuickActionItem(
-
-icon: Icons.support_agent,
+                    icon: Icons.support_agent,
                     color: const Color(0xFF904BE6),
                     title: 'Support',
                     onTap: () {
@@ -608,7 +614,8 @@ icon: Icons.support_agent,
                   decoration: BoxDecoration(
                     color: Colors.black45,
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.cyanAccent.withOpacity(0.5)),
+
+border: Border.all(color: Colors.cyanAccent.withOpacity(0.5)),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -617,8 +624,7 @@ icon: Icons.support_agent,
                       const SizedBox(width: 6),
                       Text(
                         'Room Diamonds: $_hostDiamonds',
-
-style: const TextStyle(
+                        style: const TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.bold,
                           fontSize: 13,
@@ -741,7 +747,7 @@ class _Live3DGiftDisplayState extends State<_Live3DGiftDisplay>
       duration: const Duration(milliseconds: 2600),
     );
 
-_scale = TweenSequence<double>([
+    _scale = TweenSequence<double>([
       TweenSequenceItem(
         tween: Tween(begin: 0.1, end: 1.2).chain(CurveTween(curve: Curves.elasticOut)),
         weight: 40,
@@ -836,7 +842,6 @@ _scale = TweenSequence<double>([
   }
 }
 
-// Built-in Medal Wall Widget to prevent external import build failures
 class InternalMedalWallScreen extends StatefulWidget {
   const InternalMedalWallScreen({super.key});
 
@@ -854,7 +859,7 @@ class _InternalMedalWallScreenState extends State<InternalMedalWallScreen>
 
   late List<Map<String, dynamic>> _allMedals;
 
-@override
+  @override
   void initState() {
     super.initState();
     _tabController = TabController(length: _categories.length, vsync: this);
@@ -965,7 +970,8 @@ class _InternalMedalWallScreenState extends State<InternalMedalWallScreen>
           children: [
             Container(
               padding: const EdgeInsets.all(18),
-              decoration: BoxDecoration(
+
+decoration: BoxDecoration(
                 color: medal['isUnlocked'] ? (medal['color'] as Color).withOpacity(0.15) : Colors.white10,
                 shape: BoxShape.circle,
               ),
@@ -973,8 +979,7 @@ class _InternalMedalWallScreenState extends State<InternalMedalWallScreen>
                 medal['icon'],
                 size: 48,
                 color: medal['isUnlocked'] ? medal['color'] : Colors.white30,
-
-),
+              ),
             ),
             const SizedBox(height: 16),
             Text(
@@ -1067,7 +1072,8 @@ class _InternalMedalWallScreenState extends State<InternalMedalWallScreen>
           labelColor: const Color(0xFF00C9A7),
           unselectedLabelColor: Colors.white54,
           indicatorWeight: 3,
-          tabs: _categories.map((c) => Tab(text: c)).toList(),
+
+tabs: _categories.map((c) => Tab(text: c)).toList(),
         ),
       ),
       body: Column(
@@ -1078,8 +1084,7 @@ class _InternalMedalWallScreenState extends State<InternalMedalWallScreen>
             decoration: BoxDecoration(
               gradient: const LinearGradient(
                 colors: [Color(0xFF2C1E57), Color(0xFF1A1A32)],
-
-begin: Alignment.topLeft,
+                begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
               borderRadius: BorderRadius.circular(16),
@@ -1154,15 +1159,15 @@ begin: Alignment.topLeft,
                                       ? (medal['color'] as Color).withOpacity(0.15)
                                       : Colors.white10,
                                   child: Icon(
-                                    medal['icon'],
+
+medal['icon'],
                                     size: 26,
                                     color: isUnlocked ? medal['color'] : Colors.white24,
                                   ),
                                 ),
                                 if (!isUnlocked)
                                   const Icon(Icons.lock, size: 16, color: Colors.white54),
-
-],
+                              ],
                             ),
                             const SizedBox(height: 8),
                             Text(
