@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../services/user_service.dart';
 import '../../wallet_screen.dart';
@@ -23,7 +24,7 @@ class GiftItem {
 class GiftPanel extends StatefulWidget {
   final int userCoins;
   final List<Map<String, dynamic>> seats;
-  final Function(String name, int price, int count, bool isLucky) onSendGift;
+  final Function(String name, int price, int count, bool isLucky, String targetUserId) onSendGift;
 
   const GiftPanel({
     Key? key,
@@ -36,7 +37,7 @@ class GiftPanel extends StatefulWidget {
     BuildContext context, {
     required int userCoins,
     List<Map<String, dynamic>> seats = const [],
-    required Function(String name, int price, int count, bool isLucky) onSendGift,
+    required Function(String name, int price, int count, bool isLucky, String targetUserId) onSendGift,
   }) {
     showModalBottomSheet(
       context: context,
@@ -59,24 +60,20 @@ class _GiftPanelState extends State<GiftPanel> with SingleTickerProviderStateMix
   late int _coins;
   String _selectedGiftId = 'lollipop';
   int _sendCount = 1;
+  String _targetUserId = 'all';
 
-  final List<int> _presetCounts = const [500, 200, 100, 77, 33, 10, 1];
+  int _comboCount = 0;
+  Timer? _comboTimer;
+
+  final List<int> _presetCounts = const [1314, 520, 188, 99, 66, 10, 1];
 
   final List<GiftItem> _gifts = const [
     GiftItem(
       id: 'lollipop',
-      name: 'Lollipop',
+      name: '3D Lollipop',
       price: 10,
       imageUrl: 'assets/gifts/3d-lollipop.png',
       badge: '+LUCKY',
-      isLucky: true,
-    ),
-    GiftItem(
-      id: 'rocket',
-      name: 'Gold Rocket',
-      price: 1000,
-      imageUrl: 'assets/gifts/icons8-rocket-94.png',
-      badge: '25x',
       isLucky: true,
     ),
     GiftItem(
@@ -84,7 +81,31 @@ class _GiftPanelState extends State<GiftPanel> with SingleTickerProviderStateMix
       name: 'Super Car',
       price: 500,
       imageUrl: 'assets/gifts/3d-car.png',
-      badge: 'Hot',
+      badge: '3D Hot',
+      isLucky: false,
+    ),
+    GiftItem(
+      id: 'rocket',
+      name: 'Gold Rocket',
+      price: 1000,
+      imageUrl: 'assets/gifts/icons8-rocket-94.png',
+      badge: '250x Win',
+      isLucky: true,
+    ),
+    GiftItem(
+      id: 'castle',
+      name: 'Magic Castle',
+      price: 2500,
+      imageUrl: 'assets/gifts/3d-car.png',
+      badge: 'Luxury',
+      isLucky: false,
+    ),
+    GiftItem(
+      id: 'crown',
+      name: 'Imperial Crown',
+      price: 5000,
+      imageUrl: 'assets/gifts/icons8-rocket-94.png',
+      badge: 'VIP',
       isLucky: false,
     ),
   ];
@@ -98,6 +119,7 @@ class _GiftPanelState extends State<GiftPanel> with SingleTickerProviderStateMix
 
   @override
   void dispose() {
+    _comboTimer?.cancel();
     _tabController.dispose();
     super.dispose();
   }
@@ -112,7 +134,46 @@ class _GiftPanelState extends State<GiftPanel> with SingleTickerProviderStateMix
     });
   }
 
-  void _showCountMenu(BuildContext ctx) {
+  void _triggerGiftSend(GiftItem gift) {
+    final totalPrice = gift.price * _sendCount;
+    if (_coins < totalPrice) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Insufficient coins balance!'),
+          backgroundColor: Colors.redAccent,
+          action: SnackBarAction(
+            label: 'Recharge',
+            textColor: Colors.amber,
+            onPressed: _openWallet,
+          ),
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _coins -= totalPrice;
+      UserService().coins = _coins;
+      _comboCount += _sendCount;
+    });
+
+    _comboTimer?.cancel();
+    _comboTimer = Timer(const Duration(seconds: 4), () {
+      if (mounted) {
+        setState(() => _comboCount = 0);
+      }
+    });
+
+    widget.onSendGift(
+      gift.name,
+      gift.price,
+      _sendCount,
+      gift.isLucky,
+      _targetUserId,
+    );
+  }
+
+void _showCountMenu(BuildContext ctx) {
     showModalBottomSheet(
       context: ctx,
       backgroundColor: const Color(0xFF131724),
@@ -127,7 +188,7 @@ class _GiftPanelState extends State<GiftPanel> with SingleTickerProviderStateMix
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 12),
                 child: Text(
-                  'Select Gift Count',
+                  'Select Gift Multiplier',
                   style: TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.bold,
@@ -144,8 +205,7 @@ class _GiftPanelState extends State<GiftPanel> with SingleTickerProviderStateMix
                     style: TextStyle(
                       color: isSel ? const Color(0xFF00C9A7) : Colors.white,
                       fontWeight: FontWeight.bold,
-
-fontSize: 15,
+                      fontSize: 15,
                     ),
                   ),
                   trailing: isSel
@@ -171,36 +231,50 @@ fontSize: 15,
       (g) => g.id == _selectedGiftId,
       orElse: () => _gifts.first,
     );
-    final totalPrice = selectedGift.price * _sendCount;
-    final canAfford = _coins >= totalPrice;
 
     return Container(
-      height: MediaQuery.of(context).size.height * 0.58,
+      height: MediaQuery.of(context).size.height * 0.60,
       decoration: const BoxDecoration(
         color: Color(0xFF0F1322),
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       child: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 10, 16, 0),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            decoration: const BoxDecoration(
+              border: Border(bottom: BorderSide(color: Colors.white10)),
+            ),
             child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Expanded(
-                  child: TabBar(
-                    controller: _tabController,
-                    isScrollable: true,
-                    indicatorColor: const Color(0xFF00C9A7),
-                    indicatorWeight: 3,
-                    labelColor: Colors.white,
-                    unselectedLabelColor: Colors.white54,
-                    labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                    tabs: const [
-                      Tab(text: 'Hot'),
-                      Tab(text: 'Lucky'),
-                      Tab(text: 'Luxury'),
-                      Tab(text: 'Intimacy'),
+                DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    dropdownColor: const Color(0xFF161B26),
+                    value: _targetUserId,
+                    icon: const Icon(Icons.arrow_drop_down, color: Color(0xFF00C9A7)),
+                    items: [
+                      const DropdownMenuItem(
+                        value: 'all',
+                        child: Text(
+                          'Send to: All in Room 🌍',
+                          style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                      ...widget.seats
+                          .where((s) => s['user'] != null && s['userId'] != null)
+                          .map((s) => DropdownMenuItem(
+                                value: s['userId'].toString(),
+                                child: Text(
+                                  'Seat ${s['index']}: ${s['user']}',
+                                  style: const TextStyle(color: Colors.white, fontSize: 13),
+                                ),
+                              )),
                     ],
+                    onChanged: (val) {
+                      if (val != null) setState(() => _targetUserId = val);
+
+},
                   ),
                 ),
                 GestureDetector(
@@ -236,29 +310,66 @@ fontSize: 15,
               ],
             ),
           ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: TabBar(
+              controller: _tabController,
+              isScrollable: true,
+              indicatorColor: const Color(0xFF00C9A7),
+              indicatorWeight: 3,
+              labelColor: Colors.white,
+              unselectedLabelColor: Colors.white54,
+              labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              tabs: const [
+                Tab(text: 'Hot'),
+                Tab(text: '3D Luxury'),
+                Tab(text: 'Lucky'),
+                Tab(text: 'VIP'),
+              ],
+            ),
+          ),
           Expanded(
             child: TabBarView(
               controller: _tabController,
               children: [
                 _buildGiftGrid(_gifts),
-                _buildGiftGrid(_gifts.where((g) => g.isLucky).toList()),
                 _buildGiftGrid(_gifts.where((g) => !g.isLucky).toList()),
-                _buildGiftGrid(_gifts),
+                _buildGiftGrid(_gifts.where((g) => g.isLucky).toList()),
+                _buildGiftGrid(_gifts.where((g) => g.price >= 1000).toList()),
               ],
             ),
           ),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-
-decoration: const BoxDecoration(
+            decoration: const BoxDecoration(
               color: Color(0xFF0A0D18),
               border: Border(top: BorderSide(color: Colors.white10)),
             ),
             child: Row(
               children: [
+                if (_comboCount > 0) ...[
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Colors.orange, Colors.deepOrangeAccent],
+                      ),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Text(
+                      'Combo x$_comboCount',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ],
                 const Spacer(),
                 GestureDetector(
-                  onTap: () => _showCountMenu(context),
+
+onTap: () => _showCountMenu(context),
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
@@ -269,7 +380,7 @@ decoration: const BoxDecoration(
                     child: Row(
                       children: [
                         Text(
-                          '$_sendCount',
+                          'x$_sendCount',
                           style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
                         ),
                         const SizedBox(width: 4),
@@ -280,39 +391,21 @@ decoration: const BoxDecoration(
                 ),
                 const SizedBox(width: 10),
                 GestureDetector(
-                  onTap: () {
-                    if (canAfford) {
-                      setState(() {
-                        _coins -= totalPrice;
-                        UserService().coins = _coins;
-                      });
-                      Navigator.pop(context);
-                      widget.onSendGift(
-                        selectedGift.name,
-                        selectedGift.price,
-                        _sendCount,
-                        selectedGift.isLucky,
-                      );
-                    } else {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: const Text('Insufficient coins! Please recharge.'),
-                          action: SnackBarAction(
-                            label: 'Recharge',
-                            textColor: const Color(0xFF00C9A7),
-                            onPressed: _openWallet,
-                          ),
-                        ),
-                      );
-                    }
-                  },
+                  onTap: () => _triggerGiftSend(selectedGift),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 9),
                     decoration: BoxDecoration(
                       gradient: const LinearGradient(
                         colors: [Color(0xFF00C9A7), Color(0xFF00E676)],
                       ),
                       borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF00C9A7).withOpacity(0.4),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
                     ),
                     child: const Text(
                       'Send',
@@ -348,48 +441,68 @@ decoration: const BoxDecoration(
           child: Container(
             decoration: BoxDecoration(
               color: isSelected ? const Color(0xFF1E1B3A) : const Color(0xFF141929),
-
-borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(14),
               border: Border.all(
                 color: isSelected ? const Color(0xFF00C9A7) : Colors.transparent,
                 width: 2,
               ),
             ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
+            child: Stack(
               children: [
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.all(6.0),
-                    child: Image.asset(
-                      item.imageUrl,
-                      fit: BoxFit.contain,
-                      errorBuilder: (context, error, stackTrace) => const Icon(
-                        Icons.card_giftcard,
-                        size: 38,
-                        color: Colors.amberAccent,
+                Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.all(6.0),
+                        child: Image.asset(
+                          item.imageUrl,
+                          fit: BoxFit.contain,
+                          errorBuilder: (context, error, stackTrace) => const Icon(
+                            Icons.card_giftcard,
+                            size: 38,
+                            color: Colors.amberAccent,
+                          ),
+                        ),
+
+),
+                    ),
+                    Text(
+                      item.name,
+                      style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.monetization_on, color: Colors.amber, size: 11),
+                        const SizedBox(width: 3),
+                        Text(
+                          '${item.price}',
+                          style: const TextStyle(color: Colors.white70, fontSize: 11),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                  ],
+                ),
+                if (item.badge != null)
+                  Positioned(
+                    top: 4,
+                    right: 4,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.pinkAccent,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        item.badge!,
+                        style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
                       ),
                     ),
                   ),
-                ),
-                Text(
-                  item.name,
-                  style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 2),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.monetization_on, color: Colors.amber, size: 11),
-                    const SizedBox(width: 3),
-                    Text(
-                      '${item.price}',
-                      style: const TextStyle(color: Colors.white70, fontSize: 11),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 6),
               ],
             ),
           ),
