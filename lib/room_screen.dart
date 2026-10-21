@@ -12,6 +12,7 @@ import 'backpack_screen.dart';
 import 'level_screen.dart';
 import 'support_screen.dart';
 import 'invite_screen.dart';
+import 'teen_patti_dialog.dart';
 
 import 'widgets/room/room_background.dart';
 import 'widgets/room/room_header.dart';
@@ -140,7 +141,7 @@ _socket.onChairActionReceived = (data) {
       final String? uName = data['userName'];
       final String? uId = data['userId'];
 
-      if (chairIndex == null || chairIndex < 0 ||  chairIndex >= _seats.length) {
+      if (chairIndex == null || chairIndex < 0 || chairIndex >= _seats.length) {
         return;
       }
 
@@ -691,7 +692,11 @@ Stack(
                   onToggleMic: _toggleMic,
                   onOpenGifts: _openGifts,
                   onOpenTools: _openBasicTools,
-                  onOpenGame: () {},
+                  onOpenGame: () {
+                    TeenPattiDialog.show(context, onBalanceUpdated: () {
+                      setState(() {});
+                    });
+                  },
                 ),
               ],
             ),
@@ -710,13 +715,13 @@ Stack(
                   borderRadius: BorderRadius.circular(20),
                   boxShadow: const [
                     BoxShadow(color: Colors.black45, blurRadius: 10, offset: Offset(0, 4)),
-                  ],
+
+],
                 ),
                 child: Row(
                   children: [
                     const Icon(Icons.emoji_events, color: Colors.white, size: 22),
-
-const SizedBox(width: 8),
+                    const SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         _jackpotBannerText!,
@@ -834,13 +839,13 @@ class _InternalMedalWallScreenState extends State<InternalMedalWallScreen>
         'id': 'm6',
         'title': 'Super Ambassador',
         'description': 'Successfully invited 10 active friends.',
-        'category': 'Social',
+
+'category': 'Social',
         'icon': Icons.people,
         'color': Colors.greenAccent,
         'isUnlocked': true,
         'requirement': 'Invite 10 users through your invitation code.',
-
-},
+      },
       {
         'id': 'm7',
         'title': 'Loyal Guardian',
@@ -936,7 +941,8 @@ class _InternalMedalWallScreenState extends State<InternalMedalWallScreen>
                 );
               },
               child: Text(
-                isEquipped ? 'Unequip' : 'Wear Medal',
+
+isEquipped ? 'Unequip' : 'Wear Medal',
                 style: TextStyle(
                   color: isEquipped ? Colors.white : Colors.black,
                   fontWeight: FontWeight.bold,
@@ -953,7 +959,7 @@ class _InternalMedalWallScreenState extends State<InternalMedalWallScreen>
     );
   }
 
-@override
+  @override
   Widget build(BuildContext context) {
     final int unlockedCount = _allMedals.where((m) => m['isUnlocked'] == true).length;
 
@@ -1038,7 +1044,7 @@ class _InternalMedalWallScreenState extends State<InternalMedalWallScreen>
                     final bool isEquipped = (_equippedMedalId == medal['id']);
                     final bool isUnlocked = medal['isUnlocked'] == true;
 
-                    return GestureDetector(
+return GestureDetector(
                       onTap: () => _showMedalDetails(medal),
                       child: Container(
                         padding: const EdgeInsets.all(10),
@@ -1047,8 +1053,7 @@ class _InternalMedalWallScreenState extends State<InternalMedalWallScreen>
                           borderRadius: BorderRadius.circular(14),
                           border: Border.all(
                             color: isEquipped
-
-? const Color(0xFF00C9A7)
+                                ? const Color(0xFF00C9A7)
                                 : (isUnlocked ? (medal['color'] as Color).withOpacity(0.3) : Colors.white10),
                             width: isEquipped ? 2 : 1,
                           ),
