@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import '../models/user_model.dart';
 import '../services/user_service.dart';
 import 'daily_tasks_screen.dart';
+import 'face_verification_screen.dart';
 import 'settings_screen.dart';
 import 'coin_seller_screen.dart';
 import 'host_center_screen.dart';
@@ -16,13 +17,20 @@ import 'level_screen.dart';
 import 'medal_wall_screen.dart';
 import 'support_screen.dart';
 
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends StatefulWidget {
   final String userId;
 
   const ProfileScreen({super.key, required this.userId});
 
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  final UserService _user = UserService();
+
   Future<void> _checkAndOpenCoinSeller(BuildContext context) async {
-    if (userId.trim() == '1000') {
+    if (widget.userId.trim() == '1000') {
       Navigator.push(
         context,
         MaterialPageRoute(builder: (context) => const CoinSellerScreen()),
@@ -32,7 +40,7 @@ class ProfileScreen extends StatelessWidget {
 
     try {
       final res = await http.get(
-        Uri.parse('https://voice-app-backend.onrender.com/api/search-user?userId=$userId'),
+        Uri.parse('${UserService.serverUrl}/api/search-user?userId=${widget.userId.trim()}'),
       );
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
@@ -68,10 +76,20 @@ class ProfileScreen extends StatelessWidget {
     }
   }
 
+  Future<void> _openFaceVerification() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const FaceVerificationScreen()),
+    );
+    if (result == true && mounted) {
+      setState(() {});
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final bool isMasterAdmin = (userId.trim() == '1000');
-    final userObj = UserService();
+    final bool isMasterAdmin = (widget.userId.trim() == '1000');
+    final bool isVerified = _user.isFaceVerified;
 
     return Scaffold(
       backgroundColor: const Color(0xFF13141C),
@@ -98,32 +116,73 @@ class ProfileScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  'ID: $userId',
+                  'ID: ${widget.userId}',
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
-                  ),
-                ),
-                if (isMasterAdmin)
-                  Container(
-                    margin: const EdgeInsets.top(6),
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.amber.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: Colors.amber),
-                    ),
 
-child: const Text(
-                      '👑 Master Admin',
-                      style: TextStyle(
-                        color: Colors.amber,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
+),
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (isMasterAdmin) ...[
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.amber.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: Colors.amber),
+                        ),
+                        child: const Text(
+                          '👑 Master Admin',
+                          style: TextStyle(
+                            color: Colors.amber,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                    GestureDetector(
+                      onTap: isVerified ? null : _openFaceVerification,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: isVerified
+                              ? const Color(0xFF00C9A7).withOpacity(0.18)
+                              : Colors.orangeAccent.withOpacity(0.18),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: isVerified ? const Color(0xFF00C9A7) : Colors.orangeAccent,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              isVerified ? Icons.verified : Icons.error_outline,
+                              color: isVerified ? const Color(0xFF00C9A7) : Colors.orangeAccent,
+                              size: 14,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              isVerified ? 'Verified Host' : 'Unverified (Tap to verify)',
+                              style: TextStyle(
+                                color: isVerified ? const Color(0xFF00C9A7) : Colors.orangeAccent,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
+                  ],
+                ),
               ],
             ),
           ),
@@ -145,8 +204,17 @@ child: const Text(
           ],
 
           _buildMenuItem(
+            icon: Icons.face_retouching_natural,
+            iconColor: isVerified ? const Color(0xFF00C9A7) : Colors.cyanAccent,
+            title: isVerified ? 'Face Verification (Verified)' : 'Face Verification (Required)',
+            onTap: _openFaceVerification,
+          ),
+          const SizedBox(height: 12),
+
+          _buildMenuItem(
             icon: Icons.assignment_turned_in_rounded,
-            iconColor: const Color(0xFF7B4DFF),
+
+iconColor: const Color(0xFF7B4DFF),
             title: 'Daily Tasks & Rewards',
             onTap: () {
               Navigator.push(
@@ -154,11 +222,11 @@ child: const Text(
                 MaterialPageRoute(
                   builder: (context) => DailyTasksScreen(
                     user: UserModel(
-                      userId: userId,
-                      name: userObj.userName.isNotEmpty ? userObj.userName : 'User_$userId',
-                      avatar: userObj.avatar,
-                      coins: userObj.coins,
-                      points: userObj.points,
+                      userId: widget.userId,
+                      name: _user.userName.isNotEmpty ? _user.userName : 'User_${widget.userId}',
+                      avatar: _user.avatar,
+                      coins: _user.coins,
+                      points: _user.points,
                     ),
                   ),
                 ),
@@ -240,7 +308,7 @@ child: const Text(
           ),
           const SizedBox(height: 12),
 
-_buildMenuItem(
+          _buildMenuItem(
             icon: Icons.shopping_bag,
             iconColor: Colors.amberAccent,
             title: 'Store',
@@ -269,16 +337,17 @@ _buildMenuItem(
           _buildMenuItem(
             icon: Icons.person_add_alt_1,
             iconColor: Colors.tealAccent,
-            title: 'Invite Friends',
+
+title: 'Invite Friends',
             onTap: () {
               Navigator.push(
                 context,
                 MaterialPageRoute(
                   builder: (context) => InviteScreen(
-                    userId: userId,
-                    userName: userObj.userName.isNotEmpty ? userObj.userName : 'User_$userId',
+                    userId: widget.userId,
+                    userName: _user.userName.isNotEmpty ? _user.userName : 'User_${widget.userId}',
                     onRewardClaimed: (bonusCoins) {
-                      userObj.coins += bonusCoins;
+                      _user.coins += bonusCoins;
                     },
                   ),
                 ),
@@ -362,7 +431,7 @@ class _InAppAdminScreenState extends State<InAppAdminScreen> {
     setState(() => _isLoading = true);
     try {
       final res = await http.get(
-        Uri.parse('https://voice-app-backend.onrender.com/api/admin/pending-payments'),
+        Uri.parse('${UserService.serverUrl}/api/admin/pending-payments'),
       );
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
@@ -378,9 +447,9 @@ class _InAppAdminScreenState extends State<InAppAdminScreen> {
     final targetId = _agentIdController.text.trim();
     if (targetId.isEmpty) return;
 
-try {
+    try {
       final res = await http.post(
-        Uri.parse('https://voice-app-backend.onrender.com/api/admin/toggle-agent'),
+        Uri.parse('${UserService.serverUrl}/api/admin/toggle-agent'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'userId': targetId, 'isAgent': isAgent}),
       );
@@ -403,10 +472,10 @@ try {
     }
   }
 
-  Future<void> _approvePayment(String paymentId) async {
+Future<void> _approvePayment(String paymentId) async {
     try {
       final res = await http.post(
-        Uri.parse('https://voice-app-backend.onrender.com/api/admin/approve-payment'),
+        Uri.parse('${UserService.serverUrl}/api/admin/approve-payment'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'paymentId': paymentId}),
       );
@@ -488,8 +557,7 @@ try {
                       Expanded(
                         child: ElevatedButton(
                           style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-
-onPressed: () => _toggleAgent(true),
+                          onPressed: () => _toggleAgent(true),
                           child: const Text('Make Agent', style: TextStyle(color: Colors.white)),
                         ),
                       ),
@@ -509,7 +577,7 @@ onPressed: () => _toggleAgent(true),
           ),
           const SizedBox(height: 20),
 
-          const Text(
+const Text(
             'Pending Recharge Requests',
             style: TextStyle(
               color: Colors.white,
