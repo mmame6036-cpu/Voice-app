@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'services/user_service.dart';
+import 'face_verification_screen.dart';
 
 class TaskScreen extends StatefulWidget {
   final dynamic userId;
@@ -20,7 +21,6 @@ class TaskScreen extends StatefulWidget {
 class _TaskScreenState extends State<TaskScreen> {
   final UserService _user = UserService();
   bool _isLoading = true;
-  bool isFaceVerified = false;
 
   int totalPoints = 0;
   int streakDays = 0;
@@ -72,69 +72,36 @@ class _TaskScreenState extends State<TaskScreen> {
     );
   }
 
-  void _verifyFaceAndGo() {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (BuildContext dialogContext) {
-        return AlertDialog(
-          backgroundColor: const Color(0xFF161B26),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Row(
-            children: [
-              Icon(Icons.face_retouching_natural, color: Colors.cyanAccent),
-              SizedBox(width: 8),
-              Text(
-                'Face Verification',
-                style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
-              ),
-            ],
-          ),
-          content: const Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.camera_front, size: 70, color: Colors.cyanAccent),
-              SizedBox(height: 16),
-              Text(
-                'Please align your face within the frame...',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.white70, fontSize: 14),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Cancel', style: TextStyle(color: Colors.redAccent)),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.cyanAccent),
-              onPressed: () {
-                Navigator.pop(dialogContext);
-                setState(() {
-                  isFaceVerified = true;
-                });
-                _notify('Face verification successful!');
-              },
-              child: const Text('Verify', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
-            ),
-          ],
-        );
-      },
+  Future<void> _openFaceVerification() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const FaceVerificationScreen(),
+      ),
     );
+
+    if (result == true) {
+      setState(() {
+        _user.setFaceVerified(true);
+      });
+      _notify('Face verified! Tasks unlocked and tracking is active.');
+      _fetchTaskData();
+    }
   }
 
   void _onGoPressed() {
-    if (!isFaceVerified) {
-      _verifyFaceAndGo();
+    if (!_user.isFaceVerified) {
+      _openFaceVerification();
     } else {
-      _notify('Redirecting to live room...');
+      _notify('Redirecting to live voice room...');
       Navigator.pop(context);
     }
   }
 
-@override
+  @override
   Widget build(BuildContext context) {
+    final bool isUnlocked = _user.isFaceVerified;
+
     return Scaffold(
       backgroundColor: const Color(0xFF0F1017),
       appBar: AppBar(
@@ -165,24 +132,57 @@ class _TaskScreenState extends State<TaskScreen> {
                   const SizedBox(height: 20),
                   _buildFaceVerificationCard(),
                   const SizedBox(height: 24),
-                  const Text(
-                    'Daily & Weekly Targets',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 0.5,
-                    ),
+                  Row(
+
+mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Daily & Weekly Targets',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      if (!isUnlocked)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.redAccent.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.redAccent.withOpacity(0.4)),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.lock, color: Colors.redAccent, size: 14),
+                              SizedBox(width: 4),
+                              Text(
+                                'LOCKED',
+                                style: TextStyle(
+                                  color: Colors.redAccent,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
                   ),
                   const SizedBox(height: 12),
                   _buildTaskCard(
                     title: '7-Day Live Streak',
                     points: '8,000 Points',
                     requirement: 'Stream 2 hours (120 mins) daily for 7 consecutive days',
-                    progressText: '$streakDays / 7 Days completed',
-                    progressValue: streakDays / 7.0,
+                    progressText: isUnlocked
+                        ? '$streakDays / 7 Days completed'
+                        : 'Locked: Verify face to start streak',
+                    progressValue: isUnlocked ? (streakDays / 7.0) : 0.0,
                     icon: Icons.local_fire_department,
                     accentColor: Colors.deepOrangeAccent,
+                    isLocked: !isUnlocked,
                     onGo: _onGoPressed,
                   ),
                   const SizedBox(height: 14),
@@ -190,10 +190,13 @@ class _TaskScreenState extends State<TaskScreen> {
                     title: 'Daily Live Streaming',
                     points: '1,000+ Points',
                     requirement: 'Stream 1 hour (60 mins) daily in voice room',
-                    progressText: '$liveMinutesToday / 60 Mins completed',
-                    progressValue: (liveMinutesToday / 60.0).clamp(0.0, 1.0),
+                    progressText: isUnlocked
+                        ? '$liveMinutesToday / 60 Mins completed'
+                        : 'Locked: Counter starts after face verification',
+                    progressValue: isUnlocked ? (liveMinutesToday / 60.0).clamp(0.0, 1.0) : 0.0,
                     icon: Icons.videocam,
                     accentColor: Colors.cyanAccent,
+                    isLocked: !isUnlocked,
                     onGo: _onGoPressed,
                   ),
                   const SizedBox(height: 14),
@@ -201,10 +204,16 @@ class _TaskScreenState extends State<TaskScreen> {
                     title: 'Golden Chair & Gifts',
                     points: '1,000 Points',
                     requirement: 'Take seat for 1 hour + receive 600 coins in gifts',
-                    progressText: 'Seat: $chairMinutesToday/60 mins | Gifts: $giftCoinsReceived/600 coins',
-                    progressValue: ((chairMinutesToday / 60.0) + (giftCoinsReceived / 600.0)) / 2.0,
+                    progressText: isUnlocked
+                        ? 'Seat: $chairMinutesToday/60 mins | Gifts: $giftCoinsReceived/600 coins'
+                        : 'Locked: Take seat and track gifts after verification',
+                    progressValue: isUnlocked
+                        ? (((chairMinutesToday / 60.0) + (giftCoinsReceived / 600.0)) / 2.0).clamp(0.0, 1.0)
+
+: 0.0,
                     icon: Icons.event_seat,
                     accentColor: Colors.amberAccent,
+                    isLocked: !isUnlocked,
                     onGo: _onGoPressed,
                   ),
                 ],
@@ -224,8 +233,7 @@ class _TaskScreenState extends State<TaskScreen> {
         ),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: Colors.purpleAccent.withOpacity(0.3)),
-
-),
+      ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
@@ -254,13 +262,15 @@ class _TaskScreenState extends State<TaskScreen> {
   }
 
   Widget _buildFaceVerificationCard() {
+    final bool isVerified = _user.isFaceVerified;
+
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: const Color(0xFF171926),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: isFaceVerified ? Colors.greenAccent : Colors.tealAccent.withOpacity(0.4),
+          color: isVerified ? Colors.greenAccent : Colors.tealAccent.withOpacity(0.4),
         ),
       ),
       child: Row(
@@ -268,12 +278,12 @@ class _TaskScreenState extends State<TaskScreen> {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: isFaceVerified ? Colors.greenAccent.withOpacity(0.15) : Colors.tealAccent.withOpacity(0.15),
+              color: isVerified ? Colors.greenAccent.withOpacity(0.15) : Colors.tealAccent.withOpacity(0.15),
               shape: BoxShape.circle,
             ),
             child: Icon(
-              isFaceVerified ? Icons.verified_user : Icons.face_retouching_natural,
-              color: isFaceVerified ? Colors.greenAccent : Colors.tealAccent,
+              isVerified ? Icons.verified_user : Icons.face_retouching_natural,
+              color: isVerified ? Colors.greenAccent : Colors.tealAccent,
               size: 32,
             ),
           ),
@@ -283,20 +293,22 @@ class _TaskScreenState extends State<TaskScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  isFaceVerified ? 'Face Verified' : 'Face Verification',
+                  isVerified ? 'Face Verified' : 'Face Verification Required',
                   style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  isFaceVerified ? 'Verification complete. You can access host seats.' : 'Verify face to unlock host privileges.',
+                  isVerified
+                      ? 'Verification complete. Task counter is actively tracking.'
+                      : 'Verify your face to unlock daily tasks and host rewards.',
                   style: const TextStyle(color: Colors.white60, fontSize: 12),
                 ),
               ],
             ),
           ),
-          if (!isFaceVerified)
+          if (!isVerified)
             ElevatedButton(
-              onPressed: _verifyFaceAndGo,
+              onPressed: _openFaceVerification,
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.tealAccent.shade700,
                 foregroundColor: Colors.white,
@@ -310,7 +322,7 @@ class _TaskScreenState extends State<TaskScreen> {
     );
   }
 
-  Widget _buildTaskCard({
+Widget _buildTaskCard({
     required String title,
     required String points,
     required String requirement,
@@ -318,6 +330,7 @@ class _TaskScreenState extends State<TaskScreen> {
     required double progressValue,
     required IconData icon,
     required Color accentColor,
+    required bool isLocked,
     required VoidCallback onGo,
   }) {
     return Container(
@@ -325,43 +338,74 @@ class _TaskScreenState extends State<TaskScreen> {
       decoration: BoxDecoration(
         color: const Color(0xFF171926),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: accentColor.withOpacity(0.3)),
+        border: Border.all(
+          color: isLocked ? Colors.white10 : accentColor.withOpacity(0.3),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-
-Container(
+              Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: accentColor.withOpacity(0.15),
+                  color: isLocked ? Colors.white10 : accentColor.withOpacity(0.15),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Icon(icon, color: accentColor, size: 24),
+                child: Icon(
+                  isLocked ? Icons.lock : icon,
+                  color: isLocked ? Colors.white38 : accentColor,
+                  size: 24,
+                ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+                    Text(
+                      title,
+                      style: TextStyle(
+                        color: isLocked ? Colors.white54 : Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                      ),
+                    ),
                     const SizedBox(height: 2),
-                    Text(points, style: TextStyle(color: accentColor, fontWeight: FontWeight.w600, fontSize: 13)),
+                    Text(
+                      points,
+                      style: TextStyle(
+                        color: isLocked ? Colors.white38 : accentColor,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                      ),
+                    ),
                   ],
                 ),
               ),
               ElevatedButton(
                 onPressed: onGo,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.amber,
-                  foregroundColor: Colors.black,
+                  backgroundColor: isLocked ? const Color(0xFF2C2F48) : Colors.amber,
+                  foregroundColor: isLocked ? Colors.white70 : Colors.black,
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
                   elevation: 0,
                 ),
-                child: const Text('Go', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (isLocked) ...[
+                      const Icon(Icons.lock, size: 13, color: Colors.white70),
+                      const SizedBox(width: 4),
+                    ],
+                    Text(
+                      isLocked ? 'Unlock' : 'Go',
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -373,18 +417,25 @@ Container(
             child: LinearProgressIndicator(
               value: progressValue.clamp(0.0, 1.0),
               backgroundColor: const Color(0xFF232538),
-              valueColor: AlwaysStoppedAnimation<Color>(accentColor),
+              valueColor: AlwaysStoppedAnimation<Color>(
+                isLocked ? Colors.white24 : accentColor,
+              ),
               minHeight: 7,
             ),
           ),
           const SizedBox(height: 8),
-          Row(
+
+Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(progressText, style: const TextStyle(color: Colors.white60, fontSize: 11)),
               Text(
                 '${(progressValue.clamp(0.0, 1.0) * 100).toInt()}%',
-                style: TextStyle(color: accentColor, fontWeight: FontWeight.bold, fontSize: 11),
+                style: TextStyle(
+                  color: isLocked ? Colors.white38 : accentColor,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 11,
+                ),
               ),
             ],
           ),
