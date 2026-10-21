@@ -19,7 +19,7 @@ const adminRoutes = require('./routes/admin');
 const agencyRoutes = require('./routes/agency');
 const taskRoutes = require('./routes/tasks');
 
-// Room Settings Modular Routes (10 Isolated Modules)
+// Room Settings Modular Routes
 const roomCoverRoutes = require('./routes/room_cover');
 const roomIdRoutes = require('./routes/room_id');
 const roomNameRoutes = require('./routes/room_name');
@@ -112,6 +112,7 @@ const userSchema = new mongoose.Schema({
 coins: { type: Number, default: 1000 },
   points: { type: Number, default: 0 },
   isAgent: { type: Boolean, default: false },
+  isFaceVerified: { type: Boolean, default: false },
   isFrozen: { type: Boolean, default: false },
   invitedBy: { type: String, default: '' },
   createdAt: { type: Date, default: Date.now }
@@ -163,6 +164,34 @@ app.use('/api/room-seats', roomSeatsRoutes);
 app.use('/api/room-mic-mode', roomMicModeRoutes);
 app.use('/api/room-blacklist', roomBlacklistRoutes);
 
+// Face Verification Endpoint
+app.post('/api/user/verify-face', async (req, res) => {
+  try {
+    const { userId, isFaceVerified } = req.body;
+    if (!userId) {
+      return res.status(400).json({ success: false, message: 'User ID is required' });
+    }
+
+    const user = await User.findOneAndUpdate(
+      { userId: String(userId).trim() },
+      { $set: { isFaceVerified: isFaceVerified !== false } },
+      { new: true }
+    );
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    return res.json({
+      success: true,
+      message: 'Face verification status updated successfully',
+      isFaceVerified: user.isFaceVerified
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // Payment Requests
 app.post('/api/recharge-request', async (req, res) => {
   try {
@@ -193,7 +222,7 @@ app.post('/api/recharge-request', async (req, res) => {
       status: 'pending'
     });
 
-    await newPayment.save();
+await newPayment.save();
     return res.json({ success: true, message: 'Recharge request submitted successfully' });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
@@ -213,7 +242,7 @@ app.post('/api/admin/approve-payment', async (req, res) => {
   try {
     const { paymentId } = req.body;
 
-const payment = await Payment.findById(paymentId);
+    const payment = await Payment.findById(paymentId);
     if (!payment) {
       return res.status(400).json({ success: false, message: 'Invalid payment record' });
     }
@@ -318,7 +347,7 @@ app.post('/api/wallet/agent-transfer-coins', async (req, res) => {
     agent.coins -= coinsToTransfer;
     recipient.coins += coinsToTransfer;
 
-    await agent.save();
+await agent.save();
     await recipient.save();
 
     await Transaction.create({
@@ -337,7 +366,7 @@ app.post('/api/wallet/agent-transfer-coins', async (req, res) => {
       description: 'Received ' + coinsToTransfer + ' coins from Agent ' + agent.userId
     });
 
-return res.json({
+    return res.json({
       success: true,
       message: 'Successfully transferred ' + coinsToTransfer + ' coins to User ' + recipient.userId,
       agentCoins: agent.coins
@@ -388,7 +417,6 @@ async function getNextUserId(isOwner = false) {
 
   let counter = await Counter.findOne({ id: 'user_id' });
   if (!counter) {
-    // Check if user 1000 already exists
     const ownerExists = await User.findOne({ userId: '1000' });
     const startSeq = ownerExists ? 1001 : 1000;
     counter = await Counter.create({ id: 'user_id', seq: startSeq });
@@ -413,6 +441,7 @@ app.post('/api/register-user', async (req, res) => {
       if (existingUser) {
         if (existingUser.userId === '1000') {
           existingUser.coins = 10000000;
+          existingUser.isFaceVerified = true;
           await existingUser.save();
         }
         return res.json({ success: true, user: existingUser });
@@ -431,6 +460,7 @@ app.post('/api/register-user', async (req, res) => {
       coins: initialCoins,
       points: 0,
       isAgent: (assignedId === '1000'),
+      isFaceVerified: (assignedId === '1000'),
       isFrozen: false,
       invitedBy: inviterId ? String(inviterId).trim() : ''
     });
@@ -444,7 +474,7 @@ app.post('/api/register-user', async (req, res) => {
         inviter.coins += 500;
         await inviter.save();
 
-        await Transaction.create({
+await Transaction.create({
           userId: inviter.userId,
           type: 'referral_bonus',
           amount: 500,
@@ -473,7 +503,7 @@ app.post('/api/auth/google', async (req, res) => {
   try {
     const { googleId, email, name, avatar, inviterId } = req.body;
 
-if (!googleId) {
+    if (!googleId) {
       return res.status(400).json({ success: false, message: 'Google ID is required' });
     }
 
@@ -484,6 +514,7 @@ if (!googleId) {
     if (user) {
       if (user.userId === '1000') {
         user.coins = 10000000;
+        user.isFaceVerified = true;
         await user.save();
       }
       return res.json({ success: true, user: user, isNewUser: false });
@@ -500,6 +531,7 @@ if (!googleId) {
       coins: initialCoins,
       points: 0,
       isAgent: (assignedId === '1000'),
+      isFaceVerified: (assignedId === '1000'),
       isFrozen: false,
       invitedBy: inviterId ? String(inviterId).trim() : ''
     });
@@ -578,7 +610,8 @@ app.get('/api/search-user', async (req, res) => {
 app.get('/api/chat-history', async (req, res) => {
   try {
     const { user1, user2 } = req.query;
-    const messages = await Message.find({
+
+const messages = await Message.find({
       $or: [
         { senderId: user1, receiverId: user2 },
         { senderId: user2, receiverId: user1 }
@@ -620,13 +653,17 @@ io.on('connection', (socket) => {
       });
       await newMsg.save();
 
-if (senderId) {
-        const today = getTodayString();
-        await UserTask.findOneAndUpdate(
-          { userId: String(senderId), date: today },
-          { $inc: { messagesSentCount: 1 } },
-          { upsert: true }
-        );
+      if (senderId) {
+        const senderUser = await User.findOne({ userId: String(senderId) });
+        // Only verified users track direct message tasks
+        if (senderUser && senderUser.isFaceVerified) {
+          const today = getTodayString();
+          await UserTask.findOneAndUpdate(
+            { userId: String(senderId), date: today },
+            { $inc: { messagesSentCount: 1 } },
+            { upsert: true }
+          );
+        }
       }
 
       io.to(String(receiverId)).emit('receive_direct_message', newMsg);
@@ -711,7 +748,7 @@ if (senderId) {
         );
       }
 
-      await Transaction.create({
+await Transaction.create({
         userId: String(callerId),
         type: 'call_fee',
         amount: cost,
@@ -754,7 +791,7 @@ if (senderId) {
       roomSeatsState[roomId] = {};
     }
 
-if (action === 'take') {
+    if (action === 'take') {
       for (const idx in roomSeatsState[roomId]) {
         if (roomSeatsState[roomId][idx].userId === data.userId) {
           delete roomSeatsState[roomId][idx];
@@ -773,7 +810,9 @@ if (action === 'take') {
         const durationMinutes = Math.floor((Date.now() - joinTime) / 60000);
         delete seatJoinTimes[String(data.userId)];
 
-        if (durationMinutes >= 1) {
+        // Check if user is face verified before logging valid host hours
+        const user = await User.findOne({ userId: String(data.userId) });
+        if (user && user.isFaceVerified && durationMinutes >= 1) {
           const durationHours = parseFloat((durationMinutes / 60).toFixed(2));
           await AgencyHost.findOneAndUpdate(
             { userId: String(data.userId), status: 'active' },
@@ -826,8 +865,8 @@ if (action === 'take') {
       sender.coins -= totalCost;
       await sender.save();
 
-      // Track Daily Gift Sent Task
-      if (senderId) {
+      // Only face-verified senders accumulate task gift flow
+      if (senderId && sender.isFaceVerified) {
         const today = getTodayString();
         await UserTask.findOneAndUpdate(
           { userId: String(senderId), date: today },
@@ -836,7 +875,7 @@ if (action === 'take') {
         );
       }
 
-      // 70% to Receiver Diamonds/Points
+// 70% to Receiver Diamonds/Points
       const diamondReward = Math.round(totalCost * 0.70);
       if (receiverId) {
         await User.findOneAndUpdate(
@@ -868,7 +907,7 @@ if (action === 'take') {
       const defaultGift = giftName ? giftName : 'Gift';
       const defaultTarget = receiverId ? receiverId : 'Room';
 
-await Transaction.create({
+      await Transaction.create({
         userId: String(senderId),
         type: 'gift_sent',
         amount: totalCost,
@@ -954,13 +993,15 @@ await Transaction.create({
     io.emit('game_win_broadcast', data);
   });
 
-  socket.on('disconnect', async () => {
+socket.on('disconnect', async () => {
     if (socket.userId && roomUserStayTimes[socket.userId]) {
       const stayMs = Date.now() - roomUserStayTimes[socket.userId];
       const stayMinutes = Math.floor(stayMs / 60000);
       delete roomUserStayTimes[socket.userId];
 
-      if (stayMinutes >= 1) {
+      // Track duration only for face-verified users
+      const user = await User.findOne({ userId: String(socket.userId) });
+      if (user && user.isFaceVerified && stayMinutes >= 1) {
         const today = getTodayString();
         await UserTask.findOneAndUpdate(
           { userId: String(socket.userId), date: today },
