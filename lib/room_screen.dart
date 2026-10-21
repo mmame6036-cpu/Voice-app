@@ -113,7 +113,7 @@ class _RoomScreenState extends State<RoomScreen> {
 
       setState(() {
         _hostDiamonds += diamondReward;
-        if (_seats.isNotEmpty && (receiverId == null  receiverId == 'all'  receiverId == _seats[0]['userId'])) {
+        if (_seats.isNotEmpty && (receiverId == null || receiverId == 'all' || receiverId == _seats[0]['userId'])) {
           _seats[0]['diamonds'] = (_seats[0]['diamonds'] ?? 0) + diamondReward;
         }
 
@@ -140,7 +140,7 @@ _socket.onChairActionReceived = (data) {
       final String? uName = data['userName'];
       final String? uId = data['userId'];
 
-      if (chairIndex == null || chairIndex < 0 || chairIndex >= _seats.length) {
+      if (chairIndex == null || chairIndex < 0 ||  chairIndex >= _seats.length) {
         return;
       }
 
@@ -1043,7 +1043,7 @@ class _InternalMedalWallScreenState extends State<InternalMedalWallScreen>
                       child: Container(
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF161B26),
+                          color: const Color(0xFF161826),
                           borderRadius: BorderRadius.circular(14),
                           border: Border.all(
                             color: isEquipped
