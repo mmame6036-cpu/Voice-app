@@ -19,6 +19,7 @@ import 'widgets/room/room_seats_grid.dart';
 import 'widgets/room/room_chat_feed.dart';
 import 'widgets/room/room_bottom_bar.dart';
 import 'widgets/room/gift_panel.dart';
+import 'widgets/room/gift_overlay.dart';
 import 'widgets/room/basic_tools_sheet.dart';
 
 const String agoraAppId = "1523b6d3b8144281a1a21f28bbbd7fef";
@@ -49,7 +50,7 @@ class _RoomScreenState extends State<RoomScreen> {
   int _hostDiamonds = 0;
   final TextEditingController _msgController = TextEditingController();
 
-  Map<String, String>? _active3DGift;
+  Map<String, dynamic>? _active3DGift;
   String? _jackpotBannerText;
 
   final List<Map<String, String>> _messages = [
@@ -102,7 +103,35 @@ class _RoomScreenState extends State<RoomScreen> {
       });
     });
 
-    _socket.onChairActionReceived = (data) {
+    _socket.socket?.on('gift_sent', (data) {
+      if (!mounted || data == null) return;
+      final sender = data['sender'] ?? data['senderName'] ?? 'User';
+      final giftName = data['giftName'] ?? 'Gift';
+      final count = int.tryParse(data['count']?.toString() ?? '1') ?? 1;
+      final diamondReward = int.tryParse(data['diamondReward']?.toString() ?? '0') ?? 0;
+      final receiverId = data['receiverId'];
+
+      setState(() {
+        _hostDiamonds += diamondReward;
+        if (_seats.isNotEmpty && (receiverId == null  receiverId == 'all'  receiverId == _seats[0]['userId'])) {
+          _seats[0]['diamonds'] = (_seats[0]['diamonds'] ?? 0) + diamondReward;
+        }
+
+        _active3DGift = {
+          'sender': sender,
+          'gift': giftName,
+          'count': count,
+          'image': _getGiftImage(giftName),
+        };
+
+        _messages.add({
+          'user': 'Announcement',
+          'text': '$sender sent $giftName x$count! (+${diamondReward} 💎)',
+        });
+      });
+    });
+
+_socket.onChairActionReceived = (data) {
       if (!mounted) return;
       final int? chairIndex = data['chairIndex'] != null
           ? int.tryParse(data['chairIndex'].toString())
@@ -131,8 +160,7 @@ class _RoomScreenState extends State<RoomScreen> {
             'text': '$uName joined seat ${chairIndex + 1}',
           });
         } else if (action == 'leave') {
-
-if (_seats[chairIndex]['userId'] == uId) {
+          if (_seats[chairIndex]['userId'] == uId) {
             _seats[chairIndex]['user'] = null;
             _seats[chairIndex]['userId'] = null;
             _seats[chairIndex]['isSpeaking'] = false;
@@ -221,7 +249,8 @@ if (_seats[chairIndex]['userId'] == uId) {
           padding: const EdgeInsets.all(20),
           child: Column(
             mainAxisSize: MainAxisSize.min,
-            children: [
+
+children: [
               ListTile(
                 leading: const Icon(Icons.exit_to_app, color: Colors.redAccent),
                 title: const Text(
@@ -254,7 +283,7 @@ if (_seats[chairIndex]['userId'] == uId) {
       return;
     }
 
-if (seat['user'] != null && seat['user'].toString().isNotEmpty) {
+    if (seat['user'] != null && seat['user'].toString().isNotEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Seat ${index + 1} is occupied by ${seat['user']}'),
@@ -272,7 +301,6 @@ if (seat['user'] != null && seat['user'].toString().isNotEmpty) {
       }
     }
 
-    // Users can take seat and speak freely, pass face verification state for task tracking
     _socket.sendChairAction(
       roomId: widget.roomId,
       chairIndex: index,
@@ -333,19 +361,31 @@ if (seat['user'] != null && seat['user'].toString().isNotEmpty) {
       context,
       userCoins: _user.coins,
       seats: _seats,
-      onSendGift: (name, price, count, isLucky) {
+      onSendGift: (name, price, count, isLucky, targetUserId) {
         final int totalCost = price * count;
         final int diamondReward = (totalCost * 0.70).round();
 
+        _socket.socket?.emit('gift_sent', {
+          'senderId': _user.userId,
+          'senderName': _user.userName,
+          'receiverId': targetUserId,
+          'giftName': name,
+          'giftPrice': price,
+          'count': count,
+          'isLucky': isLucky,
+          'roomId': widget.roomId,
+        });
+
         setState(() {
           _hostDiamonds += diamondReward;
-          if (_seats.isNotEmpty) {
+          if (_seats.isNotEmpty && (targetUserId == 'all' || targetUserId == _seats[0]['userId'])) {
             _seats[0]['diamonds'] = (_seats[0]['diamonds'] ?? 0) + diamondReward;
           }
 
-          _active3DGift = {
+_active3DGift = {
             'sender': _user.userName,
-            'gift': count > 1 ? '$name x$count' : name,
+            'gift': name,
+            'count': count,
             'image': _getGiftImage(name),
           };
         });
@@ -378,20 +418,11 @@ if (seat['user'] != null && seat['user'].toString().isNotEmpty) {
             });
           }
         }
-
-        final giftText = '${_user.userName} sent $name x$count! (+${diamondReward} 💎)';
-        _socket.sendChatMessage(roomId: widget.roomId, text: giftText);
-        setState(() {
-          _messages.add({
-            'user': 'Announcement',
-            'text': giftText,
-          });
-        });
       },
     );
   }
 
-void _openBasicTools() {
+  void _openBasicTools() {
     BasicToolsSheet.show(
       context,
       currentSeats: _currentSeatCount,
@@ -469,7 +500,8 @@ void _openBasicTools() {
                   _buildQuickActionItem(
                     icon: Icons.military_tech,
                     color: Colors.amber,
-                    title: 'Level',
+
+title: 'Level',
                     onTap: () {
                       Navigator.pop(ctx);
                       Navigator.push(context, MaterialPageRoute(builder: (_) => const LevelScreen()));
@@ -494,8 +526,7 @@ void _openBasicTools() {
                         context,
                         MaterialPageRoute(
                           builder: (_) => InviteScreen(
-
-userId: _user.userId,
+                            userId: _user.userId,
                             userName: _user.userName.isNotEmpty ? _user.userName : 'User_${_user.userId}',
                             onRewardClaimed: (bonusCoins) {
                               _user.coins += bonusCoins;
@@ -588,7 +619,8 @@ userId: _user.userId,
           RoomBackground(
             child: Column(
               children: [
-                Stack(
+
+Stack(
                   alignment: Alignment.centerRight,
                   children: [
                     RoomHeader(
@@ -614,8 +646,7 @@ userId: _user.userId,
                   decoration: BoxDecoration(
                     color: Colors.black45,
                     borderRadius: BorderRadius.circular(16),
-
-border: Border.all(color: Colors.cyanAccent.withOpacity(0.5)),
+                    border: Border.all(color: Colors.cyanAccent.withOpacity(0.5)),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -684,7 +715,8 @@ border: Border.all(color: Colors.cyanAccent.withOpacity(0.5)),
                 child: Row(
                   children: [
                     const Icon(Icons.emoji_events, color: Colors.white, size: 22),
-                    const SizedBox(width: 8),
+
+const SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         _jackpotBannerText!,
@@ -701,142 +733,16 @@ border: Border.all(color: Colors.cyanAccent.withOpacity(0.5)),
               ),
             ),
           if (_active3DGift != null)
-            _Live3DGiftDisplay(
-              sender: _active3DGift!['sender']!,
+            Big3DGiftOverlay(
+              senderName: _active3DGift!['sender']!,
               giftName: _active3DGift!['gift']!,
               imageUrl: _active3DGift!['image']!,
-              onComplete: () {
+              count: _active3DGift!['count'] ?? 1,
+              onFinish: () {
                 setState(() => _active3DGift = null);
               },
             ),
         ],
-      ),
-    );
-  }
-}
-
-class _Live3DGiftDisplay extends StatefulWidget {
-  final String sender;
-  final String giftName;
-  final String imageUrl;
-  final VoidCallback onComplete;
-
-  const _Live3DGiftDisplay({
-    Key? key,
-    required this.sender,
-    required this.giftName,
-    required this.imageUrl,
-    required this.onComplete,
-  }) : super(key: key);
-
-  @override
-  State<_Live3DGiftDisplay> createState() => _Live3DGiftDisplayState();
-}
-
-class _Live3DGiftDisplayState extends State<_Live3DGiftDisplay>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _anim;
-  late Animation<double> _scale;
-  late Animation<double> _opacity;
-
-  @override
-  void initState() {
-    super.initState();
-    _anim = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 2600),
-    );
-
-    _scale = TweenSequence<double>([
-      TweenSequenceItem(
-        tween: Tween(begin: 0.1, end: 1.2).chain(CurveTween(curve: Curves.elasticOut)),
-        weight: 40,
-      ),
-      TweenSequenceItem(tween: Tween(begin: 1.2, end: 1.0), weight: 30),
-      TweenSequenceItem(tween: Tween(begin: 1.0, end: 1.4), weight: 30),
-    ]).animate(_anim);
-
-    _opacity = TweenSequence<double>([
-      TweenSequenceItem(tween: Tween(begin: 0.0, end: 1.0), weight: 20),
-      TweenSequenceItem(tween: Tween(begin: 1.0, end: 1.0), weight: 60),
-      TweenSequenceItem(tween: Tween(begin: 1.0, end: 0.0), weight: 20),
-    ]).animate(_anim);
-
-    _anim.forward().then((_) => widget.onComplete());
-  }
-
-  @override
-  void dispose() {
-    _anim.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return IgnorePointer(
-      child: Center(
-        child: AnimatedBuilder(
-          animation: _anim,
-          builder: (context, child) {
-            return Opacity(
-              opacity: _opacity.value,
-              child: Transform.scale(
-                scale: _scale.value,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 220,
-                      height: 220,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xFF00C9A7).withOpacity(0.45),
-                            blurRadius: 40,
-                            spreadRadius: 8,
-                          ),
-                        ],
-                      ),
-                      child: Image.asset(
-                        widget.imageUrl,
-                        fit: BoxFit.contain,
-                        errorBuilder: (context, error, stackTrace) {
-                          return const Icon(
-                            Icons.card_giftcard,
-                            color: Colors.amberAccent,
-                            size: 100,
-                          );
-                        },
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFF00C9A7), Color(0xFF6C5CE7)],
-                        ),
-                        borderRadius: BorderRadius.circular(22),
-                        boxShadow: const [
-                          BoxShadow(color: Colors.black45, blurRadius: 10),
-                        ],
-                      ),
-                      child: Text(
-                        '${widget.sender} sent ${widget.giftName}!',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 15,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        ),
       ),
     );
   }
@@ -933,7 +839,8 @@ class _InternalMedalWallScreenState extends State<InternalMedalWallScreen>
         'color': Colors.greenAccent,
         'isUnlocked': true,
         'requirement': 'Invite 10 users through your invitation code.',
-      },
+
+},
       {
         'id': 'm7',
         'title': 'Loyal Guardian',
@@ -970,8 +877,7 @@ class _InternalMedalWallScreenState extends State<InternalMedalWallScreen>
           children: [
             Container(
               padding: const EdgeInsets.all(18),
-
-decoration: BoxDecoration(
+              decoration: BoxDecoration(
                 color: medal['isUnlocked'] ? (medal['color'] as Color).withOpacity(0.15) : Colors.white10,
                 shape: BoxShape.circle,
               ),
@@ -1047,7 +953,7 @@ decoration: BoxDecoration(
     );
   }
 
-  @override
+@override
   Widget build(BuildContext context) {
     final int unlockedCount = _allMedals.where((m) => m['isUnlocked'] == true).length;
 
@@ -1072,8 +978,7 @@ decoration: BoxDecoration(
           labelColor: const Color(0xFF00C9A7),
           unselectedLabelColor: Colors.white54,
           indicatorWeight: 3,
-
-tabs: _categories.map((c) => Tab(text: c)).toList(),
+          tabs: _categories.map((c) => Tab(text: c)).toList(),
         ),
       ),
       body: Column(
@@ -1138,11 +1043,12 @@ tabs: _categories.map((c) => Tab(text: c)).toList(),
                       child: Container(
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF161826),
+                          color: const Color(0xFF161B26),
                           borderRadius: BorderRadius.circular(14),
                           border: Border.all(
                             color: isEquipped
-                                ? const Color(0xFF00C9A7)
+
+? const Color(0xFF00C9A7)
                                 : (isUnlocked ? (medal['color'] as Color).withOpacity(0.3) : Colors.white10),
                             width: isEquipped ? 2 : 1,
                           ),
@@ -1159,8 +1065,7 @@ tabs: _categories.map((c) => Tab(text: c)).toList(),
                                       ? (medal['color'] as Color).withOpacity(0.15)
                                       : Colors.white10,
                                   child: Icon(
-
-medal['icon'],
+                                    medal['icon'],
                                     size: 26,
                                     color: isUnlocked ? medal['color'] : Colors.white24,
                                   ),
