@@ -124,22 +124,26 @@ if (isNetwork) {
       return Image.network(
         widget.imageUrl,
         fit: BoxFit.contain,
-        errorBuilder: (_, , _) => const Icon(
-          Icons.card_giftcard,
-          color: Colors.amberAccent,
-          size: 110,
-        ),
+        errorBuilder: (context, error, stackTrace) {
+          return const Icon(
+            Icons.card_giftcard,
+            color: Colors.amberAccent,
+            size: 110,
+          );
+        },
       );
     }
 
     return Image.asset(
       widget.imageUrl,
       fit: BoxFit.contain,
-      errorBuilder: (_, , _) => const Icon(
-        Icons.card_giftcard,
-        color: Colors.amberAccent,
-        size: 110,
-      ),
+      errorBuilder: (context, error, stackTrace) {
+        return const Icon(
+          Icons.card_giftcard,
+          color: Colors.amberAccent,
+          size: 110,
+        );
+      },
     );
   }
 
@@ -242,9 +246,9 @@ if (isNetwork) {
                         shape: BoxShape.circle,
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(0xFF00C9A7).withOpacity(0.45),
 
-blurRadius: 40,
+color: const Color(0xFF00C9A7).withOpacity(0.45),
+                            blurRadius: 40,
                             spreadRadius: 10,
                           ),
                         ],
