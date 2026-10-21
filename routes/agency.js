@@ -4,7 +4,126 @@ const Agency = require('../models/Agency');
 const AgencyHost = require('../models/AgencyHost');
 const mongoose = require('mongoose');
 
-// 1. Create a new Agency
+// Helper to get or create agency
+async function getOrCreateAgency(ownerId) {
+  let agency = await Agency.findOne({ ownerId: String(ownerId) });
+  if (!agency) {
+    const randomSuffix = Math.floor(100000 + Math.random() * 900000);
+    agency = new Agency({
+      agencyId: 'AG' + randomSuffix,
+      ownerId: String(ownerId),
+      agencyName: 'Medina Agency',
+      commissionRate: 15,
+      status: 'active'
+    });
+    await agency.save();
+  }
+  return agency;
+}
+
+// 1. Agency Details Endpoint (Called by Flutter agency_center_screen.dart)
+router.get('/details', async (req, res) => {
+  try {
+    const agentId = req.query.agentId || req.query.ownerId;
+    if (!agentId) {
+      return res.status(400).json({ success: false, message: 'Agent ID is required' });
+    }
+
+    const agency = await getOrCreateAgency(agentId);
+    const hosts = await AgencyHost.find({ agencyId: agency.agencyId, status: 'active' }).sort({ currentMonthPoints: -1 });
+
+    const User = mongoose.models.User;
+    const formattedHosts = await Promise.all(
+      hosts.map(async (h) => {
+        let isFaceVerified = false;
+        if (User) {
+          const uDoc = await User.findOne({ userId: String(h.userId) });
+          if (uDoc) isFaceVerified = uDoc.isFaceVerified === true;
+        }
+
+        return {
+          userId: h.userId,
+          userName: h.userName || ('Host_' + h.userId),
+          avatarUrl: h.avatar || '',
+          liveMinutes: Math.round((h.validHours || 0) * 60),
+          diamondsEarned: h.currentMonthPoints || 0,
+          isFaceVerified: isFaceVerified,
+        };
+      })
+    );
+
+    const totalDiamonds = formattedHosts.reduce((sum, item) => sum + (item.diamondsEarned || 0), 0);
+
+    return res.json({
+      success: true,
+      agencyName: agency.agencyName || 'Medina Agency',
+      commissionRate: agency.commissionRate || 15,
+      totalDiamonds: totalDiamonds,
+      hosts: formattedHosts,
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// 2. Direct Add Host (Called by Add Host button in Flutter)
+router.post('/add-host', async (req, res) => {
+  try {
+    const { agentId, hostUserId } = req.body;
+
+    if (!agentId || !hostUserId) {
+      return res.status(400).json({ success: false, message: 'Agent ID and Host ID are required' });
+    }
+
+    const agency = await getOrCreateAgency(agentId);
+    const cleanHostId = String(hostUserId).trim();
+
+    let resolvedName = 'Host_' + cleanHostId;
+    let resolvedAvatar = '';
+    const User = mongoose.models.User;
+    if (User) {
+      const targetUser = await User.findOne({ userId: cleanHostId });
+      if (!targetUser) {
+        return res.status(404).json({ success: false, message: 'Host user not found' });
+      }
+      resolvedName = targetUser.name || resolvedName;
+      resolvedAvatar = targetUser.avatar || '';
+    }
+
+    let hostRecord = await AgencyHost.findOne({ userId: cleanHostId });
+    if (hostRecord) {
+      if (hostRecord.status === 'active' && hostRecord.agencyId === agency.agencyId) {
+        return res.status(400).json({ success: false, message: 'Host is already active in your agency' });
+      }
+      hostRecord.agencyId = agency.agencyId;
+      hostRecord.userName = resolvedName;
+      hostRecord.avatar = resolvedAvatar;
+      hostRecord.status = 'active';
+      await hostRecord.save();
+    } else {
+      hostRecord = new AgencyHost({
+        agencyId: agency.agencyId,
+        userId: cleanHostId,
+        userName: resolvedName,
+        avatar: resolvedAvatar,
+        status: 'active',
+        currentMonthPoints: 0,
+        validHours: 0,
+      });
+      await hostRecord.save();
+    }
+
+return res.json({
+      success: true,
+      message: 'Host successfully recruited to agency!',
+      host: hostRecord,
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// 3. Create a new Agency
 router.post('/create', async (req, res) => {
   try {
     const { ownerId, agencyName } = req.body;
@@ -28,7 +147,7 @@ router.post('/create', async (req, res) => {
       agencyId: generatedAgencyId,
       ownerId: String(ownerId),
       agencyName: String(agencyName).trim(),
-      commissionRate: 10,
+      commissionRate: 15,
       status: 'active'
     });
 
@@ -44,16 +163,13 @@ router.post('/create', async (req, res) => {
   }
 });
 
-// 2. Host Applies to Join Agency
+// 4. Host Applies to Join Agency
 router.post('/apply', async (req, res) => {
   try {
     const { userId, agencyId } = req.body;
 
-    if (!userId) {
-      return res.status(400).json({ success: false, message: 'User ID is required' });
-    }
-    if (!agencyId) {
-      return res.status(400).json({ success: false, message: 'Agency ID is required' });
+    if (!userId || !agencyId) {
+      return res.status(400).json({ success: false, message: 'User ID and Agency ID are required' });
     }
 
     const targetAgency = await Agency.findOne({ agencyId: String(agencyId).trim(), status: 'active' });
@@ -66,10 +182,6 @@ router.post('/apply', async (req, res) => {
       if (existingRecord.status === 'active') {
         return res.status(400).json({ success: false, message: 'User is already an active host in an agency' });
       }
-      if (existingRecord.status === 'pending') {
-        return res.status(400).json({ success: false, message: 'Application is already pending approval' });
-      }
-
       existingRecord.agencyId = targetAgency.agencyId;
       existingRecord.status = 'pending';
       await existingRecord.save();
@@ -109,22 +221,16 @@ router.post('/apply', async (req, res) => {
   }
 });
 
-// 3. Agency Owner Approves or Rejects Application
+// 5. Agency Owner Approves or Rejects Application
 router.post('/manage-application', async (req, res) => {
   try {
     const { ownerId, userId, action } = req.body;
 
-    if (!ownerId) {
-      return res.status(400).json({ success: false, message: 'Owner ID is required' });
-    }
-    if (!userId) {
-      return res.status(400).json({ success: false, message: 'Target Host User ID is required' });
-    }
-    if (!action) {
-      return res.status(400).json({ success: false, message: 'Action (approve/reject) is required' });
+    if (!ownerId  !userId  !action) {
+      return res.status(400).json({ success: false, message: 'Owner ID, User ID, and Action are required' });
     }
 
-const agency = await Agency.findOne({ ownerId: String(ownerId) });
+    const agency = await Agency.findOne({ ownerId: String(ownerId) });
     if (!agency) {
       return res.status(403).json({ success: false, message: 'Unauthorized. You do not own an agency.' });
     }
@@ -134,7 +240,7 @@ const agency = await Agency.findOne({ ownerId: String(ownerId) });
       return res.status(404).json({ success: false, message: 'Host application record not found' });
     }
 
-    if (action === 'approve') {
+if (action === 'approve') {
       hostRecord.status = 'active';
       await hostRecord.save();
       return res.json({ success: true, message: 'Host approved successfully', host: hostRecord });
@@ -152,16 +258,13 @@ const agency = await Agency.findOne({ ownerId: String(ownerId) });
   }
 });
 
-// 4. Remove Host from Agency
+// 6. Remove Host from Agency
 router.post('/remove-host', async (req, res) => {
   try {
     const { ownerId, userId } = req.body;
 
-    if (!ownerId) {
-      return res.status(400).json({ success: false, message: 'Owner ID is required' });
-    }
-    if (!userId) {
-      return res.status(400).json({ success: false, message: 'Target Host User ID is required' });
+    if (!ownerId || !userId) {
+      return res.status(400).json({ success: false, message: 'Owner ID and Host User ID are required' });
     }
 
     const agency = await Agency.findOne({ ownerId: String(ownerId) });
@@ -178,51 +281,6 @@ router.post('/remove-host', async (req, res) => {
     await hostRecord.save();
 
     return res.json({ success: true, message: 'Host removed successfully from agency' });
-  } catch (err) {
-    return res.status(500).json({ success: false, message: err.message });
-  }
-});
-
-// 5. Agency Dashboard Data
-router.get('/dashboard', async (req, res) => {
-  try {
-    const ownerId = req.query.ownerId;
-    if (!ownerId) {
-      return res.status(400).json({ success: false, message: 'Owner ID is required' });
-    }
-
-    let agency = await Agency.findOne({ ownerId: String(ownerId) });
-    if (!agency) {
-      const randomSuffix = Math.floor(100000 + Math.random() * 900000);
-      agency = new Agency({
-        agencyId: 'AG' + randomSuffix,
-        ownerId: String(ownerId),
-        agencyName: 'Agency ' + ownerId,
-        commissionRate: 10,
-        status: 'active'
-      });
-      await agency.save();
-    }
-
-    const hosts = await AgencyHost.find({ agencyId: agency.agencyId, status: 'active' }).sort({ currentMonthPoints: -1 });
-    const pendingRequests = await AgencyHost.find({ agencyId: agency.agencyId, status: 'pending' }).sort({ joinedAt: -1 });
-
-    const agencyPayload = {
-      agencyId: agency.agencyId,
-      agencyName: agency.agencyName,
-      commissionRate: agency.commissionRate,
-      balancePoints: agency.balancePoints ? agency.balancePoints : 0,
-      totalEarnings: agency.totalEarnings ? agency.totalEarnings : 0,
-      level: agency.level ? agency.level : 1,
-      activeHostsCount: hosts.length
-    };
-
-    return res.json({
-      success: true,
-      agency: agencyPayload,
-      hosts: hosts,
-      pendingRequests: pendingRequests
-    });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }
