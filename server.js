@@ -623,6 +623,179 @@ const messages = await Message.find({
   }
 });
 
+// ==========================================
+// TEEN PATTI GAME LOGIC (Server-Authoritative)
+// ==========================================
+const SUITS = ['♠', '♥', '♦', '♣'];
+const VALUES = [
+  { rank: 2, label: '2' },
+  { rank: 3, label: '3' },
+  { rank: 4, label: '4' },
+  { rank: 5, label: '5' },
+  { rank: 6, label: '6' },
+  { rank: 7, label: '7' },
+  { rank: 8, label: '8' },
+  { rank: 9, label: '9' },
+  { rank: 10, label: '10' },
+  { rank: 11, label: 'J' },
+  { rank: 12, label: 'Q' },
+  { rank: 13, label: 'K' },
+  { rank: 14, label: 'A' },
+];
+
+function generateDeck() {
+  const deck = [];
+  for (const suit of SUITS) {
+    for (const val of VALUES) {
+      deck.push({ suit, label: val.label, rank: val.rank });
+    }
+  }
+  for (let i = deck.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [deck[i], deck[j]] = [deck[j], deck[i]];
+  }
+  return deck;
+}
+
+function evaluateHand(cards) {
+  const sorted = [...cards].sort((a, b) => b.rank - a.rank);
+  const r = sorted.map((c) => c.rank);
+  const isFlush = sorted[0].suit === sorted[1].suit && sorted[1].suit === sorted[2].suit;
+
+  const isNormalSeq = (r[0] - r[1] === 1 && r[1] - r[2] === 1);
+  const isA23 = (r[0] === 14 && r[1] === 3 && r[2] === 2);
+  const isSeq = isNormalSeq || isA23;
+
+  if (r[0] === r[1] && r[1] === r[2]) {
+    return { score: 6000000 + r[0], type: 'Trail', multiplier: 20 };
+  }
+  if (isFlush && isSeq) {
+    const seqHigh = isA23 ? 3 : r[0];
+    return { score: 5000000 + seqHigh, type: 'Pure Sequence', multiplier: 10 };
+  }
+  if (isSeq) {
+    const seqHigh = isA23 ? 3 : r[0];
+    return { score: 4000000 + seqHigh, type: 'Sequence', multiplier: 5 };
+  }
+  if (isFlush) {
+    return { score: 3000000 + r[0] * 10000 + r[1] * 100 + r[2], type: 'Color', multiplier: 3 };
+  }
+  if (r[0] === r[1]) {
+    return { score: 2000000 + r[0] * 1000 + r[2], type: 'Pair', multiplier: 2 };
+  }
+  if (r[1] === r[2]) {
+    return { score: 2000000 + r[1] * 1000 + r[0], type: 'Pair', multiplier: 2 };
+  }
+  if (r[0] === r[2]) {
+    return { score: 2000000 + r[0] * 1000 + r[1], type: 'Pair', multiplier: 2 };
+  }
+  return { score: 1000000 + r[0] * 10000 + r[1] * 100 + r[2], type: 'High Card', multiplier: 1.9 };
+}
+
+function dealTeenPattiRound() {
+  const deck = generateDeck();
+  const playerA = [deck.pop(), deck.pop(), deck.pop()];
+  const playerB = [deck.pop(), deck.pop(), deck.pop()];
+
+  const evalA = evaluateHand(playerA);
+  const evalB = evaluateHand(playerB);
+
+  let winner = 'tie';
+  if (evalA.score > evalB.score) {
+    winner = 'playerA';
+  } else if (evalB.score > evalA.score) {
+    winner = 'playerB';
+  }
+
+  return {
+    playerA: { cards: playerA, evaluation: evalA },
+    playerB: { cards: playerB, evaluation: evalB },
+    winner,
+  };
+}
+
+let tpRoundId = 1;
+let tpGameState = 'betting'; // 'betting' | 'revealing' | 'settling'
+let tpTimeLeft = 15;
+let tpCurrentBets = [];
+let tpLastResult = null;
+
+async function resolveTeenPattiRound() {
+  tpLastResult = dealTeenPattiRound();
+  const winners = [];
+
+  for (const bet of tpCurrentBets) {
+    if (bet.side === tpLastResult.winner) {
+      const winCoins = Math.floor(bet.amount * 1.95);
+      winners.push({ userId: bet.userId, winCoins });
+
+      const u = await User.findOneAndUpdate(
+        { userId: bet.userId },
+        { $inc: { coins: winCoins } },
+        { new: true }
+      );
+
+      if (u) {
+        await Transaction.create({
+          userId: u.userId,
+          type: 'game_win',
+          amount: winCoins,
+          balanceAfter: u.coins,
+          description: Teen Patti Win (${tpLastResult.winner.toUpperCase()}) Round #${tpRoundId}
+        });
+      }
+    }
+  }
+
+  io.emit('teen_patti_result', {
+    roundId: tpRoundId,
+    result: tpLastResult,
+    winners,
+  });
+}
+
+// 1-Second Global Heartbeat for Teen Patti
+setInterval(() => {
+  tpTimeLeft--;
+
+  if (tpTimeLeft <= 0) {
+    if (tpGameState === 'betting') {
+      tpGameState = 'revealing';
+      tpTimeLeft = 5;
+      resolveTeenPattiRound().catch(e => console.error('TP resolve error:', e));
+    } else if (tpGameState === 'revealing') {
+      tpGameState = 'settling';
+      tpTimeLeft = 4;
+    } else {
+      tpRoundId++;
+      tpCurrentBets = [];
+      tpLastResult = null;
+      tpGameState = 'betting';
+      tpTimeLeft = 15;
+
+      io.emit('teen_patti_new_round', {
+        roundId: tpRoundId,
+        timeLeft: tpTimeLeft,
+      });
+    }
+  }
+
+  const totalA = tpCurrentBets.filter(b => b.side === 'playerA').reduce((s, b) => s + b.amount, 0);
+  const totalB = tpCurrentBets.filter(b => b.side === 'playerB').reduce((s, b) => s + b.amount, 0);
+  const totalTie = tpCurrentBets.filter(b => b.side === 'tie').reduce((s, b) => s + b.amount, 0);
+
+  io.emit('teen_patti_timer', {
+    roundId: tpRoundId,
+    gameState: tpGameState,
+    timeLeft: tpTimeLeft,
+    totalBetsA: totalA,
+    totalBetsB: totalB,
+    totalBetsTie: totalTie,
+    betsCount: tpCurrentBets.length,
+    lastResult: tpLastResult,
+  });
+}, 1000);
+
 // Socket.io Real-time
 const roomSeatsState = {};
 const seatJoinTimes = {};
@@ -642,6 +815,64 @@ io.on('connection', (socket) => {
     }
   });
 
+  // TEEN PATTI SOCKET LISTENERS
+  socket.on('teen_patti_join', () => {
+    const totalA = tpCurrentBets.filter(b => b.side === 'playerA').reduce((s, b) => s + b.amount, 0);
+    const totalB = tpCurrentBets.filter(b => b.side === 'playerB').reduce((s, b) => s + b.amount, 0);
+    const totalTie = tpCurrentBets.filter(b => b.side === 'tie').reduce((s, b) => s + b.amount, 0);
+
+    socket.emit('teen_patti_state', {
+      roundId: tpRoundId,
+      gameState: tpGameState,
+      timeLeft: tpTimeLeft,
+      totalBetsA: totalA,
+      totalBetsB: totalB,
+      totalBetsTie: totalTie,
+      lastResult: tpLastResult,
+    });
+  });
+
+  socket.on('teen_patti_place_bet', async (data) => {
+    try {
+      const { userId, side, amount } = data;
+      if (tpGameState !== 'betting') {
+        return socket.emit('teen_patti_error', { message: 'Betting is closed for this round!' });
+      }
+
+      const betAmount = parseInt(amount, 10);
+      if (!betAmount || betAmount <= 0) {
+        return socket.emit('teen_patti_error', { message: 'Invalid bet amount' });
+      }
+
+      const user = await User.findOne({ userId: String(userId).trim() });
+      if (!user || user.coins < betAmount) {
+        return socket.emit('teen_patti_error', { message: 'Insufficient coins balance' });
+      }
+
+      user.coins -= betAmount;
+      await user.save();
+
+      await Transaction.create({
+        userId: user.userId,
+        type: 'game_bet',
+        amount: -betAmount,
+        balanceAfter: user.coins,
+        description: Teen Patti bet on ${side} (Round #${tpRoundId})
+      });
+
+      tpCurrentBets.push({ userId: user.userId, side, amount: betAmount });
+
+      socket.emit('teen_patti_bet_success', {
+        roundId: tpRoundId,
+        side,
+        amount: betAmount,
+        remainingCoins: user.coins
+      });
+    } catch (err) {
+      socket.emit('teen_patti_error', { message: err.message });
+    }
+  });
+
   socket.on('send_direct_message', async (data) => {
     try {
       const { senderId, receiverId, text } = data;
@@ -653,9 +884,8 @@ io.on('connection', (socket) => {
       });
       await newMsg.save();
 
-      if (senderId) {
+if (senderId) {
         const senderUser = await User.findOne({ userId: String(senderId) });
-        // Only verified users track direct message tasks
         if (senderUser && senderUser.isFaceVerified) {
           const today = getTodayString();
           await UserTask.findOneAndUpdate(
@@ -748,7 +978,7 @@ io.on('connection', (socket) => {
         );
       }
 
-await Transaction.create({
+      await Transaction.create({
         userId: String(callerId),
         type: 'call_fee',
         amount: cost,
@@ -791,7 +1021,7 @@ await Transaction.create({
       roomSeatsState[roomId] = {};
     }
 
-    if (action === 'take') {
+if (action === 'take') {
       for (const idx in roomSeatsState[roomId]) {
         if (roomSeatsState[roomId][idx].userId === data.userId) {
           delete roomSeatsState[roomId][idx];
@@ -810,7 +1040,6 @@ await Transaction.create({
         const durationMinutes = Math.floor((Date.now() - joinTime) / 60000);
         delete seatJoinTimes[String(data.userId)];
 
-        // Check if user is face verified before logging valid host hours
         const user = await User.findOne({ userId: String(data.userId) });
         if (user && user.isFaceVerified && durationMinutes >= 1) {
           const durationHours = parseFloat((durationMinutes / 60).toFixed(2));
@@ -865,7 +1094,6 @@ await Transaction.create({
       sender.coins -= totalCost;
       await sender.save();
 
-      // Only face-verified senders accumulate task gift flow
       if (senderId && sender.isFaceVerified) {
         const today = getTodayString();
         await UserTask.findOneAndUpdate(
@@ -875,7 +1103,6 @@ await Transaction.create({
         );
       }
 
-// 70% to Receiver Diamonds/Points
       const diamondReward = Math.round(totalCost * 0.70);
       if (receiverId) {
         await User.findOneAndUpdate(
@@ -904,7 +1131,7 @@ await Transaction.create({
         }
       }
 
-      const defaultGift = giftName ? giftName : 'Gift';
+const defaultGift = giftName ? giftName : 'Gift';
       const defaultTarget = receiverId ? receiverId : 'Room';
 
       await Transaction.create({
@@ -915,7 +1142,6 @@ await Transaction.create({
         description: 'Sent ' + defaultGift + ' x' + giftCount + ' to ' + defaultTarget
       });
 
-      // House Edge Pool Logic for Lucky Multipliers
       let wonMultiplier = 0;
       let wonCoins = 0;
 
@@ -993,13 +1219,12 @@ await Transaction.create({
     io.emit('game_win_broadcast', data);
   });
 
-socket.on('disconnect', async () => {
+  socket.on('disconnect', async () => {
     if (socket.userId && roomUserStayTimes[socket.userId]) {
       const stayMs = Date.now() - roomUserStayTimes[socket.userId];
       const stayMinutes = Math.floor(stayMs / 60000);
       delete roomUserStayTimes[socket.userId];
 
-      // Track duration only for face-verified users
       const user = await User.findOne({ userId: String(socket.userId) });
       if (user && user.isFaceVerified && stayMinutes >= 1) {
         const today = getTodayString();
@@ -1021,7 +1246,8 @@ socket.on('disconnect', async () => {
               delete seatJoinTimes[String(socket.userId)];
               const defaultName = socket.userName ? socket.userName : 'User';
               io.to(roomId).emit('chair_action', {
-                action: 'leave',
+
+action: 'leave',
                 chairIndex: parseInt(idx),
                 userId: socket.userId,
                 userName: defaultName,
