@@ -20,6 +20,9 @@ class UserService {
   bool isOwner = false;
   bool isInitialized = false;
 
+  // Face Verification & Task Lock State
+  bool isFaceVerified = false;
+
   // Backpack Equipment
   String equippedFrame = '';
   String equippedEntry = '';
@@ -38,6 +41,12 @@ class UserService {
     _saveToStorage();
   }
 
+  void setFaceVerified(bool value) {
+    isFaceVerified = value;
+    _saveToStorage();
+    _syncFaceVerificationToServer();
+  }
+
   void equipItem(String category, String itemName) {
     if (category == 'Frame') {
       equippedFrame = equippedFrame == itemName ? '' : itemName;
@@ -50,7 +59,6 @@ class UserService {
   }
 
   Future<File> _getStorageFile() async {
-    // ቋሚ የፋይል ማስቀመጫ
     final dir = Directory.systemTemp;
     return File('${dir.path}/nile_voice_permanent_user.json');
   }
@@ -64,7 +72,7 @@ class UserService {
     try {
       final file = await _getStorageFile();
 
-      // 1. በስልኩ ላይ ቀድሞ የተመዘገበ ቋሚ ፕሮፋይል ካለ ማንበብ
+      // 1. Check local persistent profile
       if (await file.exists()) {
         final content = await file.readAsString();
         final localData = jsonDecode(content);
@@ -75,19 +83,20 @@ class UserService {
           _coins = localData['coins'] ?? 0;
           _points = localData['points'] ?? 0;
           invitedBy = localData['invitedBy'] ?? '';
+          isFaceVerified = localData['isFaceVerified'] == true;
           equippedFrame = localData['equippedFrame'] ?? '';
           equippedEntry = localData['equippedEntry'] ?? '';
           equippedTheme = localData['equippedTheme'] ?? '';
           isOwner = (userId == '1000');
           isInitialized = true;
 
-          // የቅርብ ጊዜ መረጃውን ከ MongoDB ማመሳከር
+          // Sync with database
           await refreshUserData();
           return;
         }
       }
 
-      // 2. አዲስ ስልክ ከሆነ ከሰርቨሩ ተከታታይ ID (ከ 1000 ጀምሮ) በቅደም ተከተል መቀበል
+      // 2. Register fallback device account if no profile exists
       final randomDeviceSeed = Random().nextInt(899999) + 100000;
       final deviceKey = 'dev_${Platform.operatingSystem}_$randomDeviceSeed';
 
@@ -119,12 +128,13 @@ class UserService {
       debugPrint('UserService Initialization Error: $e');
     }
 
-    // ከሰርቨር ጋር ግንኙነት ባይኖር እንኳን መነሻ መመደብ
+// Default initialization if server is unreachable
     if (userId.isEmpty) {
       userId = '1001';
       userName = 'User_$userId';
       _coins = 1000;
       _points = 0;
+      isFaceVerified = false;
       isOwner = false;
       await _saveToStorage();
     }
@@ -132,13 +142,13 @@ class UserService {
     isInitialized = true;
   }
 
-// Google Login ሲደረግ የተጠቃሚውን ዳታ መያዣ
+  // Set user directly after successful Google Login
   Future<void> setUserData(Map<String, dynamic> userData) async {
     _updateFromUserMap(userData);
     await _saveToStorage();
   }
 
-  // የቅርብ ጊዜ መረጃን ከሰርቨር ማደሻ
+  // Refresh latest coins, points, and profile from MongoDB
   Future<void> refreshUserData() async {
     if (userId.isEmpty) return;
     try {
@@ -169,6 +179,7 @@ class UserService {
     invitedBy = userMap['invitedBy'] ?? '';
     _coins = (userMap['coins'] is num) ? (userMap['coins'] as num).toInt() : 0;
     _points = (userMap['points'] is num) ? (userMap['points'] as num).toInt() : 0;
+    isFaceVerified = userMap['isFaceVerified'] == true || isFaceVerified;
     isOwner = (userId == '1000');
   }
 
@@ -182,6 +193,7 @@ class UserService {
         'coins': _coins,
         'points': _points,
         'invitedBy': invitedBy,
+        'isFaceVerified': isFaceVerified,
         'equippedFrame': equippedFrame,
         'equippedEntry': equippedEntry,
         'equippedTheme': equippedTheme,
@@ -201,6 +213,21 @@ class UserService {
       request.add(utf8.encode(jsonEncode({
         'userId': userId,
         'coins': _coins,
+      })));
+      await request.close();
+    } catch (_) {}
+  }
+
+  Future<void> _syncFaceVerificationToServer() async {
+    if (userId.isEmpty) return;
+    try {
+      final client = HttpClient();
+      client.connectionTimeout = const Duration(seconds: 4);
+      final request = await client.postUrl(Uri.parse('$serverUrl/api/user/verify-face'));
+      request.headers.set('content-type', 'application/json');
+      request.add(utf8.encode(jsonEncode({
+        'userId': userId,
+        'isFaceVerified': isFaceVerified,
       })));
       await request.close();
     } catch (_) {}
