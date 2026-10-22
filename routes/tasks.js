@@ -95,7 +95,7 @@ router.post('/claim', async (req, res) => {
         return res.status(400).json({ success: false, message: 'Requires 60 minutes on seat' });
       }
       rewardPoints = task.normalSeatRewardRate;
-      description = Daily Normal Seat Reward (${rewardPoints} pts);
+      description = 'Daily Normal Seat Reward (' + rewardPoints + ' pts)';
     }
 
     // 3. Crown Seat 1hr + 600 Gift Coins
@@ -134,13 +134,13 @@ else if (taskId === 'followers_task') {
       type: 'task_points_reward',
       amount: rewardPoints,
       balanceAfter: updatedUser ? (updatedUser.points || 0) : 0,
-      description
+      description: description
     });
 
     res.json({
       success: true,
-      rewardPoints,
-      message: Successfully claimed ${rewardPoints} points!
+      rewardPoints: rewardPoints,
+      message: 'Successfully claimed ' + rewardPoints + ' points!'
     });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -157,15 +157,4 @@ router.post('/record-activity', async (req, res) => {
     const val = Number(value) || 1;
 
     if (type === 'normal_seat') task.normalSeatMinutes += val;
-    else if (type === 'crown_seat') task.crownSeatMinutes += val;
-    else if (type === 'crown_gift') task.crownGiftCoins += val;
-    else if (type === 'follow') task.dailyFollowersCount += val;
-
-    await task.save();
-    res.json({ success: true, task });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-module.exports = router;
+    else if (type === 'crown_
