@@ -110,21 +110,32 @@ class _HomeScreenState extends State<HomeScreen> {
   final UserService _user = UserService();
   List<dynamic> _rooms = [];
   bool _isLoading = true;
-  String _selectedCategory = 'All';
 
-  final List<String> _categories = ['All', 'Party', 'Chat', 'Music', 'Gaming'];
+  String _mainTab = 'Party'; // 'Follow' or 'Party'
+  String _selectedCountry = 'All';
 
-  final List<Map<String, dynamic>> _banners = [
+  final List<Map<String, String>> _countries = const [
+    {'name': 'All', 'flag': ''},
+    {'name': 'Ethiopia', 'flag': '🇪🇹'},
+    {'name': 'Philippines', 'flag': '🇵🇭'},
+    {'name': 'Burma', 'flag': '🇲🇲'},
+    {'name': 'Kenya', 'flag': '🇰🇪'},
+    {'name': 'Saudi Arabia', 'flag': '🇸🇦'},
+    {'name': 'UAE', 'flag': '🇦🇪'},
+  ];
+
+  final List<Map<String, dynamic>> _banners = const [
     {
       'title': 'Weekly PK Star Tournament',
-      'subtitle': 'Win up to 50,000 Coins!',
-      'colors': [const Color(0xFF8A2387), const Color(0xFFE94057), const Color(0xFFF27121)],
+
+'subtitle': 'Win up to 50,000 Coins!',
+      'colors': [Color(0xFF8A2387), Color(0xFFE94057), Color(0xFFF27121)],
       'icon': Icons.emoji_events,
     },
     {
       'title': 'Recharge Bonus 20%',
       'subtitle': 'Get extra coins on Binance Pay',
-      'colors': [const Color(0xFF0052D4), const Color(0xFF4364F7), const Color(0xFF6FB1FC)],
+      'colors': [Color(0xFF0052D4), Color(0xFF4364F7), Color(0xFF6FB1FC)],
       'icon': Icons.monetization_on,
     },
   ];
@@ -135,25 +146,42 @@ class _HomeScreenState extends State<HomeScreen> {
     _fetchRooms();
   }
 
-List<Map<String, dynamic>> _getDefaultRooms() {
+  List<Map<String, dynamic>> _getDefaultRooms() {
     return [
       {
         'roomId': '2001',
         'title': 'Ethiopian Coffee & Chat ☕',
         'hostName': 'Selam',
         'usersCount': '8',
+        'country': 'Ethiopia',
       },
       {
         'roomId': '2002',
         'title': 'Habesha Music Lounge 🎵',
         'hostName': 'DJ_Nile',
         'usersCount': '15',
+        'country': 'Ethiopia',
       },
       {
         'roomId': '2003',
         'title': 'Tech & Crypto Talks 🚀',
         'hostName': 'Kedir',
         'usersCount': '6',
+        'country': 'Ethiopia',
+      },
+      {
+        'roomId': '2004',
+        'title': 'Manila Friends Chill 🇵🇭',
+        'hostName': 'Maria',
+        'usersCount': '11',
+        'country': 'Philippines',
+      },
+      {
+        'roomId': '2005',
+        'title': 'Yangon Golden Night 🇲🇲',
+        'hostName': 'Aung',
+        'usersCount': '19',
+        'country': 'Burma',
       },
     ];
   }
@@ -175,9 +203,7 @@ List<Map<String, dynamic>> _getDefaultRooms() {
           return;
         }
       }
-    } catch (e) {
-      debugPrint('Fetch rooms error: $e');
-    }
+    } catch (_) {}
 
     if (mounted) {
       setState(() {
@@ -185,6 +211,159 @@ List<Map<String, dynamic>> _getDefaultRooms() {
         _isLoading = false;
       });
     }
+  }
+
+  void _showDailySignInDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 20),
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFF6C3CE9), Color(0xFF8F14E9)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(28),
+            boxShadow: const [
+              BoxShadow(color: Colors.black54, blurRadius: 15, offset: Offset(0, 8)),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Daily Sign-in',
+                        style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+                      ),
+                      SizedBox(height: 2),
+                      Text(
+                        'Claim free G-Coins daily to send gifts!',
+                        style: TextStyle(color: Colors.white70, fontSize: 11),
+                      ),
+                    ],
+                  ),
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+
+shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.card_giftcard, color: Colors.amberAccent, size: 28),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Column(
+                  children: [
+                    const Text(
+                      'Consecutive Check-ins: Active',
+                      style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold, fontSize: 13),
+                    ),
+                    const SizedBox(height: 12),
+                    GridView.count(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      crossAxisCount: 4,
+                      crossAxisSpacing: 8,
+                      mainAxisSpacing: 8,
+                      children: [
+                        _buildDailyItem('Day 1', '+100', true),
+                        _buildDailyItem('Day 2', '+200', true),
+                        _buildDailyItem('Day 3', '+300', true),
+                        _buildDailyItem('Day 4', '+400', false),
+                        _buildDailyItem('Day 5', '+500', false),
+                        _buildDailyItem('Day 6', '+600', false),
+                        _buildDailyItem('Day 7', '+1000', false, isJackpot: true),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 18),
+              SizedBox(
+                width: double.infinity,
+                height: 46,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF00C9A7),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(23)),
+                    elevation: 0,
+                  ),
+                  onPressed: () {
+                    setState(() {
+                      _user.coins += 300;
+                    });
+                    Navigator.pop(ctx);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('🎉 Claimed 300 Daily G-Coins successfully!'),
+                        backgroundColor: Color(0xFF00C9A7),
+                      ),
+                    );
+                  },
+                  child: const Text(
+                    'Claim Coins Now',
+                    style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 14),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDailyItem(String day, String reward, bool isClaimed, {bool isJackpot = false}) {
+    return Container(
+      decoration: BoxDecoration(
+        color: isJackpot ? const Color(0xFFFFF3E0) : const Color(0xFFF3F4F8),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isJackpot ? Colors.amber : (isClaimed ? const Color(0xFF00C9A7) : Colors.transparent),
+          width: 1.5,
+        ),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(day, style: const TextStyle(fontSize: 10, color: Colors.black54, fontWeight: FontWeight.w500)),
+          const SizedBox(height: 2),
+          Text(
+            reward,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              color: isJackpot ? Colors.deepOrange : const Color(0xFF6C3CE9),
+
+),
+          ),
+          const SizedBox(height: 2),
+          Icon(
+            isClaimed ? Icons.check_circle : Icons.monetization_on,
+            size: 14,
+            color: isClaimed ? const Color(0xFF00C9A7) : Colors.amber,
+          ),
+        ],
+      ),
+    );
   }
 
   void _showSearchRoomDialog() {
@@ -199,16 +378,15 @@ List<Map<String, dynamic>> _getDefaultRooms() {
             children: [
               Icon(Icons.search, color: Color(0xFF00C9A7)),
               SizedBox(width: 8),
-              Text('Search Room by ID', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              Text('Search Room or User', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
             ],
           ),
           content: TextField(
             controller: searchController,
-            keyboardType: TextInputType.text,
             style: const TextStyle(color: Colors.white),
             decoration: InputDecoration(
-              hintText: 'Enter Room ID (e.g. 1001)',
-              hintStyle: const TextStyle(color: Colors.white38),
+              hintText: 'Enter Room ID, User ID or Name...',
+              hintStyle: const TextStyle(color: Colors.white38, fontSize: 13),
               filled: true,
               fillColor: Colors.white.withOpacity(0.05),
               border: OutlineInputBorder(
@@ -243,7 +421,7 @@ List<Map<String, dynamic>> _getDefaultRooms() {
                   );
                 }
               },
-              child: const Text('Join Room', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+              child: const Text('Search', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
             ),
           ],
         );
@@ -266,7 +444,7 @@ List<Map<String, dynamic>> _getDefaultRooms() {
       );
     } catch (_) {}
 
-if (!mounted) return;
+    if (!mounted) return;
 
     Navigator.push(
       context,
@@ -280,39 +458,268 @@ if (!mounted) return;
     ).then((_) => _fetchRooms());
   }
 
+  List<dynamic> get _filteredRooms {
+    if (_mainTab == 'Follow') {
+      return _rooms.take(2).toList();
+    }
+    if (_selectedCountry == 'All') {
+      return _rooms;
+    }
+    return _rooms.where((r) => r['country'] == _selectedCountry).toList();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF161B26),
-        elevation: 0,
-        title: const Text('Nile Voice', style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.8)),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.search, color: Color(0xFF00C9A7), size: 24),
-            tooltip: 'Search Room',
-            onPressed: _showSearchRoomDialog,
-          ),
-          GestureDetector(
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RechargeScreen())),
-            child: Container(
-              margin: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: Colors.amber.withOpacity(0.15),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: Colors.amber.withOpacity(0.4)),
-              ),
+      backgroundColor: const Color(0xFF0F141C),
+      body: SafeArea(
+        child: Column(
+
+children: [
+            // TOP HEADER: Follow & Party Tabs + Search & Daily Coins Check-in
+            Container(
+              padding: const EdgeInsets.only(top: 8, left: 16, right: 16, bottom: 8),
               child: Row(
                 children: [
-                  const Icon(Icons.monetization_on, color: Colors.amber, size: 16),
-                  const SizedBox(width: 4),
-                  Text('${_user.coins}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.amber)),
+                  GestureDetector(
+                    onTap: () => setState(() => _mainTab = 'Follow'),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Follow',
+                          style: TextStyle(
+                            fontSize: _mainTab == 'Follow' ? 22 : 17,
+                            fontWeight: FontWeight.bold,
+                            color: _mainTab == 'Follow' ? Colors.white : Colors.white54,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        if (_mainTab == 'Follow')
+                          Container(
+                            width: 18,
+                            height: 3,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF00C9A7),
+                              borderRadius: BorderRadius.circular(2),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 20),
+                  GestureDetector(
+                    onTap: () => setState(() => _mainTab = 'Party'),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Party',
+                          style: TextStyle(
+                            fontSize: _mainTab == 'Party' ? 22 : 17,
+                            fontWeight: FontWeight.bold,
+                            color: _mainTab == 'Party' ? Colors.white : Colors.white54,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        if (_mainTab == 'Party')
+                          Container(
+                            width: 18,
+                            height: 3,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF00C9A7),
+                              borderRadius: BorderRadius.circular(2),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.search, color: Colors.white, size: 24),
+                    tooltip: 'Search Room',
+                    onPressed: _showSearchRoomDialog,
+                  ),
+                  GestureDetector(
+                    onTap: _showDailySignInDialog,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFFFFB300), Color(0xFFFF6F00)],
+                        ),
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(color: Colors.amber.withOpacity(0.4), blurRadius: 8, offset: const Offset(0, 2)),
+                        ],
+                      ),
+                      child: const Row(
+                        children: [
+                          Icon(Icons.card_giftcard, color: Colors.white, size: 15),
+                          SizedBox(width: 4),
+                          Text(
+                            'Coins',
+
+style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
-          ),
-        ],
+
+            // HORIZONTAL COUNTRY FILTER
+            SizedBox(
+              height: 34,
+              child: ListView.separated(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                scrollDirection: Axis.horizontal,
+                itemCount: _countries.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 8),
+                itemBuilder: (context, idx) {
+                  final country = _countries[idx];
+                  final name = country['name']!;
+                  final flag = country['flag']!;
+                  final isSelected = (_selectedCountry == name);
+
+                  return GestureDetector(
+                    onTap: () => setState(() => _selectedCountry = name),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      decoration: BoxDecoration(
+                        color: isSelected ? const Color(0xFF00C9A7) : const Color(0xFF161B26),
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(
+                          color: isSelected ? const Color(0xFF00C9A7) : Colors.white12,
+                        ),
+                      ),
+                      alignment: Alignment.center,
+                      child: Row(
+                        children: [
+                          if (flag.isNotEmpty) ...[
+                            Text(flag, style: const TextStyle(fontSize: 13)),
+                            const SizedBox(width: 5),
+                          ],
+                          Text(
+                            name,
+                            style: TextStyle(
+                              color: isSelected ? Colors.black : Colors.white70,
+                              fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 10),
+
+            // ROOMS FEED & BANNERS
+            Expanded(
+              child: RefreshIndicator(
+                onRefresh: _fetchRooms,
+                color: const Color(0xFF00C9A7),
+                child: ListView(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  children: [
+                    SizedBox(
+                      height: 115,
+                      child: PageView.builder(
+                        itemCount: _banners.length,
+                        itemBuilder: (context, index) {
+                          final b = _banners[index];
+                          return Container(
+                            margin: const EdgeInsets.symmetric(horizontal: 4),
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(colors: b['colors'] as List<Color>),
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    mainAxisAlignment: MainAxisAlignment.center,
+
+children: [
+                                      Text(
+                                        b['title'],
+                                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        b['subtitle'],
+                                        style: const TextStyle(fontSize: 11, color: Colors.white70),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Icon(b['icon'] as IconData, size: 44, color: Colors.white.withOpacity(0.85)),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          _mainTab == 'Follow' ? 'Followed Rooms' : 'Active Live Rooms',
+                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                        ),
+                        TextButton(
+                          onPressed: () {
+                            setState(() => _isLoading = true);
+                            _fetchRooms();
+                          },
+                          child: const Text('Refresh', style: TextStyle(color: Color(0xFF00C9A7), fontSize: 13)),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    _buildRoomCard(
+                      roomId: '1001',
+                      title: 'Global Chat Lounge 🌍',
+                      host: 'Master Host',
+                      usersCount: '12',
+                    ),
+                    const SizedBox(height: 10),
+                    if (_isLoading)
+                      const Center(
+                        child: Padding(
+                          padding: EdgeInsets.all(24),
+                          child: CircularProgressIndicator(color: Color(0xFF00C9A7)),
+                        ),
+                      )
+                    else
+                      ..._filteredRooms.map((room) {
+                        final rId = room['roomId'].toString();
+                        if (rId == '1001' || rId == _user.userId) return const SizedBox.shrink();
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: _buildRoomCard(
+                            roomId: rId,
+                            title: room['title'] ?? 'Party Room',
+                            host: room['hostName'] ?? 'Host',
+                            usersCount: room['usersCount']?.toString() ?? '5',
+                          ),
+                        );
+                      }).toList(),
+                    const SizedBox(height: 80),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
       floatingActionButton: FloatingActionButton.extended(
         backgroundColor: const Color(0xFF00C9A7),
@@ -321,124 +728,6 @@ if (!mounted) return;
         icon: const Icon(Icons.mic, color: Colors.black),
         label: const Text('My Room', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
       ),
-      body: RefreshIndicator(
-        onRefresh: _fetchRooms,
-        color: const Color(0xFF00C9A7),
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            SizedBox(
-              height: 120,
-              child: PageView.builder(
-                itemCount: _banners.length,
-                itemBuilder: (context, index) {
-                  final b = _banners[index];
-                  return Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 4),
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(colors: b['colors'] as List<Color>),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text(
-                                b['title'],
-                                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                b['subtitle'],
-                                style: const TextStyle(fontSize: 12, color: Colors.white70),
-                              ),
-                            ],
-                          ),
-                        ),
-
-Icon(b['icon'] as IconData, size: 48, color: Colors.white.withOpacity(0.85)),
-                      ],
-                    ),
-                  );
-                },
-              ),
-            ),
-            const SizedBox(height: 18),
-            SizedBox(
-              height: 38,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                itemCount: _categories.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 8),
-                itemBuilder: (context, index) {
-                  final cat = _categories[index];
-                  final isSelected = _selectedCategory == cat;
-                  return ChoiceChip(
-                    label: Text(cat),
-                    selected: isSelected,
-                    selectedColor: const Color(0xFF00C9A7),
-                    backgroundColor: const Color(0xFF161B26),
-                    labelStyle: TextStyle(
-                      color: isSelected ? Colors.black : Colors.white70,
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                      fontSize: 12,
-                    ),
-                    onSelected: (val) => setState(() => _selectedCategory = cat),
-                  );
-                },
-              ),
-            ),
-            const SizedBox(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text('Active Audio Rooms', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                TextButton(
-                  onPressed: () {
-                    setState(() => _isLoading = true);
-                    _fetchRooms();
-                  },
-                  child: const Text('Refresh', style: TextStyle(color: Color(0xFF00C9A7), fontSize: 13)),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            _buildRoomCard(
-              roomId: '1001',
-              title: 'Global Chat Lounge 🌍',
-              host: 'Master Host',
-              usersCount: '12',
-            ),
-            const SizedBox(height: 10),
-            if (_isLoading)
-              const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(24),
-                  child: CircularProgressIndicator(color: Color(0xFF00C9A7)),
-                ),
-              )
-            else
-              ..._rooms.map((room) {
-                final rId = room['roomId'].toString();
-                if (rId == '1001' || rId == _user.userId) return const SizedBox.shrink();
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: _buildRoomCard(
-                    roomId: rId,
-                    title: room['title'] ?? 'Party Room',
-                    host: room['hostName'] ?? 'Host',
-                    usersCount: room['usersCount']?.toString() ?? '5',
-                  ),
-                );
-              }).toList(),
-            const SizedBox(height: 80),
-          ],
-        ),
-      ),
     );
   }
 
@@ -446,7 +735,8 @@ Icon(b['icon'] as IconData, size: 48, color: Colors.white.withOpacity(0.85)),
     required String roomId,
     required String title,
     required String host,
-    required String usersCount,
+
+required String usersCount,
   }) {
     return GestureDetector(
       onTap: () {
@@ -467,8 +757,7 @@ Icon(b['icon'] as IconData, size: 48, color: Colors.white.withOpacity(0.85)),
           color: const Color(0xFF161B26),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: Colors.white10),
-
-),
+        ),
         child: Row(
           children: [
             Stack(
@@ -572,7 +861,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
-                  children: [
+
+children: [
                     CircleAvatar(
                       radius: 36,
                       backgroundColor: const Color(0xFF00C9A7),
@@ -585,8 +875,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
-
-children: [
+                        children: [
                           Text(
                             _user.userName,
                             style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
@@ -638,7 +927,8 @@ children: [
                                           fontWeight: FontWeight.bold,
                                           fontSize: 11,
                                         ),
-                                      ),
+
+),
                                     ],
                                   ),
                                 ),
@@ -654,8 +944,7 @@ children: [
                         Navigator.push(
                           context,
                           MaterialPageRoute(builder: (_) => const SettingsScreen()),
-
-);
+                        );
                       },
                     ),
                   ],
@@ -721,7 +1010,8 @@ children: [
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    const Text('Coins', style: TextStyle(color: Colors.white60, fontSize: 12)),
+
+const Text('Coins', style: TextStyle(color: Colors.white60, fontSize: 12)),
                                     const SizedBox(height: 6),
                                     Text(
                                       '${_user.coins}',
@@ -732,8 +1022,7 @@ children: [
                               ),
                               const CircleAvatar(
                                 radius: 16,
-
-backgroundColor: Colors.amber,
+                                backgroundColor: Colors.amber,
                                 child: Icon(Icons.monetization_on, color: Colors.black, size: 20),
                               ),
                             ],
@@ -802,7 +1091,8 @@ backgroundColor: Colors.amber,
                             Navigator.push(
                               context,
                               MaterialPageRoute(builder: (_) => const HostCenterScreen()),
-                            );
+
+);
                           },
                           child: Padding(
                             padding: const EdgeInsets.symmetric(vertical: 8),
@@ -815,8 +1105,7 @@ backgroundColor: Colors.amber,
                           borderRadius: BorderRadius.circular(12),
                           onTap: () {
                             Navigator.push(
-
-context,
+                              context,
                               MaterialPageRoute(builder: (_) => const AgencyScreen()),
                             );
                           },
@@ -886,7 +1175,8 @@ context,
                                 },
                               ),
                             ),
-                          );
+
+);
                         },
                         child: _buildGridMenuItem(icon: Icons.person_add_alt, label: 'Invite'),
                       ),
@@ -899,8 +1189,7 @@ context,
                           );
                         },
                         child: _buildGridMenuItem(icon: Icons.shopping_bag_outlined, label: 'Store'),
-
-),
+                      ),
                       InkWell(
                         borderRadius: BorderRadius.circular(12),
                         onTap: () {
