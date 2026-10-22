@@ -58,7 +58,7 @@ const handleTokenGeneration = (req, res) => {
     const rawChannel = req.query.channelName || '1001';
     const channelName = String(rawChannel).trim();
     const role = RtcRole.PUBLISHER;
-    const expireTime = 3600 * 24 * 30; // 30 days valid
+    const expireTime = 3600 * 24 * 30;
     const currentTime = Math.floor(Date.now() / 1000);
     const privilegeExpireTime = currentTime + expireTime;
 
@@ -191,7 +191,7 @@ app.post('/api/user/verify-face', async (req, res) => {
   }
 });
 
-// Real-Time Active Conversations API for Messages Screen
+// Real-Time Active Conversations API
 app.get('/api/user-conversations', async (req, res) => {
   try {
     const { userId } = req.query;
@@ -200,13 +200,11 @@ app.get('/api/user-conversations', async (req, res) => {
     }
 
     const myId = String(userId).trim();
-
     const messages = await Message.find({
       $or: [{ senderId: myId }, { receiverId: myId }]
     }).sort({ timestamp: -1 });
 
     const conversationMap = new Map();
-
     for (const msg of messages) {
       const peerId = msg.senderId === myId ? msg.receiverId : msg.senderId;
       if (!conversationMap.has(peerId)) {
@@ -221,7 +219,7 @@ app.get('/api/user-conversations', async (req, res) => {
 
     const conversations = [];
     conversationMap.forEach((msg, peerId) => {
-      const peerName = userMap.get(peerId) || ('user_' + peerId);
+      const peerName = userMap.get(peerId) || ('User_' + peerId);
       const timeStr = new Date(msg.timestamp).toISOString().substring(5, 16).replace('T', ' ');
 
       conversations.push({
@@ -232,7 +230,7 @@ app.get('/api/user-conversations', async (req, res) => {
       });
     });
 
-return res.json({ success: true, conversations: conversations });
+    return res.json({ success: true, conversations: conversations });
   } catch (err) {
     return res.status(500).json({ success: false, error: err.message });
   }
@@ -243,14 +241,8 @@ app.post('/api/recharge-request', async (req, res) => {
   try {
     const { userId, userName, paymentMethod, txId, amountCoins, pricePaid } = req.body;
 
-    if (!userId) {
-      return res.status(400).json({ success: false, message: 'Missing user ID' });
-    }
-    if (!txId) {
-      return res.status(400).json({ success: false, message: 'Missing transaction ID' });
-    }
-    if (!amountCoins) {
-      return res.status(400).json({ success: false, message: 'Missing coin amount' });
+    if (!userId  !txId  !amountCoins) {
+      return res.status(400).json({ success: false, message: 'Missing required payment fields' });
     }
 
     const existingTx = await Payment.findOne({ txId: String(txId).trim() });
@@ -287,13 +279,9 @@ app.get('/api/admin/pending-payments', async (req, res) => {
 app.post('/api/admin/approve-payment', async (req, res) => {
   try {
     const { paymentId } = req.body;
-
     const payment = await Payment.findById(paymentId);
-    if (!payment) {
-      return res.status(400).json({ success: false, message: 'Invalid payment record' });
-    }
-    if (payment.status !== 'pending') {
-      return res.status(400).json({ success: false, message: 'Already processed payment' });
+    if (!payment || payment.status !== 'pending') {
+      return res.status(400).json({ success: false, message: 'Invalid or already processed payment' });
     }
 
     const user = await User.findOneAndUpdate(
@@ -307,7 +295,7 @@ app.post('/api/admin/approve-payment', async (req, res) => {
       type: 'recharge',
       amount: payment.amountCoins,
       balanceAfter: user ? user.coins : 0,
-      description: 'Wholesale Recharge via ' + paymentMethod + '(TxID: ' + payment.txID + ')'
+      description: 'Wholesale Recharge via ' + payment.paymentMethod + ' (TxID: ' + payment.txId + ')'
     });
 
     payment.status = 'approved';
@@ -360,21 +348,12 @@ app.post('/api/wallet/agent-transfer-coins', async (req, res) => {
     const { agentId, targetUserId, amountCoins } = req.body;
     const coinsToTransfer = Number(amountCoins);
 
-if (!agentId) {
-      return res.status(400).json({ success: false, message: 'Agent ID is required' });
-    }
-    if (!targetUserId) {
-      return res.status(400).json({ success: false, message: 'Target user ID is required' });
-    }
-    if (!coinsToTransfer || coinsToTransfer <= 0) {
-      return res.status(400).json({ success: false, message: 'Transfer amount must be greater than zero' });
+    if (!agentId  !targetUserId  !coinsToTransfer || coinsToTransfer <= 0) {
+      return res.status(400).json({ success: false, message: 'Invalid transfer details' });
     }
 
     const agent = await User.findOne({ userId: String(agentId).trim() });
-    if (!agent) {
-      return res.status(403).json({ success: false, message: 'Agent not found' });
-    }
-    if (!agent.isAgent) {
+    if (!agent || !agent.isAgent) {
       return res.status(403).json({ success: false, message: 'Unauthorized. You are not a registered Agent.' });
     }
 
@@ -382,7 +361,7 @@ if (!agentId) {
       return res.status(400).json({ success: false, message: 'Insufficient agent coin balance' });
     }
 
-    const recipient = await User.findOne({ userId: String(targetUserId).trim() });
+const recipient = await User.findOne({ userId: String(targetUserId).trim() });
     if (!recipient) {
       return res.status(404).json({ success: false, message: 'Recipient user not found' });
     }
@@ -398,7 +377,7 @@ if (!agentId) {
       type: 'agent_sale',
       amount: -coinsToTransfer,
       balanceAfter: agent.coins,
-      description: Sold ${coinsToTransfer} coins to User ${recipient.userId}
+      description: 'Sold ' + coinsToTransfer + ' coins to User ' + recipient.userId
     });
 
     await Transaction.create({
@@ -406,12 +385,12 @@ if (!agentId) {
       type: 'agent_purchase',
       amount: coinsToTransfer,
       balanceAfter: recipient.coins,
-      description: Received ${coinsToTransfer} coins from Agent ${agent.userId}
+      description: 'Received ' + coinsToTransfer + ' coins from Agent ' + agent.userId
     });
 
     return res.json({
       success: true,
-      message: Successfully transferred ${coinsToTransfer} coins to User ${recipient.userId},
+      message: 'Successfully transferred ' + coinsToTransfer + ' coins to User ' + recipient.userId,
       agentCoins: agent.coins
     });
   } catch (err) {
@@ -428,8 +407,7 @@ app.post('/api/rooms/create', async (req, res) => {
 
     let room = await Room.findOne({ roomId: String(roomId) });
     if (!room) {
-      const defaultTitle = hostName ? ${hostName}'s Room : 'Live Room';
-
+      const defaultTitle = hostName ? (hostName + "'s Room") : 'Live Room';
       room = new Room({
         roomId: String(roomId),
         title: title || defaultTitle,
@@ -454,7 +432,6 @@ app.get('/api/rooms', async (req, res) => {
   }
 });
 
-// Helper function to assign next sequential ID (Starts at 1000)
 async function getNextUserId(isOwner = false) {
   if (isOwner) return '1000';
 
@@ -481,8 +458,7 @@ app.post('/api/register-user', async (req, res) => {
 
     if (deviceId) {
       let existingUser = await User.findOne({ deviceId: deviceId });
-
-if (existingUser) {
+      if (existingUser) {
         if (existingUser.userId === '1000') {
           existingUser.coins = 10000000;
           existingUser.isFaceVerified = true;
@@ -493,8 +469,8 @@ if (existingUser) {
     }
 
     const assignedId = await getNextUserId(isOwner === true);
-    const defaultName = name || User_${assignedId};
-    const defaultDevice = deviceId || dev_${Date.now()};
+    const defaultName = name || ('User_' + assignedId);
+    const defaultDevice = deviceId || ('dev_' + Date.now());
     const initialCoins = (assignedId === '1000') ? 10000000 : 1000;
 
     const newUser = new User({
@@ -517,12 +493,12 @@ if (existingUser) {
         inviter.coins += 500;
         await inviter.save();
 
-        await Transaction.create({
+await Transaction.create({
           userId: inviter.userId,
           type: 'referral_bonus',
           amount: 500,
           balanceAfter: inviter.coins,
-          description: Referral Bonus for inviting User ${assignedId}
+          description: 'Referral Bonus for inviting User ' + assignedId
         });
       }
     }
@@ -568,7 +544,7 @@ app.post('/api/auth/google', async (req, res) => {
 
     user = new User({
       userId: assignedId,
-      name: name || User_${assignedId},
+      name: name || ('User_' + assignedId),
       deviceId: googleId,
       avatar: avatar || '',
       coins: initialCoins,
@@ -592,7 +568,7 @@ app.post('/api/auth/google', async (req, res) => {
           type: 'referral_bonus',
           amount: 500,
           balanceAfter: inviter.coins,
-          description: Referral Bonus for inviting User ${assignedId}
+          description: 'Referral Bonus for inviting User ' + assignedId
         });
       }
     }
@@ -617,8 +593,7 @@ app.get('/api/search-user', async (req, res) => {
     const userId = req.query.userId;
     if (!userId) {
       return res.status(400).json({ error: 'User ID is required' });
-
-}
+    }
     const user = await User.findOne({ userId: String(userId).trim() });
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
@@ -633,7 +608,6 @@ app.get('/api/search-user', async (req, res) => {
 app.get('/api/chat-history', async (req, res) => {
   try {
     const { user1, user2 } = req.query;
-
     const messages = await Message.find({
       $or: [
         { senderId: user1, receiverId: user2 },
@@ -758,13 +732,13 @@ async function resolveTeenPattiRound() {
         { new: true }
       );
 
-if (u) {
+      if (u) {
         await Transaction.create({
           userId: u.userId,
           type: 'game_win',
           amount: winCoins,
           balanceAfter: u.coins,
-          description: Teen Patti Win (${tpLastResult.winner.toUpperCase()}) Round #${tpRoundId}
+          description: 'Teen Patti Win (' + tpLastResult.winner.toUpperCase() + ') Round #' + tpRoundId
         });
       }
     }
@@ -803,7 +777,7 @@ setInterval(() => {
     }
   }
 
-  const totalA = tpCurrentBets.filter(b => b.side === 'playerA').reduce((s, b) => s + b.amount, 0);
+const totalA = tpCurrentBets.filter(b => b.side === 'playerA').reduce((s, b) => s + b.amount, 0);
   const totalB = tpCurrentBets.filter(b => b.side === 'playerB').reduce((s, b) => s + b.amount, 0);
   const totalTie = tpCurrentBets.filter(b => b.side === 'tie').reduce((s, b) => s + b.amount, 0);
 
@@ -880,7 +854,7 @@ io.on('connection', (socket) => {
         type: 'game_bet',
         amount: -betAmount,
         balanceAfter: user.coins,
-        description: Teen Patti bet on ${side} (Round #${tpRoundId})
+        description: 'Teen Patti bet on ' + side + ' (Round #' + tpRoundId + ')'
       });
 
       tpCurrentBets.push({ userId: user.userId, side, amount: betAmount });
@@ -896,7 +870,7 @@ io.on('connection', (socket) => {
     }
   });
 
-socket.on('send_direct_message', async (data) => {
+  socket.on('send_direct_message', async (data) => {
     try {
       const { senderId, receiverId, text } = data;
       const newMsg = new Message({
@@ -931,7 +905,7 @@ socket.on('send_direct_message', async (data) => {
       const { callerId, callerName, targetUserId } = data;
       const caller = await User.findOne({ userId: String(callerId) });
 
-      if (!caller) {
+if (!caller) {
         socket.emit('call_error', { message: 'Caller not found' });
         return;
       }
@@ -940,8 +914,8 @@ socket.on('send_direct_message', async (data) => {
         return;
       }
 
-      const defaultCallerName = callerName || User_${callerId};
-      const privateChannel = call_${callerId}_${targetUserId}_${Date.now()};
+      const defaultCallerName = callerName || ('User_' + callerId);
+      const privateChannel = 'call_' + callerId + '_' + targetUserId + '_' + Date.now();
 
       io.to(String(targetUserId)).emit('incoming_call', {
         callerId: callerId,
@@ -1006,7 +980,7 @@ socket.on('send_direct_message', async (data) => {
         type: 'call_fee',
         amount: cost,
         balanceAfter: caller.coins,
-        description: 1-Minute Private Voice Call to User ${receiverId}
+        description: '1-Minute Private Voice Call to User ' + receiverId
       });
 
       socket.emit('call_coin_deducted', { remainingCoins: caller.coins });
@@ -1037,7 +1011,7 @@ socket.on('send_direct_message', async (data) => {
     if (data.room) roomId = String(data.room);
     if (data.roomId) roomId = String(data.roomId);
 
-const chairIndex = data.chairIndex;
+    const chairIndex = data.chairIndex;
     const action = data.action;
 
     if (!roomSeatsState[roomId]) {
@@ -1063,7 +1037,7 @@ const chairIndex = data.chairIndex;
         const durationMinutes = Math.floor((Date.now() - joinTime) / 60000);
         delete seatJoinTimes[String(data.userId)];
 
-        const user = await User.findOne({ userId: String(data.userId) });
+const user = await User.findOne({ userId: String(data.userId) });
         if (user && user.isFaceVerified && durationMinutes >= 1) {
           const durationHours = parseFloat((durationMinutes / 60).toFixed(2));
           await AgencyHost.findOneAndUpdate(
@@ -1095,7 +1069,7 @@ const chairIndex = data.chairIndex;
     io.to(roomId).emit('chat_message', data);
   });
 
-  // Gift Engine with Sustainable Server Lucky Pool Logic
+  // Gift Engine
   socket.on('gift_sent', async (data) => {
     try {
       const { senderId, receiverId, giftPrice, room, giftName, count, isLucky } = data;
@@ -1157,12 +1131,12 @@ const chairIndex = data.chairIndex;
       const defaultGift = giftName || 'Gift';
       const defaultTarget = receiverId || 'Room';
 
-await Transaction.create({
+      await Transaction.create({
         userId: String(senderId),
         type: 'gift_sent',
         amount: totalCost,
         balanceAfter: sender.coins,
-        description: Sent ${defaultGift} x${giftCount} to ${defaultTarget}
+        description: 'Sent ' + defaultGift + ' x' + giftCount + ' to ' + defaultTarget
       });
 
       let wonMultiplier = 0;
@@ -1187,7 +1161,7 @@ await Transaction.create({
           targetMultiplier = 25;
         }
 
-        if (targetMultiplier > 0) {
+if (targetMultiplier > 0) {
           const potentialWin = unitPrice * targetMultiplier;
           if (pool && pool.balance >= potentialWin) {
             wonMultiplier = targetMultiplier;
@@ -1205,15 +1179,15 @@ await Transaction.create({
               type: 'lucky_win',
               amount: wonCoins,
               balanceAfter: sender.coins,
-              description: Won ${wonMultiplier}x lucky prize on ${defaultGift}
+              description: 'Won ' + wonMultiplier + 'x lucky prize on ' + defaultGift
             });
 
-            const bannerText = ${sender.name} so lucky and won ${wonMultiplier}x the prize (${wonCoins} Coins)!;
+            const bannerText = sender.name + ' so lucky and won ' + wonMultiplier + 'x the prize (' + wonCoins + ' Coins)!';
             io.to(roomId).emit('chat_message', {
               room: roomId,
               roomId: roomId,
               sender: 'Jackpot',
-              text: 🎉 ${bannerText}
+              text: '🎉 ' + bannerText
             });
 
             io.to(roomId).emit('jackpot_win_broadcast', {
