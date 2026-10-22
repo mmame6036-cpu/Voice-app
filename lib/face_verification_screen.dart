@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:camera/camera.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
@@ -26,9 +27,11 @@ class _FaceVerificationScreenState extends State<FaceVerificationScreen>
   CameraController? _cameraController;
   late FaceDetector _faceDetector;
   final FlutterTts _flutterTts = FlutterTts();
+  CameraDescription? _cameraDescription;
 
   bool _isProcessing = false;
   bool _isCameraReady = false;
+  bool _isBlinked = false;
   VerificationStep _currentStep = VerificationStep.alignFace;
   String _instructionText = 'Please align your face inside the frame';
 
@@ -48,7 +51,7 @@ class _FaceVerificationScreenState extends State<FaceVerificationScreen>
     await _flutterTts.setLanguage('en-US');
     await _flutterTts.setPitch(1.1);
     await _flutterTts.setSpeechRate(0.45);
-    _speak('Please look at the camera and align your face inside the circle.');
+    _speak('Please look at the camera and align your face inside the frame.');
   }
 
   void _speak(String text) async {
@@ -71,7 +74,8 @@ class _FaceVerificationScreenState extends State<FaceVerificationScreen>
     final options = FaceDetectorOptions(
       enableClassification: true,
       enableLandmarks: true,
-      performanceMode: FaceDetectorMode.fast,
+      performanceMode: FaceDetectorMode.accurate,
+      minFaceSize: 0.25,
     );
     _faceDetector = FaceDetector(options: options);
   }
@@ -79,16 +83,16 @@ class _FaceVerificationScreenState extends State<FaceVerificationScreen>
   Future<void> _initCamera() async {
     try {
       final cameras = await availableCameras();
-      final frontCamera = cameras.firstWhere(
+      _cameraDescription = cameras.firstWhere(
         (cam) => cam.lensDirection == CameraLensDirection.front,
         orElse: () => cameras.first,
       );
 
       _cameraController = CameraController(
-        frontCamera,
+        _cameraDescription!,
         ResolutionPreset.medium,
         enableAudio: false,
-        imageFormatGroup: ImageFormatGroup.yuv420,
+        imageFormatGroup: ImageFormatGroup.nv21,
       );
 
       await _cameraController!.initialize();
@@ -109,52 +113,131 @@ class _FaceVerificationScreenState extends State<FaceVerificationScreen>
     }
   }
 
+  InputImage? _inputImageFromCameraImage(CameraImage image) {
+    if (_cameraDescription == null) return null;
+    final sensorOrientation = _cameraDescription!.sensorOrientation;
+    InputImageRotation? rotation = InputImageRotationValue.fromRawValue(sensorOrientation);
+    if (rotation == null) return null;
+
+    final format = InputImageFormatValue.fromRawValue(image.format.raw);
+    if (format == null) return null;
+
+    final plane = image.planes.first;
+
+    return InputImage.fromBytes(
+      bytes: plane.bytes,
+      metadata: InputImageMetadata(
+        size: Size(image.width.toDouble(), image.height.toDouble()),
+        rotation: rotation,
+        format: format,
+        bytesPerRow: plane.bytesPerRow,
+      ),
+    );
+  }
+
   Future<void> _processCameraFrame(CameraImage image) async {
     try {
-      await Future.delayed(const Duration(milliseconds: 250));
+      final inputImage = _inputImageFromCameraImage(image);
+      if (inputImage == null) return;
+
+final faces = await _faceDetector.processImage(inputImage);
 
       if (!mounted) return;
 
-      if (_currentStep == VerificationStep.alignFace) {
-        setState(() {
-          _currentStep = VerificationStep.blinkEyes;
-          _instructionText = 'Please blink your eyes';
-        });
-        _speak('Good! Now please blink your eyes.');
-      } else if (_currentStep == VerificationStep.blinkEyes) {
-        await Future.delayed(const Duration(seconds: 2));
-        if (!mounted) return;
-        setState(() {
-          _currentStep = VerificationStep.openMouth;
-          _instructionText = 'Please open your mouth';
-        });
-        _speak('Great! Now, please open your mouth.');
-      } else if (_currentStep == VerificationStep.openMouth) {
-
-await Future.delayed(const Duration(seconds: 2));
-        if (!mounted) return;
-        setState(() {
-          _currentStep = VerificationStep.turnHead;
-          _instructionText = 'Please turn your head slightly to the right';
-        });
-        _speak('Nice! Now please turn your head to the right.');
-      } else if (_currentStep == VerificationStep.turnHead) {
-        await Future.delayed(const Duration(seconds: 2));
-        if (!mounted) return;
-        setState(() {
-          _currentStep = VerificationStep.completed;
-          _instructionText = 'Verification Completed Successfully!';
-        });
-        _speak('Congratulations! Face verification completed successfully.');
-        _finishVerification();
+      // ፊት በካሜራው ካልታየ ምንም አይነት ቀጣይ እርምጃ አይፈቀድም
+      if (faces.isEmpty) {
+        if (_currentStep != VerificationStep.alignFace) {
+          setState(() {
+            _currentStep = VerificationStep.alignFace;
+            _instructionText = 'No face detected! Please look at the camera';
+          });
+        }
+        return;
       }
-    } catch (_) {
+
+      final face = faces.first;
+
+      // ደረጃ 1፡ ፊቱን ክፈፉ ውስጥ ማስተካከል (Face Alignment Check)
+      if (_currentStep == VerificationStep.alignFace) {
+        if (face.boundingBox.width > 100) {
+          setState(() {
+            _currentStep = VerificationStep.blinkEyes;
+            _instructionText = 'Good! Now please blink your eyes';
+          });
+          _speak('Good! Now please blink your eyes.');
+        }
+      }
+
+      // ደረጃ 2፡ እውነተኛ የአይን መጨፈን ፍተሻ (Blink Detection)
+      else if (_currentStep == VerificationStep.blinkEyes) {
+        final leftOpen = face.leftEyeOpenProbability ?? 1.0;
+        final rightOpen = face.rightEyeOpenProbability ?? 1.0;
+
+        // አይኑን ሲጨፍነው
+        if (leftOpen < 0.25 && rightOpen < 0.25) {
+          _isBlinked = true;
+        }
+
+        // ጨፍኖ ሲከፍተው ማረጋገጫው ያልፋል
+        if (_isBlinked && (leftOpen > 0.65 && rightOpen > 0.65)) {
+          setState(() {
+            _currentStep = VerificationStep.openMouth;
+            _instructionText = 'Great! Now please open your mouth';
+          });
+          _speak('Great! Now please open your mouth.');
+          _isBlinked = false;
+        }
+      }
+
+      // ደረጃ 3፡ እውነተኛ የአፍ መክፈት ፍተሻ (Mouth Open Detection)
+      else if (_currentStep == VerificationStep.openMouth) {
+        final bottomLip = face.landmarks[FaceLandmarkType.bottomMouth];
+        final noseBase = face.landmarks[FaceLandmarkType.noseBase];
+
+        // በከንፈርና አፍንጫ መካከል ያለውን ርቀት በመለካት አፍ መከፈቱን ማረጋገጥ
+        bool mouthOpen = false;
+        if (bottomLip != null && noseBase != null) {
+          final distance = (bottomLip.position.y - noseBase.position.y).abs();
+          if (distance > 45) {
+            mouthOpen = true;
+          }
+        } else if (face.smilingProbability != null && face.smilingProbability! > 0.7) {
+          mouthOpen = true;
+        }
+
+        if (mouthOpen) {
+          setState(() {
+            _currentStep = VerificationStep.turnHead;
+            _instructionText = 'Nice! Now turn your head slightly to the right';
+          });
+          _speak('Nice! Now please turn your head to the right.');
+        }
+      }
+
+      // ደረጃ 4፡ ጭንቅላትን ወደ ቀኝ የማዞር ፍተሻ (Head Turn Detection)
+      else if (_currentStep == VerificationStep.turnHead) {
+        final headAngleY = face.headEulerAngleY ?? 0;
+
+        // ጭንቅላቱ ወደ ቀኝ በቂ መጠን (ከ 20 ዲግሪ በላይ) መዞሩን ማረጋገጥ
+        if (headAngleY > 20 || headAngleY < -20) {
+          setState(() {
+            _currentStep = VerificationStep.completed;
+            _instructionText = 'Verification Completed Successfully!';
+          });
+          _speak('Congratulations! Face verification completed successfully.');
+          _finishVerification();
+        }
+      }
+    } catch (e) {
+      debugPrint('Face Processing Error: $e');
     } finally {
       _isProcessing = false;
     }
   }
 
   void _finishVerification() async {
+    _user.isFaceVerified = true;
+
     await Future.delayed(const Duration(seconds: 2));
     if (!mounted) return;
 
@@ -181,7 +264,7 @@ await Future.delayed(const Duration(seconds: 2));
     IconData dollIcon = Icons.face;
     Color dollColor = Colors.cyanAccent;
 
-    if (_currentStep == VerificationStep.blinkEyes) {
+if (_currentStep == VerificationStep.blinkEyes) {
       dollIcon = Icons.remove_red_eye;
       dollColor = Colors.amberAccent;
     } else if (_currentStep == VerificationStep.openMouth) {
@@ -246,8 +329,7 @@ await Future.delayed(const Duration(seconds: 2));
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-
-backgroundColor: const Color(0xFF0D0C1D),
+      backgroundColor: const Color(0xFF0D0C1D),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -288,7 +370,8 @@ backgroundColor: const Color(0xFF0D0C1D),
                   color: _currentStep == VerificationStep.completed
                       ? const Color(0xFF00C9A7)
                       : const Color(0xFF904BE6),
-                  width: 3.5,
+
+width: 3.5,
                 ),
                 boxShadow: [
                   BoxShadow(
