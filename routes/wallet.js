@@ -22,7 +22,7 @@ router.post('/bet', async (req, res) => {
 
     // Check account status and deduct balance atomically
     const user = await User.findOneAndUpdate(
-      { userId: String(userId), isFrozen: { $ne: true }, coins: {$gte: amount } },
+      { userId: String(userId), isFrozen: { $ne: true }, coins: { $gte: amount } },
       { $inc: { coins: -amount } },
       { new: true }
     );
@@ -40,7 +40,7 @@ router.post('/bet', async (req, res) => {
       type: 'game_bet',
       amount: -amount,
       balanceAfter: user.coins,
-      description: ${gameName || 'Game'} Bet
+      description: (gameName || 'Game') + ' Bet'
     });
 
     const io = req.app.get('io');
@@ -86,7 +86,7 @@ router.post('/win', async (req, res) => {
       type: 'game_win',
       amount: amount,
       balanceAfter: user.coins,
-      description: ${gameName || 'Game'} Win Reward
+      description: (gameName || 'Game') + ' Win Reward'
     });
 
     const io = req.app.get('io');
@@ -132,7 +132,7 @@ router.post('/refund', async (req, res) => {
       type: 'recharge',
       amount: amount,
       balanceAfter: user.coins,
-      description: Refund: ${reason || 'Network/Game Error'}
+      description: 'Refund: ' + (reason || 'Network/Game Error')
     });
 
     const io = req.app.get('io');
