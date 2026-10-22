@@ -82,15 +82,16 @@ class _TaskScreenState extends State<TaskScreen> {
 
     if (result == true) {
       setState(() {
-        _user.setFaceVerified(true);
+        _user.isFaceVerified = true;
       });
-      _notify('Face verified! Tasks unlocked and tracking is active.');
+      _notify('Face verified! Tasks unlocked and active.');
       _fetchTaskData();
     }
   }
 
   void _onGoPressed() {
     if (!_user.isFaceVerified) {
+      _notify('Please verify your face first to access voice room seats.');
       _openFaceVerification();
     } else {
       _notify('Redirecting to live voice room...');
@@ -131,10 +132,10 @@ class _TaskScreenState extends State<TaskScreen> {
                   _buildPointsHeader(),
                   const SizedBox(height: 20),
                   _buildFaceVerificationCard(),
-                  const SizedBox(height: 24),
-                  Row(
 
-mainAxisAlignment: MainAxisAlignment.spaceBetween,
+const SizedBox(height: 24),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       const Text(
                         'Daily & Weekly Targets',
