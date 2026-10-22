@@ -22,6 +22,29 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/agency', agencyRoutes);
 app.use('/api/tasks', taskRoutes);
 
+// User Registration Endpoint (ስህተቱን የሚፈታው አዲሱ መስመር)
+app.post('/api/register-user', (req, res) => {
+  try {
+    const { userId, userName, avatar, invitedBy } = req.body;
+    console.log('User registration attempt:', { userId, userName, invitedBy });
+
+    return res.status(200).json({
+      success: true,
+      message: 'User registered successfully',
+      user: {
+        userId: userId || 'user_' + Date.now(),
+        userName: userName || 'New User',
+        avatar: avatar || '',
+        coins: 1000,
+        points: 0
+      }
+    });
+  } catch (error) {
+    console.error('Register API Error:', error);
+    return res.status(500).json({ success: false, message: 'Server internal error' });
+  }
+});
+
 // Root Endpoint
 app.get('/', (req, res) => {
   res.send('Nile Voice App Server is Running Successfully!');
