@@ -160,7 +160,6 @@ class _MessagesScreenState extends State<MessagesScreen> {
       body: ListView(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         children: [
-          // Filter Tabs (All / Unread)
           Row(
             children: [
               _buildFilterChip('All'),
@@ -169,8 +168,6 @@ class _MessagesScreenState extends State<MessagesScreen> {
             ],
           ),
           const SizedBox(height: 12),
-
-          // User ID Search Bar to Find and Start New Chat
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14),
             decoration: BoxDecoration(
@@ -208,8 +205,6 @@ class _MessagesScreenState extends State<MessagesScreen> {
             ),
           ),
           const SizedBox(height: 14),
-
-          // Search Result Card
           if (_foundUser != null) ...[
             Container(
               padding: const EdgeInsets.all(12),
@@ -239,13 +234,13 @@ class _MessagesScreenState extends State<MessagesScreen> {
                         Text(
                           'ID: ${_foundUser!['userId']}',
                           style: const TextStyle(color: Color(0xFF00C9A7), fontSize: 12),
-
-),
+                        ),
                       ],
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.call, color: Color(0xFF00C9A7), size: 22),
+
+icon: const Icon(Icons.call, color: Color(0xFF00C9A7), size: 22),
                     onPressed: () {
                       _startCall(
                         _foundUser!['userId'].toString(),
@@ -272,8 +267,6 @@ class _MessagesScreenState extends State<MessagesScreen> {
             ),
             const SizedBox(height: 14),
           ],
-
-          // 1. System Message
           _buildSystemCard(
             icon: Icons.laptop_chromebook,
             iconColor: const Color(0xFF00C9A7),
@@ -288,8 +281,6 @@ class _MessagesScreenState extends State<MessagesScreen> {
               );
             },
           ),
-
-          // 2. Official Notification
           _buildSystemCard(
             icon: Icons.notifications_active,
             iconColor: const Color(0xFF00E676),
@@ -304,8 +295,6 @@ class _MessagesScreenState extends State<MessagesScreen> {
               );
             },
           ),
-
-          // 3. Order Messages
           _buildSystemCard(
             icon: Icons.receipt_long,
             iconColor: const Color(0xFFFF9100),
@@ -320,8 +309,6 @@ class _MessagesScreenState extends State<MessagesScreen> {
               );
             },
           ),
-
-          // 4. Customer Service
           _buildSystemCard(
             icon: Icons.headset_mic,
             iconColor: const Color(0xFF00B0FF),
@@ -336,20 +323,16 @@ class _MessagesScreenState extends State<MessagesScreen> {
               );
             },
           ),
-
           const SizedBox(height: 12),
           const Divider(color: Colors.white10),
           const SizedBox(height: 6),
-
-          // REAL CONVERSATIONS LIST (No Dummy Data)
           if (_isLoadingChats)
             const Center(
               child: Padding(
                 padding: EdgeInsets.all(24.0),
                 child: CircularProgressIndicator(color: Color(0xFF00C9A7), strokeWidth: 2),
               ),
-
-)
+            )
           else if (_activeConversations.isEmpty)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 40),
@@ -357,7 +340,8 @@ class _MessagesScreenState extends State<MessagesScreen> {
                 child: Column(
                   children: [
                     Icon(Icons.chat_bubble_outline, size: 48, color: Colors.white.withOpacity(0.15)),
-                    const SizedBox(height: 12),
+
+const SizedBox(height: 12),
                     const Text(
                       'No messages yet',
                       style: TextStyle(color: Colors.white38, fontSize: 13),
@@ -456,8 +440,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
         decoration: BoxDecoration(
           color: bgColor,
           shape: BoxShape.circle,
-
-),
+        ),
         child: Icon(icon, color: iconColor, size: 24),
       ),
       title: Row(
@@ -468,7 +451,8 @@ class _MessagesScreenState extends State<MessagesScreen> {
             style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
           ),
           if (time.isNotEmpty)
-            Text(time, style: const TextStyle(color: Colors.white38, fontSize: 11)),
+
+Text(time, style: const TextStyle(color: Colors.white38, fontSize: 11)),
         ],
       ),
       subtitle: subtitle.isNotEmpty
@@ -483,9 +467,6 @@ class _MessagesScreenState extends State<MessagesScreen> {
   }
 }
 
-// ---------------------------------------------------------------------------
-// 1. System Message Detail Screen (Withdrawal Receipt)
-// ---------------------------------------------------------------------------
 class SystemMessageDetailScreen extends StatelessWidget {
   const SystemMessageDetailScreen({Key? key}) : super(key: key);
 
@@ -550,8 +531,7 @@ class SystemMessageDetailScreen extends StatelessWidget {
                     style: OutlinedButton.styleFrom(
                       side: const BorderSide(color: Color(0xFF00C9A7)),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(21)),
-
-),
+                    ),
                     onPressed: () {},
                     child: const Text('Contact payroll', style: TextStyle(color: Color(0xFF00C9A7), fontWeight: FontWeight.bold)),
                   ),
@@ -578,9 +558,6 @@ class SystemMessageDetailScreen extends StatelessWidget {
   }
 }
 
-// ---------------------------------------------------------------------------
-// 2. Official Notification Screen
-// ---------------------------------------------------------------------------
 class OfficialNotificationScreen extends StatelessWidget {
   const OfficialNotificationScreen({Key? key}) : super(key: key);
 
@@ -654,8 +631,7 @@ class OfficialNotificationScreen extends StatelessWidget {
                     children: [
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
-
-children: [
+                        children: [
                           Text(ev['title'], style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
@@ -681,13 +657,10 @@ children: [
   }
 }
 
-// ---------------------------------------------------------------------------
-// 3. Order Messages Screen
-// ---------------------------------------------------------------------------
 class OrderMessagesScreen extends StatelessWidget {
   const OrderMessagesScreen({Key? key}) : super(key: key);
 
-  @override
+@override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF0F141C),
@@ -715,9 +688,6 @@ class OrderMessagesScreen extends StatelessWidget {
   }
 }
 
-// ---------------------------------------------------------------------------
-// 4. Customer Service Live Chat Screen
-// ---------------------------------------------------------------------------
 class CustomerServiceScreen extends StatefulWidget {
   const CustomerServiceScreen({Key? key}) : super(key: key);
 
@@ -759,8 +729,7 @@ class _CustomerServiceScreenState extends State<CustomerServiceScreen> {
           children: [
             Text('Support Service', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
             Text('Online', style: TextStyle(color: Color(0xFF00C9A7), fontSize: 11)),
-
-],
+          ],
         ),
       ),
       body: Column(
@@ -797,7 +766,8 @@ class _CustomerServiceScreenState extends State<CustomerServiceScreen> {
           ),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: const BoxDecoration(
+
+decoration: const BoxDecoration(
               color: Color(0xFF161B26),
               border: Border(top: BorderSide(color: Colors.white10)),
             ),
@@ -811,7 +781,7 @@ class _CustomerServiceScreenState extends State<CustomerServiceScreen> {
                       hintText: 'Type a message...',
                       hintStyle: TextStyle(color: Colors.white38),
                       border: InputBorder.none,
-                      isDense: true,
+                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                     ),
                     onSubmitted: (_) => _sendSupportMessage(),
                   ),
@@ -829,9 +799,6 @@ class _CustomerServiceScreenState extends State<CustomerServiceScreen> {
   }
 }
 
-// ---------------------------------------------------------------------------
-// 5. 1v1 Real-Time Chat Detail Screen (Connected with Socket & Backend)
-// ---------------------------------------------------------------------------
 class ChatDetailScreen extends StatefulWidget {
   final String currentUserId;
   final String peerId;
@@ -875,7 +842,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       _socket?.emit('user_connected', widget.currentUserId);
     });
 
-_socket?.on('receive_direct_message', (data) {
+    _socket?.on('receive_direct_message', (data) {
       if (!mounted) return;
       if (data['senderId'].toString() == widget.peerId) {
         setState(() {
@@ -948,7 +915,7 @@ _socket?.on('receive_direct_message', (data) {
     );
   }
 
-  void _scrollToBottom() {
+void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
@@ -1010,7 +977,7 @@ _socket?.on('receive_direct_message', (data) {
                           final msg = _messages[index];
                           final isMe = msg['senderId'].toString() == widget.currentUserId;
 
-return Align(
+                          return Align(
                             alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
                             child: Container(
                               margin: const EdgeInsets.only(bottom: 10),
@@ -1041,7 +1008,8 @@ return Align(
           ),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            color: const Color(0xFF161B26),
+
+color: const Color(0xFF161B26),
             child: SafeArea(
               child: Row(
                 children: [
