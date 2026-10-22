@@ -18,7 +18,6 @@ import 'widgets/room/room_background.dart';
 import 'widgets/room/room_header.dart';
 import 'widgets/room/room_seats_grid.dart';
 import 'widgets/room/room_chat_feed.dart';
-import 'widgets/room/room_bottom_bar.dart';
 import 'widgets/room/gift_panel.dart';
 import 'widgets/room/gift_overlay.dart';
 import 'widgets/room/basic_tools_sheet.dart';
@@ -50,6 +49,8 @@ class _RoomScreenState extends State<RoomScreen> {
   int _currentSeatCount = 25;
   int _hostDiamonds = 0;
   final TextEditingController _msgController = TextEditingController();
+
+  String _activeVerticalTab = 'Room'; // 'Room' or 'Chat'
 
   Map<String, dynamic>? _active3DGift;
   String? _jackpotBannerText;
@@ -114,7 +115,7 @@ class _RoomScreenState extends State<RoomScreen> {
 
       setState(() {
         _hostDiamonds += diamondReward;
-        if (_seats.isNotEmpty && (receiverId == null || receiverId == 'all' || receiverId == _seats[0]['userId'])) {
+        if (_seats.isNotEmpty && (receiverId == null || receiverId == 'all' ||  receiverId == _seats[0]['userId'])) {
           _seats[0]['diamonds'] = (_seats[0]['diamonds'] ?? 0) + diamondReward;
         }
 
@@ -666,37 +667,158 @@ Stack(
                   ),
                 ),
                 Expanded(
-                  child: SingleChildScrollView(
-                    child: Column(
-                      children: [
-                        RoomSeatsGrid(
-                          seats: _seats,
-                          currentSeatCount: _currentSeatCount,
-                          onSeatTap: _handleSeatTap,
-                          onSeatCountChanged: (count) {
-                            setState(() {
-                              _currentSeatCount = count;
-                              _initSeats(count);
-                            });
-                          },
+                  child: Row(
+                    children: [
+                      // VERTICAL SIDE TABS: Room, Chat, Game
+                      Container(
+                        width: 52,
+                        margin: const EdgeInsets.only(left: 6, top: 10),
+                        child: Column(
+                          children: [
+                            _buildVerticalTabItem(
+                              title: 'Room',
+                              icon: Icons.meeting_room_outlined,
+                              isActive: _activeVerticalTab == 'Room',
+                              onTap: () => setState(() => _activeVerticalTab = 'Room'),
+                            ),
+                            const SizedBox(height: 12),
+                            _buildVerticalTabItem(
+                              title: 'Chat',
+                              icon: Icons.chat_bubble_outline,
+                              isActive: _activeVerticalTab == 'Chat',
+                              onTap: () => setState(() => _activeVerticalTab = 'Chat'),
+                            ),
+                            const SizedBox(height: 12),
+                            _buildVerticalTabItem(
+                              title: 'Game',
+                              icon: Icons.sports_esports_outlined,
+                              isActive: false,
+                              onTap: () {
+                                TeenPattiDialog.show(context, onBalanceUpdated: () {
+                                  setState(() {});
+                                });
+                              },
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
+                      ),
+                      // MAIN CONTENT AREA
+                      Expanded(
+                        child: _activeVerticalTab == 'Room'
+                            ? SingleChildScrollView(
+
+child: Column(
+                                  children: [
+                                    RoomSeatsGrid(
+                                      seats: _seats,
+                                      currentSeatCount: _currentSeatCount,
+                                      onSeatTap: _handleSeatTap,
+                                      onSeatCountChanged: (count) {
+                                        setState(() {
+                                          _currentSeatCount = count;
+                                          _initSeats(count);
+                                        });
+                                      },
+                                    ),
+                                  ],
+                                ),
+                              )
+                            : Container(
+                                margin: const EdgeInsets.symmetric(horizontal: 8),
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: Colors.black38,
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                child: RoomChatFeed(messages: _messages),
+                              ),
+                      ),
+                    ],
                   ),
                 ),
-                RoomChatFeed(messages: _messages),
-                RoomBottomBar(
-                  controller: _msgController,
-                  isMicMuted: _isMicMuted,
-                  onSendMessage: _sendMessage,
-                  onToggleMic: _toggleMic,
-                  onOpenGifts: _openGifts,
-                  onOpenTools: _openBasicTools,
-                  onOpenGame: () {
-                    TeenPattiDialog.show(context, onBalanceUpdated: () {
-                      setState(() {});
-                    });
-                  },
+                if (_activeVerticalTab == 'Room')
+                  SizedBox(
+                    height: 110,
+                    child: RoomChatFeed(messages: _messages),
+                  ),
+                // BOTTOM BAR: Say Hello & Controls
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF10121D),
+                    borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+                  ),
+                  child: Row(
+                    children: [
+                      // Say Hello Input
+                      Expanded(
+                        child: Container(
+                          height: 38,
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.08),
+                            borderRadius: BorderRadius.circular(19),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.chat_outlined, color: Colors.white38, size: 16),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: TextField(
+                                  controller: _msgController,
+                                  style: const TextStyle(color: Colors.white, fontSize: 13),
+                                  decoration: const InputDecoration(
+                                    hintText: 'Say Hello...',
+                                    hintStyle: TextStyle(color: Colors.white38, fontSize: 12),
+                                    border: BorderSide.none,
+                                    isDense: true,
+                                    contentPadding: EdgeInsets.zero,
+                                  ),
+                                  onSubmitted: (_) => _sendMessage(),
+                                ),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.send, color: Color(0xFF00C9A7), size: 16),
+                                onPressed: _sendMessage,
+                                padding: EdgeInsets.zero,
+
+constraints: const BoxConstraints(),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      // Tool Sheet
+                      IconButton(
+                        icon: const Icon(Icons.more_horiz, color: Colors.white70, size: 20),
+                        onPressed: _openBasicTools,
+                      ),
+                      // Mic Button
+                      IconButton(
+                        icon: Icon(
+                          _isMicMuted ? Icons.mic_off : Icons.mic,
+                          color: _isMicMuted ? Colors.redAccent : const Color(0xFF00C9A7),
+                          size: 20,
+                        ),
+                        onPressed: _toggleMic,
+                      ),
+                      // Gift Button
+                      IconButton(
+                        icon: const Icon(Icons.card_giftcard, color: Colors.amberAccent, size: 22),
+                        onPressed: _openGifts,
+                      ),
+                      // Game Button
+                      IconButton(
+                        icon: const Icon(Icons.casino_outlined, color: Colors.deepOrangeAccent, size: 22),
+                        onPressed: () {
+                          TeenPattiDialog.show(context, onBalanceUpdated: () {
+                            setState(() {});
+                          });
+                        },
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -715,8 +837,7 @@ Stack(
                   borderRadius: BorderRadius.circular(20),
                   boxShadow: const [
                     BoxShadow(color: Colors.black45, blurRadius: 10, offset: Offset(0, 4)),
-
-],
+                  ],
                 ),
                 child: Row(
                   children: [
@@ -748,6 +869,47 @@ Stack(
               },
             ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildVerticalTabItem({
+    required String title,
+    required IconData icon,
+    required bool isActive,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 44,
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        decoration: BoxDecoration(
+          color: isActive ? const Color(0xFF00C9A7) : const Color(0xFF161826),
+
+borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isActive ? const Color(0xFF00C9A7) : Colors.white12,
+          ),
+        ),
+        child: Column(
+          children: [
+            Icon(
+              icon,
+              size: 18,
+              color: isActive ? Colors.black : Colors.white70,
+            ),
+            const SizedBox(height: 3),
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 9,
+                fontWeight: FontWeight.bold,
+                color: isActive ? Colors.black : Colors.white70,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -839,8 +1001,7 @@ class _InternalMedalWallScreenState extends State<InternalMedalWallScreen>
         'id': 'm6',
         'title': 'Super Ambassador',
         'description': 'Successfully invited 10 active friends.',
-
-'category': 'Social',
+        'category': 'Social',
         'icon': Icons.people,
         'color': Colors.greenAccent,
         'isUnlocked': true,
@@ -854,7 +1015,8 @@ class _InternalMedalWallScreenState extends State<InternalMedalWallScreen>
         'icon': Icons.verified_user,
         'color': Colors.amberAccent,
         'isUnlocked': false,
-        'requirement': 'Log into Nile Voice for 30 consecutive days.',
+
+'requirement': 'Log into Nile Voice for 30 consecutive days.',
       },
       {
         'id': 'm8',
@@ -941,8 +1103,7 @@ class _InternalMedalWallScreenState extends State<InternalMedalWallScreen>
                 );
               },
               child: Text(
-
-isEquipped ? 'Unequip' : 'Wear Medal',
+                isEquipped ? 'Unequip' : 'Wear Medal',
                 style: TextStyle(
                   color: isEquipped ? Colors.white : Colors.black,
                   fontWeight: FontWeight.bold,
@@ -963,7 +1124,7 @@ isEquipped ? 'Unequip' : 'Wear Medal',
   Widget build(BuildContext context) {
     final int unlockedCount = _allMedals.where((m) => m['isUnlocked'] == true).length;
 
-    return Scaffold(
+return Scaffold(
       backgroundColor: const Color(0xFF0F101A),
       appBar: AppBar(
         backgroundColor: const Color(0xFF161826),
@@ -1044,7 +1205,7 @@ isEquipped ? 'Unequip' : 'Wear Medal',
                     final bool isEquipped = (_equippedMedalId == medal['id']);
                     final bool isUnlocked = medal['isUnlocked'] == true;
 
-return GestureDetector(
+                    return GestureDetector(
                       onTap: () => _showMedalDetails(medal),
                       child: Container(
                         padding: const EdgeInsets.all(10),
@@ -1055,7 +1216,8 @@ return GestureDetector(
                             color: isEquipped
                                 ? const Color(0xFF00C9A7)
                                 : (isUnlocked ? (medal['color'] as Color).withOpacity(0.3) : Colors.white10),
-                            width: isEquipped ? 2 : 1,
+
+width: isEquipped ? 2 : 1,
                           ),
                         ),
                         child: Column(
