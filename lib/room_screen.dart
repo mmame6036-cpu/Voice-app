@@ -770,7 +770,7 @@ child: Column(
                                   decoration: const InputDecoration(
                                     hintText: 'Say Hello...',
                                     hintStyle: TextStyle(color: Colors.white38, fontSize: 12),
-                                    border: InputBorder.none
+                                    border: InputBorder.none,
                                     isDense: true,
                                     contentPadding: EdgeInsets.zero,
                                   ),
