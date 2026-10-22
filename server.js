@@ -307,7 +307,7 @@ app.post('/api/admin/approve-payment', async (req, res) => {
       type: 'recharge',
       amount: payment.amountCoins,
       balanceAfter: user ? user.coins : 0,
-      description: Wholesale Recharge via ${payment.paymentMethod} (TxID: ${payment.txId})
+      description: 'Wholesale Recharge via ' + paymentMethod + '(TxID: ' + payment.txID + ')'
     });
 
     payment.status = 'approved';
