@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const mongoose = require('mongoose');
 
-// 1. የተጠቃሚን አካውንት ማገድ ወይም ማሰር (Freeze/Block Account)
+// 1. Freeze / Block Account
 router.post('/freeze-user', async (req, res) => {
   try {
     const { userId, isFrozen, reason } = req.body;
@@ -22,9 +22,11 @@ router.post('/freeze-user', async (req, res) => {
       return res.status(404).json({ success: false, error: 'User not found' });
     }
 
+    const actionText = isFrozen ? 'frozen' : 'unfrozen';
+
     return res.json({
       success: true,
-      message: 'user account has been ' + (isFrozen ? 'frozen' : ' successfully',
+      message: 'User account has been ' + actionText + ' successfully',
       user: {
         userId: user.userId,
         isFrozen: user.isFrozen,
@@ -36,18 +38,19 @@ router.post('/freeze-user', async (req, res) => {
   }
 });
 
-// 2. ተጠርጣሪ እንቅስቃሴዎችን መፈተሻ (Fraud Detection Log)
+// 2. Fraud Detection Log
 router.get('/suspicious-activity', async (req, res) => {
   try {
     const Transaction = mongoose.model('Transaction');
     
-    // ባለፉት 10 ደቂቃዎች ውስጥ ከ15 በላይ ግብይት የፈጸሙ ተጠቃሚዎችን መለየት
+    // Identify users with more than 15 transactions in the last 10 minutes
     const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
 
     const suspiciousUsers = await Transaction.aggregate([
-      { $match: { createdAt: {$gte: tenMinutesAgo } } },
+      { $match: { createdAt: { $gte: tenMinutesAgo } } },
       { $group: { _id: "$userId", count: { $sum: 1 }, totalAmount: { $sum: "$amount" } } },
-      { $match: { count: { $gt: 15 } } },       {$sort: { count: -1 } }
+      { $match: { count: { $gt: 15 } } },
+      { $sort: { count: -1 } }
     ]);
 
     return res.json({ success: true, count: suspiciousUsers.length, suspiciousUsers });
