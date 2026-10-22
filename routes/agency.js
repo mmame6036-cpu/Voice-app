@@ -24,10 +24,7 @@ async function getOrCreateAgency(ownerId) {
 // 1. Agency Details Endpoint
 router.get('/details', async (req, res) => {
   try {
-    let agentId = req.query.agentId;
-    if (!agentId) {
-      agentId = req.query.ownerId;
-    }
+    let agentId = req.query.agentId || req.query.ownerId;
 
     if (!agentId) {
       return res.status(400).json({ success: false, message: 'Agent ID is required' });
