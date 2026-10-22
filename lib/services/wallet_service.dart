@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class WalletService {
-  static const String baseUrl = 'https://voice-app-backend.onrender.com';
+  static const String baseUrl = 'https://voice-app-3.onrender.com';
 
   // 1. Deduct Bet
   static Future<Map<String, dynamic>> deductBet({
