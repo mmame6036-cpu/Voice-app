@@ -44,7 +44,7 @@ router.get('/status/:userId', async (req, res) => {
     const daysSinceJoined = Math.floor((new Date() - new Date(task.joinedDate)) / (1000 * 60 * 60 * 24));
     const isWithin7Days = daysSinceJoined < 7;
 
-    res.json({
+    return res.json({
       success: true,
       data: {
         isWithin7Days,
@@ -58,7 +58,7 @@ router.get('/status/:userId', async (req, res) => {
       }
     });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    return res.status(500).json({ success: false, error: err.message });
   }
 });
 
@@ -137,13 +137,13 @@ else if (taskId === 'followers_task') {
       description: description
     });
 
-    res.json({
+    return res.json({
       success: true,
       rewardPoints: rewardPoints,
       message: 'Successfully claimed ' + rewardPoints + ' points!'
     });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    return res.status(500).json({ success: false, error: err.message });
   }
 });
 
@@ -156,5 +156,21 @@ router.post('/record-activity', async (req, res) => {
 
     const val = Number(value) || 1;
 
-    if (type === 'normal_seat') task.normalSeatMinutes += val;
-    else if (type === 'crown_
+    if (type === 'normal_seat') {
+      task.normalSeatMinutes += val;
+    } else if (type === 'crown_seat') {
+      task.crownSeatMinutes += val;
+    } else if (type === 'crown_gift') {
+      task.crownGiftCoins += val;
+    } else if (type === 'follow') {
+      task.dailyFollowersCount += val;
+    }
+
+    await task.save();
+    return res.json({ success: true, task });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+module.exports = router;
