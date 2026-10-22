@@ -13,16 +13,19 @@ class AgoraService {
   bool isInitialized = false;
   bool isMuted = false;
 
-  // ከሰርቨር ቶከን ማምጫ ፈንክሽን
-  Future<String> _fetchAgoraToken(String channelName) async {
+  Future<String> _fetchAgoraToken(String channelName, int uid, bool isHost) async {
     try {
-      final url = Uri.parse('${UserService.serverUrl}/api/get-token?channelName=$channelName');
-      final res = await http.get(url).timeout(const Duration(seconds: 5));
+      final url = Uri.parse(
+        '${UserService.serverUrl}/api/agora/token?channelName=$channelName&uid=$uid&isHost=$isHost',
+      );
+      final res = await http.get(url).timeout(const Duration(seconds: 8));
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
-        if (data['success'] == true && data['token'] != null) {
+        if (data['token'] != null) {
           return data['token'];
         }
+      } else {
+        print('Failed to load token: ${res.statusCode} - ${res.body}');
       }
     } catch (e) {
       print('Token fetch failed: $e');
@@ -34,21 +37,19 @@ class AgoraService {
     required String appId,
     required String channelId,
     required Function(List<AudioVolumeInfo> speakers) onVolumeChanged,
+    int uid = 0,
+    bool isHost = false,
   }) async {
-    // 1. የማይክ ፈቃድ መጠየቅ
     await [Permission.microphone].request();
 
-    // 2. ቶከን ከሰርቨር ማምጣት
-    final token = await _fetchAgoraToken(channelId);
+    final token = await _fetchAgoraToken(channelId, uid, isHost);
 
-    // 3. Engine መፍጠርና ማስነሳት
     _engine = createAgoraRtcEngine();
     await _engine!.initialize(RtcEngineContext(
       appId: appId,
       channelProfile: ChannelProfileType.channelProfileLiveBroadcasting,
     ));
 
-    // 4. የድምፅ መለኪያ ክስተት (Volume Event)
     _engine!.registerEventHandler(
       RtcEngineEventHandler(
         onAudioVolumeIndication: (
@@ -58,6 +59,12 @@ class AgoraService {
           int totalVolume,
         ) {
           onVolumeChanged(speakers);
+        },
+        onJoinChannelSuccess: (RtcConnection connection, int elapsed) {
+          print('Successfully joined channel: ${connection.channelId}');
+        },
+        onError: (ErrorCodeType err, String msg) {
+          print('Agora error: $err - $msg');
         },
       ),
     );
@@ -69,16 +76,18 @@ class AgoraService {
       reportVad: true,
     );
 
-    // ተጠቃሚው መጀመሪያ ሲገባ አድማጭ (Audience) ይሆናል
-    await _engine!.setClientRole(role: ClientRoleType.clientRoleAudience);
+    final initialRole = isHost 
+        ? ClientRoleType.clientRoleBroadcaster 
+        : ClientRoleType.clientRoleAudience;
 
-    // ወደ ቻናል መግባት
+    await _engine!.setClientRole(role: initialRole);
+
     await _engine!.joinChannel(
       token: token,
       channelId: channelId,
-      uid: 0,
-      options: const ChannelMediaOptions(
-        clientRoleType: ClientRoleType.clientRoleAudience,
+      uid: uid,
+      options: ChannelMediaOptions(
+        clientRoleType: initialRole,
         channelProfile: ChannelProfileType.channelProfileLiveBroadcasting,
       ),
     );
@@ -86,7 +95,6 @@ class AgoraService {
     isInitialized = true;
   }
 
-  // ወንበር ሲያዝ ማይክ መክፈት
   Future<void> joinMicSeat() async {
     if (!isInitialized || _engine == null) return;
     await _engine!.setClientRole(role: ClientRoleType.clientRoleBroadcaster);
@@ -94,7 +102,6 @@ class AgoraService {
     isMuted = false;
   }
 
-  // ወንበር ሲለቀቅ ማይክ መዝጋት
   Future<void> leaveMicSeat() async {
     if (!isInitialized || _engine == null) return;
     await _engine!.muteLocalAudioStream(true);
@@ -102,7 +109,6 @@ class AgoraService {
     isMuted = true;
   }
 
-  // የማይክ ማብሪያ/ማጥፊያ በተን (Mute / Unmute)
   Future<bool> toggleMute() async {
     if (!isInitialized || _engine == null) return isMuted;
     isMuted = !isMuted;
