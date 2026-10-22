@@ -221,7 +221,7 @@ app.get('/api/user-conversations', async (req, res) => {
 
     const conversations = [];
     conversationMap.forEach((msg, peerId) => {
-      const peerName = userMap.get(peerId) || User_${peerId};
+      const peerName = userMap.get(peerId) || ('user_' + peerId);
       const timeStr = new Date(msg.timestamp).toISOString().substring(5, 16).replace('T', ' ');
 
       conversations.push({
