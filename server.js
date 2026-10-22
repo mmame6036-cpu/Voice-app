@@ -241,7 +241,7 @@ app.post('/api/recharge-request', async (req, res) => {
   try {
     const { userId, userName, paymentMethod, txId, amountCoins, pricePaid } = req.body;
 
-    if (!userId  !txId  !amountCoins) {
+    if (!userId || !txId || !amountCoins) {
       return res.status(400).json({ success: false, message: 'Missing required payment fields' });
     }
 
