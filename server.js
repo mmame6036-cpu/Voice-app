@@ -50,15 +50,15 @@ app.get('/', (req, res) => {
 });
 
 // Agora Dynamic Token Generator
-const AGORA_APP_ID = process.env.AGORA_APP_ID ? process.env.AGORA_APP_ID : '1523b6d3b8144281a1a21f28bbbd7fef';
-const AGORA_APP_CERTIFICATE = process.env.AGORA_APP_CERTIFICATE ? process.env.AGORA_APP_CERTIFICATE : 'a8a098e8e7bc432d8b5c57a7a4f27657';
+const AGORA_APP_ID = process.env.AGORA_APP_ID || '1523b6d3b8144281a1a21f28bbbd7fef';
+const AGORA_APP_CERTIFICATE = process.env.AGORA_APP_CERTIFICATE || 'a8a098e8e7bc432d8b5c57a7a4f27657';
 
 const handleTokenGeneration = (req, res) => {
   try {
-    const rawChannel = req.query.channelName ? req.query.channelName : '1001';
+    const rawChannel = req.query.channelName || '1001';
     const channelName = String(rawChannel).trim();
     const role = RtcRole.PUBLISHER;
-    const expireTime = 3600 * 24 * 30;
+    const expireTime = 3600 * 24 * 30; // 30 days valid
     const currentTime = Math.floor(Date.now() / 1000);
     const privilegeExpireTime = currentTime + expireTime;
 
@@ -86,7 +86,7 @@ app.get('/api/get-token', handleTokenGeneration);
 app.get('/rtc-token', handleTokenGeneration);
 
 // MongoDB Database Connection
-const MONGO_URI = process.env.MONGO_URI ? process.env.MONGO_URI : 'mongodb+srv://Kedir:euyEPW1wNL1V9u8D@cluster0.mdtjtlb.mongodb.net/nilevoice?retryWrites=true&w=majority&appName=Cluster0';
+const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://Kedir:euyEPW1wNL1V9u8D@cluster0.mdtjtlb.mongodb.net/nilevoice?retryWrites=true&w=majority&appName=Cluster0';
 
 mongoose.connect(MONGO_URI)
   .then(() => {
@@ -108,8 +108,7 @@ const userSchema = new mongoose.Schema({
   name: { type: String, default: 'User' },
   deviceId: { type: String, unique: true },
   avatar: { type: String, default: '' },
-
-coins: { type: Number, default: 1000 },
+  coins: { type: Number, default: 1000 },
   points: { type: Number, default: 0 },
   isAgent: { type: Boolean, default: false },
   isFaceVerified: { type: Boolean, default: false },
@@ -192,6 +191,53 @@ app.post('/api/user/verify-face', async (req, res) => {
   }
 });
 
+// Real-Time Active Conversations API for Messages Screen
+app.get('/api/user-conversations', async (req, res) => {
+  try {
+    const { userId } = req.query;
+    if (!userId) {
+      return res.status(400).json({ success: false, message: 'Missing userId' });
+    }
+
+    const myId = String(userId).trim();
+
+    const messages = await Message.find({
+      $or: [{ senderId: myId }, { receiverId: myId }]
+    }).sort({ timestamp: -1 });
+
+    const conversationMap = new Map();
+
+    for (const msg of messages) {
+      const peerId = msg.senderId === myId ? msg.receiverId : msg.senderId;
+      if (!conversationMap.has(peerId)) {
+        conversationMap.set(peerId, msg);
+      }
+    }
+
+    const peerIds = Array.from(conversationMap.keys());
+    const peerUsers = await User.find({ userId: { $in: peerIds } });
+    const userMap = new Map();
+    peerUsers.forEach(u => userMap.set(u.userId, u.name));
+
+    const conversations = [];
+    conversationMap.forEach((msg, peerId) => {
+      const peerName = userMap.get(peerId) || User_${peerId};
+      const timeStr = new Date(msg.timestamp).toISOString().substring(5, 16).replace('T', ' ');
+
+      conversations.push({
+        peerId: peerId,
+        peerName: peerName,
+        lastMessage: msg.text,
+        time: timeStr
+      });
+    });
+
+return res.json({ success: true, conversations: conversations });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // Payment Requests
 app.post('/api/recharge-request', async (req, res) => {
   try {
@@ -214,7 +260,7 @@ app.post('/api/recharge-request', async (req, res) => {
 
     const newPayment = new Payment({
       userId: String(userId),
-      userName: userName ? userName : 'User',
+      userName: userName || 'User',
       paymentMethod: paymentMethod,
       txId: String(txId).trim(),
       amountCoins: Number(amountCoins),
@@ -222,7 +268,7 @@ app.post('/api/recharge-request', async (req, res) => {
       status: 'pending'
     });
 
-await newPayment.save();
+    await newPayment.save();
     return res.json({ success: true, message: 'Recharge request submitted successfully' });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
@@ -261,7 +307,7 @@ app.post('/api/admin/approve-payment', async (req, res) => {
       type: 'recharge',
       amount: payment.amountCoins,
       balanceAfter: user ? user.coins : 0,
-      description: 'Wholesale Recharge via ' + payment.paymentMethod + ' (TxID: ' + payment.txId + ')'
+      description: Wholesale Recharge via ${payment.paymentMethod} (TxID: ${payment.txId})
     });
 
     payment.status = 'approved';
@@ -314,16 +360,13 @@ app.post('/api/wallet/agent-transfer-coins', async (req, res) => {
     const { agentId, targetUserId, amountCoins } = req.body;
     const coinsToTransfer = Number(amountCoins);
 
-    if (!agentId) {
+if (!agentId) {
       return res.status(400).json({ success: false, message: 'Agent ID is required' });
     }
     if (!targetUserId) {
       return res.status(400).json({ success: false, message: 'Target user ID is required' });
     }
-    if (!coinsToTransfer) {
-      return res.status(400).json({ success: false, message: 'Invalid coin amount' });
-    }
-    if (coinsToTransfer <= 0) {
+    if (!coinsToTransfer || coinsToTransfer <= 0) {
       return res.status(400).json({ success: false, message: 'Transfer amount must be greater than zero' });
     }
 
@@ -347,7 +390,7 @@ app.post('/api/wallet/agent-transfer-coins', async (req, res) => {
     agent.coins -= coinsToTransfer;
     recipient.coins += coinsToTransfer;
 
-await agent.save();
+    await agent.save();
     await recipient.save();
 
     await Transaction.create({
@@ -355,7 +398,7 @@ await agent.save();
       type: 'agent_sale',
       amount: -coinsToTransfer,
       balanceAfter: agent.coins,
-      description: 'Sold ' + coinsToTransfer + ' coins to User ' + recipient.userId
+      description: Sold ${coinsToTransfer} coins to User ${recipient.userId}
     });
 
     await Transaction.create({
@@ -363,12 +406,12 @@ await agent.save();
       type: 'agent_purchase',
       amount: coinsToTransfer,
       balanceAfter: recipient.coins,
-      description: 'Received ' + coinsToTransfer + ' coins from Agent ' + agent.userId
+      description: Received ${coinsToTransfer} coins from Agent ${agent.userId}
     });
 
     return res.json({
       success: true,
-      message: 'Successfully transferred ' + coinsToTransfer + ' coins to User ' + recipient.userId,
+      message: Successfully transferred ${coinsToTransfer} coins to User ${recipient.userId},
       agentCoins: agent.coins
     });
   } catch (err) {
@@ -376,21 +419,21 @@ await agent.save();
   }
 });
 
-// Room Creation
+// Room Creation & List
 app.post('/api/rooms/create', async (req, res) => {
   try {
     const { title, category, hostId, hostName } = req.body;
     const randomRoom = Math.floor(1000 + Math.random() * 9000).toString();
-    const roomId = req.body.roomId ? req.body.roomId : randomRoom;
+    const roomId = req.body.roomId || randomRoom;
 
     let room = await Room.findOne({ roomId: String(roomId) });
     if (!room) {
-      const defaultTitle = hostName ? (hostName + "'s Room") : 'Live Room';
+      const defaultTitle = hostName ? ${hostName}'s Room : 'Live Room';
 
       room = new Room({
         roomId: String(roomId),
-        title: title ? title : defaultTitle,
-        category: category ? category : 'Chat',
+        title: title || defaultTitle,
+        category: category || 'Chat',
         hostId: hostId,
         hostName: hostName,
       });
@@ -431,14 +474,15 @@ async function getNextUserId(isOwner = false) {
   return String(counter.seq);
 }
 
-// Register User (Sequential Auto-Increment + Referral)
+// Register User
 app.post('/api/register-user', async (req, res) => {
   try {
     const { deviceId, name, isOwner, inviterId } = req.body;
 
     if (deviceId) {
       let existingUser = await User.findOne({ deviceId: deviceId });
-      if (existingUser) {
+
+if (existingUser) {
         if (existingUser.userId === '1000') {
           existingUser.coins = 10000000;
           existingUser.isFaceVerified = true;
@@ -449,8 +493,8 @@ app.post('/api/register-user', async (req, res) => {
     }
 
     const assignedId = await getNextUserId(isOwner === true);
-    const defaultName = name ? name : ('User_' + assignedId);
-    const defaultDevice = deviceId ? deviceId : ('dev_' + Date.now());
+    const defaultName = name || User_${assignedId};
+    const defaultDevice = deviceId || dev_${Date.now()};
     const initialCoins = (assignedId === '1000') ? 10000000 : 1000;
 
     const newUser = new User({
@@ -467,19 +511,18 @@ app.post('/api/register-user', async (req, res) => {
 
     await newUser.save();
 
-    // Reward Inviter
     if (inviterId) {
       const inviter = await User.findOne({ userId: String(inviterId).trim() });
       if (inviter) {
         inviter.coins += 500;
         await inviter.save();
 
-await Transaction.create({
+        await Transaction.create({
           userId: inviter.userId,
           type: 'referral_bonus',
           amount: 500,
           balanceAfter: inviter.coins,
-          description: 'Referral Bonus for inviting User ' + assignedId
+          description: Referral Bonus for inviting User ${assignedId}
         });
       }
     }
@@ -498,7 +541,7 @@ await Transaction.create({
   }
 });
 
-// Google Auth (Sequential Auto-Increment + Referral)
+// Google Auth
 app.post('/api/auth/google', async (req, res) => {
   try {
     const { googleId, email, name, avatar, inviterId } = req.body;
@@ -525,9 +568,9 @@ app.post('/api/auth/google', async (req, res) => {
 
     user = new User({
       userId: assignedId,
-      name: name ? name : ('User_' + assignedId),
+      name: name || User_${assignedId},
       deviceId: googleId,
-      avatar: avatar ? avatar : '',
+      avatar: avatar || '',
       coins: initialCoins,
       points: 0,
       isAgent: (assignedId === '1000'),
@@ -538,7 +581,6 @@ app.post('/api/auth/google', async (req, res) => {
 
     await user.save();
 
-    // Reward Inviter
     if (inviterId) {
       const inviter = await User.findOne({ userId: String(inviterId).trim() });
       if (inviter) {
@@ -550,7 +592,7 @@ app.post('/api/auth/google', async (req, res) => {
           type: 'referral_bonus',
           amount: 500,
           balanceAfter: inviter.coins,
-          description: 'Referral Bonus for inviting User ' + assignedId
+          description: Referral Bonus for inviting User ${assignedId}
         });
       }
     }
@@ -569,34 +611,14 @@ app.post('/api/auth/google', async (req, res) => {
   }
 });
 
-// Referral Stats Route
-app.get('/api/referral/my-team', async (req, res) => {
-  try {
-    const { userId } = req.query;
-    if (!userId) {
-      return res.status(400).json({ success: false, message: 'Missing userId' });
-    }
-
-    const invitedMembers = await User.find({ invitedBy: String(userId).trim() })
-      .select('userId name avatar createdAt')
-      .sort({ createdAt: -1 });
-
-    return res.json({
-      success: true,
-      totalInvited: invitedMembers.length,
-      members: invitedMembers
-    });
-  } catch (err) {
-    return res.status(500).json({ success: false, error: err.message });
-  }
-});
-
+// Search User
 app.get('/api/search-user', async (req, res) => {
   try {
     const userId = req.query.userId;
     if (!userId) {
       return res.status(400).json({ error: 'User ID is required' });
-    }
+
+}
     const user = await User.findOne({ userId: String(userId).trim() });
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
@@ -607,11 +629,12 @@ app.get('/api/search-user', async (req, res) => {
   }
 });
 
+// Chat History Between Two Users
 app.get('/api/chat-history', async (req, res) => {
   try {
     const { user1, user2 } = req.query;
 
-const messages = await Message.find({
+    const messages = await Message.find({
       $or: [
         { senderId: user1, receiverId: user2 },
         { senderId: user2, receiverId: user1 }
@@ -715,7 +738,7 @@ function dealTeenPattiRound() {
 }
 
 let tpRoundId = 1;
-let tpGameState = 'betting'; // 'betting' | 'revealing' | 'settling'
+let tpGameState = 'betting';
 let tpTimeLeft = 15;
 let tpCurrentBets = [];
 let tpLastResult = null;
@@ -735,7 +758,7 @@ async function resolveTeenPattiRound() {
         { new: true }
       );
 
-      if (u) {
+if (u) {
         await Transaction.create({
           userId: u.userId,
           type: 'game_win',
@@ -873,7 +896,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('send_direct_message', async (data) => {
+socket.on('send_direct_message', async (data) => {
     try {
       const { senderId, receiverId, text } = data;
       const newMsg = new Message({
@@ -884,7 +907,7 @@ io.on('connection', (socket) => {
       });
       await newMsg.save();
 
-if (senderId) {
+      if (senderId) {
         const senderUser = await User.findOne({ userId: String(senderId) });
         if (senderUser && senderUser.isFaceVerified) {
           const today = getTodayString();
@@ -917,8 +940,8 @@ if (senderId) {
         return;
       }
 
-      const defaultCallerName = callerName ? callerName : ('User ' + callerId);
-      const privateChannel = 'call_' + callerId + '_' + targetUserId + '_' + Date.now();
+      const defaultCallerName = callerName || User_${callerId};
+      const privateChannel = call_${callerId}_${targetUserId}_${Date.now()};
 
       io.to(String(targetUserId)).emit('incoming_call', {
         callerId: callerId,
@@ -943,7 +966,7 @@ if (senderId) {
   socket.on('reject_call', (data) => {
     const { callerId, reason } = data;
     io.to(String(callerId)).emit('call_rejected', {
-      reason: reason ? reason : 'Call rejected'
+      reason: reason || 'Call rejected'
     });
   });
 
@@ -957,7 +980,7 @@ if (senderId) {
   socket.on('call_deduct_coins', async (data) => {
     try {
       const { callerId, receiverId, amount } = data;
-      const cost = Number(amount) ? Number(amount) : 20;
+      const cost = Number(amount) || 20;
 
       const caller = await User.findOne({ userId: String(callerId) });
       if (!caller) return;
@@ -983,7 +1006,7 @@ if (senderId) {
         type: 'call_fee',
         amount: cost,
         balanceAfter: caller.coins,
-        description: '1-Minute Private Voice Call to User ' + receiverId
+        description: 1-Minute Private Voice Call to User ${receiverId}
       });
 
       socket.emit('call_coin_deducted', { remainingCoins: caller.coins });
@@ -1014,14 +1037,14 @@ if (senderId) {
     if (data.room) roomId = String(data.room);
     if (data.roomId) roomId = String(data.roomId);
 
-    const chairIndex = data.chairIndex;
+const chairIndex = data.chairIndex;
     const action = data.action;
 
     if (!roomSeatsState[roomId]) {
       roomSeatsState[roomId] = {};
     }
 
-if (action === 'take') {
+    if (action === 'take') {
       for (const idx in roomSeatsState[roomId]) {
         if (roomSeatsState[roomId][idx].userId === data.userId) {
           delete roomSeatsState[roomId][idx];
@@ -1080,8 +1103,8 @@ if (action === 'take') {
       if (room) roomId = String(room);
       if (data.roomId) roomId = String(data.roomId);
 
-      const giftCount = Number(count) ? Number(count) : 1;
-      const unitPrice = Number(giftPrice) ? Number(giftPrice) : 0;
+      const giftCount = Number(count) || 1;
+      const unitPrice = Number(giftPrice) || 0;
       const totalCost = unitPrice * giftCount;
 
       const sender = await User.findOne({ userId: String(senderId) });
@@ -1116,30 +1139,30 @@ if (action === 'take') {
         });
 
         if (hostAgencyRecord) {
-          hostAgencyRecord.currentMonthPoints = (hostAgencyRecord.currentMonthPoints ? hostAgencyRecord.currentMonthPoints : 0) + diamondReward;
+          hostAgencyRecord.currentMonthPoints = (hostAgencyRecord.currentMonthPoints || 0) + diamondReward;
           await hostAgencyRecord.save();
 
           const parentAgency = await Agency.findOne({ agencyId: hostAgencyRecord.agencyId });
           if (parentAgency) {
-            const rate = parentAgency.commissionRate ? parentAgency.commissionRate : 10;
+            const rate = parentAgency.commissionRate || 10;
             const agencyCommissionPoints = Math.floor(diamondReward * (rate / 100));
 
-            parentAgency.balancePoints = (parentAgency.balancePoints ? parentAgency.balancePoints : 0) + agencyCommissionPoints;
-            parentAgency.totalEarnings = (parentAgency.totalEarnings ? parentAgency.totalEarnings : 0) + agencyCommissionPoints;
+            parentAgency.balancePoints = (parentAgency.balancePoints || 0) + agencyCommissionPoints;
+            parentAgency.totalEarnings = (parentAgency.totalEarnings || 0) + agencyCommissionPoints;
             await parentAgency.save();
           }
         }
       }
 
-const defaultGift = giftName ? giftName : 'Gift';
-      const defaultTarget = receiverId ? receiverId : 'Room';
+      const defaultGift = giftName || 'Gift';
+      const defaultTarget = receiverId || 'Room';
 
-      await Transaction.create({
+await Transaction.create({
         userId: String(senderId),
         type: 'gift_sent',
         amount: totalCost,
         balanceAfter: sender.coins,
-        description: 'Sent ' + defaultGift + ' x' + giftCount + ' to ' + defaultTarget
+        description: Sent ${defaultGift} x${giftCount} to ${defaultTarget}
       });
 
       let wonMultiplier = 0;
@@ -1182,15 +1205,15 @@ const defaultGift = giftName ? giftName : 'Gift';
               type: 'lucky_win',
               amount: wonCoins,
               balanceAfter: sender.coins,
-              description: 'Won ' + wonMultiplier + 'x lucky prize on ' + defaultGift
+              description: Won ${wonMultiplier}x lucky prize on ${defaultGift}
             });
 
-            const bannerText = sender.name + ' so lucky and won ' + wonMultiplier + 'x the prize (' + wonCoins + ' Coins)!';
+            const bannerText = ${sender.name} so lucky and won ${wonMultiplier}x the prize (${wonCoins} Coins)!;
             io.to(roomId).emit('chat_message', {
               room: roomId,
               roomId: roomId,
               sender: 'Jackpot',
-              text: '🎉 ' + bannerText
+              text: 🎉 ${bannerText}
             });
 
             io.to(roomId).emit('jackpot_win_broadcast', {
@@ -1244,10 +1267,9 @@ const defaultGift = giftName ? giftName : 'Gift';
             if (roomSeatsState[roomId][idx].userId === socket.userId) {
               delete roomSeatsState[roomId][idx];
               delete seatJoinTimes[String(socket.userId)];
-              const defaultName = socket.userName ? socket.userName : 'User';
+              const defaultName = socket.userName || 'User';
               io.to(roomId).emit('chair_action', {
-
-action: 'leave',
+                action: 'leave',
                 chairIndex: parseInt(idx),
                 userId: socket.userId,
                 userName: defaultName,
@@ -1262,7 +1284,7 @@ action: 'leave',
   });
 });
 
-const PORT = process.env.PORT ? process.env.PORT : 10000;
+const PORT = process.env.PORT || 10000;
 server.listen(PORT, '0.0.0.0', () => {
   console.log('Server running on port ' + PORT);
 });
