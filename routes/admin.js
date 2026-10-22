@@ -24,7 +24,7 @@ router.post('/freeze-user', async (req, res) => {
 
     return res.json({
       success: true,
-      message: User account has been ${isFrozen ? 'frozen' : 'unfrozen'} successfully,
+      message: 'user account has been ' + (isFrozen ? 'frozen' : ' successfully',
       user: {
         userId: user.userId,
         isFrozen: user.isFrozen,
