@@ -21,10 +21,14 @@ async function getOrCreateAgency(ownerId) {
   return agency;
 }
 
-// 1. Agency Details Endpoint (Called by Flutter agency_center_screen.dart)
+// 1. Agency Details Endpoint
 router.get('/details', async (req, res) => {
   try {
-    const agentId = req.query.agentId || req.query.ownerId;
+    let agentId = req.query.agentId;
+    if (!agentId) {
+      agentId = req.query.ownerId;
+    }
+
     if (!agentId) {
       return res.status(400).json({ success: false, message: 'Agent ID is required' });
     }
@@ -38,26 +42,28 @@ router.get('/details', async (req, res) => {
         let isFaceVerified = false;
         if (User) {
           const uDoc = await User.findOne({ userId: String(h.userId) });
-          if (uDoc) isFaceVerified = uDoc.isFaceVerified === true;
+          if (uDoc) {
+            isFaceVerified = uDoc.isFaceVerified === true;
+          }
         }
 
         return {
           userId: h.userId,
-          userName: h.userName || ('Host_' + h.userId),
-          avatarUrl: h.avatar || '',
-          liveMinutes: Math.round((h.validHours || 0) * 60),
-          diamondsEarned: h.currentMonthPoints || 0,
+          userName: h.userName ? h.userName : ('Host_' + h.userId),
+          avatarUrl: h.avatar ? h.avatar : '',
+          liveMinutes: Math.round((h.validHours ? h.validHours : 0) * 60),
+          diamondsEarned: h.currentMonthPoints ? h.currentMonthPoints : 0,
           isFaceVerified: isFaceVerified,
         };
       })
     );
 
-    const totalDiamonds = formattedHosts.reduce((sum, item) => sum + (item.diamondsEarned || 0), 0);
+    const totalDiamonds = formattedHosts.reduce((sum, item) => sum + (item.diamondsEarned ? item.diamondsEarned : 0), 0);
 
     return res.json({
       success: true,
-      agencyName: agency.agencyName || 'Medina Agency',
-      commissionRate: agency.commissionRate || 15,
+      agencyName: agency.agencyName ? agency.agencyName : 'Medina Agency',
+      commissionRate: agency.commissionRate ? agency.commissionRate : 15,
       totalDiamonds: totalDiamonds,
       hosts: formattedHosts,
     });
@@ -66,13 +72,16 @@ router.get('/details', async (req, res) => {
   }
 });
 
-// 2. Direct Add Host (Called by Add Host button in Flutter)
+// 2. Direct Add Host
 router.post('/add-host', async (req, res) => {
   try {
     const { agentId, hostUserId } = req.body;
 
-    if (!agentId || !hostUserId) {
-      return res.status(400).json({ success: false, message: 'Agent ID and Host ID are required' });
+    if (!agentId) {
+      return res.status(400).json({ success: false, message: 'Agent ID is required' });
+    }
+    if (!hostUserId) {
+      return res.status(400).json({ success: false, message: 'Host ID is required' });
     }
 
     const agency = await getOrCreateAgency(agentId);
@@ -86,8 +95,8 @@ router.post('/add-host', async (req, res) => {
       if (!targetUser) {
         return res.status(404).json({ success: false, message: 'Host user not found' });
       }
-      resolvedName = targetUser.name || resolvedName;
-      resolvedAvatar = targetUser.avatar || '';
+      resolvedName = targetUser.name ? targetUser.name : resolvedName;
+      resolvedAvatar = targetUser.avatar ? targetUser.avatar : '';
     }
 
     let hostRecord = await AgencyHost.findOne({ userId: cleanHostId });
@@ -168,8 +177,11 @@ router.post('/apply', async (req, res) => {
   try {
     const { userId, agencyId } = req.body;
 
-    if (!userId || !agencyId) {
-      return res.status(400).json({ success: false, message: 'User ID and Agency ID are required' });
+    if (!userId) {
+      return res.status(400).json({ success: false, message: 'User ID is required' });
+    }
+    if (!agencyId) {
+      return res.status(400).json({ success: false, message: 'Agency ID is required' });
     }
 
     const targetAgency = await Agency.findOne({ agencyId: String(agencyId).trim(), status: 'active' });
@@ -226,8 +238,14 @@ router.post('/manage-application', async (req, res) => {
   try {
     const { ownerId, userId, action } = req.body;
 
-    if (!ownerId  !userId  !action) {
-      return res.status(400).json({ success: false, message: 'Owner ID, User ID, and Action are required' });
+    if (!ownerId) {
+      return res.status(400).json({ success: false, message: 'Owner ID is required' });
+    }
+    if (!userId) {
+      return res.status(400).json({ success: false, message: 'User ID is required' });
+    }
+    if (!action) {
+      return res.status(400).json({ success: false, message: 'Action is required' });
     }
 
     const agency = await Agency.findOne({ ownerId: String(ownerId) });
@@ -235,12 +253,12 @@ router.post('/manage-application', async (req, res) => {
       return res.status(403).json({ success: false, message: 'Unauthorized. You do not own an agency.' });
     }
 
-    const hostRecord = await AgencyHost.findOne({ userId: String(userId), agencyId: agency.agencyId });
+const hostRecord = await AgencyHost.findOne({ userId: String(userId), agencyId: agency.agencyId });
     if (!hostRecord) {
       return res.status(404).json({ success: false, message: 'Host application record not found' });
     }
 
-if (action === 'approve') {
+    if (action === 'approve') {
       hostRecord.status = 'active';
       await hostRecord.save();
       return res.json({ success: true, message: 'Host approved successfully', host: hostRecord });
@@ -263,8 +281,11 @@ router.post('/remove-host', async (req, res) => {
   try {
     const { ownerId, userId } = req.body;
 
-    if (!ownerId || !userId) {
-      return res.status(400).json({ success: false, message: 'Owner ID and Host User ID are required' });
+    if (!ownerId) {
+      return res.status(400).json({ success: false, message: 'Owner ID is required' });
+    }
+    if (!userId) {
+      return res.status(400).json({ success: false, message: 'Host User ID is required' });
     }
 
     const agency = await Agency.findOne({ ownerId: String(ownerId) });
