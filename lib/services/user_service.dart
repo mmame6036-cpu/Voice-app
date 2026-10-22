@@ -8,9 +8,8 @@ class UserService {
   factory UserService() => _instance;
   UserService._internal();
 
-  static const String serverUrl = 'https://voice-app-2-jd95.onrender.com';
+  static const String serverUrl = 'https://voice-app-3.onrender.com';
   static const String agoraAppId = '1523b6d3b8144281a1a21f28bbbd7fef';
-
   String userId = '';
   String userName = '';
   String avatar = '';
