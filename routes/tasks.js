@@ -2,14 +2,16 @@ const express = require('express');
 const router = express.Router();
 const UserTask = require('../models/UserTask');
 
-const getTodayDate = () => new Date().toISOString().split('T')[0];
+function getTodayDate() {
+  return new Date().toISOString().split('T')[0];
+}
 
-const checkWithin7Days = (joinedDate) => {
+function checkWithin7Days(joinedDate) {
   if (!joinedDate) return false;
   const diffTime = Math.abs(new Date() - new Date(joinedDate));
   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   return diffDays <= 7;
-};
+}
 
 router.get('/status/:userId', async (req, res) => {
   try {
@@ -22,7 +24,7 @@ router.get('/status/:userId', async (req, res) => {
       taskData = new UserTask({
         userId,
         lastActiveDate: today,
-        consecutiveActiveDays: 1,
+        consecutiveActiveDays: 1
       });
       await taskData.save();
     } else if (taskData.lastActiveDate !== today) {
@@ -50,8 +52,8 @@ router.get('/status/:userId', async (req, res) => {
         dailyFollowersCount: taskData.dailyFollowersCount,
         coinsSent: taskData.coinsSent,
         gameBetting: taskData.gameBetting,
-        claimedTasks: taskData.claimedTasks,
-      },
+        claimedTasks: taskData.claimedTasks
+      }
     });
   } catch (error) {
     return res.status(500).json({ success: false, message: 'Server error' });
@@ -152,10 +154,10 @@ if (!isEligible) {
       message: 'Claim successful!',
       rewardPoints,
       rewardCoins,
-      claimedTasks: taskData.claimedTasks,
+      claimedTasks: taskData.claimedTasks
     });
   } catch (error) {
-    return res.status(500).json({ success: false, message: 'Server error' });
+    return res.status(500).json({ success: false, message: 'Server error during claim' });
   }
 });
 
