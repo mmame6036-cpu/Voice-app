@@ -1,7 +1,8 @@
-import 'dart:math' as math;
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
+import 'package:socket_io_client/socket_io_client.dart' as IO;
 
 class LiveAudioRoomScreen extends StatefulWidget {
   final String roomTitle;
@@ -17,15 +18,23 @@ class LiveAudioRoomScreen extends StatefulWidget {
 }
 
 class _LiveAudioRoomScreenState extends State<LiveAudioRoomScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   // Agora State
   RtcEngine? _engine;
   bool _isJoined = false;
   bool _isMuted = false;
-  int _localUid = 0;
 
-  // 3D Audio Ripple Animation Controller
+  // Socket.io State
+  IO.Socket? _socket;
+
+  // 3D Pulse Animation for Host
   late AnimationController _pulseController;
+
+  // 3D Gift Banner Animation
+  late AnimationController _giftAnimController;
+  late Animation<double> _giftScaleAnimation;
+  String? _activeGiftEmoji;
+  String? _activeGiftSender;
 
   final TextEditingController _msgController = TextEditingController();
   final List<Map<String, String>> _messages = [
@@ -35,19 +44,59 @@ class _LiveAudioRoomScreenState extends State<LiveAudioRoomScreen>
   @override
   void initState() {
     super.initState();
+
     _pulseController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1400),
     )..repeat();
+
+    _giftAnimController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    );
+    _giftScaleAnimation = CurvedAnimation(
+      parent: _giftAnimController,
+      curve: Curves.elasticOut,
+    );
+
     _initAgoraAudio();
+    _initSocket();
+  }
+
+  void _initSocket() {
+    // ሰርቨር አድራሻ (Render አድራሻህ እዚህ ይተካል)
+    _socket = IO.io('https://nile-voice-server.onrender.com', <String, dynamic>{
+      'transports': ['websocket'],
+      'autoConnect': true,
+    });
+
+    _socket!.onConnect((_) {
+      debugPrint('Connected to Socket Server');
+      _socket!.emit('join_room', widget.channelName);
+    });
+
+    // የቀጥታ መልዕክት ሲመጣ
+    _socket!.on('receive_message', (data) {
+      if (mounted) {
+        setState(() {
+          _messages.add({
+            'user': data['user'] ?? 'Guest',
+            'text': data['text'] ?? '',
+          });
+        });
+      }
+    });
+
+    // ስጦታ ሲላክ በ 3D ስክሪኑ ላይ ማሳየት
+    _socket!.on('receive_gift', (data) {
+      _trigger3DGiftAnimation(data['emoji'] ?? '🎁', data['sender'] ?? 'Someone');
+    });
   }
 
   Future<void> _initAgoraAudio() async {
-    // 1. የማይክራፎን ፈቃድ መጠየቅ
     await [Permission.microphone].request();
 
     try {
-      // 2. የአጎራ ሞተር ማዘጋጀት (App ID እዚህ ይቀየራል)
       _engine = createAgoraRtcEngine();
       await _engine!.initialize(const RtcEngineContext(
         appId: 'YOUR_AGORA_APP_ID',
@@ -59,23 +108,17 @@ class _LiveAudioRoomScreenState extends State<LiveAudioRoomScreen>
           onJoinChannelSuccess: (RtcConnection connection, int elapsed) {
             setState(() {
               _isJoined = true;
-              _localUid = connection.localUid ?? 0;
             });
-          },
-          onUserMuteAudio: (RtcConnection connection, int remoteUid, bool muted) {
-            setState(() {});
           },
         ),
       );
 
-      // 3. ድምፅ ላይ ብቻ እንዲያተኩር ማድረግ
       await _engine!.setClientRole(role: ClientRoleType.clientRoleBroadcaster);
       await _engine!.enableAudio();
       await _engine!.enableAudioVolumeIndication(interval: 250, smooth: 3, reportVad: true);
 
-      // 4. ወደ ድምፅ ቻነሉ መግባት
       await _engine!.joinChannel(
-        token: '', // የሰርቨር ቶክን እስኪገናኝ ባዶ
+        token: '',
         channelId: widget.channelName,
         uid: 0,
         options: const ChannelMediaOptions(
@@ -84,8 +127,35 @@ class _LiveAudioRoomScreenState extends State<LiveAudioRoomScreen>
         ),
       );
     } catch (e) {
-      debugPrint('Agora Audio Engine Init Error: $e');
+      debugPrint('Agora Error: $e');
     }
+  }
+
+  void _trigger3DGiftAnimation(String emoji, String sender) {
+    setState(() {
+      _activeGiftEmoji = emoji;
+      _activeGiftSender = sender;
+    });
+    _giftAnimController.forward(from: 0.0).then((_) {
+      Timer(const Duration(seconds: 2), () {
+        if (mounted) {
+          setState(() {
+            _activeGiftEmoji = null;
+          });
+        }
+      });
+    });
+  }
+
+void _sendGift(String emoji, String giftName) {
+    _socket?.emit('send_gift', {
+      'room': widget.channelName,
+      'sender': 'Me',
+      'emoji': emoji,
+      'giftName': giftName,
+    });
+    Navigator.pop(context);
+    _trigger3DGiftAnimation(emoji, 'Me');
   }
 
   void _toggleMute() async {
@@ -97,8 +167,16 @@ class _LiveAudioRoomScreenState extends State<LiveAudioRoomScreen>
 
   void _sendMessage() {
     if (_msgController.text.trim().isEmpty) return;
+    final text = _msgController.text.trim();
+
+    _socket?.emit('send_message', {
+      'room': widget.channelName,
+      'user': 'Me',
+      'text': text,
+    });
+
     setState(() {
-      _messages.add({'user': 'Me', 'text': _msgController.text.trim()});
+      _messages.add({'user': 'Me', 'text': text});
     });
     _msgController.clear();
   }
@@ -123,8 +201,7 @@ class _LiveAudioRoomScreenState extends State<LiveAudioRoomScreen>
             ],
           ),
           padding: const EdgeInsets.all(20),
-
-child: Column(
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
@@ -156,28 +233,31 @@ child: Column(
   }
 
   Widget _build3DGiftCard(String emoji, String title, String cost) {
-    return Container(
-      margin: const EdgeInsets.all(6),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.06),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withOpacity(0.12)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.4),
-            offset: const Offset(0, 4),
-            blurRadius: 8,
-          ),
-        ],
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(emoji, style: const TextStyle(fontSize: 32)),
-          const SizedBox(height: 4),
-          Text(title, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
-          Text('$cost Coins', style: const TextStyle(color: Colors.amberAccent, fontSize: 10)),
-        ],
+    return GestureDetector(
+      onTap: () => _sendGift(emoji, title),
+      child: Container(
+        margin: const EdgeInsets.all(6),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.06),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.white.withOpacity(0.12)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.4),
+              offset: const Offset(0, 4),
+              blurRadius: 8,
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(emoji, style: const TextStyle(fontSize: 32)),
+            const SizedBox(height: 4),
+            Text(title, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
+            Text('$cost Coins', style: const TextStyle(color: Colors.amberAccent, fontSize: 10)),
+          ],
+        ),
       ),
     );
   }
@@ -185,7 +265,10 @@ child: Column(
   @override
   void dispose() {
     _pulseController.dispose();
+    _giftAnimController.dispose();
     _msgController.dispose();
+    _socket?.disconnect();
+    _socket?.dispose();
     _engine?.leaveChannel();
     _engine?.release();
     super.dispose();
@@ -194,7 +277,8 @@ child: Column(
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF090D16),
+
+backgroundColor: const Color(0xFF090D16),
       body: Stack(
         children: [
           // 3D Background Lighting Balls
@@ -240,14 +324,13 @@ child: Column(
           SafeArea(
             child: Column(
               children: [
-                // 1. 3D Header Glassmorphism Bar
+                // 1. 3D Header
                 Container(
                   margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                   decoration: BoxDecoration(
                     color: Colors.white.withOpacity(0.08),
-
-borderRadius: BorderRadius.circular(24),
+                    borderRadius: BorderRadius.circular(24),
                     border: Border.all(color: Colors.white.withOpacity(0.15)),
                   ),
                   child: Row(
@@ -292,7 +375,8 @@ borderRadius: BorderRadius.circular(24),
                               Text(
                                 _isJoined ? 'Live Room' : 'Connecting...',
                                 style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 10),
-                              ),
+
+),
                             ],
                           ),
                         ],
@@ -308,7 +392,7 @@ borderRadius: BorderRadius.circular(24),
 
                 const SizedBox(height: 15),
 
-                // 2. 8ቱ 3D Audio Pod Seats
+                // 2. 8ቱ 3D Audio Seats
                 Expanded(
                   flex: 5,
                   child: Padding(
@@ -330,14 +414,13 @@ borderRadius: BorderRadius.circular(24),
                   ),
                 ),
 
-                // 3. 3D Floating Live Chat Section
+                // 3. 3D Floating Live Chat
                 Expanded(
                   flex: 3,
                   child: Container(
                     margin: const EdgeInsets.symmetric(horizontal: 16),
                     padding: const EdgeInsets.all(12),
-
-decoration: BoxDecoration(
+                    decoration: BoxDecoration(
                       color: Colors.black.withOpacity(0.25),
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(color: Colors.white.withOpacity(0.08)),
@@ -373,7 +456,7 @@ decoration: BoxDecoration(
                   ),
                 ),
 
-                // 4. 3D Bottom Floating Glass Toolbar
+                // 4. 3D Bottom Floating Toolbar
                 Padding(
                   padding: const EdgeInsets.all(16),
                   child: Row(
@@ -385,7 +468,8 @@ decoration: BoxDecoration(
                           decoration: BoxDecoration(
                             color: Colors.white.withOpacity(0.1),
                             borderRadius: BorderRadius.circular(23),
-                            border: Border.all(color: Colors.white.withOpacity(0.15)),
+
+border: Border.all(color: Colors.white.withOpacity(0.15)),
                           ),
                           child: TextField(
                             controller: _msgController,
@@ -416,8 +500,7 @@ decoration: BoxDecoration(
                               colors: _isMuted
                                   ? [Colors.redAccent, Colors.red.shade800]
                                   : [const Color(0xFF38BDF8), const Color(0xFF2563EB)],
-
-),
+                            ),
                             boxShadow: [
                               BoxShadow(
                                 color: (_isMuted ? Colors.red : Colors.blue).withOpacity(0.5),
@@ -463,6 +546,45 @@ decoration: BoxDecoration(
               ],
             ),
           ),
+
+          // 5. 3D Pop-up Gift Center Animation
+          if (_activeGiftEmoji != null)
+            Center(
+              child: ScaleTransition(
+                scale: _giftScaleAnimation,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                  decoration: BoxDecoration(
+
+color: Colors.black.withOpacity(0.85),
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(color: Colors.amberAccent, width: 2),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.amberAccent.withOpacity(0.5),
+                        blurRadius: 30,
+                        spreadRadius: 8,
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(_activeGiftEmoji!, style: const TextStyle(fontSize: 70)),
+                      const SizedBox(height: 10),
+                      Text(
+                        '$_activeGiftSender sent a Gift!',
+                        style: const TextStyle(
+                          color: Colors.amberAccent,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -474,7 +596,6 @@ decoration: BoxDecoration(
         Stack(
           alignment: Alignment.center,
           children: [
-            // 3D Animated Soundwave Ripple for Host
             if (isHost && !_isMuted)
               AnimatedBuilder(
                 animation: _pulseController,
@@ -492,8 +613,6 @@ decoration: BoxDecoration(
                   );
                 },
               ),
-
-            // 3D Sphere Avatar Container
             Container(
               width: 54,
               height: 54,
@@ -518,8 +637,7 @@ decoration: BoxDecoration(
                   width: 1.5,
                 ),
               ),
-
-child: Icon(
+              child: Icon(
                 isHost ? Icons.person_rounded : Icons.mic_none_rounded,
                 color: isHost ? Colors.white : Colors.white54,
                 size: 26,
