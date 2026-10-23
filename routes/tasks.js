@@ -4,7 +4,6 @@ const UserTask = require('../models/UserTask');
 
 const getTodayDate = () => new Date().toISOString().split('T')[0];
 
-// Helper: Check if user registered within last 7 days
 const checkWithin7Days = (joinedDate) => {
   if (!joinedDate) return false;
   const diffTime = Math.abs(new Date() - new Date(joinedDate));
@@ -12,7 +11,6 @@ const checkWithin7Days = (joinedDate) => {
   return diffDays <= 7;
 };
 
-// 1. Fetch Task Status for UI (/api/tasks/status/:userId)
 router.get('/status/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
@@ -56,12 +54,10 @@ router.get('/status/:userId', async (req, res) => {
       },
     });
   } catch (error) {
-    console.error('Error fetching task status:', error);
     return res.status(500).json({ success: false, message: 'Server error' });
   }
 });
 
-// 2. Claim Specific Task Reward
 router.post('/claim', async (req, res) => {
   try {
     const { userId, taskId } = req.body;
@@ -79,7 +75,6 @@ router.post('/claim', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Task already claimed today' });
     }
 
-    // Task Validation Logic
     let isEligible = false;
     let rewardPoints = 0;
     let rewardCoins = 0;
@@ -134,7 +129,7 @@ router.post('/claim', async (req, res) => {
         }
         break;
 
-case 'game_flow_100k':
+      case 'game_flow_100k':
         if (taskData.gameBetting >= 100000) {
           isEligible = true;
           rewardCoins = 1000;
@@ -145,7 +140,7 @@ case 'game_flow_100k':
         return res.status(400).json({ success: false, message: 'Unknown task ID' });
     }
 
-    if (!isEligible) {
+if (!isEligible) {
       return res.status(400).json({ success: false, message: 'Task requirements not satisfied yet' });
     }
 
@@ -160,12 +155,10 @@ case 'game_flow_100k':
       claimedTasks: taskData.claimedTasks,
     });
   } catch (error) {
-    console.error('Error claiming task:', error);
-    return res.status(500).json({ success: false, message: 'Server error during claim' });
+    return res.status(500).json({ success: false, message: 'Server error' });
   }
 });
 
-// 3. Progress Updater (Called when user sits, sends gifts, or bets)
 router.post('/update-progress', async (req, res) => {
   try {
     const { userId, type, value } = req.body;
@@ -190,7 +183,6 @@ router.post('/update-progress', async (req, res) => {
 
     return res.status(200).json({ success: true, data: taskData });
   } catch (error) {
-    console.error('Error updating progress:', error);
     return res.status(500).json({ success: false, message: 'Server error' });
   }
 });
