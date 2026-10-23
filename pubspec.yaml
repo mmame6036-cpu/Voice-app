@@ -10,7 +10,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-    camera: ^0.11.0+2
+  camera: ^0.10.5+9
   agora_rtc_engine: ^6.3.0
   permission_handler: ^11.3.0
   socket_io_client: ^2.0.3+1
@@ -19,9 +19,8 @@ dependencies:
   http: ^1.2.0
   image_picker: ^1.0.7
   url_launcher: ^6.3.0
-  
+
   # Face Liveness Detection & Voice Guidance Packages
-  camera: ^0.10.5+9
   google_mlkit_face_detection: ^0.10.0
   flutter_tts: ^3.8.5
 
