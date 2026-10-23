@@ -56,7 +56,7 @@ class _DailyTasksScreenState extends State<DailyTasksScreen> with SingleTickerPr
 
     try {
       final url = Uri.parse('${UserService.serverUrl}/api/tasks/status/$_currentUserId');
-      final response = await http.get(url);
+      final response = await http.get(url).timeout(const Duration(seconds: 8));
 
       if (response.statusCode == 200) {
         final resData = jsonDecode(response.body);
@@ -358,43 +358,47 @@ isCompleted: _crownSeatMinutes >= 60,
   }
 
   Widget _buildCoinsTab() {
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        _buildTaskCard(
-          icon: Icons.meeting_room_outlined,
-          iconColor: Colors.greenAccent,
-          title: 'Stay in a Room for 10 Minutes',
-          subtitle: 'Total time spent: ${_normalSeatMinutes > 10 ? 10 : _normalSeatMinutes}/10 min',
-          rewardText: '1k Coins',
-          isCompleted: _normalSeatMinutes >= 10,
-          isClaimed: _claimedTasks.contains('stay_10_coins'),
-          onClaim: () => _claimTask('stay_10_coins'),
-          onGo: () => Navigator.pop(context),
-        ),
-        _buildTaskCard(
-          icon: Icons.card_giftcard,
-          iconColor: Colors.pinkAccent,
-          title: 'Bonus Gifts: Sent 100k Coins',
-          subtitle: 'Lucky Gift Flow: ${_coinsSent > 100000 ? 100000 : _coinsSent}/100k',
-          rewardText: '1k Coins',
-          isCompleted: _coinsSent >= 100000,
-          isClaimed: _claimedTasks.contains('gift_flow_100k'),
-          onClaim: () => _claimTask('gift_flow_100k'),
-          onGo: () => Navigator.pop(context),
-        ),
-        _buildTaskCard(
-          icon: Icons.sports_esports,
-          iconColor: Colors.purpleAccent,
-          title: 'Game: Bet 100k Coins',
-          subtitle: 'Game Flow: ${_gameBetting > 100000 ? 100000 : _gameBetting}/100k',
-          rewardText: '1k Coins',
-          isCompleted: _gameBetting >= 100000,
-          isClaimed: _claimedTasks.contains('game_flow_100k'),
-          onClaim: () => _claimTask('game_flow_100k'),
-          onGo: () => Navigator.pop(context),
-        ),
-      ],
+    return RefreshIndicator(
+      onRefresh: _fetchTaskStatus,
+      color: const Color(0xFF7B4DFF),
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          _buildTaskCard(
+            icon: Icons.meeting_room_outlined,
+            iconColor: Colors.greenAccent,
+            title: 'Stay in a Room for 10 Minutes',
+            subtitle: 'Total time spent: ${_normalSeatMinutes > 10 ? 10 : _normalSeatMinutes}/10 min',
+            rewardText: '1k Coins',
+            isCompleted: _normalSeatMinutes >= 10,
+            isClaimed: _claimedTasks.contains('stay_10_coins'),
+            onClaim: () => _claimTask('stay_10_coins'),
+            onGo: () => Navigator.pop(context),
+          ),
+          _buildTaskCard(
+            icon: Icons.card_giftcard,
+            iconColor: Colors.pinkAccent,
+            title: 'Bonus Gifts: Sent 100k Coins',
+            subtitle: 'Lucky Gift Flow: ${_coinsSent > 100000 ? 100000 : _coinsSent}/100k',
+            rewardText: '1k Coins',
+            isCompleted: _coinsSent >= 100000,
+            isClaimed: _claimedTasks.contains('gift_flow_100k'),
+            onClaim: () => _claimTask('gift_flow_100k'),
+            onGo: () => Navigator.pop(context),
+          ),
+          _buildTaskCard(
+            icon: Icons.sports_esports,
+            iconColor: Colors.purpleAccent,
+            title: 'Game: Bet 100k Coins',
+            subtitle: 'Game Flow: ${_gameBetting > 100000 ? 100000 : _gameBetting}/100k',
+            rewardText: '1k Coins',
+            isCompleted: _gameBetting >= 100000,
+            isClaimed: _claimedTasks.contains('game_flow_100k'),
+            onClaim: () => _claimTask('game_flow_100k'),
+            onGo: () => Navigator.pop(context),
+          ),
+        ],
+      ),
     );
   }
 
@@ -433,15 +437,15 @@ isCompleted: _crownSeatMinutes >= 60,
             child: Icon(icon, color: iconColor, size: 26),
           ),
           const SizedBox(width: 12),
-          Expanded(
+
+Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   title,
                   style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
-
-),
+                ),
                 const SizedBox(height: 4),
                 Text(
                   subtitle,
