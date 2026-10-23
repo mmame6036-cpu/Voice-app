@@ -15,11 +15,13 @@ const userTaskSchema = new mongoose.Schema({
   crownSeatMinutes: { type: Number, default: 0 },
   crownGiftCoins: { type: Number, default: 0 },
 
-  // Followers
+  // Followers & Flow
   dailyFollowersCount: { type: Number, default: 0 },
+  coinsSent: { type: Number, default: 0 },
+  gameBetting: { type: Number, default: 0 },
 
   // Claimed Task IDs
   claimedTasks: { type: [String], default: [] }
 }, { timestamps: true });
 
-module.exports = mongoose.model('UserTask', userTaskSchema);
+module.exports = mongoose.models.UserTask || mongoose.model('UserTask', userTaskSchema);
