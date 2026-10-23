@@ -4,7 +4,16 @@ const Agency = require('../models/Agency');
 const AgencyHost = require('../models/AgencyHost');
 const mongoose = require('mongoose');
 
-// Helper to get or create agency
+// Helper: Calculate Dynamic Commission Rate
+function calculateCommissionRate(totalPoints) {
+  if (totalPoints >= 150000000) return 20;
+  if (totalPoints >= 50000000) return 16;
+  if (totalPoints >= 10000000) return 12;
+  if (totalPoints >= 2000000) return 8;
+  return 4; // Base rate
+}
+
+// Helper: Get or Create Agency
 async function getOrCreateAgency(ownerId) {
   let agency = await Agency.findOne({ ownerId: String(ownerId) });
   if (!agency) {
@@ -13,7 +22,7 @@ async function getOrCreateAgency(ownerId) {
       agencyId: 'AG' + randomSuffix,
       ownerId: String(ownerId),
       agencyName: 'Medina Agency',
-      commissionRate: 15,
+      commissionRate: 4,
       status: 'active'
     });
     await agency.save();
@@ -21,48 +30,35 @@ async function getOrCreateAgency(ownerId) {
   return agency;
 }
 
-// 1. Agency Details Endpoint
-router.get('/details', async (req, res) => {
+// 1. Dashboard Endpoint (Matches Flutter UI: /api/agency/dashboard?ownerId=...)
+router.get('/dashboard', async (req, res) => {
   try {
-    let agentId = req.query.agentId || req.query.ownerId;
+    const ownerId = req.query.ownerId || req.query.agentId;
 
-    if (!agentId) {
-      return res.status(400).json({ success: false, message: 'Agent ID is required' });
+    if (!ownerId) {
+      return res.status(400).json({ success: false, message: 'Owner ID is required' });
     }
 
-    const agency = await getOrCreateAgency(agentId);
+    const agency = await getOrCreateAgency(ownerId);
     const hosts = await AgencyHost.find({ agencyId: agency.agencyId, status: 'active' }).sort({ currentMonthPoints: -1 });
 
-    const User = mongoose.models.User;
-    const formattedHosts = await Promise.all(
-      hosts.map(async (h) => {
-        let isFaceVerified = false;
-        if (User) {
-          const uDoc = await User.findOne({ userId: String(h.userId) });
-          if (uDoc) {
-            isFaceVerified = uDoc.isFaceVerified === true;
-          }
-        }
+    const totalPoints = hosts.reduce((sum, h) => sum + (h.currentMonthPoints || 0), 0);
+    const dynamicRate = calculateCommissionRate(totalPoints);
 
-        return {
-          userId: h.userId,
-          userName: h.userName ? h.userName : ('Host_' + h.userId),
-          avatarUrl: h.avatar ? h.avatar : '',
-          liveMinutes: Math.round((h.validHours ? h.validHours : 0) * 60),
-          diamondsEarned: h.currentMonthPoints ? h.currentMonthPoints : 0,
-          isFaceVerified: isFaceVerified,
-        };
-      })
-    );
-
-    const totalDiamonds = formattedHosts.reduce((sum, item) => sum + (item.diamondsEarned ? item.diamondsEarned : 0), 0);
+    if (agency.commissionRate !== dynamicRate) {
+      agency.commissionRate = dynamicRate;
+      await agency.save();
+    }
 
     return res.json({
       success: true,
-      agencyName: agency.agencyName ? agency.agencyName : 'Medina Agency',
-      commissionRate: agency.commissionRate ? agency.commissionRate : 15,
-      totalDiamonds: totalDiamonds,
-      hosts: formattedHosts,
+      agency: {
+        agencyId: agency.agencyId,
+        agencyName: agency.agencyName || 'Medina Agency',
+        commissionRate: dynamicRate,
+        totalEarnings: totalPoints,
+      },
+      hosts: hosts,
     });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
@@ -74,11 +70,8 @@ router.post('/add-host', async (req, res) => {
   try {
     const { agentId, hostUserId } = req.body;
 
-    if (!agentId) {
-      return res.status(400).json({ success: false, message: 'Agent ID is required' });
-    }
-    if (!hostUserId) {
-      return res.status(400).json({ success: false, message: 'Host ID is required' });
+    if (!agentId || !hostUserId) {
+      return res.status(400).json({ success: false, message: 'agentId and hostUserId are required' });
     }
 
     const agency = await getOrCreateAgency(agentId);
@@ -92,8 +85,8 @@ router.post('/add-host', async (req, res) => {
       if (!targetUser) {
         return res.status(404).json({ success: false, message: 'Host user not found' });
       }
-      resolvedName = targetUser.name ? targetUser.name : resolvedName;
-      resolvedAvatar = targetUser.avatar ? targetUser.avatar : '';
+      resolvedName = targetUser.name || resolvedName;
+      resolvedAvatar = targetUser.avatar || '';
     }
 
     let hostRecord = await AgencyHost.findOne({ userId: cleanHostId });
@@ -119,7 +112,7 @@ router.post('/add-host', async (req, res) => {
       await hostRecord.save();
     }
 
-return res.json({
+    return res.json({
       success: true,
       message: 'Host successfully recruited to agency!',
       host: hostRecord,
@@ -129,16 +122,13 @@ return res.json({
   }
 });
 
-// 3. Create a new Agency
+// 3. Create Agency
 router.post('/create', async (req, res) => {
   try {
     const { ownerId, agencyName } = req.body;
 
-    if (!ownerId) {
-      return res.status(400).json({ success: false, message: 'Owner ID is required' });
-    }
-    if (!agencyName) {
-      return res.status(400).json({ success: false, message: 'Agency Name is required' });
+if (!ownerId || !agencyName) {
+      return res.status(400).json({ success: false, message: 'ownerId and agencyName are required' });
     }
 
     const existingAgency = await Agency.findOne({ ownerId: String(ownerId) });
@@ -153,7 +143,7 @@ router.post('/create', async (req, res) => {
       agencyId: generatedAgencyId,
       ownerId: String(ownerId),
       agencyName: String(agencyName).trim(),
-      commissionRate: 15,
+      commissionRate: 4,
       status: 'active'
     });
 
@@ -174,11 +164,8 @@ router.post('/apply', async (req, res) => {
   try {
     const { userId, agencyId } = req.body;
 
-    if (!userId) {
-      return res.status(400).json({ success: false, message: 'User ID is required' });
-    }
-    if (!agencyId) {
-      return res.status(400).json({ success: false, message: 'Agency ID is required' });
+    if (!userId || !agencyId) {
+      return res.status(400).json({ success: false, message: 'userId and agencyId are required' });
     }
 
     const targetAgency = await Agency.findOne({ agencyId: String(agencyId).trim(), status: 'active' });
@@ -200,13 +187,12 @@ router.post('/apply', async (req, res) => {
 
     let resolvedName = 'Host_' + userId;
     let resolvedAvatar = '';
-
     const User = mongoose.models.User;
     if (User) {
       const userDoc = await User.findOne({ userId: String(userId) });
       if (userDoc) {
-        if (userDoc.name) resolvedName = userDoc.name;
-        if (userDoc.avatar) resolvedAvatar = userDoc.avatar;
+        resolvedName = userDoc.name || resolvedName;
+        resolvedAvatar = userDoc.avatar || '';
       }
     }
 
@@ -230,19 +216,13 @@ router.post('/apply', async (req, res) => {
   }
 });
 
-// 5. Agency Owner Approves or Rejects Application
+// 5. Manage Application (Approve / Reject)
 router.post('/manage-application', async (req, res) => {
   try {
     const { ownerId, userId, action } = req.body;
 
-    if (!ownerId) {
-      return res.status(400).json({ success: false, message: 'Owner ID is required' });
-    }
-    if (!userId) {
-      return res.status(400).json({ success: false, message: 'User ID is required' });
-    }
-    if (!action) {
-      return res.status(400).json({ success: false, message: 'Action is required' });
+    if (!ownerId  !userId  !action) {
+      return res.status(400).json({ success: false, message: 'ownerId, userId, and action are required' });
     }
 
     const agency = await Agency.findOne({ ownerId: String(ownerId) });
@@ -250,7 +230,7 @@ router.post('/manage-application', async (req, res) => {
       return res.status(403).json({ success: false, message: 'Unauthorized. You do not own an agency.' });
     }
 
-const hostRecord = await AgencyHost.findOne({ userId: String(userId), agencyId: agency.agencyId });
+    const hostRecord = await AgencyHost.findOne({ userId: String(userId), agencyId: agency.agencyId });
     if (!hostRecord) {
       return res.status(404).json({ success: false, message: 'Host application record not found' });
     }
@@ -267,22 +247,19 @@ const hostRecord = await AgencyHost.findOne({ userId: String(userId), agencyId: 
       return res.json({ success: true, message: 'Host application rejected', host: hostRecord });
     }
 
-    return res.status(400).json({ success: false, message: 'Invalid action parameter' });
+return res.status(400).json({ success: false, message: 'Invalid action parameter' });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }
 });
 
-// 6. Remove Host from Agency
+// 6. Remove Host
 router.post('/remove-host', async (req, res) => {
   try {
     const { ownerId, userId } = req.body;
 
-    if (!ownerId) {
-      return res.status(400).json({ success: false, message: 'Owner ID is required' });
-    }
-    if (!userId) {
-      return res.status(400).json({ success: false, message: 'Host User ID is required' });
+    if (!ownerId || !userId) {
+      return res.status(400).json({ success: false, message: 'ownerId and userId are required' });
     }
 
     const agency = await Agency.findOne({ ownerId: String(ownerId) });
