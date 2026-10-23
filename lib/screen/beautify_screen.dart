@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'live_audio_room_screen.dart';
 
 class BeautifyScreen extends StatefulWidget {
   final String roomTitle;
@@ -99,9 +100,9 @@ class _BeautifyScreenState extends State<BeautifyScreen> {
               child: Stack(
                 children: [
                   Positioned(
-                    right: 15,
 
-bottom: 15,
+right: 15,
+                    bottom: 15,
                     child: Icon(
                       _themes[_selectedThemeIndex]['icon'],
                       size: 80,
@@ -213,12 +214,13 @@ fontSize: 10,
                 height: 50,
                 child: ElevatedButton(
                   onPressed: () {
-                    // የማረጋገጫውን ሂደት በሙሉ ጨርሶ በቀጥታ ወደ ክፍል መግቢያ
-                    Navigator.popUntil(context, (route) => route.isFirst);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('🎉 የቀጥታ ድምፅ ክፍልዎ በተሳካ ሁኔታ ተከፍቷል!'),
-                        backgroundColor: Color(0xFF10B981),
+                    // በቀጥታ ወደ ቀጥታ ድምፅ ክፍሉ ያሳልፋል
+                    Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => LiveAudioRoomScreen(
+                          roomTitle: widget.roomTitle,
+                        ),
                       ),
                     );
                   },
