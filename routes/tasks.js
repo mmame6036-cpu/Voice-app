@@ -1,175 +1,197 @@
 const express = require('express');
 const router = express.Router();
-const mongoose = require('mongoose');
 const UserTask = require('../models/UserTask');
-const Transaction = require('../models/Transaction');
 
-const getTodayStr = () => new Date().toISOString().split('T')[0];
+const getTodayDate = () => new Date().toISOString().split('T')[0];
 
-// Fetch daily status & recalculate tier rates
+// Helper: Check if user registered within last 7 days
+const checkWithin7Days = (joinedDate) => {
+  if (!joinedDate) return false;
+  const diffTime = Math.abs(new Date() - new Date(joinedDate));
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  return diffDays <= 7;
+};
+
+// 1. Fetch Task Status for UI (/api/tasks/status/:userId)
 router.get('/status/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
-    let task = await UserTask.findOne({ userId });
+    const today = getTodayDate();
 
-    if (!task) {
-      task = await UserTask.create({ userId, joinedDate: new Date() });
+    let taskData = await UserTask.findOne({ userId });
+
+    if (!taskData) {
+      taskData = new UserTask({
+        userId,
+        lastActiveDate: today,
+        consecutiveActiveDays: 1,
+      });
+      await taskData.save();
+    } else if (taskData.lastActiveDate !== today) {
+      taskData.normalSeatMinutes = 0;
+      taskData.crownSeatMinutes = 0;
+      taskData.crownGiftCoins = 0;
+      taskData.dailyFollowersCount = 0;
+      taskData.coinsSent = 0;
+      taskData.gameBetting = 0;
+      taskData.claimedTasks = [];
+      taskData.lastActiveDate = today;
+      await taskData.save();
     }
 
-    const today = getTodayStr();
+    const isWithin7Days = checkWithin7Days(taskData.joinedDate);
 
-    if (task.lastActiveDate !== today && task.lastActiveDate !== '') {
-      if (task.normalSeatMinutes >= 60) {
-        task.consecutiveActiveDays += 1;
-        task.consecutiveInactiveDays = 0;
-        task.normalSeatRewardRate += 200;
-      } else {
-        task.consecutiveInactiveDays += 1;
-        task.consecutiveActiveDays = 0;
-        task.normalSeatRewardRate = Math.max(500, task.normalSeatRewardRate - 250);
-      }
-
-      task.normalSeatMinutes = 0;
-      task.crownSeatMinutes = 0;
-      task.crownGiftCoins = 0;
-      task.dailyFollowersCount = 0;
-      task.claimedTasks = [];
-      task.lastActiveDate = today;
-      await task.save();
-    } else if (task.lastActiveDate === '') {
-      task.lastActiveDate = today;
-      await task.save();
-    }
-
-    const daysSinceJoined = Math.floor((new Date() - new Date(task.joinedDate)) / (1000 * 60 * 60 * 24));
-    const isWithin7Days = daysSinceJoined < 7;
-
-    return res.json({
+    return res.status(200).json({
       success: true,
       data: {
         isWithin7Days,
-        daysSinceJoined,
-        normalSeatMinutes: task.normalSeatMinutes,
-        normalSeatRewardRate: task.normalSeatRewardRate,
-        crownSeatMinutes: task.crownSeatMinutes,
-        crownGiftCoins: task.crownGiftCoins,
-        dailyFollowersCount: task.dailyFollowersCount,
-        claimedTasks: task.claimedTasks
-      }
+        normalSeatMinutes: taskData.normalSeatMinutes,
+        normalSeatRewardRate: taskData.normalSeatRewardRate,
+        crownSeatMinutes: taskData.crownSeatMinutes,
+        crownGiftCoins: taskData.crownGiftCoins,
+        dailyFollowersCount: taskData.dailyFollowersCount,
+        coinsSent: taskData.coinsSent,
+        gameBetting: taskData.gameBetting,
+        claimedTasks: taskData.claimedTasks,
+      },
     });
-  } catch (err) {
-    return res.status(500).json({ success: false, error: err.message });
+  } catch (error) {
+    console.error('Error fetching task status:', error);
+    return res.status(500).json({ success: false, message: 'Server error' });
   }
 });
 
-// Claim task reward
+// 2. Claim Specific Task Reward
 router.post('/claim', async (req, res) => {
   try {
     const { userId, taskId } = req.body;
-    let task = await UserTask.findOne({ userId });
-    if (!task) return res.status(404).json({ success: false, error: 'Task profile not found' });
 
-    if (task.claimedTasks.includes(taskId)) {
-      return res.status(400).json({ success: false, message: 'Task already claimed' });
+    if (!userId || !taskId) {
+      return res.status(400).json({ success: false, message: 'Missing userId or taskId' });
     }
 
+    const taskData = await UserTask.findOne({ userId });
+    if (!taskData) {
+      return res.status(404).json({ success: false, message: 'User task profile not found' });
+    }
+
+    if (taskData.claimedTasks.includes(taskId)) {
+      return res.status(400).json({ success: false, message: 'Task already claimed today' });
+    }
+
+    // Task Validation Logic
+    let isEligible = false;
     let rewardPoints = 0;
-    let description = '';
+    let rewardCoins = 0;
 
-    // 1. 7-Day New User 2hr Seat (8k Points)
-    if (taskId === 'new_user_7day') {
-      const daysSinceJoined = Math.floor((new Date() - new Date(task.joinedDate)) / (1000 * 60 * 60 * 24));
-      if (daysSinceJoined >= 7) {
-        return res.status(400).json({ success: false, message: '7-day limit expired' });
-      }
-      if (task.normalSeatMinutes < 120) {
-        return res.status(400).json({ success: false, message: 'Requires 120 minutes on seat' });
-      }
-      rewardPoints = 8000;
-      description = '7-Day New User 2hr Seat Reward';
+    switch (taskId) {
+      case 'new_user_7day':
+        if (checkWithin7Days(taskData.joinedDate) && taskData.normalSeatMinutes >= 120) {
+          isEligible = true;
+          rewardPoints = 8000;
+        }
+        break;
+
+      case 'normal_seat_daily':
+        if (taskData.normalSeatMinutes >= 60) {
+          isEligible = true;
+          rewardPoints = taskData.normalSeatRewardRate || 1000;
+        }
+        break;
+
+      case 'crown_seat_task':
+        if (taskData.crownSeatMinutes >= 60 && taskData.crownGiftCoins >= 600) {
+          isEligible = true;
+          rewardPoints = 3000;
+        }
+        break;
+
+      case 'crown_room_reward':
+        if (taskData.crownSeatMinutes >= 60) {
+          isEligible = true;
+          rewardPoints = 5000;
+        }
+        break;
+
+      case 'followers_task':
+        if (taskData.dailyFollowersCount >= 3) {
+          isEligible = true;
+          rewardPoints = 1000;
+        }
+        break;
+
+      case 'stay_10_coins':
+        if (taskData.normalSeatMinutes >= 10) {
+          isEligible = true;
+          rewardCoins = 1000;
+        }
+        break;
+
+      case 'gift_flow_100k':
+        if (taskData.coinsSent >= 100000) {
+          isEligible = true;
+          rewardCoins = 1000;
+        }
+        break;
+
+case 'game_flow_100k':
+        if (taskData.gameBetting >= 100000) {
+          isEligible = true;
+          rewardCoins = 1000;
+        }
+        break;
+
+      default:
+        return res.status(400).json({ success: false, message: 'Unknown task ID' });
     }
 
-    // 2. Daily Normal Seat 1hr (Rate from 500 upwards)
-    else if (taskId === 'normal_seat_daily') {
-      if (task.normalSeatMinutes < 60) {
-        return res.status(400).json({ success: false, message: 'Requires 60 minutes on seat' });
-      }
-      rewardPoints = task.normalSeatRewardRate;
-      description = 'Daily Normal Seat Reward (' + rewardPoints + ' pts)';
+    if (!isEligible) {
+      return res.status(400).json({ success: false, message: 'Task requirements not satisfied yet' });
     }
 
-    // 3. Crown Seat 1hr + 600 Gift Coins
-    else if (taskId === 'crown_seat_task') {
-      if (task.crownSeatMinutes < 60 || task.crownGiftCoins < 600) {
-        return res.status(400).json({ success: false, message: 'Requires 60 mins and 600 gift coins' });
-      }
-      rewardPoints = 3000;
-      description = 'Crown Seat 1hr & 600 Gifts Reward';
-    }
+    taskData.claimedTasks.push(taskId);
+    await taskData.save();
 
-    // 4. Gain 3 Followers (1k Points)
-
-else if (taskId === 'followers_task') {
-      if (task.dailyFollowersCount < 3) {
-        return res.status(400).json({ success: false, message: 'Requires 3 new followers' });
-      }
-      rewardPoints = 1000;
-      description = 'Gain 3 Followers Daily Reward';
-    } else {
-      return res.status(400).json({ success: false, error: 'Unknown task ID' });
-    }
-
-    task.claimedTasks.push(taskId);
-    await task.save();
-
-    const User = mongoose.model('User');
-    const updatedUser = await User.findOneAndUpdate(
-      { userId: String(userId) },
-      { $inc: { points: rewardPoints } },
-      { new: true }
-    );
-
-    await Transaction.create({
-      userId: String(userId),
-      type: 'task_points_reward',
-      amount: rewardPoints,
-      balanceAfter: updatedUser ? (updatedUser.points || 0) : 0,
-      description: description
-    });
-
-    return res.json({
+    return res.status(200).json({
       success: true,
-      rewardPoints: rewardPoints,
-      message: 'Successfully claimed ' + rewardPoints + ' points!'
+      message: 'Claim successful!',
+      rewardPoints,
+      rewardCoins,
+      claimedTasks: taskData.claimedTasks,
     });
-  } catch (err) {
-    return res.status(500).json({ success: false, error: err.message });
+  } catch (error) {
+    console.error('Error claiming task:', error);
+    return res.status(500).json({ success: false, message: 'Server error during claim' });
   }
 });
 
-// Record user activity
-router.post('/record-activity', async (req, res) => {
+// 3. Progress Updater (Called when user sits, sends gifts, or bets)
+router.post('/update-progress', async (req, res) => {
   try {
     const { userId, type, value } = req.body;
-    let task = await UserTask.findOne({ userId });
-    if (!task) task = await UserTask.create({ userId });
+    const today = getTodayDate();
 
-    const val = Number(value) || 1;
-
-    if (type === 'normal_seat') {
-      task.normalSeatMinutes += val;
-    } else if (type === 'crown_seat') {
-      task.crownSeatMinutes += val;
-    } else if (type === 'crown_gift') {
-      task.crownGiftCoins += val;
-    } else if (type === 'follow') {
-      task.dailyFollowersCount += val;
+    let taskData = await UserTask.findOne({ userId });
+    if (!taskData) {
+      taskData = new UserTask({ userId, lastActiveDate: today });
     }
 
-    await task.save();
-    return res.json({ success: true, task });
-  } catch (err) {
-    return res.status(500).json({ success: false, error: err.message });
+    const val = Number(value) || 0;
+
+    if (type === 'normal_seat') taskData.normalSeatMinutes += val;
+    if (type === 'crown_seat') taskData.crownSeatMinutes += val;
+    if (type === 'crown_gift') taskData.crownGiftCoins += val;
+    if (type === 'follower') taskData.dailyFollowersCount += val;
+    if (type === 'coins_sent') taskData.coinsSent += val;
+    if (type === 'game_betting') taskData.gameBetting += val;
+
+    taskData.lastActiveDate = today;
+    await taskData.save();
+
+    return res.status(200).json({ success: true, data: taskData });
+  } catch (error) {
+    console.error('Error updating progress:', error);
+    return res.status(500).json({ success: false, message: 'Server error' });
   }
 });
 
