@@ -74,7 +74,13 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> {
             }
           },
           onUserMuteAudio: (RtcConnection connection, int remoteUid, bool muted) {
-            setState(() {});
+            setState(() {
+              for (var seat in _seats) {
+                if (seat != null && seat['userId'] == remoteUid.toString()) {
+                  seat['isMuted'] = muted;
+                }
+              }
+            });
           },
         ),
       );
@@ -125,16 +131,18 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> {
       _leaveSeat();
     }
 
-    setState(() {
+setState(() {
       _mySeatIndex = seatIndex;
       _seats[seatIndex] = {
         'userId': _userService.userId,
         'userName': _userService.userName,
         'isCrown': seatIndex == 0,
+        'isMuted': false,
+        'receivedGifts': 0,
       };
     });
 
-await _engine.setClientRole(role: ClientRoleType.clientRoleBroadcaster);
+    await _engine.setClientRole(role: ClientRoleType.clientRoleBroadcaster);
     await _engine.updateChannelMediaOptions(
       const ChannelMediaOptions(
         publishMicrophoneTrack: true,
@@ -174,7 +182,12 @@ await _engine.setClientRole(role: ClientRoleType.clientRoleBroadcaster);
     if (_mySeatIndex == null) return;
     final newMuteState = !_isMuted;
     _engine.muteLocalAudioStream(newMuteState);
-    setState(() => _isMuted = newMuteState);
+    setState(() {
+      _isMuted = newMuteState;
+      if (_seats[_mySeatIndex!] != null) {
+        _seats[_mySeatIndex!]['isMuted'] = newMuteState;
+      }
+    });
   }
 
   @override
@@ -223,13 +236,16 @@ await _engine.setClientRole(role: ClientRoleType.clientRoleBroadcaster);
         crossAxisCount: 4,
         crossAxisSpacing: 12,
         mainAxisSpacing: 16,
-        childAspectRatio: 0.75,
+        childAspectRatio: 0.65,
       ),
       itemCount: 8,
       itemBuilder: (context, index) {
         final seat = _seats[index];
         final isCrown = index == 0;
         final isMySeat = _mySeatIndex == index;
+        final bool isSeatOccupied = seat != null;
+        final bool seatMuted = seat != null ? (seat['isMuted'] ?? false) : true;
+        final int gifts = seat != null ? (seat['receivedGifts'] ?? 0) : 0;
 
         return GestureDetector(
           onTap: () {
@@ -241,7 +257,9 @@ await _engine.setClientRole(role: ClientRoleType.clientRoleBroadcaster);
           },
           child: Column(
             children: [
-              Stack(
+
+Stack(
+                clipBehavior: Clip.none,
                 alignment: Alignment.center,
                 children: [
                   Container(
@@ -251,13 +269,12 @@ await _engine.setClientRole(role: ClientRoleType.clientRoleBroadcaster);
                       shape: BoxShape.circle,
                       color: const Color(0xFF1E1742),
                       border: Border.all(
-                        color: isCrown ? Colors.amber : (seat != null ? const Color(0xFF00C9A7) : Colors.white12),
+                        color: isCrown ? Colors.amber : (isSeatOccupied ? const Color(0xFF00C9A7) : Colors.white12),
                         width: 2,
                       ),
                     ),
                     child: Center(
-
-child: seat != null
+                      child: isSeatOccupied
                           ? Text(
                               seat['userName'] != null && seat['userName'].isNotEmpty
                                   ? seat['userName'][0].toUpperCase()
@@ -273,21 +290,63 @@ child: seat != null
                   ),
                   if (isCrown)
                     const Positioned(
-                      top: 0,
+                      top: -6,
                       child: Icon(Icons.star, color: Colors.amber, size: 16),
+                    ),
+                  if (isSeatOccupied)
+                    Positioned(
+                      bottom: 0,
+                      right: 0,
+                      child: Container(
+                        padding: const EdgeInsets.all(3),
+                        decoration: BoxDecoration(
+                          color: seatMuted ? Colors.redAccent : const Color(0xFF00C9A7),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: const Color(0xFF0F0C20), width: 1.5),
+                        ),
+                        child: Icon(
+                          seatMuted ? Icons.mic_off : Icons.mic,
+                          color: Colors.white,
+                          size: 11,
+                        ),
+                      ),
                     ),
                 ],
               ),
               const SizedBox(height: 6),
               Text(
-                seat != null ? (isMySeat ? 'You' : seat['userName']) : '${index + 1}',
+                isSeatOccupied ? (isMySeat ? 'You' : seat['userName']) : '${index + 1}',
                 style: TextStyle(
-                  color: seat != null ? Colors.white : Colors.white38,
+                  color: isSeatOccupied ? Colors.white : Colors.white38,
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 4),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1E1742),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.white10),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.card_giftcard, size: 10, color: Colors.amber),
+                    const SizedBox(width: 3),
+                    Text(
+                      '$gifts',
+                      style: const TextStyle(
+                        color: Colors.amber,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -299,7 +358,7 @@ child: seat != null
   Widget _buildBottomBar() {
     final bool onSeat = _mySeatIndex != null;
 
-    return Container(
+return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
       decoration: const BoxDecoration(
         color: Color(0xFF191432),
