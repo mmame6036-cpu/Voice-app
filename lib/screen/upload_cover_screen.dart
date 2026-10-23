@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'beautify_screen.dart';
 
 class UploadCoverScreen extends StatefulWidget {
   const UploadCoverScreen({Key? key}) : super(key: key);
@@ -108,9 +109,9 @@ class _UploadCoverScreenState extends State<UploadCoverScreen> {
                             image: FileImage(_selectedImage!),
                             fit: BoxFit.cover,
                           )
-                        : null,
 
-),
+: null,
+                  ),
                   child: _selectedImage == null
                       ? Column(
                           mainAxisAlignment: MainAxisAlignment.center,
@@ -137,116 +138,3 @@ class _UploadCoverScreenState extends State<UploadCoverScreen> {
               // የክፍሉ ርዕስ መጻፊያ (Room Title Input)
               TextField(
                 controller: _titleController,
-                maxLength: 40,
-                decoration: InputDecoration(
-                  hintText: 'Enter Room Title (e.g. Chat & Music)',
-                  hintStyle: const TextStyle(fontSize: 14, color: Colors.grey),
-                  filled: true,
-                  fillColor: const Color(0xFFF8FAFC),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: Colors.grey.shade300),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: Colors.grey.shade300),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: Color(0xFF2563EB)),
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 40),
-
-              // የቀጣይ ቁልፍ (Next Step Button)
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: ElevatedButton(
-                  onPressed: () {
-                    if (_selectedImage == null) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('እባክዎ መጀመሪያ የክፍሉን ሽፋን ፎቶ ይምረጡ'),
-                          backgroundColor: Colors.orange,
-                        ),
-                      );
-                      return;
-                    }
-                    // ወደ ደረጃ 3 (Beautify / Go Live) የሚያሳልፍ ጥሪ እዚህ ይቀመጣል
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF2563EB),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(25),
-                    ),
-                    elevation: 0,
-                  ),
-                  child: const Text(
-                    'Next Step',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildStepItem(int step, String title, {required bool isDone, required bool isActive}) {
-    return Column(
-      children: [
-        Container(
-          width: 28,
-          height: 28,
-          decoration: BoxDecoration(
-
-color: isDone
-                ? const Color(0xFF10B981)
-                : (isActive ? const Color(0xFF2563EB) : Colors.grey.shade300),
-            shape: BoxShape.circle,
-          ),
-          alignment: Alignment.center,
-          child: isDone
-              ? const Icon(Icons.check, size: 16, color: Colors.white)
-              : Text(
-                  '$step',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 13,
-                  ),
-                ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          title,
-          style: TextStyle(
-            fontSize: 11,
-            color: isActive || isDone ? Colors.black87 : Colors.grey,
-            fontWeight: isActive || isDone ? FontWeight.w600 : FontWeight.normal,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildStepDivider({required bool isActive}) {
-    return Container(
-      width: 45,
-      height: 2,
-      margin: const EdgeInsets.only(bottom: 18, left: 4, right: 4),
-      color: isActive ? const Color(0xFF2563EB) : Colors.grey.shade300,
-    );
-  }
-}
