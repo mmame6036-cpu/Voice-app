@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
+import 'upload_cover_screen.dart';
 
 class FaceVerificationScreen extends StatefulWidget {
   const FaceVerificationScreen({Key? key}) : super(key: key);
@@ -11,6 +13,7 @@ class FaceVerificationScreen extends StatefulWidget {
 class _FaceVerificationScreenState extends State<FaceVerificationScreen> {
   CameraController? _cameraController;
   bool _isCameraInitialized = false;
+  Timer? _verificationTimer;
 
   @override
   void initState() {
@@ -21,7 +24,6 @@ class _FaceVerificationScreenState extends State<FaceVerificationScreen> {
   Future<void> _initializeCamera() async {
     try {
       final cameras = await availableCameras();
-      // የፊት ካሜራን (Front Camera) መምረጥ
       final frontCamera = cameras.firstWhere(
         (camera) => camera.lensDirection == CameraLensDirection.front,
         orElse: () => cameras.first,
@@ -38,6 +40,16 @@ class _FaceVerificationScreenState extends State<FaceVerificationScreen> {
         setState(() {
           _isCameraInitialized = true;
         });
+
+        // ካሜራው እንደበራ ለሙከራ ከ 3 ሰከንድ በኋላ ወደ ደረጃ 2 (Upload Cover) እንዲያሳልፍ
+        _verificationTimer = Timer(const Duration(seconds: 3), () {
+          if (mounted) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => const UploadCoverScreen()),
+            );
+          }
+        });
       }
     } catch (e) {
       debugPrint('የካሜራ ስህተት: $e');
@@ -46,6 +58,7 @@ class _FaceVerificationScreenState extends State<FaceVerificationScreen> {
 
   @override
   void dispose() {
+    _verificationTimer?.cancel();
     _cameraController?.dispose();
     super.dispose();
   }
@@ -116,7 +129,8 @@ class _FaceVerificationScreenState extends State<FaceVerificationScreen> {
                             width: _cameraController!.value.previewSize?.height ?? 280,
                             height: _cameraController!.value.previewSize?.width ?? 280,
                             child: CameraPreview(_cameraController!),
-                          ),
+
+),
                         ),
                       )
                     : Container(
@@ -131,7 +145,7 @@ class _FaceVerificationScreenState extends State<FaceVerificationScreen> {
 
           const Spacer(),
 
-// የታችኛው መመሪያ ማሳሰቢያ
+          // የታችኛው መመሪያ ማሳሰቢያ
           Padding(
             padding: const EdgeInsets.only(bottom: 40),
             child: Row(
