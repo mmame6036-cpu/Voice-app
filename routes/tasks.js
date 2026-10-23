@@ -1,6 +1,25 @@
 const express = require('express');
 const router = express.Router();
-const UserTask = require('../models/UserTask');
+const mongoose = require('mongoose');
+
+// Schema Definition with safe registration
+const userTaskSchema = new mongoose.Schema({
+  userId: { type: String, required: true, index: true },
+  joinedDate: { type: Date, default: Date.now },
+  lastActiveDate: { type: String, default: '' },
+  normalSeatMinutes: { type: Number, default: 0 },
+  normalSeatRewardRate: { type: Number, default: 1000 },
+  consecutiveActiveDays: { type: Number, default: 0 },
+  consecutiveInactiveDays: { type: Number, default: 0 },
+  crownSeatMinutes: { type: Number, default: 0 },
+  crownGiftCoins: { type: Number, default: 0 },
+  dailyFollowersCount: { type: Number, default: 0 },
+  coinsSent: { type: Number, default: 0 },
+  gameBetting: { type: Number, default: 0 },
+  claimedTasks: { type: [String], default: [] }
+}, { timestamps: true });
+
+const UserTask = mongoose.models.UserTask || mongoose.model('UserTask', userTaskSchema);
 
 function getTodayDate() {
   return new Date().toISOString().split('T')[0];
@@ -13,6 +32,7 @@ function checkWithin7Days(joinedDate) {
   return diffDays <= 7;
 }
 
+// 1. Task Status Endpoint
 router.get('/status/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
@@ -60,6 +80,7 @@ router.get('/status/:userId', async (req, res) => {
   }
 });
 
+// 2. Claim Task Endpoint
 router.post('/claim', async (req, res) => {
   try {
     const { userId, taskId } = req.body;
@@ -103,7 +124,7 @@ router.post('/claim', async (req, res) => {
         }
         break;
 
-      case 'crown_room_reward':
+case 'crown_room_reward':
         if (taskData.crownSeatMinutes >= 60) {
           isEligible = true;
           rewardPoints = 5000;
@@ -142,7 +163,7 @@ router.post('/claim', async (req, res) => {
         return res.status(400).json({ success: false, message: 'Unknown task ID' });
     }
 
-if (!isEligible) {
+    if (!isEligible) {
       return res.status(400).json({ success: false, message: 'Task requirements not satisfied yet' });
     }
 
@@ -161,6 +182,7 @@ if (!isEligible) {
   }
 });
 
+// 3. Update Progress Endpoint
 router.post('/update-progress', async (req, res) => {
   try {
     const { userId, type, value } = req.body;
