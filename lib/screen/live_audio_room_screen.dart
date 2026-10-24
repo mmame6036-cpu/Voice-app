@@ -87,7 +87,7 @@ class _LiveAudioRoomScreenState extends State<LiveAudioRoomScreen>
             if (mounted) setState(() => _isJoined = true);
           },
           onAudioVolumeIndication: (RtcConnection connection,
-              List<AudioVolumeInfo> speakers, int totalVolume) {
+              List<AudioVolumeInfo> speakers, int totalVolume, int speakerNumber) {
             for (var speaker in speakers) {
               _updateSpeakerVisual(speaker.uid.toString(), (speaker.volume ?? 0) > 5);
             }
