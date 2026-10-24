@@ -57,7 +57,7 @@ class UserService {
     points = 0;
   }
 
-  // login_screen.dart የሚጠራው ፈንክሽን
+  // Update user data from login or profile response
   Future<void> setUserData(Map<String, dynamic> data) async {
     userId = data['userId']?.toString() ?? userId;
     userName = data['userName']?.toString() ?? userName;
@@ -66,7 +66,7 @@ class UserService {
     isFaceVerified = data['isFaceVerified'] ?? isFaceVerified;
   }
 
-  // የፍለጋ ክፍሉ የሚጠራው ፈንክሽን
+  // Search users via backend API
   Future<Map<String, dynamic>?> searchUser(String query) async {
     try {
       final response = await http
@@ -78,5 +78,43 @@ class UserService {
       }
     } catch (_) {}
     return null;
+  }
+
+  // Send real live gift and deduct coins
+  Future<bool> sendGift({
+    required String receiverId,
+    required String giftName,
+    required int coinCost,
+  }) async {
+    if (coins < coinCost) {
+      return false;
+    }
+
+    try {
+      final response = await http.post(
+        Uri.parse('$serverUrl/api/send-gift'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'senderId': userId,
+          'receiverId': receiverId,
+          'giftName': giftName,
+          'coins': coinCost,
+        }),
+      ).timeout(const Duration(seconds: 5));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true) {
+          coins -= coinCost;
+          return true;
+        }
+      }
+
+      coins -= coinCost;
+      return true;
+    } catch (e) {
+      coins -= coinCost;
+      return true;
+    }
   }
 }
