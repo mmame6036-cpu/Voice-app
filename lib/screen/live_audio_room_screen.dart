@@ -1,16 +1,18 @@
-import 'dart:async';
+import 'dart:math';
 import 'package:flutter/material.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
-import 'package:socket_io_client/socket_io_client.dart' as IO;
+import 'package:permission_handler/permission_handler.dart';
+import '../services/user_service.dart';
+import '../recharge_screen.dart';
 
 class LiveAudioRoomScreen extends StatefulWidget {
   final String roomTitle;
   final String channelName;
+
   const LiveAudioRoomScreen({
     Key? key,
-    this.roomTitle = '3D Voice Party',
-    this.channelName = 'party_room_1',
+    required this.roomTitle,
+    required this.channelName,
   }) : super(key: key);
 
   @override
@@ -18,434 +20,296 @@ class LiveAudioRoomScreen extends StatefulWidget {
 }
 
 class _LiveAudioRoomScreenState extends State<LiveAudioRoomScreen>
-    with TickerProviderStateMixin {
-  // Agora State
+    with SingleTickerProviderStateMixin {
+  final UserService _user = UserService();
   RtcEngine? _engine;
   bool _isJoined = false;
   bool _isMuted = false;
+  int? _mySeatIndex;
 
-  // Socket.io State
-  IO.Socket? _socket;
-
-  // 3D Pulse Animation for Host
-  late AnimationController _pulseController;
-
-  // 3D Gift Banner Animation
   late AnimationController _giftAnimController;
   late Animation<double> _giftScaleAnimation;
-  String? _activeGiftEmoji;
-  String? _activeGiftSender;
+  Map<String, dynamic>? _activeScreenGift;
 
-  final TextEditingController _msgController = TextEditingController();
-  final List<Map<String, String>> _messages = [
-    {'user': 'System', 'text': 'Welcome to the 3D Audio Lounge ✨'},
+  final List<Map<String, dynamic>> _seats = List.generate(8, (index) {
+    return {
+      'index': index,
+      'isHost': index == 0,
+      'userId': index == 0 ? '1001' : null,
+      'userName': index == 0 ? 'Host' : 'Seat ${index + 1}',
+      'isSpeaking': false,
+    };
+  });
+
+  final List<Map<String, dynamic>> _gifts = [
+    {'name': 'Rose', 'coins': 10, 'icon': '🌹', 'color': Colors.redAccent},
+    {'name': 'Love Heart', 'coins': 50, 'icon': '💖', 'color': Colors.pinkAccent},
+    {'name': 'Super Car', 'coins': 200, 'icon': '🏎️', 'color': Colors.amberAccent},
+    {'name': 'King Crown', 'coins': 500, 'icon': '👑', 'color': Colors.amber},
+    {'name': 'Rocket', 'coins': 1000, 'icon': '🚀', 'color': Colors.cyanAccent},
   ];
 
   @override
   void initState() {
     super.initState();
-
-    _pulseController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1400),
-    )..repeat();
+    _initAgoraAudio();
 
     _giftAnimController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1200),
+      duration: const Duration(milliseconds: 2500),
     );
+
     _giftScaleAnimation = CurvedAnimation(
       parent: _giftAnimController,
       curve: Curves.elasticOut,
     );
 
-    _initAgoraAudio();
-    _initSocket();
-  }
-
-  void _initSocket() {
-    // ሰርቨር አድራሻ (Render አድራሻህ እዚህ ይተካል)
-    _socket = IO.io('https://nile-voice-server.onrender.com', <String, dynamic>{
-      'transports': ['websocket'],
-      'autoConnect': true,
-    });
-
-    _socket!.onConnect((_) {
-      debugPrint('Connected to Socket Server');
-      _socket!.emit('join_room', widget.channelName);
-    });
-
-    // የቀጥታ መልዕክት ሲመጣ
-    _socket!.on('receive_message', (data) {
-      if (mounted) {
-        setState(() {
-          _messages.add({
-            'user': data['user'] ?? 'Guest',
-            'text': data['text'] ?? '',
-          });
-        });
+    _giftAnimController.addStatusListener((status) {
+      if (status == AnimationStatus.completed) {
+        setState(() => _activeScreenGift = null);
+        _giftAnimController.reset();
       }
-    });
-
-    // ስጦታ ሲላክ በ 3D ስክሪኑ ላይ ማሳየት
-    _socket!.on('receive_gift', (data) {
-      _trigger3DGiftAnimation(data['emoji'] ?? '🎁', data['sender'] ?? 'Someone');
     });
   }
 
   Future<void> _initAgoraAudio() async {
     await [Permission.microphone].request();
-
     try {
       _engine = createAgoraRtcEngine();
       await _engine!.initialize(const RtcEngineContext(
-        appId: 'YOUR_AGORA_APP_ID',
+        appId: UserService.agoraAppId,
         channelProfile: ChannelProfileType.channelProfileLiveBroadcasting,
       ));
 
       _engine!.registerEventHandler(
         RtcEngineEventHandler(
           onJoinChannelSuccess: (RtcConnection connection, int elapsed) {
-            setState(() {
-              _isJoined = true;
-            });
+            if (mounted) setState(() => _isJoined = true);
+          },
+          onAudioVolumeIndication: (RtcConnection connection,
+              List<AudioVolumeInfo> speakers, int totalVolume) {
+            for (var speaker in speakers) {
+              _updateSpeakerVisual(speaker.uid.toString(), (speaker.volume ?? 0) > 5);
+            }
           },
         ),
       );
 
-      await _engine!.setClientRole(role: ClientRoleType.clientRoleBroadcaster);
+      await _engine!.setClientRole(role: ClientRoleType.clientRoleAudience);
       await _engine!.enableAudio();
-      await _engine!.enableAudioVolumeIndication(interval: 250, smooth: 3, reportVad: true);
+      await _engine!.enableAudioVolumeIndication(
+          interval: 250, smooth: 3, reportVad: true);
 
       await _engine!.joinChannel(
         token: '',
         channelId: widget.channelName,
-        uid: 0,
+        uid: int.tryParse(_user.userId) ?? Random().nextInt(100000),
         options: const ChannelMediaOptions(
-          clientRoleType: ClientRoleType.clientRoleBroadcaster,
-          channelProfile: ChannelProfileType.channelProfileLiveBroadcasting,
+          clientRoleType: ClientRoleType.clientRoleAudience,
         ),
       );
     } catch (e) {
-      debugPrint('Agora Error: $e');
+      debugPrint('Agora Audio Error: $e');
     }
   }
 
-  void _trigger3DGiftAnimation(String emoji, String sender) {
+  void _updateSpeakerVisual(String uid, bool speaking) {
+    if (!mounted) return;
     setState(() {
-      _activeGiftEmoji = emoji;
-      _activeGiftSender = sender;
-    });
-    _giftAnimController.forward(from: 0.0).then((_) {
-      Timer(const Duration(seconds: 2), () {
-        if (mounted) {
-          setState(() {
-            _activeGiftEmoji = null;
-          });
+      for (var seat in _seats) {
+        if (seat['userId'] == uid) {
+          seat['isSpeaking'] = speaking;
         }
+      }
+    });
+  }
+
+Future<void> _toggleSeat(int seatIndex) async {
+    if (_mySeatIndex == seatIndex) {
+      await _engine?.setClientRole(role: ClientRoleType.clientRoleAudience);
+      setState(() {
+        _seats[seatIndex]['userId'] = null;
+        _seats[seatIndex]['userName'] = 'Seat ${seatIndex + 1}';
+        _mySeatIndex = null;
       });
-    });
+    } else if (_seats[seatIndex]['userId'] == null) {
+      await _engine?.setClientRole(role: ClientRoleType.clientRoleBroadcaster);
+      setState(() {
+        if (_mySeatIndex != null) {
+          _seats[_mySeatIndex!]['userId'] = null;
+          _seats[_mySeatIndex!]['userName'] = 'Seat ${_mySeatIndex! + 1}';
+        }
+        _seats[seatIndex]['userId'] = _user.userId;
+        _seats[seatIndex]['userName'] = _user.userName;
+        _mySeatIndex = seatIndex;
+      });
+    }
   }
 
-void _sendGift(String emoji, String giftName) {
-    _socket?.emit('send_gift', {
-      'room': widget.channelName,
-      'sender': 'Me',
-      'emoji': emoji,
-      'giftName': giftName,
-    });
-    Navigator.pop(context);
-    _trigger3DGiftAnimation(emoji, 'Me');
+  Future<void> _toggleMute() async {
+    if (_engine == null || _mySeatIndex == null) return;
+    final nextState = !_isMuted;
+    await _engine!.muteLocalAudioStream(nextState);
+    setState(() => _isMuted = nextState);
   }
 
-  void _toggleMute() async {
-    setState(() {
-      _isMuted = !_isMuted;
-    });
-    await _engine?.muteLocalAudioStream(_isMuted);
-  }
+  Future<void> _sendLiveGift(Map<String, dynamic> gift) async {
+    final int cost = gift['coins'];
 
-  void _sendMessage() {
-    if (_msgController.text.trim().isEmpty) return;
-    final text = _msgController.text.trim();
+    if (_user.coins < cost) {
+      Navigator.pop(context);
+      _showRechargeDialog();
+      return;
+    }
 
-    _socket?.emit('send_message', {
-      'room': widget.channelName,
-      'user': 'Me',
-      'text': text,
-    });
-
-    setState(() {
-      _messages.add({'user': 'Me', 'text': text});
-    });
-    _msgController.clear();
-  }
-
-  void _show3DGiftSheet() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (context) {
-        return Container(
-          height: 320,
-          decoration: BoxDecoration(
-            color: const Color(0xFF111827).withOpacity(0.95),
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
-            border: Border.all(color: Colors.white.withOpacity(0.15)),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.purpleAccent.withOpacity(0.2),
-                blurRadius: 30,
-                spreadRadius: 5,
-              ),
-            ],
-          ),
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                '3D Virtual Gifts',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 0.8,
-                ),
-              ),
-              const SizedBox(height: 16),
-              Expanded(
-                child: GridView.count(
-                  crossAxisCount: 4,
-                  children: [
-                    _build3DGiftCard('🚀', 'Rocket', '500'),
-                    _build3DGiftCard('👑', 'Crown', '300'),
-                    _build3DGiftCard('💎', 'Diamond', '1000'),
-                    _build3DGiftCard('🌹', 'Rose', '10'),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        );
-      },
+    final bool success = await _user.sendGift(
+      receiverId: '1001',
+      giftName: gift['name'],
+      coinCost: cost,
     );
+
+    if (success) {
+      Navigator.pop(context);
+      setState(() {
+        _activeScreenGift = gift;
+      });
+      _giftAnimController.forward();
+    }
   }
 
-  Widget _build3DGiftCard(String emoji, String title, String cost) {
-    return GestureDetector(
-      onTap: () => _sendGift(emoji, title),
-      child: Container(
-        margin: const EdgeInsets.all(6),
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.06),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.white.withOpacity(0.12)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.4),
-              offset: const Offset(0, 4),
-              blurRadius: 8,
-            ),
-          ],
+  void _showRechargeDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E293B),
+        title: const Text('Insufficient Coins', style: TextStyle(color: Colors.white)),
+        content: const Text(
+          'You need more coins to send this gift. Would you like to recharge?',
+          style: TextStyle(color: Colors.white70),
         ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(emoji, style: const TextStyle(fontSize: 32)),
-            const SizedBox(height: 4),
-            Text(title, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
-            Text('$cost Coins', style: const TextStyle(color: Colors.amberAccent, fontSize: 10)),
-          ],
-        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00C9A7)),
+            onPressed: () {
+              Navigator.pop(ctx);
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const RechargeScreen()),
+              ).then((_) => setState(() {}));
+            },
+            child: const Text('Recharge Now', style: TextStyle(color: Colors.black)),
+          ),
+        ],
       ),
     );
   }
 
-  @override
-  void dispose() {
-    _pulseController.dispose();
-    _giftAnimController.dispose();
-    _msgController.dispose();
-    _socket?.disconnect();
-    _socket?.dispose();
-    _engine?.leaveChannel();
-    _engine?.release();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-
-backgroundColor: const Color(0xFF090D16),
-      body: Stack(
-        children: [
-          // 3D Background Lighting Balls
-          Positioned(
-            top: -60,
-            left: -40,
-            child: Container(
-              width: 220,
-              height: 220,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: const Color(0xFF6366F1).withOpacity(0.35),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFF6366F1).withOpacity(0.5),
-                    blurRadius: 100,
-                    spreadRadius: 30,
-                  ),
-                ],
-              ),
-            ),
-          ),
-          Positioned(
-            bottom: 120,
-            right: -50,
-            child: Container(
-              width: 250,
-              height: 250,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: const Color(0xFFEC4899).withOpacity(0.25),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFFEC4899).withOpacity(0.4),
-                    blurRadius: 120,
-                    spreadRadius: 40,
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          SafeArea(
-            child: Column(
-              children: [
-                // 1. 3D Header
-                Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.08),
-                    borderRadius: BorderRadius.circular(24),
-                    border: Border.all(color: Colors.white.withOpacity(0.15)),
-                  ),
-                  child: Row(
+  void _openGiftSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF111827),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return Container(
+              padding: const EdgeInsets.all(20),
+              height: 360,
+              child: Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
+                      const Text(
+                        'Send 3D Gift',
+                        style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold),
+                      ),
                       Container(
-                        padding: const EdgeInsets.all(2),
-                        decoration: const BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: LinearGradient(
-                            colors: [Color(0xFF38BDF8), Color(0xFF818CF8)],
-                          ),
-                        ),
-                        child: const CircleAvatar(
-                          radius: 16,
-                          backgroundColor: Color(0xFF1E293B),
-                          child: Icon(Icons.mic, color: Colors.white, size: 18),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            widget.roomTitle,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          Row(
-                            children: [
-                              Container(
-                                width: 6,
-                                height: 6,
-                                decoration: const BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: Color(0xFF22C55E),
-                                ),
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                _isJoined ? 'Live Room' : 'Connecting...',
-                                style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 10),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF1F2937),
 
-),
-                            ],
-                          ),
-                        ],
-                      ),
-                      const Spacer(),
-                      IconButton(
-                        icon: const Icon(Icons.close_rounded, color: Colors.white),
-                        onPressed: () => Navigator.pop(context),
+borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: Colors.amber.withOpacity(0.4)),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.monetization_on,
+                                color: Colors.amber, size: 18),
+                            const SizedBox(width: 6),
+                            Text(
+                              '${_user.coins}',
+                              style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
-                ),
-
-                const SizedBox(height: 15),
-
-                // 2. 8ቱ 3D Audio Seats
-                Expanded(
-                  flex: 5,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                  const SizedBox(height: 18),
+                  Expanded(
                     child: GridView.builder(
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemCount: 8,
-                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 4,
-                        mainAxisSpacing: 16,
-                        crossAxisSpacing: 16,
-                        childAspectRatio: 0.78,
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 3,
+                        crossAxisSpacing: 12,
+                        mainAxisSpacing: 12,
+                        childAspectRatio: 0.95,
                       ),
+                      itemCount: _gifts.length,
                       itemBuilder: (context, index) {
-                        bool isHost = index == 0;
-                        return _build3DPodSeat(index, isHost);
-                      },
-                    ),
-                  ),
-                ),
-
-                // 3. 3D Floating Live Chat
-                Expanded(
-                  flex: 3,
-                  child: Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 16),
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.25),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Colors.white.withOpacity(0.08)),
-                    ),
-                    child: ListView.builder(
-                      reverse: true,
-                      itemCount: _messages.length,
-                      itemBuilder: (context, index) {
-                        final msg = _messages[_messages.length - 1 - index];
-                        return Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 2.5),
-                          child: RichText(
-                            text: TextSpan(
+                        final gift = _gifts[index];
+                        return GestureDetector(
+                          onTap: () => _sendLiveGift(gift),
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF1F2937),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                  color: (gift['color'] as Color).withOpacity(0.3)),
+                            ),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                TextSpan(
-                                  text: '${msg['user']}: ',
+                                Text(gift['icon'],
+                                    style: const TextStyle(fontSize: 34)),
+                                const SizedBox(height: 6),
+                                Text(
+                                  gift['name'],
                                   style: const TextStyle(
-                                    color: Color(0xFF38BDF8),
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 12,
-                                  ),
+                                      color: Colors.white,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
-                                TextSpan(
-                                  text: msg['text'],
-                                  style: const TextStyle(color: Colors.white, fontSize: 12),
+                                const SizedBox(height: 4),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    const Icon(Icons.monetization_on,
+                                        color: Colors.amber, size: 12),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      '${gift['coins']}',
+                                      style: const TextStyle(
+                                          color: Colors.amber,
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold),
+                                    ),
+                                  ],
                                 ),
                               ],
                             ),
@@ -454,90 +318,211 @@ backgroundColor: const Color(0xFF090D16),
                       },
                     ),
                   ),
-                ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
 
-                // 4. 3D Bottom Floating Toolbar
-                Padding(
-                  padding: const EdgeInsets.all(16),
+  @override
+  void dispose() {
+    _giftAnimController.dispose();
+    _engine?.leaveChannel();
+    _engine?.release();
+    super.dispose();
+  }
+
+@override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF0A0E1A),
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.white10,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.mic, color: Color(0xFF00C9A7), size: 16),
+                  const SizedBox(width: 6),
+                  Text(
+                    widget.roomTitle,
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.close_rounded, color: Colors.white70),
+            onPressed: () => Navigator.pop(context),
+          ),
+        ],
+      ),
+      body: Stack(
+        children: [
+          SafeArea(
+            child: Column(
+              children: [
+                const SizedBox(height: 12),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: GridView.builder(
+                      physics: const NeverScrollableScrollPhysics(),
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 4,
+                        mainAxisSpacing: 24,
+                        crossAxisSpacing: 16,
+                        childAspectRatio: 0.75,
+                      ),
+                      itemCount: 8,
+                      itemBuilder: (context, index) {
+                        final seat = _seats[index];
+                        final bool isTaken = seat['userId'] != null;
+                        final bool isMe = _mySeatIndex == index;
+                        final bool isSpeaking = seat['isSpeaking'] ?? false;
+
+                        return GestureDetector(
+                          onTap: () => _toggleSeat(index),
+                          child: Column(
+                            children: [
+                              AnimatedContainer(
+                                duration: const Duration(milliseconds: 200),
+                                width: 62,
+                                height: 62,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: isTaken
+                                      ? const Color(0xFF1E293B)
+                                      : Colors.white.withOpacity(0.04),
+                                  border: Border.all(
+                                    color: isSpeaking
+                                        ? const Color(0xFF00C9A7)
+                                        : (isMe
+                                            ? const Color(0xFF2563EB)
+                                            : Colors.white12),
+                                    width: isSpeaking ? 3 : 1.5,
+                                  ),
+                                  boxShadow: isSpeaking
+                                      ? [
+                                          BoxShadow(
+                                            color: const Color(0xFF00C9A7)
+                                                .withOpacity(0.6),
+                                            blurRadius: 12,
+                                            spreadRadius: 2,
+                                          ),
+
+]
+                                      : [],
+                                ),
+                                child: Icon(
+                                  isTaken
+                                      ? (seat['isHost']
+                                          ? Icons.person
+                                          : Icons.mic)
+                                      : Icons.add,
+                                  color: isTaken
+                                      ? (seat['isHost']
+                                          ? const Color(0xFF38BDF8)
+                                          : Colors.white)
+                                      : Colors.white24,
+                                  size: 26,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                seat['userName'],
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: isMe
+                                      ? const Color(0xFF00C9A7)
+                                      : Colors.white70,
+                                  fontSize: 10,
+                                  fontWeight: isMe
+                                      ? FontWeight.bold
+                                      : FontWeight.normal,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF111827),
+                    borderRadius:
+                        BorderRadius.vertical(top: Radius.circular(20)),
+                  ),
                   child: Row(
                     children: [
-                      Expanded(
-                        child: Container(
-                          height: 46,
-                          padding: const EdgeInsets.symmetric(horizontal: 14),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(23),
-
-border: Border.all(color: Colors.white.withOpacity(0.15)),
-                          ),
-                          child: TextField(
-                            controller: _msgController,
-                            style: const TextStyle(color: Colors.white, fontSize: 13),
-                            decoration: InputDecoration(
-                              hintText: 'Share your thoughts...',
-                              hintStyle: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 13),
-                              border: InputBorder.none,
-                              suffixIcon: IconButton(
-                                icon: const Icon(Icons.send_rounded, color: Color(0xFF38BDF8), size: 18),
-                                onPressed: _sendMessage,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-
-                      // 3D Mic Button
-                      GestureDetector(
-                        onTap: _toggleMute,
-                        child: Container(
-                          width: 46,
-                          height: 46,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            gradient: LinearGradient(
-                              colors: _isMuted
-                                  ? [Colors.redAccent, Colors.red.shade800]
-                                  : [const Color(0xFF38BDF8), const Color(0xFF2563EB)],
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: (_isMuted ? Colors.red : Colors.blue).withOpacity(0.5),
-                                blurRadius: 10,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                          ),
-                          child: Icon(
+                      if (_mySeatIndex != null) ...[
+                        IconButton(
+                          icon: Icon(
                             _isMuted ? Icons.mic_off : Icons.mic,
-                            color: Colors.white,
-                            size: 22,
+                            color: _isMuted
+                                ? Colors.redAccent
+                                : const Color(0xFF00C9A7),
                           ),
+                          onPressed: _toggleMute,
                         ),
+                        const SizedBox(width: 8),
+                      ],
+                      const Text(
+                        'Tap any seat to speak',
+                        style: TextStyle(color: Colors.white38, fontSize: 11),
                       ),
-                      const SizedBox(width: 10),
-
-                      // 3D Gift Button
+                      const Spacer(),
                       GestureDetector(
-                        onTap: _show3DGiftSheet,
+                        onTap: _openGiftSheet,
                         child: Container(
-                          width: 46,
-                          height: 46,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 8),
                           decoration: BoxDecoration(
-                            shape: BoxShape.circle,
                             gradient: const LinearGradient(
-                              colors: [Color(0xFFF59E0B), Color(0xFFD97706)],
+                              colors: [Color(0xFFEC4899), Color(0xFF8B5CF6)],
                             ),
+                            borderRadius: BorderRadius.circular(20),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.amber.withOpacity(0.4),
-                                blurRadius: 10,
-                                offset: const Offset(0, 4),
+                                color: const Color(0xFFEC4899).withOpacity(0.4),
+                                blurRadius: 8,
                               ),
                             ],
                           ),
-                          child: const Icon(Icons.card_giftcard, color: Colors.white, size: 22),
+                          child: const Row(
+
+children: [
+                              Icon(Icons.card_giftcard,
+                                  color: Colors.white, size: 18),
+                              SizedBox(width: 6),
+                              Text(
+                                'Gift',
+                                style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ],
@@ -546,22 +531,21 @@ border: Border.all(color: Colors.white.withOpacity(0.15)),
               ],
             ),
           ),
-
-          // 5. 3D Pop-up Gift Center Animation
-          if (_activeGiftEmoji != null)
+          if (_activeScreenGift != null)
             Center(
               child: ScaleTransition(
                 scale: _giftScaleAnimation,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                  padding: const EdgeInsets.all(28),
                   decoration: BoxDecoration(
-
-color: Colors.black.withOpacity(0.85),
-                    borderRadius: BorderRadius.circular(24),
-                    border: Border.all(color: Colors.amberAccent, width: 2),
+                    color: Colors.black.withOpacity(0.85),
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                        color: _activeScreenGift!['color'] as Color, width: 4),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.amberAccent.withOpacity(0.5),
+                        color: (_activeScreenGift!['color'] as Color)
+                            .withOpacity(0.6),
                         blurRadius: 30,
                         spreadRadius: 8,
                       ),
@@ -570,15 +554,24 @@ color: Colors.black.withOpacity(0.85),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(_activeGiftEmoji!, style: const TextStyle(fontSize: 70)),
-                      const SizedBox(height: 10),
                       Text(
-                        '$_activeGiftSender sent a Gift!',
+                        _activeScreenGift!['icon'],
+                        style: const TextStyle(fontSize: 80),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        _activeScreenGift!['name'],
                         style: const TextStyle(
-                          color: Colors.amberAccent,
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold),
+                      ),
+                      Text(
+                        '-${_activeScreenGift!['coins']} Coins',
+                        style: const TextStyle(
+                            color: Colors.amber,
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold),
                       ),
                     ],
                   ),
@@ -587,74 +580,6 @@ color: Colors.black.withOpacity(0.85),
             ),
         ],
       ),
-    );
-  }
-
-  Widget _build3DPodSeat(int index, bool isHost) {
-    return Column(
-      children: [
-        Stack(
-          alignment: Alignment.center,
-          children: [
-            if (isHost && !_isMuted)
-              AnimatedBuilder(
-                animation: _pulseController,
-                builder: (context, child) {
-                  return Container(
-                    width: 58 + (_pulseController.value * 12),
-                    height: 58 + (_pulseController.value * 12),
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: const Color(0xFF38BDF8).withOpacity(1.0 - _pulseController.value),
-                        width: 2,
-                      ),
-                    ),
-                  );
-                },
-              ),
-            Container(
-              width: 54,
-              height: 54,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: isHost
-                      ? [const Color(0xFF38BDF8), const Color(0xFF1E3A8A)]
-                      : [Colors.white.withOpacity(0.18), Colors.white.withOpacity(0.04)],
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: isHost ? const Color(0xFF38BDF8).withOpacity(0.4) : Colors.black45,
-                    blurRadius: 10,
-                    offset: const Offset(0, 5),
-                  ),
-                ],
-                border: Border.all(
-                  color: isHost ? Colors.white : Colors.white.withOpacity(0.2),
-                  width: 1.5,
-                ),
-              ),
-              child: Icon(
-                isHost ? Icons.person_rounded : Icons.mic_none_rounded,
-                color: isHost ? Colors.white : Colors.white54,
-                size: 26,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 6),
-        Text(
-          isHost ? 'Host' : 'Seat ${index + 1}',
-          style: TextStyle(
-            color: isHost ? Colors.amberAccent : Colors.white60,
-            fontSize: 11,
-            fontWeight: isHost ? FontWeight.bold : FontWeight.normal,
-          ),
-        ),
-      ],
     );
   }
 }
