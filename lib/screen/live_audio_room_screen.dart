@@ -31,7 +31,7 @@ class _LiveAudioRoomScreenState extends State<LiveAudioRoomScreen> {
   late List<Map<String, dynamic>> _seats;
 
   final List<Map<String, String>> _messages = [
-    {'user': 'System', 'text': 'Welcome to the live voice lounge!'},
+    {'user': 'System', 'text': 'Welcome to the live voice lounge! 🎙️'},
   ];
   final TextEditingController _chatController = TextEditingController();
 
@@ -39,13 +39,8 @@ class _LiveAudioRoomScreenState extends State<LiveAudioRoomScreen> {
   String? _activeGiftSender;
   Timer? _giftTimer;
 
-  final List<String> _audienceList = [
-    'User_902',
-    'User_334',
-    'User_771',
-    'User_105',
-    'User_652'
-  ];
+  // Online count simulation
+  int _onlineCount = 8;
 
   String get effectiveTitle =>
       widget.roomTitle ?? widget.channelName ?? 'Habesha Voice Lounge';
@@ -140,7 +135,7 @@ class _LiveAudioRoomScreenState extends State<LiveAudioRoomScreen> {
     _user.coins -= cost;
     Navigator.pop(context);
 
-setState(() {
+    setState(() {
       _activeGiftName = giftName;
       _activeGiftSender = _user.userName;
       _messages.add({
@@ -149,7 +144,7 @@ setState(() {
       });
     });
 
-    _giftTimer?.cancel();
+_giftTimer?.cancel();
     _giftTimer = Timer(const Duration(seconds: 4), () {
       if (mounted) {
         setState(() {
@@ -183,6 +178,68 @@ setState(() {
     });
   }
 
+  void _showGameSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF161F30),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) {
+        return Container(
+          padding: const EdgeInsets.all(20),
+          height: 280,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Room Mini Games & PK 🎮',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _gameItem('Lucky Wheel', '🎡', Colors.purpleAccent),
+                  _gameItem('PK Battle', '⚔️', Colors.redAccent),
+                  _gameItem('Dice Roll', '🎲', Colors.amberAccent),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _gameItem(String title, String icon, Color color) {
+    return Column(
+      children: [
+        Container(
+          width: 64,
+          height: 64,
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.15),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: color.withOpacity(0.5), width: 1.5),
+          ),
+          child: Center(
+            child: Text(icon, style: const TextStyle(fontSize: 30)),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          title,
+          style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+        ),
+      ],
+    );
+  }
+
   @override
   void dispose() {
     _chatController.dispose();
@@ -201,13 +258,23 @@ setState(() {
           children: [
             Column(
               children: [
+                // 1. TOP BAR: Minimize, Title, Online Badge & Exit
                 _buildTopBar(),
+
+                // 2. 8 SEATS GRID
                 _buildSeatsGrid(),
+
                 const Spacer(),
+
+                // 3. IN-ROOM LIVE CHAT
                 _buildChatStream(),
+
+                // 4. BOTTOM CONTROLS: Game, Mic, Chat, Reaction, Gift
                 _buildBottomControls(),
               ],
             ),
+
+            // 5. FULL-SCREEN 3D GIFT OVERLAY
             if (_activeGiftName != null) _buildGiftOverlay(),
           ],
         ),
@@ -215,72 +282,90 @@ setState(() {
     );
   }
 
+  // --- 1. TOP BAR ---
   Widget _buildTopBar() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: const BoxDecoration(
         color: Color(0xFF101726),
-        border: Border(bottom: BorderSide(color: Colors.white10)),
+
+border: Border(bottom: BorderSide(color: Colors.white10)),
       ),
       child: Row(
         children: [
-          const CircleAvatar(
-            radius: 18,
-            backgroundColor: Color(0xFF2563EB),
-            child: Icon(Icons.mic, color: Colors.white, size: 18),
+          // Minimize Button (ሚኒማይዝ ማድረጊያ)
+          IconButton(
+            constraints: const BoxConstraints(),
+            padding: const EdgeInsets.all(6),
+            icon: const Icon(Icons.picture_in_picture_alt_rounded, color: Colors.white70, size: 20),
+            onPressed: () {
+              Navigator.pop(context);
+            },
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 6),
+          // Room Avatar & Title
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            child: Row(
               children: [
-                Text(
-                  effectiveTitle,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                  ),
-                  overflow: TextOverflow.ellipsis,
+                CircleAvatar(
+                  radius: 16,
+                  backgroundColor: const Color(0xFF2563EB),
+                  child: const Icon(Icons.mic, color: Colors.white, size: 16),
                 ),
-                Text(
-                  'Category: ${widget.category}',
-                  style: const TextStyle(color: Colors.white54, fontSize: 11),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        effectiveTitle,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      Text(
+                        widget.category,
+                        style: const TextStyle(color: Colors.white54, fontSize: 10),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
           ),
-          Row(
-            children: _audienceList.take(3).map((aud) {
-              return Container(
-                margin: const EdgeInsets.only(left: 4),
-                child: CircleAvatar(
-                  radius: 13,
-                  backgroundColor: const Color(0xFF1E293B),
-                  child: Text(
-                    aud.substring(aud.length - 2),
-                    style: const TextStyle(color: Colors.white70, fontSize: 10),
-                  ),
-                ),
-              );
-            }).toList(),
-          ),
-          const SizedBox(width: 8),
+          // Online Users Count Badge (የገባ ሰው ቁጥር ማሳያ ባጅ)
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
-              color: Colors.white12,
-              borderRadius: BorderRadius.circular(12),
+              color: const Color(0xFF1E293B),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: Colors.white12),
             ),
-            child: Text(
-              '${_audienceList.length + 1}',
-              style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
-
-),
+            child: Row(
+              children: [
+                const Icon(Icons.local_fire_department, size: 14, color: Colors.amber),
+                const SizedBox(width: 4),
+                Text(
+                  '$_onlineCount',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
           ),
           const SizedBox(width: 6),
+          // Leave / Close Room Button
           IconButton(
-            icon: const Icon(Icons.close_rounded, color: Colors.white70, size: 22),
+            constraints: const BoxConstraints(),
+            padding: const EdgeInsets.all(6),
+            icon: const Icon(Icons.power_settings_new_rounded, color: Colors.redAccent, size: 20),
             onPressed: () => Navigator.pop(context),
           ),
         ],
@@ -288,9 +373,10 @@ setState(() {
     );
   }
 
+  // --- 2. 8 SEATS GRID ---
   Widget _buildSeatsGrid() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       child: GridView.builder(
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
@@ -310,10 +396,11 @@ setState(() {
           return Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              AnimatedContainer(
+
+AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
-                width: 62,
-                height: 62,
+                width: 60,
+                height: 60,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: const Color(0xFF161F30),
@@ -339,14 +426,14 @@ setState(() {
                     Icon(
                       isOccupied ? Icons.person : Icons.add_rounded,
                       color: isOccupied ? Colors.white : Colors.white24,
-                      size: isOccupied ? 30 : 26,
+                      size: isOccupied ? 28 : 24,
                     ),
                     if (isOccupied && isMuted)
                       Positioned(
                         bottom: 2,
                         right: 2,
                         child: Container(
-                          padding: const EdgeInsets.all(3),
+                          padding: const EdgeInsets.all(2),
                           decoration: const BoxDecoration(
                             color: Colors.redAccent,
                             shape: BoxShape.circle,
@@ -362,7 +449,7 @@ setState(() {
                 isOccupied ? seat['userName'] : seat['title'],
                 style: TextStyle(
                   color: isOccupied ? Colors.white : Colors.white38,
-                  fontSize: 11,
+                  fontSize: 10,
                   fontWeight: isOccupied ? FontWeight.bold : FontWeight.normal,
                 ),
                 overflow: TextOverflow.ellipsis,
@@ -374,9 +461,10 @@ setState(() {
     );
   }
 
+  // --- 3. LIVE CHAT STREAM ---
   Widget _buildChatStream() {
     return Container(
-      height: 160,
+      height: 150,
       padding: const EdgeInsets.symmetric(horizontal: 14),
       child: ListView.builder(
         itemCount: _messages.length,
@@ -384,7 +472,7 @@ setState(() {
           final msg = _messages[index];
           final bool isGift = msg['user'] == 'GIFT';
 
-if (isGift) {
+          if (isGift) {
             return Container(
               margin: const EdgeInsets.symmetric(vertical: 4),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -413,7 +501,7 @@ if (isGift) {
             );
           }
 
-          return Container(
+return Container(
             margin: const EdgeInsets.symmetric(vertical: 3),
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
@@ -427,13 +515,13 @@ if (isGift) {
                     text: '${msg['user']}: ',
                     style: const TextStyle(
                       color: Color(0xFF38BDF8),
-                      fontSize: 12,
+                      fontSize: 11,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                   TextSpan(
                     text: msg['text']!,
-                    style: const TextStyle(color: Colors.white70, fontSize: 12),
+                    style: const TextStyle(color: Colors.white70, fontSize: 11),
                   ),
                 ],
               ),
@@ -444,25 +532,34 @@ if (isGift) {
     );
   }
 
+  // --- 4. BOTTOM CONTROLS ---
   Widget _buildBottomControls() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: const BoxDecoration(
         color: Color(0xFF101726),
         border: Border(top: BorderSide(color: Colors.white10)),
       ),
       child: Row(
         children: [
+          // 1. Mic Button
           IconButton(
             icon: Icon(
               _isMicMuted ? Icons.mic_off : Icons.mic,
               color: _isMicMuted ? Colors.redAccent : const Color(0xFF00FFC2),
+              size: 22,
             ),
             onPressed: _toggleMic,
           ),
+          // 2. Game Button (የጌም ቁልፍ 🎮)
+          IconButton(
+            icon: const Icon(Icons.sports_esports_rounded, color: Colors.amber, size: 22),
+            onPressed: _showGameSheet,
+          ),
+          // 3. Chat Input Box
           Expanded(
             child: Container(
-              height: 40,
+              height: 38,
               padding: const EdgeInsets.symmetric(horizontal: 12),
               decoration: BoxDecoration(
                 color: const Color(0xFF1C2538),
@@ -470,13 +567,15 @@ if (isGift) {
               ),
               child: TextField(
                 controller: _chatController,
-                style: const TextStyle(color: Colors.white, fontSize: 13),
+                style: const TextStyle(color: Colors.white, fontSize: 12),
                 decoration: InputDecoration(
                   hintText: 'Say something...',
-                  hintStyle: const TextStyle(color: Colors.white30, fontSize: 12),
+                  hintStyle: const TextStyle(color: Colors.white30, fontSize: 11),
                   border: InputBorder.none,
                   suffixIcon: IconButton(
-                    icon: const Icon(Icons.send_rounded, color: Color(0xFF38BDF8), size: 18),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    icon: const Icon(Icons.send_rounded, color: Color(0xFF38BDF8), size: 16),
                     onPressed: _sendMessage,
                   ),
                 ),
@@ -484,17 +583,18 @@ if (isGift) {
             ),
           ),
           const SizedBox(width: 8),
+          // 4. Gift Button (የስጦታ ቁልፍ)
           GestureDetector(
             onTap: _showGiftPanel,
             child: Container(
-              padding: const EdgeInsets.all(10),
+              padding: const EdgeInsets.all(9),
               decoration: const BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: LinearGradient(
                   colors: [Color(0xFFFF007A), Color(0xFF7928CA)],
                 ),
               ),
-              child: const Icon(Icons.card_giftcard, color: Colors.white, size: 20),
+              child: const Icon(Icons.card_giftcard, color: Colors.white, size: 18),
             ),
           ),
         ],
@@ -502,15 +602,17 @@ if (isGift) {
     );
   }
 
-Widget _buildGiftOverlay() {
+  // --- 5. FULL-SCREEN GIFT OVERLAY ---
+  Widget _buildGiftOverlay() {
     return Positioned.fill(
       child: IgnorePointer(
         child: Container(
-          color: Colors.black.withOpacity(0.3),
+          color: Colors.black.withOpacity(0.35),
           child: Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
-              children: [
+
+children: [
                 Text(
                   '${_activeGiftSender!} sent',
                   style: const TextStyle(
@@ -614,15 +716,15 @@ Widget _buildGiftOverlay() {
   }
 
   Widget _giftItem(String name, String icon, int cost) {
-
-return GestureDetector(
+    return GestureDetector(
       onTap: () => _triggerGift(name, cost),
       child: Container(
         decoration: BoxDecoration(
           color: const Color(0xFF1C2538),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: Colors.white10),
-        ),
+
+),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
