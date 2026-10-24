@@ -9,7 +9,7 @@ class UserService {
   UserService._internal();
 
   static const String serverUrl = 'https://nile-voice-server.onrender.com';
-  static const String agoraAppId = 'YOUR_AGORA_APP_ID';
+  static const String agoraAppId = '388d62b7f0ef47a0821b470a635b9473';
 
   String userId = '100234';
   String userName = 'User_100234';
