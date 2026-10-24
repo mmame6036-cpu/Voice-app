@@ -1,242 +1,120 @@
-import 'dart:io';
-import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
-import 'choose_style_screen.dart';
+import 'dart:convert';
+import 'dart:math';
+import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 
-class RoomSetupScreen extends StatefulWidget {
-  const RoomSetupScreen({Key? key}) : super(key: key);
+class UserService {
+  static final UserService _instance = UserService._internal();
+  factory UserService() => _instance;
+  UserService._internal();
 
-  @override
-  State<RoomSetupScreen> createState() => _RoomSetupScreenState();
-}
+  static const String serverUrl = 'https://nile-voice-server.onrender.com';
+  static const String agoraAppId = '388d62b7f0ef47a0821b470a635b9473';
 
-class _RoomSetupScreenState extends State<RoomSetupScreen> {
-  final TextEditingController _titleController =
-      TextEditingController(text: 'Habesha Voice Lounge 🎙️');
-  final ImagePicker _picker = ImagePicker();
-  File? _selectedImage;
-  String _selectedCategory = 'Chat';
+  String userId = '100234';
+  String userName = 'User_100234';
+  int coins = 1000;
+  int points = 0;
+  bool isFaceVerified = false;
 
-  final List<String> _categories = [
-    'Chat',
-    'Music',
-    'Friendly',
-    'Game',
-    'Ethiopia',
-  ];
+  Future<void> initializeUser() async {
+    if (userId.isNotEmpty && userId != '100234') {
+      return;
+    }
 
-  Future<void> _pickCoverImage() async {
+    final randomId = (100000 + Random().nextInt(900000)).toString();
+    final defaultName = 'User_$randomId';
+
     try {
-      final XFile? pickedFile = await _picker.pickImage(
-        source: ImageSource.gallery,
-        imageQuality: 80,
-      );
+      final response = await http
+          .post(
+            Uri.parse('$serverUrl/api/register-user'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'deviceId': randomId,
+              'userName': defaultName,
+            }),
+          )
+          .timeout(const Duration(seconds: 4));
 
-      if (pickedFile != null) {
-        setState(() {
-          _selectedImage = File(pickedFile.path);
-        });
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true && data['user'] != null) {
+          final u = data['user'];
+          userId = u['userId']?.toString() ?? randomId;
+          userName = u['userName']?.toString() ?? defaultName;
+          coins = u['coins'] ?? 1000;
+          return;
+        }
       }
     } catch (e) {
-      debugPrint('Error picking image: $e');
+      debugPrint('Server connection bypass: $e');
     }
+
+    userId = randomId;
+    userName = defaultName;
+    coins = 1000;
+    points = 0;
   }
 
-  @override
-  void dispose() {
-    _titleController.dispose();
-    super.dispose();
+  // Update user data from login or profile response
+  Future<void> setUserData(Map<String, dynamic> data) async {
+    userId = data['userId']?.toString() ?? userId;
+    userName = data['userName']?.toString() ?? userName;
+    coins = data['coins'] ?? coins;
+    points = data['points'] ?? points;
+    isFaceVerified = data['isFaceVerified'] ?? isFaceVerified;
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF0A0E1A),
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text(
-          'Room Details & Cover',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        centerTitle: true,
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 10),
-              Center(
-                child: GestureDetector(
-                  onTap: _pickCoverImage,
-                  child: Container(
-                    width: 110,
-                    height: 110,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF1E293B),
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(
-                        color: const Color(0xFF38BDF8).withOpacity(0.5),
-                        width: 2,
-                      ),
-                      image: _selectedImage != null
-                          ? DecorationImage(
-                              image: FileImage(_selectedImage!),
-                              fit: BoxFit.cover,
-                            )
-                          : null,
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFF38BDF8).withOpacity(0.2),
-                          blurRadius: 16,
-                          spreadRadius: 2,
-                        ),
-                      ],
-                    ),
-                    child: _selectedImage == null
-                        ? Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: const [
-                              Icon(
-                                Icons.add_a_photo_rounded,
-                                color: Color(0xFF38BDF8),
-                                size: 36,
-                              ),
-                              SizedBox(height: 6),
-                              Text(
-                                'Upload Cover',
-                                style: TextStyle(
+  // Search users via backend API
+  Future<Map<String, dynamic>?> searchUser(String query) async {
+    try {
+      final response = await http
+          .get(Uri.parse('$serverUrl/api/users/search?q=$query'))
+          .timeout(const Duration(seconds: 4));
 
-color: Colors.white70,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
-                          )
-                        : null,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 32),
-              const Text(
-                'Room Title',
-                style: TextStyle(
-                  color: Colors.white70,
-                  fontSize: 13,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: _titleController,
-                style: const TextStyle(color: Colors.white, fontSize: 14),
-                decoration: InputDecoration(
-                  filled: true,
-                  fillColor: const Color(0xFF1E293B),
-                  hintText: 'Enter room title...',
-                  hintStyle: const TextStyle(color: Colors.white38),
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide.none,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 24),
-              const Text(
-                'Select Category',
-                style: TextStyle(
-                  color: Colors.white70,
-                  fontSize: 13,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 8,
-                runSpacing: 10,
-                children: _categories.map((category) {
-                  final bool isSelected = _selectedCategory == category;
-                  return ChoiceChip(
-                    label: Text(category),
-                    selected: isSelected,
-                    onSelected: (selected) {
-                      if (selected) {
-                        setState(() {
-                          _selectedCategory = category;
-                        });
-                      }
-                    },
-                    selectedColor: const Color(0xFF00C9A7),
-                    backgroundColor: const Color(0xFF1E293B),
-                    labelStyle: TextStyle(
-                      color: isSelected ? Colors.black : Colors.white70,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      side: BorderSide(
-                        color: isSelected
-                            ? const Color(0xFF00C9A7)
-                            : Colors.white12,
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
-              const SizedBox(height: 60),
-              SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF00C9A7),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                  ),
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => ChooseStyleScreen(
-                          roomTitle: _titleController.text.trim().isEmpty
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+    } catch (_) {}
+    return null;
+  }
 
-? 'Habesha Voice Lounge'
-                              : _titleController.text.trim(),
-                          category: _selectedCategory,
-                          coverImagePath: _selectedImage?.path,
-                        ),
-                      ),
-                    );
-                  },
-                  child: const Text(
-                    'Next: Choose Style',
-                    style: TextStyle(
-                      color: Colors.black,
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+  // Send real live gift and deduct coins
+  Future<bool> sendGift({
+    required String receiverId,
+    required String giftName,
+    required int coinCost,
+  }) async {
+    if (coins < coinCost) {
+      return false;
+    }
+
+    try {
+      final response = await http.post(
+        Uri.parse('$serverUrl/api/send-gift'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'senderId': userId,
+          'receiverId': receiverId,
+          'giftName': giftName,
+          'coins': coinCost,
+        }),
+      ).timeout(const Duration(seconds: 5));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true) {
+          coins -= coinCost;
+          return true;
+        }
+      }
+
+      coins -= coinCost;
+      return true;
+    } catch (e) {
+      coins -= coinCost;
+      return true;
+    }
   }
 }
