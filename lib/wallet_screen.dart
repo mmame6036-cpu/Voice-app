@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:nile_voice/services/user_service.dart';
+import 'services/user_service.dart';
 import 'recharge_screen.dart';
 
 class WalletScreen extends StatefulWidget {
@@ -97,9 +97,9 @@ class _WalletScreenState extends State<WalletScreen> {
                   Navigator.push(
                     context,
                     MaterialPageRoute(builder: (_) => const RechargeScreen()),
+                  ).then((_) => setState(() {}));
 
-).then((_) => setState(() {}));
-                },
+},
                 child: const Text(
                   'Recharge Coins',
                   style: TextStyle(
