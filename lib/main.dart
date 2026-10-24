@@ -12,7 +12,7 @@ import 'coin_seller_screen.dart';
 import 'daily_tasks_screen.dart';
 import 'face_verification_screen.dart';
 import 'screen/login_screen.dart';
-import 'screens/home_party_screen.dart';
+import 'home_party_screen.dart';
 
 import 'store_screen.dart';
 import 'backpack_screen.dart';
