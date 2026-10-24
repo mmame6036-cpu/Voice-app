@@ -12,8 +12,8 @@ import 'coin_seller_screen.dart';
 import 'daily_tasks_screen.dart';
 import 'face_verification_screen.dart';
 import 'screen/login_screen.dart';
-import 'start_live_screen.dart';
-import 'live_audio_room_screen.dart';
+import 'screen/start_live_screen.dart';
+import 'screen/live_audio_room_screen.dart';
 
 import 'store_screen.dart';
 import 'backpack_screen.dart';
@@ -101,7 +101,6 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   }
 }
 
-// 3D Party Screen በቀጥታ እዚህ ተካትቷል (ከውጪ ፋይል መፈለግ አይጠበቅበትም)
 class HomePartyScreen extends StatefulWidget {
   const HomePartyScreen({Key? key}) : super(key: key);
 
@@ -124,11 +123,11 @@ class _HomePartyScreenState extends State<HomePartyScreen> {
       'listeners': '840',
       'tag': 'Chat',
       'gradient': [const Color(0xFFD97706), const Color(0xFFDC2626)],
-
-},
+    },
     {
       'title': 'Night Owls Gaming 🎮',
-      'host': 'Rediet_Pro',
+
+'host': 'Rediet_Pro',
       'listeners': '2.5k',
       'tag': 'Game',
       'gradient': [const Color(0xFF7C3AED), const Color(0xFFDB2777)],
