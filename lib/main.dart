@@ -111,7 +111,7 @@ class _HomeScreenState extends State<HomeScreen> {
   List<dynamic> _rooms = [];
   bool _isLoading = true;
 
-  String _mainTab = 'Party'; // 'Follow' or 'Party'
+  String _mainTab = 'Party';
   String _selectedCountry = 'All';
 
   final List<Map<String, String>> _countries = const [
@@ -1276,6 +1276,28 @@ const Text('Coins', style: TextStyle(color: Colors.white60, fontSize: 12)),
           overflow: TextOverflow.ellipsis,
         ),
       ],
+    );
+  }
+}
+
+class InternalMedalWallScreen extends StatelessWidget {
+  const InternalMedalWallScreen({Key? key}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF0F141C),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF161B26),
+        elevation: 0,
+        title: const Text('Medal Wall', style: TextStyle(fontWeight: FontWeight.bold)),
+      ),
+      body: const Center(
+        child: Text(
+          'Medals & Achievements Coming Soon!',
+          style: TextStyle(color: Colors.white54, fontSize: 14),
+        ),
+      ),
     );
   }
 }
