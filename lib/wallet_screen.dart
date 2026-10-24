@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'services/user_service.dart';
+import 'package:nile_voice/services/user_service.dart';
 import 'recharge_screen.dart';
 
 class WalletScreen extends StatefulWidget {
@@ -19,7 +19,10 @@ class _WalletScreenState extends State<WalletScreen> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: const Text('My Wallet', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        title: const Text(
+          'My Wallet',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        ),
         centerTitle: true,
       ),
       body: SafeArea(
@@ -41,7 +44,10 @@ class _WalletScreenState extends State<WalletScreen> {
                 ),
                 child: Column(
                   children: [
-                    const Text('Available Balance', style: TextStyle(color: Colors.white54, fontSize: 13)),
+                    const Text(
+                      'Available Balance',
+                      style: TextStyle(color: Colors.white54, fontSize: 13),
+                    ),
                     const SizedBox(height: 10),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -50,10 +56,17 @@ class _WalletScreenState extends State<WalletScreen> {
                         const SizedBox(width: 8),
                         Text(
                           '${_user.coins}',
-                          style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 32,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                         const SizedBox(width: 6),
-                        const Text('Coins', style: TextStyle(color: Colors.amber, fontSize: 14)),
+                        const Text(
+                          'Coins',
+                          style: TextStyle(color: Colors.amber, fontSize: 14),
+                        ),
                       ],
                     ),
                     const SizedBox(height: 16),
@@ -62,7 +75,10 @@ class _WalletScreenState extends State<WalletScreen> {
                       children: [
                         const Icon(Icons.stars, color: Color(0xFF00C9A7), size: 18),
                         const SizedBox(width: 6),
-                        Text('Points: ${_user.points}', style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                        Text(
+                          'Points: ${_user.points}',
+                          style: const TextStyle(color: Colors.white70, fontSize: 13),
+                        ),
                       ],
                     ),
                   ],
@@ -73,15 +89,25 @@ class _WalletScreenState extends State<WalletScreen> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF00C9A7),
                   padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
                 ),
                 onPressed: () {
                   Navigator.push(
                     context,
                     MaterialPageRoute(builder: (_) => const RechargeScreen()),
-                  ).then((_) => setState(() {}));
+
+).then((_) => setState(() {}));
                 },
-                child: const Text('Recharge Coins', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 15)),
+                child: const Text(
+                  'Recharge Coins',
+                  style: TextStyle(
+                    color: Colors.black,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                  ),
+                ),
               ),
             ],
           ),
