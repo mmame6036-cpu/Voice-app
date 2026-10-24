@@ -162,12 +162,12 @@ class _HomePartyScreenState extends State<HomePartyScreen> {
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(20),
                 gradient: const LinearGradient(
-                  color: isActive ? Colors.black87 : Colors.grey,
+                  colors: [Color(0xFF6366F1), Color(0xFFA855F7)],
                 ),
               ),
               padding: const EdgeInsets.all(16),
-              child: Row(
-                children: const [
+              child: const Row(
+                children: [
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
