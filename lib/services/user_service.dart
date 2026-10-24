@@ -10,6 +10,7 @@ class UserService {
   UserService._internal();
 
   static const String serverUrl = 'https://nile-voice-server.onrender.com';
+  static const String agoraAppId = 'YOUR_AGORA_APP_ID';
 
   String userId = '';
   String userName = '';
@@ -25,12 +26,10 @@ class UserService {
     points = prefs.getInt('user_points') ?? 0;
     isFaceVerified = prefs.getBool('is_face_verified') ?? false;
 
-    // መታወቂያ አስቀድሞ ካለ ተጨማሪ ጥሪ አያስፈልግም
     if (userId.isNotEmpty) {
       return;
     }
 
-    // አዲስ መታወቂያ ማመንጨት
     final randomId = (100000 + Random().nextInt(900000)).toString();
     final defaultName = 'User_$randomId';
 
@@ -58,15 +57,38 @@ class UserService {
         }
       }
     } catch (e) {
-      debugPrint('Server connection bypassed: $e');
+      debugPrint('Server bypass: $e');
     }
 
-    // ሰርቨሩ 404 ቢል ወይም ባይመልስ እንኳ አፑ እንዳይቆም በራሱ ይከፍታል
     userId = randomId;
     userName = defaultName;
     coins = 1000;
     points = 0;
     await _saveToStorage();
+  }
+
+  // የ login_screen.dart የጠራው ፈንክሽን
+  Future<void> setUserData(Map<String, dynamic> data) async {
+    userId = data['userId']?.toString() ?? userId;
+    userName = data['userName']?.toString() ?? userName;
+    coins = data['coins'] ?? coins;
+    points = data['points'] ?? points;
+    isFaceVerified = data['isFaceVerified'] ?? isFaceVerified;
+    await _saveToStorage();
+  }
+
+  // የፍለጋ ክፍሉ የጠራው ፈንክሽን
+  Future<Map<String, dynamic>?> searchUser(String query) async {
+    try {
+      final response = await http
+          .get(Uri.parse('$serverUrl/api/users/search?q=$query'))
+          .timeout(const Duration(seconds: 4));
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+    } catch (_) {}
+    return null;
   }
 
   Future<void> _saveToStorage() async {
