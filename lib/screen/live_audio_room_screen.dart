@@ -22,7 +22,8 @@ class LiveAudioRoomScreen extends StatefulWidget {
   State<LiveAudioRoomScreen> createState() => _LiveAudioRoomScreenState();
 }
 
-class _LiveAudioRoomScreenState extends State<LiveAudioRoomScreen> {
+class _LiveAudioRoomScreenState extends State<LiveAudioRoomScreen>
+    with SingleTickerProviderStateMixin {
   final UserService _user = UserService();
   RtcEngine? _engine;
   bool _isMicMuted = false;
@@ -35,11 +36,16 @@ class _LiveAudioRoomScreenState extends State<LiveAudioRoomScreen> {
   ];
   final TextEditingController _chatController = TextEditingController();
 
+  // Full Screen Gift Animation Controllers
+  late AnimationController _giftAnimController;
+  late Animation<Offset> _carSlideAnimation;
+  late Animation<double> _scaleAnimation;
+  late Animation<Offset> _rocketFlyAnimation;
+
   String? _activeGiftName;
   String? _activeGiftSender;
   Timer? _giftTimer;
 
-  // Online count simulation
   int _onlineCount = 8;
 
   String get effectiveTitle =>
@@ -48,6 +54,8 @@ class _LiveAudioRoomScreenState extends State<LiveAudioRoomScreen> {
   @override
   void initState() {
     super.initState();
+
+    // 8 Seats Setup
     _seats = List.generate(8, (index) {
       if (index == 0) {
         return {
@@ -69,6 +77,38 @@ class _LiveAudioRoomScreenState extends State<LiveAudioRoomScreen> {
       };
     });
 
+    // Setup Animations
+    _giftAnimController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 3200),
+    );
+
+    // Car drives left to right across screen
+    _carSlideAnimation = Tween<Offset>(
+      begin: const Offset(-1.6, 0.0),
+      end: const Offset(1.6, 0.0),
+    ).animate(CurvedAnimation(
+      parent: _giftAnimController,
+      curve: Curves.easeInOutCubic,
+    ));
+
+    // Rocket flies upwards
+    _rocketFlyAnimation = Tween<Offset>(
+      begin: const Offset(0.0, 1.8),
+      end: const Offset(0.0, -1.8),
+    ).animate(CurvedAnimation(
+      parent: _giftAnimController,
+      curve: Curves.easeInOutQuart,
+    ));
+
+    // Pop and scale for Crown, Rose, Heart
+    _scaleAnimation = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween(begin: 0.1, end: 1.3), weight: 30),
+      TweenSequenceItem(tween: Tween(begin: 1.3, end: 1.0), weight: 20),
+      TweenSequenceItem(tween: Tween(begin: 1.0, end: 1.1), weight: 30),
+      TweenSequenceItem(tween: Tween(begin: 1.1, end: 0.0), weight: 20),
+    ]).animate(_giftAnimController);
+
     _initAgora();
   }
 
@@ -87,7 +127,8 @@ class _LiveAudioRoomScreenState extends State<LiveAudioRoomScreen> {
               List<AudioVolumeInfo> speakers, int totalVolume, int? speakerNumber) {
             if (!mounted) return;
             for (var speaker in speakers) {
-              final speakerUid = speaker.uid.toString();
+
+final speakerUid = speaker.uid.toString();
               setState(() {
                 for (var seat in _seats) {
                   if (seat['userId'] == speakerUid ||
@@ -133,7 +174,7 @@ class _LiveAudioRoomScreenState extends State<LiveAudioRoomScreen> {
     }
 
     _user.coins -= cost;
-    Navigator.pop(context);
+    Navigator.pop(context); // Close dialog
 
     setState(() {
       _activeGiftName = giftName;
@@ -144,8 +185,10 @@ class _LiveAudioRoomScreenState extends State<LiveAudioRoomScreen> {
       });
     });
 
-_giftTimer?.cancel();
-    _giftTimer = Timer(const Duration(seconds: 4), () {
+    _giftAnimController.forward(from: 0.0);
+
+    _giftTimer?.cancel();
+    _giftTimer = Timer(const Duration(milliseconds: 3300), () {
       if (mounted) {
         setState(() {
           _activeGiftName = null;
@@ -224,7 +267,8 @@ _giftTimer?.cancel();
           height: 64,
           decoration: BoxDecoration(
             color: color.withOpacity(0.15),
-            borderRadius: BorderRadius.circular(20),
+
+borderRadius: BorderRadius.circular(20),
             border: Border.all(color: color.withOpacity(0.5), width: 1.5),
           ),
           child: Center(
@@ -234,7 +278,11 @@ _giftTimer?.cancel();
         const SizedBox(height: 8),
         Text(
           title,
-          style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+          ),
         ),
       ],
     );
@@ -242,6 +290,7 @@ _giftTimer?.cancel();
 
   @override
   void dispose() {
+    _giftAnimController.dispose();
     _chatController.dispose();
     _giftTimer?.cancel();
     _engine?.leaveChannel();
@@ -258,52 +307,39 @@ _giftTimer?.cancel();
           children: [
             Column(
               children: [
-                // 1. TOP BAR: Minimize, Title, Online Badge & Exit
                 _buildTopBar(),
-
-                // 2. 8 SEATS GRID
                 _buildSeatsGrid(),
-
                 const Spacer(),
-
-                // 3. IN-ROOM LIVE CHAT
                 _buildChatStream(),
-
-                // 4. BOTTOM CONTROLS: Game, Mic, Chat, Reaction, Gift
                 _buildBottomControls(),
               ],
             ),
 
-            // 5. FULL-SCREEN 3D GIFT OVERLAY
-            if (_activeGiftName != null) _buildGiftOverlay(),
+            // 4. FULL-SCREEN 3D ANIMATION LAYER
+            if (_activeGiftName != null) _buildFullScreenGiftOverlay(),
           ],
         ),
       ),
     );
   }
 
-  // --- 1. TOP BAR ---
   Widget _buildTopBar() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: const BoxDecoration(
         color: Color(0xFF101726),
-
-border: Border(bottom: BorderSide(color: Colors.white10)),
+        border: Border(bottom: BorderSide(color: Colors.white10)),
       ),
       child: Row(
         children: [
-          // Minimize Button (ሚኒማይዝ ማድረጊያ)
           IconButton(
             constraints: const BoxConstraints(),
             padding: const EdgeInsets.all(6),
-            icon: const Icon(Icons.picture_in_picture_alt_rounded, color: Colors.white70, size: 20),
-            onPressed: () {
-              Navigator.pop(context);
-            },
+            icon: const Icon(Icons.picture_in_picture_alt_rounded,
+                color: Colors.white70, size: 20),
+            onPressed: () => Navigator.pop(context),
           ),
           const SizedBox(width: 6),
-          // Room Avatar & Title
           Expanded(
             child: Row(
               children: [
@@ -337,7 +373,6 @@ border: Border(bottom: BorderSide(color: Colors.white10)),
               ],
             ),
           ),
-          // Online Users Count Badge (የገባ ሰው ቁጥር ማሳያ ባጅ)
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
@@ -354,18 +389,19 @@ border: Border(bottom: BorderSide(color: Colors.white10)),
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 11,
-                    fontWeight: FontWeight.bold,
+
+fontWeight: FontWeight.bold,
                   ),
                 ),
               ],
             ),
           ),
           const SizedBox(width: 6),
-          // Leave / Close Room Button
           IconButton(
             constraints: const BoxConstraints(),
             padding: const EdgeInsets.all(6),
-            icon: const Icon(Icons.power_settings_new_rounded, color: Colors.redAccent, size: 20),
+            icon: const Icon(Icons.power_settings_new_rounded,
+                color: Colors.redAccent, size: 20),
             onPressed: () => Navigator.pop(context),
           ),
         ],
@@ -373,7 +409,6 @@ border: Border(bottom: BorderSide(color: Colors.white10)),
     );
   }
 
-  // --- 2. 8 SEATS GRID ---
   Widget _buildSeatsGrid() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -396,8 +431,7 @@ border: Border(bottom: BorderSide(color: Colors.white10)),
           return Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-
-AnimatedContainer(
+              AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
                 width: 60,
                 height: 60,
@@ -461,7 +495,6 @@ AnimatedContainer(
     );
   }
 
-  // --- 3. LIVE CHAT STREAM ---
   Widget _buildChatStream() {
     return Container(
       height: 150,
@@ -472,7 +505,7 @@ AnimatedContainer(
           final msg = _messages[index];
           final bool isGift = msg['user'] == 'GIFT';
 
-          if (isGift) {
+if (isGift) {
             return Container(
               margin: const EdgeInsets.symmetric(vertical: 4),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -501,7 +534,7 @@ AnimatedContainer(
             );
           }
 
-return Container(
+          return Container(
             margin: const EdgeInsets.symmetric(vertical: 3),
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
@@ -532,7 +565,6 @@ return Container(
     );
   }
 
-  // --- 4. BOTTOM CONTROLS ---
   Widget _buildBottomControls() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
@@ -542,7 +574,6 @@ return Container(
       ),
       child: Row(
         children: [
-          // 1. Mic Button
           IconButton(
             icon: Icon(
               _isMicMuted ? Icons.mic_off : Icons.mic,
@@ -551,12 +582,10 @@ return Container(
             ),
             onPressed: _toggleMic,
           ),
-          // 2. Game Button (የጌም ቁልፍ 🎮)
           IconButton(
             icon: const Icon(Icons.sports_esports_rounded, color: Colors.amber, size: 22),
             onPressed: _showGameSheet,
           ),
-          // 3. Chat Input Box
           Expanded(
             child: Container(
               height: 38,
@@ -575,15 +604,16 @@ return Container(
                   suffixIcon: IconButton(
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(),
-                    icon: const Icon(Icons.send_rounded, color: Color(0xFF38BDF8), size: 16),
+                    icon: const Icon(Icons.send_rounded,
+                        color: Color(0xFF38BDF8), size: 16),
                     onPressed: _sendMessage,
                   ),
                 ),
               ),
-            ),
+
+),
           ),
           const SizedBox(width: 8),
-          // 4. Gift Button (የስጦታ ቁልፍ)
           GestureDetector(
             onTap: _showGiftPanel,
             child: Container(
@@ -602,58 +632,114 @@ return Container(
     );
   }
 
-  // --- 5. FULL-SCREEN GIFT OVERLAY ---
-  Widget _buildGiftOverlay() {
+  // --- 4. FULL-SCREEN 3D DYNAMIC ANIMATION LAYER ---
+  Widget _buildFullScreenGiftOverlay() {
+    final bool isCar = _activeGiftName == 'Super Car';
+    final bool isRocket = _activeGiftName == 'Rocket';
+
+    Widget giftVisual;
+    if (isCar) {
+      giftVisual = SlideTransition(
+        position: _carSlideAnimation,
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            boxShadow: [
+              BoxShadow(
+                color: Colors.redAccent.withOpacity(0.5),
+                blurRadius: 50,
+                spreadRadius: 10,
+              ),
+            ],
+          ),
+          child: const Text('🏎️💨', style: TextStyle(fontSize: 100)),
+        ),
+      );
+    } else if (isRocket) {
+      giftVisual = SlideTransition(
+        position: _rocketFlyAnimation,
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            boxShadow: [
+              BoxShadow(
+                color: Colors.orangeAccent.withOpacity(0.6),
+                blurRadius: 60,
+                spreadRadius: 15,
+              ),
+            ],
+          ),
+          child: const Text('🚀🔥', style: TextStyle(fontSize: 110)),
+        ),
+      );
+    } else {
+      String icon = '🌹';
+      if (_activeGiftName == 'Love Heart') icon = '💖';
+      if (_activeGiftName == 'Crown') icon = '👑';
+
+      giftVisual = ScaleTransition(
+        scale: _scaleAnimation,
+        child: Container(
+          padding: const EdgeInsets.all(30),
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.pinkAccent.withOpacity(0.5),
+                blurRadius: 50,
+                spreadRadius: 10,
+              ),
+            ],
+          ),
+          child: Text(icon, style: const TextStyle(fontSize: 100)),
+        ),
+      );
+    }
+
     return Positioned.fill(
       child: IgnorePointer(
         child: Container(
-          color: Colors.black.withOpacity(0.35),
-          child: Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-
-children: [
-                Text(
-                  '${_activeGiftSender!} sent',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.all(24),
+          color: Colors.black.withOpacity(0.3),
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              // Floating Title Banner
+              Positioned(
+                top: 90,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                   decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.amber.withOpacity(0.4),
-                        blurRadius: 40,
-                        spreadRadius: 10,
+                    color: Colors.black.withOpacity(0.7),
+                    borderRadius: BorderRadius.circular(25),
+                    border: Border.all(color: Colors.amberAccent, width: 1.5),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.auto_awesome, color: Colors.amber, size: 20),
+                      const SizedBox(width: 8),
+                      Text(
+                        '${_activeGiftSender!} sent ${_activeGiftName!}!',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ],
                   ),
-                  child: const Text('🏎️', style: TextStyle(fontSize: 84)),
                 ),
-                const SizedBox(height: 12),
-                Text(
-                  _activeGiftName!,
-                  style: const TextStyle(
-                    color: Colors.amberAccent,
-                    fontSize: 26,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-            ),
+              ),
+
+              // Animated Graphic
+              giftVisual,
+            ],
           ),
         ),
       ),
     );
   }
 
-  void _showGiftPanel() {
+void _showGiftPanel() {
     showModalBottomSheet(
       context: context,
       backgroundColor: const Color(0xFF161F30),
@@ -672,7 +758,11 @@ children: [
                 children: [
                   const Text(
                     'Send Gift',
-                    style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -686,7 +776,10 @@ children: [
                         const SizedBox(width: 4),
                         Text(
                           '${_user.coins}',
-                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ],
                     ),
@@ -723,15 +816,15 @@ children: [
           color: const Color(0xFF1C2538),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: Colors.white10),
-
-),
+        ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Text(icon, style: const TextStyle(fontSize: 28)),
             const SizedBox(height: 6),
             Text(name, style: const TextStyle(color: Colors.white, fontSize: 11)),
-            Text('$cost Coins', style: const TextStyle(color: Colors.amber, fontSize: 10)),
+            Text('$cost Coins',
+                style: const TextStyle(color: Colors.amber, fontSize: 10)),
           ],
         ),
       ),
