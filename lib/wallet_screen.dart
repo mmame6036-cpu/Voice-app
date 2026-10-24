@@ -1,21 +1,6 @@
 import 'package:flutter/material.dart';
+import 'services/user_service.dart';
 import 'recharge_screen.dart';
-
-// Standalone fallback/direct service reference to avoid path mismatch
-class UserService {
-  static final UserService _instance = UserService._internal();
-  factory UserService() => _instance;
-  UserService._internal();
-
-  static const String serverUrl = 'https://nile-voice-server.onrender.com';
-  static const String agoraAppId = '388d62b7f0ef47a0821b470a635b9473';
-
-  String userId = '100234';
-  String userName = 'User_100234';
-  int coins = 1000;
-  int points = 0;
-  bool isFaceVerified = false;
-}
 
 class WalletScreen extends StatefulWidget {
   const WalletScreen({Key? key}) : super(key: key);
@@ -102,8 +87,7 @@ class _WalletScreenState extends State<WalletScreen> {
               const SizedBox(height: 24),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
-
-backgroundColor: const Color(0xFF00C9A7),
+                  backgroundColor: const Color(0xFF00C9A7),
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
@@ -114,7 +98,8 @@ backgroundColor: const Color(0xFF00C9A7),
                     context,
                     MaterialPageRoute(builder: (_) => const RechargeScreen()),
                   ).then((_) => setState(() {}));
-                },
+
+},
                 child: const Text(
                   'Recharge Coins',
                   style: TextStyle(
