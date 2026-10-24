@@ -5,14 +5,16 @@ import 'package:permission_handler/permission_handler.dart';
 import '../services/user_service.dart';
 
 class LiveAudioRoomScreen extends StatefulWidget {
-  final String roomTitle;
+  final String? roomTitle;
+  final String? channelName;
   final String category;
   final String? coverImagePath;
 
   const LiveAudioRoomScreen({
     Key? key,
-    required this.roomTitle,
-    required this.category,
+    this.roomTitle,
+    this.channelName,
+    this.category = 'Chat',
     this.coverImagePath,
   }) : super(key: key);
 
@@ -20,28 +22,23 @@ class LiveAudioRoomScreen extends StatefulWidget {
   State<LiveAudioRoomScreen> createState() => _LiveAudioRoomScreenState();
 }
 
-class _LiveAudioRoomScreenState extends State<LiveAudioRoomScreen>
-    with SingleTickerProviderStateMixin {
+class _LiveAudioRoomScreenState extends State<LiveAudioRoomScreen> {
   final UserService _user = UserService();
   RtcEngine? _engine;
   bool _isMicMuted = false;
-  int? _mySeatIndex = 0; // Default sitting on Host seat
+  int? _mySeatIndex = 0;
 
-  // 8 Seats Configuration
   late List<Map<String, dynamic>> _seats;
 
-  // Real-time Chat List
   final List<Map<String, String>> _messages = [
     {'user': 'System', 'text': 'Welcome to the live voice lounge!'},
   ];
   final TextEditingController _chatController = TextEditingController();
 
-  // Active Gift Animation State
   String? _activeGiftName;
   String? _activeGiftSender;
   Timer? _giftTimer;
 
-  // Audience list simulation for Top Bar
   final List<String> _audienceList = [
     'User_902',
     'User_334',
@@ -49,6 +46,9 @@ class _LiveAudioRoomScreenState extends State<LiveAudioRoomScreen>
     'User_105',
     'User_652'
   ];
+
+  String get effectiveTitle =>
+      widget.roomTitle ?? widget.channelName ?? 'Habesha Voice Lounge';
 
   @override
   void initState() {
@@ -89,7 +89,7 @@ class _LiveAudioRoomScreenState extends State<LiveAudioRoomScreen>
       _engine!.registerEventHandler(
         RtcEngineEventHandler(
           onAudioVolumeIndication: (RtcConnection connection,
-              List<AudioVolumeInfo> speakers, int totalVolume) {
+              List<AudioVolumeInfo> speakers, int totalVolume, int? speakerNumber) {
             if (!mounted) return;
             for (var speaker in speakers) {
               final speakerUid = speaker.uid.toString();
@@ -115,7 +115,7 @@ class _LiveAudioRoomScreenState extends State<LiveAudioRoomScreen>
       await _engine!.setClientRole(role: ClientRoleType.clientRoleBroadcaster);
       await _engine!.joinChannel(
         token: '',
-        channelId: widget.roomTitle.replaceAll(' ', '_'),
+        channelId: effectiveTitle.replaceAll(' ', '_'),
         uid: int.tryParse(_user.userId) ?? 0,
         options: const ChannelMediaOptions(
           clientRoleType: ClientRoleType.clientRoleBroadcaster,
@@ -138,7 +138,7 @@ class _LiveAudioRoomScreenState extends State<LiveAudioRoomScreen>
     }
 
     _user.coins -= cost;
-    Navigator.pop(context); // Close gift sheet
+    Navigator.pop(context);
 
 setState(() {
       _activeGiftName = giftName;
@@ -201,23 +201,13 @@ setState(() {
           children: [
             Column(
               children: [
-                // 1. TOP BAR: Title, Viewers & Ranking
                 _buildTopBar(),
-
-                // 2. SEATS GRID: 8 Dynamic Interactive Seats
                 _buildSeatsGrid(),
-
                 const Spacer(),
-
-                // 3. IN-ROOM LIVE CHAT STREAM
                 _buildChatStream(),
-
-                // 4. BOTTOM CONTROLS: Mic, Chat Input, Gift Button
                 _buildBottomControls(),
               ],
             ),
-
-            // 5. FULL-SCREEN 3D GIFT ANIMATION OVERLAY
             if (_activeGiftName != null) _buildGiftOverlay(),
           ],
         ),
@@ -225,7 +215,6 @@ setState(() {
     );
   }
 
-  // --- 1. TOP BAR ---
   Widget _buildTopBar() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -235,10 +224,10 @@ setState(() {
       ),
       child: Row(
         children: [
-          CircleAvatar(
+          const CircleAvatar(
             radius: 18,
-            backgroundColor: const Color(0xFF2563EB),
-            child: const Icon(Icons.mic, color: Colors.white, size: 18),
+            backgroundColor: Color(0xFF2563EB),
+            child: Icon(Icons.mic, color: Colors.white, size: 18),
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -246,7 +235,7 @@ setState(() {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  widget.roomTitle,
+                  effectiveTitle,
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 14,
@@ -261,7 +250,6 @@ setState(() {
               ],
             ),
           ),
-          // Viewers Avatars
           Row(
             children: _audienceList.take(3).map((aud) {
               return Container(
@@ -278,8 +266,7 @@ setState(() {
             }).toList(),
           ),
           const SizedBox(width: 8),
-
-Container(
+          Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
               color: Colors.white12,
@@ -288,7 +275,8 @@ Container(
             child: Text(
               '${_audienceList.length + 1}',
               style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
-            ),
+
+),
           ),
           const SizedBox(width: 6),
           IconButton(
@@ -300,7 +288,6 @@ Container(
     );
   }
 
-  // --- 2. 8 SEATS GRID ---
   Widget _buildSeatsGrid() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
@@ -387,7 +374,6 @@ Container(
     );
   }
 
-// --- 3. IN-ROOM LIVE CHAT STREAM ---
   Widget _buildChatStream() {
     return Container(
       height: 160,
@@ -398,7 +384,7 @@ Container(
           final msg = _messages[index];
           final bool isGift = msg['user'] == 'GIFT';
 
-          if (isGift) {
+if (isGift) {
             return Container(
               margin: const EdgeInsets.symmetric(vertical: 4),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -458,7 +444,6 @@ Container(
     );
   }
 
-  // --- 4. BOTTOM CONTROLS ---
   Widget _buildBottomControls() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -493,8 +478,7 @@ Container(
                   suffixIcon: IconButton(
                     icon: const Icon(Icons.send_rounded, color: Color(0xFF38BDF8), size: 18),
                     onPressed: _sendMessage,
-
-),
+                  ),
                 ),
               ),
             ),
@@ -518,8 +502,7 @@ Container(
     );
   }
 
-  // --- 5. FULL-SCREEN 3D GIFT ANIMATION ---
-  Widget _buildGiftOverlay() {
+Widget _buildGiftOverlay() {
     return Positioned.fill(
       child: IgnorePointer(
         child: Container(
@@ -568,7 +551,6 @@ Container(
     );
   }
 
-  // --- GIFT BOTTOM SHEET ---
   void _showGiftPanel() {
     showModalBottomSheet(
       context: context,
@@ -607,8 +589,7 @@ Container(
                       ],
                     ),
                   ),
-
-],
+                ],
               ),
               const SizedBox(height: 16),
               Expanded(
@@ -633,7 +614,8 @@ Container(
   }
 
   Widget _giftItem(String name, String icon, int cost) {
-    return GestureDetector(
+
+return GestureDetector(
       onTap: () => _triggerGift(name, cost),
       child: Container(
         decoration: BoxDecoration(
