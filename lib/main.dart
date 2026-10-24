@@ -12,7 +12,8 @@ import 'coin_seller_screen.dart';
 import 'daily_tasks_screen.dart';
 import 'face_verification_screen.dart';
 import 'screen/login_screen.dart';
-import 'home_party_screen.dart';
+import 'screens/start_live_screen.dart';
+import 'screens/live_audio_room_screen.dart';
 
 import 'store_screen.dart';
 import 'backpack_screen.dart';
@@ -66,7 +67,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   int _currentIndex = 0;
 
   final List<Widget> _screens = [
-    const HomePartyScreen(), // በአዲሱ 3D Party ስክሪን ተተክቷል
+    const HomePartyScreen(),
     const MessagesScreen(),
     const ProfileScreen(),
   ];
@@ -95,6 +96,183 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
             label: 'Me',
           ),
         ],
+      ),
+    );
+  }
+}
+
+// 3D Party Screen በቀጥታ እዚህ ተካትቷል (ከውጪ ፋይል መፈለግ አይጠበቅበትም)
+class HomePartyScreen extends StatefulWidget {
+  const HomePartyScreen({Key? key}) : super(key: key);
+
+  @override
+  State<HomePartyScreen> createState() => _HomePartyScreenState();
+}
+
+class _HomePartyScreenState extends State<HomePartyScreen> {
+  final List<Map<String, dynamic>> _liveRooms = [
+    {
+      'title': 'Habesha Chill & Music 🎵',
+      'host': 'Sara_Des',
+      'listeners': '1.2k',
+      'tag': 'Music',
+      'gradient': [const Color(0xFF4F46E5), const Color(0xFF06B6D4)],
+    },
+    {
+      'title': 'Coffee & Life Chat ☕',
+      'host': 'Aman_Voice',
+      'listeners': '840',
+      'tag': 'Chat',
+      'gradient': [const Color(0xFFD97706), const Color(0xFFDC2626)],
+
+},
+    {
+      'title': 'Night Owls Gaming 🎮',
+      'host': 'Rediet_Pro',
+      'listeners': '2.5k',
+      'tag': 'Game',
+      'gradient': [const Color(0xFF7C3AED), const Color(0xFFDB2777)],
+    },
+    {
+      'title': 'Friendship & Fun Lounge ✨',
+      'host': 'Kedir_O',
+      'listeners': '620',
+      'tag': 'Friendly',
+      'gradient': [const Color(0xFF059669), const Color(0xFF10B981)],
+    },
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF0A0E1A),
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        title: const Text(
+          'Party Lounge',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 20),
+        ),
+      ),
+      body: CustomScrollView(
+        slivers: [
+          SliverToBoxAdapter(
+            child: Container(
+              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              height: 110,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(20),
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF6366F1), Color(0xFFA855F7)],
+                ),
+              ),
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: const [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          'Host 3D Voice Rooms 🎙️',
+                          style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                        ),
+                        SizedBox(height: 6),
+                        Text(
+                          'Go live, invite friends, and receive gifts daily!',
+                          style: TextStyle(color: Colors.white70, fontSize: 11),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(Icons.stars_rounded, color: Colors.amberAccent, size: 48),
+                ],
+              ),
+            ),
+          ),
+          SliverPadding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            sliver: SliverGrid(
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                mainAxisSpacing: 14,
+                crossAxisSpacing: 14,
+                childAspectRatio: 0.9,
+              ),
+              delegate: SliverChildBuilderDelegate(
+                (context, index) {
+                  final room = _liveRooms[index];
+                  return GestureDetector(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => LiveAudioRoomScreen(
+                            roomTitle: room['title'],
+                            channelName: 'room_${index + 1}',
+                          ),
+                        ),
+                      );
+                    },
+                    child: Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(18),
+                        gradient: LinearGradient(
+                          colors: room['gradient'],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                      ),
+                      padding: const EdgeInsets.all(12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+
+children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: Colors.black38,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              room['tag'],
+                              style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                          const Spacer(),
+                          Text(
+                            room['title'],
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            room['host'],
+                            style: const TextStyle(color: Colors.white70, fontSize: 11),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+                childCount: _liveRooms.length,
+              ),
+            ),
+          ),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        backgroundColor: const Color(0xFF2563EB),
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const StartLiveScreen()),
+          );
+        },
+        icon: const Icon(Icons.mic, color: Colors.white),
+        label: const Text('Go Live', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
       ),
     );
   }
@@ -135,7 +313,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget build(BuildContext context) {
     final bool isVerified = _user.isFaceVerified;
 
-return Scaffold(
+    return Scaffold(
       backgroundColor: const Color(0xFF0F141C),
       body: SafeArea(
         child: RefreshIndicator(
@@ -160,7 +338,8 @@ return Scaffold(
                     const SizedBox(width: 14),
                     Expanded(
                       child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+
+crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
                             _user.userName,
@@ -206,8 +385,7 @@ return Scaffold(
                                         size: 13,
                                       ),
                                       const SizedBox(width: 4),
-
-Text(
+                                      Text(
                                         isVerified ? 'Verified' : 'Verify Face',
                                         style: TextStyle(
                                           color: isVerified ? const Color(0xFF00C9A7) : Colors.orangeAccent,
@@ -229,7 +407,8 @@ Text(
                       onPressed: () {
                         Navigator.push(
                           context,
-                          MaterialPageRoute(builder: (_) => const SettingsScreen()),
+
+MaterialPageRoute(builder: (_) => const SettingsScreen()),
                         );
                       },
                     ),
@@ -287,8 +466,7 @@ Text(
                           padding: const EdgeInsets.all(14),
                           decoration: BoxDecoration(
                             color: const Color(0xFF161B26),
-
-borderRadius: BorderRadius.circular(14),
+                            borderRadius: BorderRadius.circular(14),
                             border: Border.all(color: Colors.white10),
                           ),
                           child: Row(
@@ -306,7 +484,8 @@ borderRadius: BorderRadius.circular(14),
                                   ],
                                 ),
                               ),
-                              const CircleAvatar(
+
+const CircleAvatar(
                                 radius: 16,
                                 backgroundColor: Colors.amber,
                                 child: Icon(Icons.monetization_on, color: Colors.black, size: 20),
@@ -366,8 +545,7 @@ borderRadius: BorderRadius.circular(14),
                   decoration: BoxDecoration(
                     color: const Color(0xFF161B26),
                     borderRadius: BorderRadius.circular(16),
-
-border: Border.all(color: Colors.white10),
+                    border: Border.all(color: Colors.white10),
                   ),
                   child: Row(
                     children: [
@@ -389,7 +567,8 @@ border: Border.all(color: Colors.white10),
                       Expanded(
                         child: InkWell(
                           borderRadius: BorderRadius.circular(12),
-                          onTap: () {
+
+onTap: () {
                             Navigator.push(
                               context,
                               MaterialPageRoute(builder: (_) => const AgencyScreen()),
@@ -452,8 +631,7 @@ border: Border.all(color: Colors.white10),
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-
-builder: (_) => InviteScreen(
+                              builder: (_) => InviteScreen(
                                 userId: _user.userId,
                                 userName: _user.userName.isNotEmpty ? _user.userName : 'User_${_user.userId}',
                                 onRewardClaimed: (bonusCoins) {
@@ -473,7 +651,8 @@ builder: (_) => InviteScreen(
                             context,
                             MaterialPageRoute(builder: (_) => const StoreScreen()),
                           );
-                        },
+
+},
                         child: _buildGridMenuItem(icon: Icons.shopping_bag_outlined, label: 'Store'),
                       ),
                       InkWell(
@@ -549,7 +728,7 @@ builder: (_) => InviteScreen(
     );
   }
 
-Widget _buildGridMenuItem({required IconData icon, required String label}) {
+  Widget _buildGridMenuItem({required IconData icon, required String label}) {
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
@@ -574,7 +753,8 @@ class InternalMedalWallScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: const Color(0xFF0F141C),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF161B26),
+
+backgroundColor: const Color(0xFF161B26),
         elevation: 0,
         title: const Text('Medal Wall', style: TextStyle(fontWeight: FontWeight.bold)),
       ),
