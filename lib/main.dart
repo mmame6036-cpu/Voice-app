@@ -12,8 +12,8 @@ import 'coin_seller_screen.dart';
 import 'daily_tasks_screen.dart';
 import 'face_verification_screen.dart';
 import 'screen/login_screen.dart';
-import 'screens/start_live_screen.dart';
-import 'screens/live_audio_room_screen.dart';
+import 'start_live_screen.dart';
+import 'live_audio_room_screen.dart';
 
 import 'store_screen.dart';
 import 'backpack_screen.dart';
