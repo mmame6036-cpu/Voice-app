@@ -48,6 +48,24 @@ io.on('connection', (socket) => {
   });
 });
 
+// User Registration Route (Fixes 404 Error)
+app.post('/api/register-user', (req, res) => {
+  const { deviceId, userName } = req.body;
+  const userId = Math.floor(100000 + Math.random() * 900000).toString();
+
+  res.status(200).json({
+    success: true,
+    user: {
+      userId: userId,
+      userName: userName || User_${userId},
+      deviceId: deviceId || 'unknown',
+      coins: 500,
+      points: 0,
+      isFaceVerified: false
+    }
+  });
+});
+
 // Core Routes
 const walletRoutes = require('./routes/wallet');
 const adminRoutes = require('./routes/admin');
