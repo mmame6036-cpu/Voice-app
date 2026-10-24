@@ -162,7 +162,7 @@ class _StartLiveScreenState extends State<StartLiveScreen> {
           title,
           style: TextStyle(
             fontSize: 11,
-            color: isActive ? Colors.black89 : Colors.grey,
+            color: isActive ? Colors.black87 : Colors.grey,
             fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
           ),
         ),
