@@ -2,9 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 
-// ማስታወሻ፡ ከ console.agora.io የምታገኘውን ነፃ App ID እዚህ አስገባ
-const String agoraAppId = "21091aff01114a66b580ce15b0f1b642";
-const String agoraToken = ""; 
+const String agoraAppId = "2109"; // የእርሶን ሙሉ የ Agora App ID እዚህ ያስገቡ
+const String agoraToken = "";
 const String channelName = "habesha_vip_room";
 
 void main() {
@@ -19,7 +18,7 @@ class VoicePartyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Voice Party',
+      title: '3D Voice Party',
       theme: ThemeData.dark().copyWith(
         scaffoldBackgroundColor: const Color(0xFF0F0F1E),
         primaryColor: const Color(0xFFFFD700),
@@ -126,12 +125,12 @@ class HomeScreen extends StatelessWidget {
               padding: const EdgeInsets.all(16),
               children: [
                 const Text(
-                  "Trending Voice Parties",
+                  "Trending 3D Voice Parties",
                   style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 12),
                 RoomCard(
-                  title: "Habesha VIP Chill & Music 🎵",
+                  title: "Abay Falls 3D Lounge 🌊",
                   hostName: "Kedir Umer",
                   membersCount: 8,
                   onJoin: () {
@@ -139,7 +138,7 @@ class HomeScreen extends StatelessWidget {
                       context,
                       MaterialPageRoute(
                         builder: (_) => VoicePartyRoomScreen(
-                          roomTitle: "Habesha VIP Chill & Music 🎵",
+                          roomTitle: "Abay Falls 3D Lounge 🌊",
                           initialCoins: coins,
                           onCoinUpdate: onCoinUpdate,
                         ),
@@ -181,14 +180,14 @@ class RoomCard extends StatelessWidget {
             colors: [Color(0xFF261D45), Color(0xFF16162A)],
           ),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.purpleAccent.withOpacity(0.3)),
+          border: Border.all(color: Colors.blueAccent.withOpacity(0.3)),
         ),
         child: Row(
           children: [
             const CircleAvatar(
               radius: 26,
-              backgroundColor: Colors.purple,
-              child: Icon(Icons.mic, color: Colors.white, size: 28),
+              backgroundColor: Colors.blueAccent,
+              child: Icon(Icons.water, color: Colors.white, size: 28),
             ),
             const SizedBox(width: 14),
             Expanded(
@@ -207,11 +206,11 @@ class RoomCard extends StatelessWidget {
                 color: Colors.black40,
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: Row(
+              child: const Row(
                 children: [
-                  const Icon(Icons.headset, color: Color(0xFFFFD700), size: 14),
-                  const SizedBox(width: 4),
-                  Text("$membersCount/8", style: const TextStyle(color: Colors.white, fontSize: 12)),
+                  Icon(Icons.spatial_audio, color: Color(0xFFFFD700), size: 14),
+                  SizedBox(width: 4),
+                  Text("3D Audio", style: TextStyle(color: Colors.white, fontSize: 12)),
                 ],
               ),
             )
@@ -243,11 +242,23 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen> {
   bool _isMicMuted = false;
   int? _mySeatIndex;
   final List<String?> _seats = List.filled(8, null);
-  final List<String> _chatMessages = ["Welcome to the party room! Keep it friendly."];
+  final List<String> _chatMessages = ["🎧 3D Spatial Audio and Live Room active."];
   final TextEditingController _msgController = TextEditingController();
 
   RtcEngine? _engine;
+  LocalSpatialAudioEngine? _spatialAudioEngine;
   bool _isEngineReady = false;
+
+  final List<List<double>> _seat3DCoordinates = [
+    [-2.0, 1.0, 0.0],
+    [-1.5, 2.0, 0.0],
+    [-1.0, 3.0, 0.0],
+    [-0.5, 4.0, 0.0],
+    [0.5, 4.0, 0.0],
+    [1.0, 3.0, 0.0],
+    [1.5, 2.0, 0.0],
+    [2.0, 1.0, 0.0],
+  ];
 
   @override
   void initState() {
@@ -257,10 +268,9 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen> {
   }
 
   Future<void> _initVoiceEngine() async {
-    // ማይክሮፎን ፈቃድ መጠየቅ
     await [Permission.microphone].request();
 
-    if (agoraAppId != "YOUR_AGORA_APP_ID_HERE") {
+    if (agoraAppId.length > 3) {
       try {
         _engine = createAgoraRtcEngine();
         await _engine!.initialize(const RtcEngineContext(
@@ -268,15 +278,24 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen> {
           channelProfile: ChannelProfileType.channelProfileLiveBroadcasting,
         ));
 
+        _spatialAudioEngine = await _engine!.getLocalSpatialAudioEngine();
+        await _spatialAudioEngine!.initialize();
+        await _spatialAudioEngine!.updateSelfPosition(
+          position: [0.0, 0.0, 0.0],
+          axisForward: [1.0, 0.0, 0.0],
+          axisRight: [0.0, 1.0, 0.0],
+          axisUp: [0.0, 0.0, 1.0],
+        );
+
         _engine!.registerEventHandler(
           RtcEngineEventHandler(
             onJoinChannelSuccess: (RtcConnection connection, int elapsed) {
               setState(() {
-                _chatMessages.add("Joined voice channel successfully.");
+                _chatMessages.add("Connected to 3D Audio (Abay Room).");
               });
             },
-            onUserMuteAudio: (RtcConnection connection, int remoteUid, bool muted) {
-              // Remote user mute handler
+            onUserJoined: (RtcConnection connection, int remoteUid, int elapsed) {
+              _set3DSeatPosition(remoteUid, 1);
             },
           ),
         );
@@ -297,8 +316,20 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen> {
           _isEngineReady = true;
         });
       } catch (e) {
-        debugPrint("Agora Error: $e");
+        debugPrint("3D Engine Error: $e");
       }
+    }
+  }
+
+  void _set3DSeatPosition(int uid, int seatIndex) {
+    if (_spatialAudioEngine != null && seatIndex < _seat3DCoordinates.length) {
+      _spatialAudioEngine!.updateRemotePosition(
+        uid: uid,
+        posInfo: RemoteVoicePositionInfo(
+          position: _seat3DCoordinates[seatIndex],
+          forward: [0.0, 0.0, 0.0],
+        ),
+      );
     }
   }
 
@@ -337,11 +368,11 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen> {
     }
   }
 
-  void _sendGift(String giftName, int cost) {
+void _sendGift(String giftName, int cost) {
     if (_currentCoins >= cost) {
       setState(() {
         _currentCoins -= cost;
-        _chatMessages.add("🎁 Kedir sent a $giftName!");
+        _chatMessages.add("🎁 Kedir sent $giftName!");
       });
       widget.onCoinUpdate(_currentCoins);
       Navigator.pop(context);
@@ -362,16 +393,15 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text("Send a Gift", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
-
-const SizedBox(height: 16),
+            const Text("Send 3D Gift", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
+            const SizedBox(height: 16),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
                 _giftItem("Rose", "🌹", 10),
                 _giftItem("Crown", "👑", 100),
-                _giftItem("Super Car", "🏎️", 500),
-                _giftItem("Rocket", "🚀", 1000),
+                _giftItem("Sports Car", "🏎️", 500),
+                _giftItem("Spaceship", "🚀", 1000),
               ],
             ),
             const SizedBox(height: 16),
@@ -405,6 +435,7 @@ const SizedBox(height: 16),
 
   @override
   void dispose() {
+    _spatialAudioEngine?.release();
     _engine?.leaveChannel();
     _engine?.release();
     _msgController.dispose();
@@ -417,7 +448,7 @@ const SizedBox(height: 16),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: Text(widget.roomTitle, style: const TextStyle(fontSize: 16, color: Colors.white)),
+        title: Text(widget.roomTitle, style: const TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold)),
         actions: [
           IconButton(
             icon: const Icon(Icons.exit_to_app, color: Colors.redAccent),
@@ -425,107 +456,124 @@ const SizedBox(height: 16),
           ),
         ],
       ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
-            child: GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: 8,
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 4,
-                crossAxisSpacing: 12,
-                mainAxisSpacing: 12,
-                childAspectRatio: 0.85,
-              ),
-              itemBuilder: (context, index) {
-                final isTaken = _seats[index] != null;
-                return GestureDetector(
-                  onTap: () => _handleSeatTap(index),
-                  child: Column(
-                    children: [
-                      CircleAvatar(
-                        radius: 26,
-                        backgroundColor: isTaken ? Colors.amber : Colors.white12,
-                        child: Icon(
-                          isTaken ? Icons.mic : Icons.add,
-                          color: isTaken ? Colors.black : Colors.white54,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        isTaken ? _seats[index]! : "Seat ${index + 1}",
-                        style: TextStyle(
-                          color: isTaken ? const Color(0xFFFFD700) : Colors.white54,
-                          fontSize: 10,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
+      body: Container(
+        decoration: const BoxDecoration(
+          image: DecorationImage(
+            image: NetworkImage("https://images.unsplash.com/photo-1547471080-7cc2caa01a7e?q=80&w=1080"), // ውብ የተፈጥሮና የአባይ ፏፏቴ ዳራ
+            fit: BoxFit.cover,
+            colorFilter: ColorFilter.mode(Colors.black45, BlendMode.darken),
           ),
-          const Spacer(),
-          Container(
-            height: 140,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: ListView.builder(
-              itemCount: _chatMessages.length,
-              itemBuilder: (context, index) => Padding(
-                padding: const EdgeInsets.symmetric(vertical: 2.0),
+        ),
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+              child: GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: 8,
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 4,
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 12,
+                  childAspectRatio: 0.85,
+                ),
+                itemBuilder: (context, index) {
 
-child: Text(
-                  _chatMessages[index],
-                  style: const TextStyle(color: Colors.white70, fontSize: 12),
-                ),
+final isTaken = _seats[index] != null;
+                  return GestureDetector(
+                    onTap: () => _handleSeatTap(index),
+                    child: Column(
+                      children: [
+                        CircleAvatar(
+                          radius: 26,
+                          backgroundColor: isTaken ? const Color(0xFFFFD700) : Colors.black54,
+                          child: Icon(
+                            isTaken ? Icons.mic : Icons.add,
+                            color: isTaken ? Colors.black : Colors.white70,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          isTaken ? _seats[index]! : "Seat ${index + 1}",
+                          style: TextStyle(
+                            color: isTaken ? const Color(0xFFFFD700) : Colors.white70,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  );
+                },
               ),
             ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            color: const Color(0xFF16162A),
-            child: Row(
-              children: [
-                IconButton(
-                  icon: Icon(_isMicMuted ? Icons.mic_off : Icons.mic,
-                      color: _isMicMuted ? Colors.red : Colors.greenAccent),
-                  onPressed: _toggleMic,
-                ),
-                Expanded(
+            const Spacer(),
+            Container(
+              height: 140,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: ListView.builder(
+                itemCount: _chatMessages.length,
+                itemBuilder: (context, index) => Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2.0),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
-                      color: Colors.white10,
-                      borderRadius: BorderRadius.circular(20),
+                      color: Colors.black54,
+                      borderRadius: BorderRadius.circular(8),
                     ),
-                    child: TextField(
-                      controller: _msgController,
-                      style: const TextStyle(color: Colors.white, fontSize: 13),
-                      decoration: const InputDecoration(
-                        hintText: "Say something...",
-                        hintStyle: TextStyle(color: Colors.white38),
-                        border: InputBorder.none,
-                      ),
-                      onSubmitted: (val) {
-                        if (val.trim().isNotEmpty) {
-                          setState(() => _chatMessages.add("Kedir: $val"));
-                          _msgController.clear();
-                        }
-                      },
+                    child: Text(
+                      _chatMessages[index],
+                      style: const TextStyle(color: Colors.white, fontSize: 12),
                     ),
                   ),
                 ),
-                IconButton(
-                  icon: const Icon(Icons.card_giftcard, color: Color(0xFFFFD700)),
-                  onPressed: _openGiftSheet,
-                ),
-              ],
+              ),
             ),
-          ),
-        ],
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              color: Colors.black87,
+              child: Row(
+                children: [
+                  IconButton(
+                    icon: Icon(_isMicMuted ? Icons.mic_off : Icons.mic,
+                        color: _isMicMuted ? Colors.red : Colors.greenAccent),
+                    onPressed: _toggleMic,
+                  ),
+                  Expanded(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.white24,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: TextField(
+                        controller: _msgController,
+                        style: const TextStyle(color: Colors.white, fontSize: 13),
+                        decoration: const InputDecoration(
+                          hintText: "Say something...",
+                          hintStyle: TextStyle(color: Colors.white70),
+                          border: InputBorder.none,
+                        ),
+                        onSubmitted: (val) {
+                          if (val.trim().isNotEmpty) {
+                            setState(() => _chatMessages.add("Kedir: $val"));
+                            _msgController.clear();
+                          }
+                        },
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.card_giftcard, color: Color(0xFFFFD700)),
+                    onPressed: _openGiftSheet,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
