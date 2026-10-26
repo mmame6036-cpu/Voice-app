@@ -1,6 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:agora_rtc_engine/agora_rtc_engine.dart';
+
+// ማስታወሻ፡ ከ console.agora.io የምታገኘውን ነፃ App ID እዚህ አስገባ
+const String agoraAppId = "YOUR_AGORA_APP_ID_HERE";
+const String agoraToken = ""; 
+const String channelName = "habesha_vip_room";
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
   runApp(const VoicePartyApp());
 }
 
@@ -75,7 +83,6 @@ class HomeScreen extends StatelessWidget {
     return SafeArea(
       child: Column(
         children: [
-          // Top Bar
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
             child: Row(
@@ -100,21 +107,20 @@ class HomeScreen extends StatelessWidget {
                     color: const Color(0xFF23233E),
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(color: const Color(0xFFFFD700), width: 1),
-                  ),
+
+),
                   child: Row(
                     children: [
                       const Icon(Icons.monetization_on, color: Color(0xFFFFD700), size: 18),
                       const SizedBox(width: 6),
                       Text("$coins", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-
-],
+                    ],
                   ),
                 ),
               ],
             ),
           ),
           const Divider(color: Colors.white10),
-          // Active Rooms List
           Expanded(
             child: ListView(
               padding: const EdgeInsets.all(16),
@@ -233,31 +239,102 @@ class VoicePartyRoomScreen extends StatefulWidget {
 }
 
 class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen> {
-
-late int _currentCoins;
+  late int _currentCoins;
   bool _isMicMuted = false;
   int? _mySeatIndex;
   final List<String?> _seats = List.filled(8, null);
   final List<String> _chatMessages = ["Welcome to the party room! Keep it friendly."];
   final TextEditingController _msgController = TextEditingController();
 
+  RtcEngine? _engine;
+  bool _isEngineReady = false;
+
   @override
   void initState() {
     super.initState();
     _currentCoins = widget.initialCoins;
+    _initVoiceEngine();
   }
 
-  void _handleSeatTap(int index) {
+  Future<void> _initVoiceEngine() async {
+    // ማይክሮፎን ፈቃድ መጠየቅ
+    await [Permission.microphone].request();
+
+    if (agoraAppId != "YOUR_AGORA_APP_ID_HERE") {
+      try {
+        _engine = createAgoraRtcEngine();
+        await _engine!.initialize(const RtcEngineContext(
+          appId: agoraAppId,
+          channelProfile: ChannelProfileType.channelProfileLiveBroadcasting,
+        ));
+
+        _engine!.registerEventHandler(
+          RtcEngineEventHandler(
+            onJoinChannelSuccess: (RtcConnection connection, int elapsed) {
+              setState(() {
+                _chatMessages.add("Joined voice channel successfully.");
+              });
+            },
+            onUserMuteAudio: (RtcConnection connection, int remoteUid, bool muted) {
+              // Remote user mute handler
+            },
+          ),
+        );
+
+        await _engine!.setClientRole(role: ClientRoleType.clientRoleAudience);
+        await _engine!.enableAudio();
+        await _engine!.joinChannel(
+          token: agoraToken,
+          channelId: channelName,
+          uid: 0,
+          options: const ChannelMediaOptions(
+            clientRoleType: ClientRoleType.clientRoleAudience,
+            autoSubscribeAudio: true,
+          ),
+        );
+
+        setState(() {
+          _isEngineReady = true;
+        });
+      } catch (e) {
+        debugPrint("Agora Error: $e");
+      }
+    }
+  }
+
+  Future<void> _handleSeatTap(int index) async {
     setState(() {
       if (_seats[index] == null) {
         if (_mySeatIndex != null) _seats[_mySeatIndex!] = null;
         _seats[index] = "Kedir (Me)";
         _mySeatIndex = index;
+        _updateBroadcasterRole(true);
       } else if (_mySeatIndex == index) {
         _seats[index] = null;
         _mySeatIndex = null;
+        _updateBroadcasterRole(false);
       }
     });
+  }
+
+  Future<void> _updateBroadcasterRole(bool isSpeaker) async {
+    if (_engine != null && _isEngineReady) {
+      if (isSpeaker) {
+        await _engine!.setClientRole(role: ClientRoleType.clientRoleBroadcaster);
+        await _engine!.muteLocalAudioStream(_isMicMuted);
+      } else {
+        await _engine!.setClientRole(role: ClientRoleType.clientRoleAudience);
+      }
+    }
+  }
+
+  Future<void> _toggleMic() async {
+    setState(() {
+      _isMicMuted = !_isMicMuted;
+    });
+    if (_engine != null && _isEngineReady && _mySeatIndex != null) {
+      await _engine!.muteLocalAudioStream(_isMicMuted);
+    }
   }
 
   void _sendGift(String giftName, int cost) {
@@ -286,7 +363,8 @@ late int _currentCoins;
           mainAxisSize: MainAxisSize.min,
           children: [
             const Text("Send a Gift", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
-            const SizedBox(height: 16),
+
+const SizedBox(height: 16),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
@@ -326,6 +404,14 @@ late int _currentCoins;
   }
 
   @override
+  void dispose() {
+    _engine?.leaveChannel();
+    _engine?.release();
+    _msgController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
@@ -341,7 +427,6 @@ late int _currentCoins;
       ),
       body: Column(
         children: [
-          // 8 Seats Grid
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16.0),
             child: GridView.builder(
@@ -351,8 +436,7 @@ late int _currentCoins;
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 4,
                 crossAxisSpacing: 12,
-
-mainAxisSpacing: 12,
+                mainAxisSpacing: 12,
                 childAspectRatio: 0.85,
               ),
               itemBuilder: (context, index) {
@@ -385,7 +469,6 @@ mainAxisSpacing: 12,
             ),
           ),
           const Spacer(),
-          // Messages display
           Container(
             height: 140,
             padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -393,14 +476,14 @@ mainAxisSpacing: 12,
               itemCount: _chatMessages.length,
               itemBuilder: (context, index) => Padding(
                 padding: const EdgeInsets.symmetric(vertical: 2.0),
-                child: Text(
+
+child: Text(
                   _chatMessages[index],
                   style: const TextStyle(color: Colors.white70, fontSize: 12),
                 ),
               ),
             ),
           ),
-          // Control Bar
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             color: const Color(0xFF16162A),
@@ -409,7 +492,7 @@ mainAxisSpacing: 12,
                 IconButton(
                   icon: Icon(_isMicMuted ? Icons.mic_off : Icons.mic,
                       color: _isMicMuted ? Colors.red : Colors.greenAccent),
-                  onPressed: () => setState(() => _isMicMuted = !_isMicMuted),
+                  onPressed: _toggleMic,
                 ),
                 Expanded(
                   child: Container(
@@ -453,8 +536,7 @@ class MeProfileScreen extends StatelessWidget {
   const MeProfileScreen({super.key, required this.coins});
 
   @override
-
-Widget build(BuildContext context) {
+  Widget build(BuildContext context) {
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.all(20.0),
