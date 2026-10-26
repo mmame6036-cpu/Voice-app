@@ -3,7 +3,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 
 // ማስታወሻ፡ ከ console.agora.io የምታገኘውን ነፃ App ID እዚህ አስገባ
-const String agoraAppId = "YOUR_AGORA_APP_ID_HERE";
+const String agoraAppId = "
 const String agoraToken = ""; 
 const String channelName = "habesha_vip_room";
 
