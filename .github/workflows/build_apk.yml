@@ -23,28 +23,19 @@ jobs:
         with:
           channel: 'stable'
 
-      - name: Recreate Android Project Platform
-        run: flutter create . --platforms=android
-
-      - name: Fix Android SDK Versions
+      - name: Create Clean Android Platform
         run: |
-          python3 -c "
-          import os, glob, re
+          rm -rf android
+          flutter create . --platforms=android --android-language=java
 
-          gradle_files = glob.glob('android/app/build.gradle*')
-          for path in gradle_files:
-              with open(path, 'r') as f:
-                  txt = f.read()
-              txt = re.sub(r'compileSdk\s*=.*', 'compileSdk = 34', txt)
-              txt = re.sub(r'compileSdkVersion\s+.*', 'compileSdkVersion 34', txt)
-              txt = re.sub(r'targetSdk\s*=.*', 'targetSdk = 34', txt)
-              txt = re.sub(r'targetSdkVersion\s+.*', 'targetSdkVersion 34', txt)
-              txt = re.sub(r'minSdk\s*=.*', 'minSdk = 21', txt)
-              txt = re.sub(r'minSdkVersion\s+.*', 'minSdkVersion 21', txt)
-              with open(path, 'w') as f:
-                  f.write(txt)
-              print('Updated SDK in:', path)
-          "
+      - name: Configure SDK for Agora
+        run: |
+          sed -i 's/compileSdkVersion flutter.compileSdkVersion/compileSdkVersion 34/g' android/app/build.gradle
+          sed -i 's/compileSdk = flutter.compileSdkVersion/compileSdk = 34/g' android/app/build.gradle
+          sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 21/g' android/app/build.gradle
+          sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 21/g' android/app/build.gradle
+          sed -i 's/targetSdkVersion flutter.targetSdkVersion/targetSdkVersion 34/g' android/app/build.gradle
+          sed -i 's/targetSdk = flutter.targetSdkVersion/targetSdk = 34/g' android/app/build.gradle
 
       - name: Get Dependencies
         run: flutter pub get
