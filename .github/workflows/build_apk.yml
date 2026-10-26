@@ -23,6 +23,9 @@ jobs:
         with:
           channel: 'stable'
 
+      - name: Recreate Android Project Platform
+        run: flutter create . --platforms=android
+
       - name: Get Dependencies
         run: flutter pub get
 
