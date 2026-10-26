@@ -26,16 +26,26 @@ jobs:
       - name: Create Clean Android Platform
         run: |
           rm -rf android
-          flutter create . --platforms=android --android-language=java
+          flutter create . --platforms=android
 
-      - name: Configure SDK for Agora
+      - name: Global Force SDK 34 via Gradle Init Script
         run: |
-          sed -i 's/compileSdkVersion flutter.compileSdkVersion/compileSdkVersion 34/g' android/app/build.gradle
-          sed -i 's/compileSdk = flutter.compileSdkVersion/compileSdk = 34/g' android/app/build.gradle
-          sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 21/g' android/app/build.gradle
-          sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 21/g' android/app/build.gradle
-          sed -i 's/targetSdkVersion flutter.targetSdkVersion/targetSdkVersion 34/g' android/app/build.gradle
-          sed -i 's/targetSdk = flutter.targetSdkVersion/targetSdk = 34/g' android/app/build.gradle
+          mkdir -p ~/.gradle
+          cat << 'EOF' > ~/.gradle/init.gradle
+          allprojects {
+              afterEvaluate { project ->
+                  if (project.hasProperty("android")) {
+                      android {
+                          compileSdkVersion 34
+                          defaultConfig {
+                              minSdkVersion 21
+                              targetSdkVersion 34
+                          }
+                      }
+                  }
+              }
+          }
+          EOF
 
       - name: Get Dependencies
         run: flutter pub get
