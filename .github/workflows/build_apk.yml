@@ -26,12 +26,21 @@ jobs:
       - name: Recreate Android Project Platform
         run: flutter create . --platforms=android
 
-      - name: Fix Android SDK Versions
+      - name: Force Compile SDK 34
         run: |
-          sed -i 's/compileSdk = flutter.compileSdkVersion/compileSdk = 34/g' android/app/build.gradle || true
-          sed -i 's/compileSdkVersion flutter.compileSdkVersion/compileSdkVersion 34/g' android/app/build.gradle || true
-          sed -i 's/targetSdk = flutter.targetSdkVersion/targetSdk = 34/g' android/app/build.gradle || true
-          sed -i 's/targetSdkVersion flutter.targetSdkVersion/targetSdkVersion 34/g' android/app/build.gradle || true
+          cat << 'EOF' > fix_sdk.py
+          import re
+          path = 'android/app/build.gradle'
+          with open(path, 'r') as f:
+              content = f.read()
+          content = re.sub(r'compileSdk\s*=.*', 'compileSdk = 34', content)
+          content = re.sub(r'compileSdkVersion\s+.*', 'compileSdkVersion 34', content)
+          content = re.sub(r'targetSdk\s*=.*', 'targetSdk = 34', content)
+          content = re.sub(r'targetSdkVersion\s+.*', 'targetSdkVersion 34', content)
+          with open(path, 'w') as f:
+              f.write(content)
+          EOF
+          python3 fix_sdk.py
 
       - name: Get Dependencies
         run: flutter pub get
