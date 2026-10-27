@@ -246,19 +246,7 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen> {
   final TextEditingController _msgController = TextEditingController();
 
   RtcEngine? _engine;
-  LocalSpatialAudioEngine? _spatialAudioEngine;
   bool _isEngineReady = false;
-
-  final List<List<double>> _seat3DCoordinates = [
-    [-2.0, 1.0, 0.0],
-    [-1.5, 2.0, 0.0],
-    [-1.0, 3.0, 0.0],
-    [-0.5, 4.0, 0.0],
-    [0.5, 4.0, 0.0],
-    [1.0, 3.0, 0.0],
-    [1.5, 2.0, 0.0],
-    [2.0, 1.0, 0.0],
-  ];
 
   @override
   void initState() {
@@ -270,64 +258,43 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen> {
   Future<void> _initVoiceEngine() async {
     await [Permission.microphone].request();
 
-    try {
-      _engine = createAgoraRtcEngine();
-      await _engine!.initialize(const RtcEngineContext(
-        appId: agoraAppId,
-        channelProfile: ChannelProfileType.channelProfileLiveBroadcasting,
-      ));
+    if (agoraAppId.length > 5) {
+      try {
+        _engine = createAgoraRtcEngine();
+        await _engine!.initialize(const RtcEngineContext(
+          appId: agoraAppId,
+          channelProfile: ChannelProfileType.channelProfileLiveBroadcasting,
+        ));
 
-      _spatialAudioEngine = await _engine!.getLocalSpatialAudioEngine();
-      await _spatialAudioEngine!.initialize();
-      await _spatialAudioEngine!.updateSelfPosition(
-        position: [0.0, 0.0, 0.0],
-        axisForward: [1.0, 0.0, 0.0],
-        axisRight: [0.0, 1.0, 0.0],
-        axisUp: [0.0, 0.0, 1.0],
-      );
+        _engine!.registerEventHandler(
+          RtcEngineEventHandler(
+            onJoinChannelSuccess: (RtcConnection connection, int elapsed) {
+              setState(() {
+                _chatMessages.add("Connected to Voice Channel.");
+              });
+            },
+          ),
+        );
 
-      _engine!.registerEventHandler(
-        RtcEngineEventHandler(
-          onJoinChannelSuccess: (RtcConnection connection, int elapsed) {
-            setState(() {
-              _chatMessages.add("Connected to 3D Audio (Abay Room).");
-            });
-          },
-          onUserJoined: (RtcConnection connection, int remoteUid, int elapsed) {
-            _set3DSeatPosition(remoteUid, 1);
-          },
-        ),
-      );
+        await _engine!.setClientRole(role: ClientRoleType.clientRoleAudience);
+        await _engine!.enableAudio();
+        await _engine!.enableSpatialAudio(true);
+        await _engine!.joinChannel(
+          token: agoraToken,
+          channelId: channelName,
+          uid: 0,
+          options: const ChannelMediaOptions(
+            clientRoleType: ClientRoleType.clientRoleAudience,
+            autoSubscribeAudio: true,
+          ),
+        );
 
-      await _engine!.setClientRole(role: ClientRoleType.clientRoleAudience);
-      await _engine!.enableAudio();
-      await _engine!.joinChannel(
-        token: agoraToken,
-        channelId: channelName,
-        uid: 0,
-        options: const ChannelMediaOptions(
-          clientRoleType: ClientRoleType.clientRoleAudience,
-          autoSubscribeAudio: true,
-        ),
-      );
-
-      setState(() {
-        _isEngineReady = true;
-      });
-    } catch (e) {
-      debugPrint("3D Engine Error: $e");
-    }
-  }
-
-  void _set3DSeatPosition(int uid, int seatIndex) {
-    if (_spatialAudioEngine != null && seatIndex < _seat3DCoordinates.length) {
-      _spatialAudioEngine!.updateRemotePosition(
-        uid: uid,
-        posInfo: RemoteVoicePositionInfo(
-          position: _seat3DCoordinates[seatIndex],
-          forward: [0.0, 0.0, 0.0],
-        ),
-      );
+        setState(() {
+          _isEngineReady = true;
+        });
+      } catch (e) {
+        debugPrint("Voice Engine Error: $e");
+      }
     }
   }
 
@@ -367,8 +334,7 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen> {
   }
 
   void _sendGift(String giftName, int cost) {
-
-if (_currentCoins >= cost) {
+    if (_currentCoins >= cost) {
       setState(() {
         _currentCoins -= cost;
         _chatMessages.add("🎁 Kedir sent $giftName!");
@@ -394,7 +360,8 @@ if (_currentCoins >= cost) {
           children: [
             const Text("Send 3D Gift", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
             const SizedBox(height: 16),
-            Row(
+
+Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
                 _giftItem("Rose", "🌹", 10),
@@ -434,7 +401,6 @@ if (_currentCoins >= cost) {
 
   @override
   void dispose() {
-    _spatialAudioEngine?.release();
     _engine?.leaveChannel();
     _engine?.release();
     _msgController.dispose();
@@ -458,7 +424,7 @@ if (_currentCoins >= cost) {
       body: Container(
         decoration: const BoxDecoration(
           image: DecorationImage(
-            image: NetworkImage("https://upload.wikimedia.org/wikipedia/commons/thumb/0/05/Blue_Nile_Falls_Ethiopia.jpg/1024px-Blue_Nile_Falls_Ethiopia.jpg"), // እውነተኛው የጢስ አባይ ፏፏቴ ምስል
+            image: NetworkImage("https://upload.wikimedia.org/wikipedia/commons/thumb/0/05/Blue_Nile_Falls_Ethiopia.jpg/1024px-Blue_Nile_Falls_Ethiopia.jpg"),
             fit: BoxFit.cover,
             colorFilter: ColorFilter.mode(Colors.black45, BlendMode.darken),
           ),
@@ -478,8 +444,7 @@ if (_currentCoins >= cost) {
                   childAspectRatio: 0.85,
                 ),
                 itemBuilder: (context, index) {
-
-final isTaken = _seats[index] != null;
+                  final isTaken = _seats[index] != null;
                   return GestureDetector(
                     onTap: () => _handleSeatTap(index),
                     child: Column(
@@ -499,7 +464,8 @@ final isTaken = _seats[index] != null;
                             color: isTaken ? const Color(0xFFFFD700) : Colors.white70,
                             fontSize: 10,
                             fontWeight: FontWeight.bold,
-                          ),
+
+),
                           overflow: TextOverflow.ellipsis,
                         ),
                       ],
@@ -599,7 +565,8 @@ class MeProfileScreen extends StatelessWidget {
             const Text("ID: 9845210", style: TextStyle(color: Colors.white38, fontSize: 12)),
             const SizedBox(height: 24),
             Container(
-              padding: const EdgeInsets.all(16),
+
+padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: const Color(0xFF1E1B38),
                 borderRadius: BorderRadius.circular(16),
