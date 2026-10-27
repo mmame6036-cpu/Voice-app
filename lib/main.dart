@@ -180,13 +180,13 @@ class RoomCard extends StatelessWidget {
             colors: [Color(0xFF261D45), Color(0xFF16162A)],
           ),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.blueAccent.withOpacity(0.3)),
+          border: Border.all(color: const Color(0xFF448AFF)),
         ),
         child: Row(
           children: [
             const CircleAvatar(
               radius: 26,
-              backgroundColor: Colors.blueAccent,
+              backgroundColor: Color(0xFF2979FF),
               child: Icon(Icons.water, color: Colors.white, size: 28),
             ),
             const SizedBox(width: 14),
@@ -203,7 +203,7 @@ class RoomCard extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
-                color: Colors.black40,
+                color: const Color(0x66000000),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: const Row(
@@ -337,7 +337,7 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen> {
     if (_currentCoins >= cost) {
       setState(() {
         _currentCoins -= cost;
-        _chatMessages.add("🎁 Kedir sent $giftName!");
+        _chatMessages.add("🎁 Kedir sent a $giftName!");
       });
       widget.onCoinUpdate(_currentCoins);
       Navigator.pop(context);
@@ -426,7 +426,7 @@ Row(
           image: DecorationImage(
             image: NetworkImage("https://upload.wikimedia.org/wikipedia/commons/thumb/0/05/Blue_Nile_Falls_Ethiopia.jpg/1024px-Blue_Nile_Falls_Ethiopia.jpg"),
             fit: BoxFit.cover,
-            colorFilter: ColorFilter.mode(Colors.black45, BlendMode.darken),
+            colorFilter: ColorFilter.mode(Color(0x80000000), BlendMode.darken),
           ),
         ),
         child: Column(
@@ -451,7 +451,7 @@ Row(
                       children: [
                         CircleAvatar(
                           radius: 26,
-                          backgroundColor: isTaken ? const Color(0xFFFFD700) : Colors.black54,
+                          backgroundColor: isTaken ? const Color(0xFFFFD700) : const Color(0x8A000000),
                           child: Icon(
                             isTaken ? Icons.mic : Icons.add,
                             color: isTaken ? Colors.black : Colors.white70,
@@ -485,7 +485,7 @@ Row(
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
-                      color: Colors.black54,
+                      color: const Color(0x8A000000),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
@@ -498,7 +498,7 @@ Row(
             ),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              color: Colors.black87,
+              color: Colors.black,
               child: Row(
                 children: [
                   IconButton(
