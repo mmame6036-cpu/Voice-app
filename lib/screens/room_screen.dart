@@ -10,14 +10,14 @@ class VoicePartyRoomScreen extends StatefulWidget {
   final String roomTitle;
   final int initialCoins;
   final Function(int) onCoinUpdate;
-  final int seatCount; // 8, 12, 16, 20, 25, ወይም 30
+  final int seatCount;
 
   const VoicePartyRoomScreen({
     super.key,
     required this.roomTitle,
     required this.initialCoins,
     required this.onCoinUpdate,
-    this.seatCount = 12, // መደበኛ የወንበር ብዛት
+    this.seatCount = 12,
   });
 
   @override
@@ -91,7 +91,6 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen> {
     }
   }
 
-  // የወንበር ብዛት መቀየሪያ (8, 12, 16, 20, 25, 30)
   void _changeSeatLayout(int newCount) {
     setState(() {
       _activeSeatCount = newCount;
@@ -122,10 +121,10 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen> {
             Wrap(
               spacing: 12,
               runSpacing: 12,
-
-children: [8, 12, 16, 20, 25, 30].map((count) {
+              children: [8, 12, 16, 20, 25, 30].map((count) {
                 final isSelected = _activeSeatCount == count;
-                return ChoiceChip(
+
+return ChoiceChip(
                   label: Text("$count ወንበሮች"),
                   selected: isSelected,
                   selectedColor: const Color(0xFFFFD700),
@@ -255,7 +254,6 @@ children: [8, 12, 16, 20, 25, 30].map((count) {
 
 @override
   Widget build(BuildContext context) {
-    // እንደ ወንበሩ ብዛት ስፋቱ የሚስተካከል (8 ከሆነ 4 ረድፍ፣ ከዛ በላይ ከሆነ 5 ረድፍ)
     final int crossAxisCount = _activeSeatCount <= 8 ? 4 : 5;
     final double avatarRadius = _activeSeatCount > 16 ? 18 : 22;
 
@@ -264,11 +262,10 @@ children: [8, 12, 16, 20, 25, 30].map((count) {
         backgroundColor: Colors.transparent,
         elevation: 0,
         title: Text(
-          "${widget.roomTitle} (${_activeSeatCount} Seats)",
+          "${widget.roomTitle} ($_activeSeatCount Seats)",
           style: const TextStyle(fontSize: 15, color: Colors.white, fontWeight: FontWeight.bold),
         ),
         actions: [
-          // የወንበሮችን ብዛት መምረጫ አዶ
           IconButton(
             icon: const Icon(Icons.event_seat, color: Color(0xFFFFD700)),
             tooltip: "Change Seats Layout",
@@ -281,8 +278,132 @@ children: [8, 12, 16, 20, 25, 30].map((count) {
         ],
       ),
       body: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           image: DecorationImage(
-            image: NetworkImage(abayFallsUrl),
+            image: const NetworkImage(abayFallsUrl),
             fit: BoxFit.cover,
-            colorFilter: ColorFilter.mode(Color(0x77000000), BlendMode.darken
+            colorFilter: ColorFilter.mode(
+              Colors.black.withOpacity(0.55),
+              BlendMode.darken,
+            ),
+          ),
+        ),
+        child: Column(
+          children: [
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
+                child: GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: _activeSeatCount,
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: crossAxisCount,
+                    crossAxisSpacing: 8,
+                    mainAxisSpacing: 8,
+                    childAspectRatio: 0.8,
+                  ),
+                  itemBuilder: (context, index) {
+                    final isTaken = _seats[index] != null;
+                    return GestureDetector(
+                      onTap: () => _handleSeatTap(index),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          CircleAvatar(
+                            radius: avatarRadius,
+                            backgroundColor: isTaken ? const Color(0xFFFFD700) : const Color(0x8A000000),
+                            child: Icon(
+                              isTaken ? Icons.mic : Icons.add,
+                              size: avatarRadius * 0.9,
+                              color: isTaken ? Colors.black : Colors.white70,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            isTaken ? _seats[index]! : "${index + 1}",
+                            style: TextStyle(
+                              color: isTaken ? const Color(0xFFFFD700) : Colors.white70,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+            Container(
+              height: 120,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: ListView.builder(
+                itemCount: _chatMessages.length,
+                itemBuilder: (context, index) => Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2.0),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+
+decoration: BoxDecoration(
+                      color: const Color(0x8A000000),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      _chatMessages[index],
+                      style: const TextStyle(color: Colors.white, fontSize: 11),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              color: Colors.black,
+              child: Row(
+                children: [
+                  IconButton(
+                    icon: Icon(
+                      _isMicMuted ? Icons.mic_off : Icons.mic,
+                      color: _isMicMuted ? Colors.red : Colors.greenAccent,
+                    ),
+                    onPressed: _toggleMic,
+                  ),
+                  Expanded(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.white24,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: TextField(
+                        controller: _msgController,
+                        style: const TextStyle(color: Colors.white, fontSize: 13),
+                        decoration: const InputDecoration(
+                          hintText: "Say something...",
+                          hintStyle: TextStyle(color: Colors.white70),
+                          border: InputBorder.none,
+                        ),
+                        onSubmitted: (val) {
+                          if (val.trim().isNotEmpty) {
+                            setState(() => _chatMessages.add("Kedir: $val"));
+                            _msgController.clear();
+                          }
+                        },
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.card_giftcard, color: Color(0xFFFFD700)),
+                    onPressed: _openGiftSheet,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
