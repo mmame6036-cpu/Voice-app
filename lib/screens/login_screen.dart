@@ -1,10 +1,18 @@
 import 'package:flutter/material.dart';
+import 'main_navigation.dart';
 
 class LoginScreen extends StatelessWidget {
   const LoginScreen({super.key});
 
   static const String abayFallsUrl =
       "https://upload.wikimedia.org/wikipedia/commons/thumb/0/05/Blue_Nile_Falls_Ethiopia.jpg/1024px-Blue_Nile_Falls_Ethiopia.jpg";
+
+  void _goToHome(BuildContext context) {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => const MainNavigationScreen()),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -50,7 +58,7 @@ class LoginScreen extends StatelessWidget {
                     bgColor: Colors.white,
                     textColor: Colors.black87,
                     iconColor: Colors.red,
-                    onTap: () {},
+                    onTap: () => _goToHome(context),
                   ),
                   const SizedBox(height: 14),
                   _loginButton(
@@ -59,7 +67,7 @@ class LoginScreen extends StatelessWidget {
                     bgColor: const Color(0xFF23233E),
                     textColor: Colors.white,
                     iconColor: const Color(0xFFFFD700),
-                    onTap: () {},
+                    onTap: () => _goToHome(context),
                   ),
                   const SizedBox(height: 14),
                   _loginButton(
@@ -68,7 +76,7 @@ class LoginScreen extends StatelessWidget {
                     bgColor: const Color(0xFF1877F2),
                     textColor: Colors.white,
                     iconColor: Colors.white,
-                    onTap: () {},
+                    onTap: () => _goToHome(context),
                   ),
                   const SizedBox(height: 20),
                   const Text(
@@ -103,7 +111,8 @@ class LoginScreen extends StatelessWidget {
           elevation: 4,
         ),
         onPressed: onTap,
-        child: Row(
+
+child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(icon, color: iconColor, size: 26),
