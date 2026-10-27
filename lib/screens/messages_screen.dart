@@ -102,7 +102,7 @@ class _MessagesScreenState extends State<MessagesScreen> with SingleTickerProvid
   Widget _buildChatList() {
     return Column(
       children: [
-        // Search Box
+        // የፍለጋ ሳጥን (Search Bar)
         Padding(
           padding: const EdgeInsets.all(12.0),
           child: Container(
@@ -123,7 +123,7 @@ class _MessagesScreenState extends State<MessagesScreen> with SingleTickerProvid
           ),
         ),
 
-        // Chat ListView
+        // የቻቶች ዝርዝር (Chat List)
         Expanded(
           child: ListView.separated(
             itemCount: _chats.length,
@@ -134,9 +134,9 @@ class _MessagesScreenState extends State<MessagesScreen> with SingleTickerProvid
                 onTap: () {
                   Navigator.push(
                     context,
-                    MaterialPageRoute(
 
-builder: (_) => ChatConversationScreen(userName: chat["name"]),
+MaterialPageRoute(
+                      builder: (_) => ChatConversationScreen(userName: chat["name"]),
                     ),
                   );
                 },
@@ -240,9 +240,9 @@ builder: (_) => ChatConversationScreen(userName: chat["name"]),
               const SizedBox(width: 12),
               const Expanded(
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
 
-children: [
+crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                     Text("Kedir Umer ጠርቶዎታል", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                     Text("ክፍል: Abay Falls 3D Lounge 🌊", style: TextStyle(color: Colors.white60, fontSize: 12)),
                   ],
@@ -297,7 +297,7 @@ children: [
   }
 }
 
-// ==================== የቀጥታ የግል ቻት ገጽ (CHAT ROOM) ====================
+// ==================== የቀጥታ የግል ውይይት ገጽ (CHAT ROOM) ====================
 class ChatConversationScreen extends StatefulWidget {
   final String userName;
   const ChatConversationScreen({super.key, required this.userName});
@@ -346,9 +346,9 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
                   alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
                   child: Container(
                     margin: const EdgeInsets.only(bottom: 10),
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
 
-decoration: BoxDecoration(
+padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
                       color: isMe ? const Color(0xFFFFD700) : const Color(0xFF1E1B38),
                       borderRadius: BorderRadius.circular(16),
                     ),
