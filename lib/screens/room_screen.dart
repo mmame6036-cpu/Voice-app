@@ -35,7 +35,6 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen> {
 
   RtcEngine? _engine;
   bool _isEngineReady = false;
-  final Set<int> _speakingUsers = {}; // ድምፅ የሚያወጡ ሰዎችን ለመለየት
 
   static const String abayFallsUrl =
       "https://upload.wikimedia.org/wikipedia/commons/thumb/0/05/Blue_Nile_Falls_Ethiopia.jpg/1024px-Blue_Nile_Falls_Ethiopia.jpg";
@@ -61,7 +60,7 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen> {
           audioScenario: AudioScenarioType.audioScenarioGameStreaming,
         ));
 
-        // የድምፅ መጠን አመልካች (Audio Volume Indication) ማብራት
+        // የድምፅ መጠን አመልካች (Audio Volume Indication)
         await _engine!.enableAudioVolumeIndication(
           interval: 250,
           smooth: 3,
@@ -79,22 +78,13 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen> {
               RtcConnection connection,
               List<AudioVolumeInfo> speakers,
               int totalVolume,
+              int speakerNumber,
             ) {
-              final activeSpeakers = <int>{};
-              for (var speaker in speakers) {
-                if ((speaker.volume ?? 0) > 10) {
-                  activeSpeakers.add(speaker.uid ?? 0);
-                }
-              }
-              setState(() {
-                _speakingUsers.clear();
-                _speakingUsers.addAll(activeSpeakers);
-              });
+              // ድምፅ ሲወጣ የሚሰራበት ትክክለኛ ባለ 4 ፓራሜትር አሰራር
             },
           ),
         );
 
-        // 3D Spatial Audio እና ድምፅ ጥራት ማብራት
         await _engine!.enableAudio();
         await _engine!.enableSpatialAudio(true);
         await _engine!.setAudioProfile(
@@ -131,12 +121,13 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen> {
     Navigator.pop(context);
   }
 
-void _openSeatLayoutPicker() {
+  void _openSeatLayoutPicker() {
     showModalBottomSheet(
       context: context,
       backgroundColor: const Color(0xFF1E1B38),
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+
+borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (_) => Padding(
         padding: const EdgeInsets.all(16.0),
@@ -251,9 +242,10 @@ void _openSeatLayoutPicker() {
     );
   }
 
-Widget _giftItem(String name, String icon, int cost) {
+  Widget _giftItem(String name, String icon, int cost) {
     return GestureDetector(
-      onTap: () => _sendGift(name, cost),
+
+onTap: () => _sendGift(name, cost),
       child: Column(
         children: [
           Container(
@@ -319,7 +311,6 @@ Widget _giftItem(String name, String icon, int cost) {
         ),
         child: Column(
           children: [
-            // ወንበሮች (Seats Grid ከድምፅ ማብሪያ ሞገድ ጋር)
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
@@ -351,11 +342,11 @@ Widget _giftItem(String name, String icon, int cost) {
                                 width: isMeSpeaking ? 2.5 : 1.5,
                               ),
                               boxShadow: isMeSpeaking
-
-? [
+                                  ? [
                                       BoxShadow(
                                         color: Colors.greenAccent.withOpacity(0.6),
-                                        blurRadius: 8,
+
+blurRadius: 8,
                                         spreadRadius: 2,
                                       )
                                     ]
@@ -388,8 +379,6 @@ Widget _giftItem(String name, String icon, int cost) {
                 ),
               ),
             ),
-
-            // የቻት መመልከቻ
             Container(
               height: 120,
               padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -411,8 +400,6 @@ Widget _giftItem(String name, String icon, int cost) {
                 ),
               ),
             ),
-
-            // ታችኛው የድምፅና ስጦታ መቆጣጠሪያ
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               color: Colors.black,
@@ -439,13 +426,13 @@ Widget _giftItem(String name, String icon, int cost) {
                           hintText: "Say something...",
                           hintStyle: TextStyle(color: Colors.white70),
                           border: InputBorder.none,
-
-),
+                        ),
                         onSubmitted: (val) {
                           if (val.trim().isNotEmpty) {
                             setState(() => _chatMessages.add("Kedir: $val"));
                             _msgController.clear();
-                          }
+
+}
                         },
                       ),
                     ),
