@@ -1,17 +1,17 @@
 name: voice_app
-description: "A Real Voice Party Room Application."
-publish_to: "none"
+description: "A new Flutter 3D Voice Party project."
+publish_to: 'none'
+
 version: 1.0.0+1
 
 environment:
-  sdk: ">=3.0.0 <4.0.0"
+  sdk: '>=3.0.0 <4.0.0'
 
 dependencies:
   flutter:
     sdk: flutter
-  cupertino_icons: ^1.0.8
-  agora_rtc_engine: ^6.3.2
   permission_handler: ^11.3.1
+  agora_rtc_engine: ^6.3.2
 
 dev_dependencies:
   flutter_test:
@@ -21,4 +21,4 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
-     -assets/images/abay_falls.jpg
+    - assets/images/abay_falls.jpg
