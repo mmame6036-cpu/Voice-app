@@ -30,11 +30,12 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen> {
   bool _isMicMuted = false;
   int? _mySeatIndex;
   late List<String?> _seats;
-  final List<String> _chatMessages = ["🎧 Tis Abay Live Room Active."];
+  final List<String> _chatMessages = ["🎧 3D Tis Abay Live Room Active."];
   final TextEditingController _msgController = TextEditingController();
 
   RtcEngine? _engine;
   bool _isEngineReady = false;
+  final Set<int> _speakingUsers = {}; // ድምፅ የሚያወጡ ሰዎችን ለመለየት
 
   static const String abayFallsUrl =
       "https://upload.wikimedia.org/wikipedia/commons/thumb/0/05/Blue_Nile_Falls_Ethiopia.jpg/1024px-Blue_Nile_Falls_Ethiopia.jpg";
@@ -57,21 +58,50 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen> {
         await _engine!.initialize(const RtcEngineContext(
           appId: agoraAppId,
           channelProfile: ChannelProfileType.channelProfileLiveBroadcasting,
+          audioScenario: AudioScenarioType.audioScenarioGameStreaming,
         ));
+
+        // የድምፅ መጠን አመልካች (Audio Volume Indication) ማብራት
+        await _engine!.enableAudioVolumeIndication(
+          interval: 250,
+          smooth: 3,
+          reportVad: true,
+        );
 
         _engine!.registerEventHandler(
           RtcEngineEventHandler(
             onJoinChannelSuccess: (RtcConnection connection, int elapsed) {
               setState(() {
-                _chatMessages.add("Connected to Voice Channel.");
+                _chatMessages.add("ድምፅ መስመር ጋር ተገናኝቷል 🎙️");
+              });
+            },
+            onAudioVolumeIndication: (
+              RtcConnection connection,
+              List<AudioVolumeInfo> speakers,
+              int totalVolume,
+            ) {
+              final activeSpeakers = <int>{};
+              for (var speaker in speakers) {
+                if ((speaker.volume ?? 0) > 10) {
+                  activeSpeakers.add(speaker.uid ?? 0);
+                }
+              }
+              setState(() {
+                _speakingUsers.clear();
+                _speakingUsers.addAll(activeSpeakers);
               });
             },
           ),
         );
 
-        await _engine!.setClientRole(role: ClientRoleType.clientRoleAudience);
+        // 3D Spatial Audio እና ድምፅ ጥራት ማብራት
         await _engine!.enableAudio();
         await _engine!.enableSpatialAudio(true);
+        await _engine!.setAudioProfile(
+          profile: AudioProfileType.audioProfileMusicStandard,
+          scenario: AudioScenarioType.audioScenarioGameStreaming,
+        );
+
         await _engine!.joinChannel(
           token: agoraToken,
           channelId: channelName,
@@ -101,7 +131,7 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen> {
     Navigator.pop(context);
   }
 
-  void _openSeatLayoutPicker() {
+void _openSeatLayoutPicker() {
     showModalBottomSheet(
       context: context,
       backgroundColor: const Color(0xFF1E1B38),
@@ -123,8 +153,7 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen> {
               runSpacing: 12,
               children: [8, 12, 16, 20, 25, 30].map((count) {
                 final isSelected = _activeSeatCount == count;
-
-return ChoiceChip(
+                return ChoiceChip(
                   label: Text("$count ወንበሮች"),
                   selected: isSelected,
                   selectedColor: const Color(0xFFFFD700),
@@ -222,7 +251,7 @@ return ChoiceChip(
     );
   }
 
-  Widget _giftItem(String name, String icon, int cost) {
+Widget _giftItem(String name, String icon, int cost) {
     return GestureDetector(
       onTap: () => _sendGift(name, cost),
       child: Column(
@@ -252,7 +281,7 @@ return ChoiceChip(
     super.dispose();
   }
 
-@override
+  @override
   Widget build(BuildContext context) {
     final int crossAxisCount = _activeSeatCount <= 8 ? 4 : 5;
     final double avatarRadius = _activeSeatCount > 16 ? 18 : 22;
@@ -290,6 +319,7 @@ return ChoiceChip(
         ),
         child: Column(
           children: [
+            // ወንበሮች (Seats Grid ከድምፅ ማብሪያ ሞገድ ጋር)
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
@@ -305,18 +335,40 @@ return ChoiceChip(
                   ),
                   itemBuilder: (context, index) {
                     final isTaken = _seats[index] != null;
+                    final isMeSpeaking = _mySeatIndex == index && !_isMicMuted;
+
                     return GestureDetector(
                       onTap: () => _handleSeatTap(index),
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          CircleAvatar(
-                            radius: avatarRadius,
-                            backgroundColor: isTaken ? const Color(0xFFFFD700) : const Color(0x8A000000),
-                            child: Icon(
-                              isTaken ? Icons.mic : Icons.add,
-                              size: avatarRadius * 0.9,
-                              color: isTaken ? Colors.black : Colors.white70,
+                          Container(
+                            padding: const EdgeInsets.all(3),
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: isMeSpeaking ? Colors.greenAccent : (isTaken ? const Color(0xFFFFD700) : Colors.transparent),
+                                width: isMeSpeaking ? 2.5 : 1.5,
+                              ),
+                              boxShadow: isMeSpeaking
+
+? [
+                                      BoxShadow(
+                                        color: Colors.greenAccent.withOpacity(0.6),
+                                        blurRadius: 8,
+                                        spreadRadius: 2,
+                                      )
+                                    ]
+                                  : null,
+                            ),
+                            child: CircleAvatar(
+                              radius: avatarRadius,
+                              backgroundColor: isTaken ? const Color(0xFFFFD700) : const Color(0x8A000000),
+                              child: Icon(
+                                isTaken ? Icons.mic : Icons.add,
+                                size: avatarRadius * 0.9,
+                                color: isTaken ? Colors.black : Colors.white70,
+                              ),
                             ),
                           ),
                           const SizedBox(height: 4),
@@ -336,6 +388,8 @@ return ChoiceChip(
                 ),
               ),
             ),
+
+            // የቻት መመልከቻ
             Container(
               height: 120,
               padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -345,8 +399,7 @@ return ChoiceChip(
                   padding: const EdgeInsets.symmetric(vertical: 2.0),
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-
-decoration: BoxDecoration(
+                    decoration: BoxDecoration(
                       color: const Color(0x8A000000),
                       borderRadius: BorderRadius.circular(8),
                     ),
@@ -358,6 +411,8 @@ decoration: BoxDecoration(
                 ),
               ),
             ),
+
+            // ታችኛው የድምፅና ስጦታ መቆጣጠሪያ
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               color: Colors.black,
@@ -384,7 +439,8 @@ decoration: BoxDecoration(
                           hintText: "Say something...",
                           hintStyle: TextStyle(color: Colors.white70),
                           border: InputBorder.none,
-                        ),
+
+),
                         onSubmitted: (val) {
                           if (val.trim().isNotEmpty) {
                             setState(() => _chatMessages.add("Kedir: $val"));
