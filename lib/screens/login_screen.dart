@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 
 class LoginScreen extends StatelessWidget {
-  final VoidCallback onLoginSuccess;
-
-  const LoginScreen({super.key, required this.onLoginSuccess});
+  const LoginScreen({super.key});
 
   static const String abayFallsUrl =
       "https://upload.wikimedia.org/wikipedia/commons/thumb/0/05/Blue_Nile_Falls_Ethiopia.jpg/1024px-Blue_Nile_Falls_Ethiopia.jpg";
@@ -13,14 +11,12 @@ class LoginScreen extends StatelessWidget {
     return Scaffold(
       body: Stack(
         children: [
-          // ጀርባው ሙሉ በሙሉ የአባይ ፏፏቴ
           Positioned.fill(
             child: Image.network(
               abayFallsUrl,
               fit: BoxFit.cover,
             ),
           ),
-          // ጥላ
           Positioned.fill(
             child: Container(
               color: const Color(0x8C000000),
@@ -48,40 +44,33 @@ class LoginScreen extends StatelessWidget {
                     style: TextStyle(fontSize: 14, color: Color(0xFFFFD700)),
                   ),
                   const Spacer(),
-
-                  // በ Google መግቢያ
                   _loginButton(
                     text: "Continue with Google",
                     icon: Icons.g_mobiledata,
                     bgColor: Colors.white,
                     textColor: Colors.black87,
                     iconColor: Colors.red,
-                    onTap: onLoginSuccess,
+                    onTap: () {},
                   ),
                   const SizedBox(height: 14),
-
-                  // በስልክ መግቢያ
                   _loginButton(
                     text: "Continue with Phone",
                     icon: Icons.phone_android,
                     bgColor: const Color(0xFF23233E),
                     textColor: Colors.white,
                     iconColor: const Color(0xFFFFD700),
-                    onTap: onLoginSuccess,
+                    onTap: () {},
                   ),
                   const SizedBox(height: 14),
-
-                  // በ Facebook መግቢያ
                   _loginButton(
                     text: "Continue with Facebook",
                     icon: Icons.facebook,
                     bgColor: const Color(0xFF1877F2),
                     textColor: Colors.white,
                     iconColor: Colors.white,
-                    onTap: onLoginSuccess,
+                    onTap: () {},
                   ),
                   const SizedBox(height: 20),
-
                   const Text(
                     "By continuing, you agree to our Terms & Privacy Policy.",
                     style: TextStyle(fontSize: 11, color: Colors.white54),
@@ -114,8 +103,7 @@ class LoginScreen extends StatelessWidget {
           elevation: 4,
         ),
         onPressed: onTap,
-
-child: Row(
+        child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(icon, color: iconColor, size: 26),
