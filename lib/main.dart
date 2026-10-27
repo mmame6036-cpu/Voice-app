@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 
-const String agoraAppId = "21091aff01114a66b580ce15b0f1b642';
+const String agoraAppId = "21091aff01114a66b580ce15b0f1b642";
 const String agoraToken = "";
 const String channelName = "habesha_vip_room";
 
@@ -106,9 +106,9 @@ class HomeScreen extends StatelessWidget {
                     color: const Color(0xFF23233E),
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(color: const Color(0xFFFFD700), width: 1),
+                  ),
 
-),
-                  child: Row(
+child: Row(
                     children: [
                       const Icon(Icons.monetization_on, color: Color(0xFFFFD700), size: 18),
                       const SizedBox(width: 6),
@@ -270,54 +270,52 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen> {
   Future<void> _initVoiceEngine() async {
     await [Permission.microphone].request();
 
-    if (agoraAppId.length > 3) {
-      try {
-        _engine = createAgoraRtcEngine();
-        await _engine!.initialize(const RtcEngineContext(
-          appId: agoraAppId,
-          channelProfile: ChannelProfileType.channelProfileLiveBroadcasting,
-        ));
+    try {
+      _engine = createAgoraRtcEngine();
+      await _engine!.initialize(const RtcEngineContext(
+        appId: agoraAppId,
+        channelProfile: ChannelProfileType.channelProfileLiveBroadcasting,
+      ));
 
-        _spatialAudioEngine = await _engine!.getLocalSpatialAudioEngine();
-        await _spatialAudioEngine!.initialize();
-        await _spatialAudioEngine!.updateSelfPosition(
-          position: [0.0, 0.0, 0.0],
-          axisForward: [1.0, 0.0, 0.0],
-          axisRight: [0.0, 1.0, 0.0],
-          axisUp: [0.0, 0.0, 1.0],
-        );
+      _spatialAudioEngine = await _engine!.getLocalSpatialAudioEngine();
+      await _spatialAudioEngine!.initialize();
+      await _spatialAudioEngine!.updateSelfPosition(
+        position: [0.0, 0.0, 0.0],
+        axisForward: [1.0, 0.0, 0.0],
+        axisRight: [0.0, 1.0, 0.0],
+        axisUp: [0.0, 0.0, 1.0],
+      );
 
-        _engine!.registerEventHandler(
-          RtcEngineEventHandler(
-            onJoinChannelSuccess: (RtcConnection connection, int elapsed) {
-              setState(() {
-                _chatMessages.add("Connected to 3D Audio (Abay Room).");
-              });
-            },
-            onUserJoined: (RtcConnection connection, int remoteUid, int elapsed) {
-              _set3DSeatPosition(remoteUid, 1);
-            },
-          ),
-        );
+      _engine!.registerEventHandler(
+        RtcEngineEventHandler(
+          onJoinChannelSuccess: (RtcConnection connection, int elapsed) {
+            setState(() {
+              _chatMessages.add("Connected to 3D Audio (Abay Room).");
+            });
+          },
+          onUserJoined: (RtcConnection connection, int remoteUid, int elapsed) {
+            _set3DSeatPosition(remoteUid, 1);
+          },
+        ),
+      );
 
-        await _engine!.setClientRole(role: ClientRoleType.clientRoleAudience);
-        await _engine!.enableAudio();
-        await _engine!.joinChannel(
-          token: agoraToken,
-          channelId: channelName,
-          uid: 0,
-          options: const ChannelMediaOptions(
-            clientRoleType: ClientRoleType.clientRoleAudience,
-            autoSubscribeAudio: true,
-          ),
-        );
+      await _engine!.setClientRole(role: ClientRoleType.clientRoleAudience);
+      await _engine!.enableAudio();
+      await _engine!.joinChannel(
+        token: agoraToken,
+        channelId: channelName,
+        uid: 0,
+        options: const ChannelMediaOptions(
+          clientRoleType: ClientRoleType.clientRoleAudience,
+          autoSubscribeAudio: true,
+        ),
+      );
 
-        setState(() {
-          _isEngineReady = true;
-        });
-      } catch (e) {
-        debugPrint("3D Engine Error: $e");
-      }
+      setState(() {
+        _isEngineReady = true;
+      });
+    } catch (e) {
+      debugPrint("3D Engine Error: $e");
     }
   }
 
@@ -368,8 +366,9 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen> {
     }
   }
 
-void _sendGift(String giftName, int cost) {
-    if (_currentCoins >= cost) {
+  void _sendGift(String giftName, int cost) {
+
+if (_currentCoins >= cost) {
       setState(() {
         _currentCoins -= cost;
         _chatMessages.add("🎁 Kedir sent $giftName!");
@@ -459,7 +458,7 @@ void _sendGift(String giftName, int cost) {
       body: Container(
         decoration: const BoxDecoration(
           image: DecorationImage(
-            image: NetworkImage("https://images.unsplash.com/photo-1547471080-7cc2caa01a7e?q=80&w=1080"), // ውብ የተፈጥሮና የአባይ ፏፏቴ ዳራ
+            image: NetworkImage("https://upload.wikimedia.org/wikipedia/commons/thumb/0/05/Blue_Nile_Falls_Ethiopia.jpg/1024px-Blue_Nile_Falls_Ethiopia.jpg"), // እውነተኛው የጢስ አባይ ፏፏቴ ምስል
             fit: BoxFit.cover,
             colorFilter: ColorFilter.mode(Colors.black45, BlendMode.darken),
           ),
