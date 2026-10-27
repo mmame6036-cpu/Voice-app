@@ -28,7 +28,7 @@ jobs:
           rm -rf android
           flutter create . --platforms=android
 
-      - name: Global Force SDK Configuration
+      - name: Global Force SDK Configuration & Internet Permission
         run: |
           mkdir -p ~/.gradle
           cat << 'EOF' > ~/.gradle/init.gradle
@@ -46,6 +46,8 @@ jobs:
               }
           }
           EOF
+          # Add Internet & Audio Permissions to AndroidManifest.xml
+          sed -i '/<manifest/a \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.RECORD_AUDIO"/>\n    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>' android/app/src/main/AndroidManifest.xml
 
       - name: Get Dependencies
         run: flutter pub get
