@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'screens/login_screen.dart';
-import 'screens/main_navigation.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -19,14 +18,7 @@ class VoicePartyApp extends StatelessWidget {
         scaffoldBackgroundColor: const Color(0xFF0F0F1E),
         primaryColor: const Color(0xFFFFD700),
       ),
-      home: LoginScreen(
-        onLoginSuccess: () {
-          // የመግቢያ ምርጫ ሲነካ ወደ ዋናው ገጽ ያስገባል
-        },
-      ),
-      routes: {
-        '/main': (context) => const MainNavigationScreen(),
-      },
+      home: const LoginScreen(),
     );
   }
 }
