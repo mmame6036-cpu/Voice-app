@@ -259,18 +259,20 @@ await _engine!.joinChannel(
         _currentPlayingGift = gift.name;
       });
       _svgaController!.videoItem = videoItem;
-      _svgaController!
-          .reset()
-          .then((_) => _svgaController!.forward().whenComplete(() {
-                setState(() {
-                  _isPlayingAnimation = false;
-                });
-              }));
+      _svgaController!.reset();
+      await _svgaController!.forward();
+      if (mounted) {
+        setState(() {
+          _isPlayingAnimation = false;
+        });
+      }
     } catch (e) {
       debugPrint("SVGA Play Error: $e");
-      setState(() {
-        _isPlayingAnimation = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isPlayingAnimation = false;
+        });
+      }
     }
   }
 
