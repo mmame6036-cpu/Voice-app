@@ -1,16 +1,15 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'wallet_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   final int currentCoins;
-  final int currentDiamonds;
   final Function(int) onCoinsUpdated;
 
   const ProfileScreen({
     super.key,
     required this.currentCoins,
-    this.currentDiamonds = 120,
     required this.onCoinsUpdated,
   });
 
@@ -19,390 +18,486 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
+  // Dynamic User State (Can be edited by user)
+  String _userName = "User Name";
+  late String _userId;
   late int _coins;
-  late int _diamonds;
-  final String userId = "1753925";
-  final String userName = "Kedir VIP";
+  double _points = 23946.56;
+
+  // Levels & Badges
+  int _wealthLevel = 17;
+  int _charmLevel = 14;
+  int _hostLevel = 1;
+  bool _isAgency = true;
+
+  // Social Stats
+  int _followed = 3117;
+  int _following = 519;
+  int _friends = 103;
 
   @override
   void initState() {
     super.initState();
     _coins = widget.currentCoins;
-    _diamonds = widget.currentDiamonds;
+    _userId = "${Random().nextInt(899999) + 1000000}";
   }
 
   void _copyId() {
-    Clipboard.setData(ClipboardData(text: userId));
+    Clipboard.setData(ClipboardData(text: _userId));
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("User ID copied to clipboard!")),
+      const SnackBar(content: Text("ID Copied to clipboard")),
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF7F8FA),
-      body: SingleChildScrollView(
-        child: Column(
+  void _editProfileDialog() {
+    final nameCtrl = TextEditingController(text: _userName);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        title: const Text("Edit Profile", style: TextStyle(fontWeight: FontWeight.bold)),
+        content: TextField(
+          controller: nameCtrl,
+          decoration: const InputDecoration(
+            labelText: "Nickname",
+            hintText: "Enter your nickname",
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Cancel"),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00C9A7)),
+            onPressed: () {
+              if (nameCtrl.text.trim().isNotEmpty) {
+                setState(() => _userName = nameCtrl.text.trim());
+              }
+              Navigator.pop(ctx);
+            },
+            child: const Text("Save", style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _openAgencyDialog() {
+    final codeCtrl = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        title: Row(
+          children: const [
+            Icon(Icons.business_center, color: Color(0xFF00C9A7)),
+            SizedBox(width: 8),
+            Text("Agency Portal", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Top Golden Gradient Profile Header
-            _buildProfileHeader(),
+            Text(
+              _isAgency ? "You are currently an Agency Manager." : "Become an Agency Partner",
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              _isAgency
+                  ? "Manage your agency hosts, track daily targets, and view settlement commissions."
+                  : "Enter your Agency Referral Code or Invitation ID to upgrade your account role.",
+              style: const TextStyle(color: Colors.black54, fontSize: 13),
+            ),
+            if (!_isAgency) ...[
+              const SizedBox(height: 14),
+              TextField(
+                controller: codeCtrl,
+                decoration: const InputDecoration(
+                  labelText: "Agency Invitation Code",
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
 
-            // Golden Wallet Banner
-            _buildWalletBanner(),
+),
+            ]
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Close"),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _isAgency ? Colors.blueAccent : const Color(0xFF00C9A7),
+            ),
+            onPressed: () {
+              if (!_isAgency && codeCtrl.text.trim().isNotEmpty) {
+                setState(() => _isAgency = true);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("Upgraded to Agency Successfully!")),
+                );
+              } else if (_isAgency) {
+                _showFeatureDetail("Agency Dashboard", "Agency Host list, earnings and analytics active.");
+              }
+              Navigator.pop(ctx);
+            },
+            child: Text(_isAgency ? "Open Agency Dashboard" : "Join Agency", style: const TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
 
+  void _showFeatureDetail(String title, String description) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 12),
-
-            // VIP & Wealth Level Cards
-            _buildVipAndWealthCards(),
-
-            const SizedBox(height: 16),
-
-            // Golden Icons Grid (Medal of Honor, Family, Shop, CP Nest, etc.)
-            _buildGoldenToolsGrid(),
-
-            const SizedBox(height: 16),
-
-            // General Settings List
-            _buildSettingsList(),
-
-            const SizedBox(height: 24),
+            Text(description, style: const TextStyle(color: Colors.black87, fontSize: 14)),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00C9A7)),
+                onPressed: () => Navigator.pop(context),
+                child: const Text("OK", style: TextStyle(color: Colors.white)),
+              ),
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildProfileHeader() {
-    return Container(
-      padding: const EdgeInsets.only(top: 50, left: 16, right: 16, bottom: 20),
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Color(0xFF201B3A), Color(0xFF131024)],
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
+  void _openRecharge() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => WalletScreen(
+          currentCoins: _coins,
+          onCoinsRecharged: (newCoins) {
+            setState(() => _coins = newCoins);
+            widget.onCoinsUpdated(newCoins);
+          },
         ),
       ),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              // Golden Avatar Frame
-              Stack(
-                alignment: Alignment.center,
-                children: [
-                  Container(
-                    width: 76,
-                    height: 76,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: const SweepGradient(
-                        colors: [
-                          Color(0xFFFFDF7A),
-                          Color(0xFFD49E35),
-                          Color(0xFFFFF1BD),
-                          Color(0xFFFFDF7A),
-                        ],
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFFFFD700).withOpacity(0.4),
-                          blurRadius: 10,
-                          spreadRadius: 2,
-                        ),
-                      ],
-                    ),
-                  ),
-                  const CircleAvatar(
-                    radius: 34,
-                    backgroundImage: NetworkImage(
-                      "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=200&auto=format&fit=crop",
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Text(
+    );
+  }
 
-userName,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [Color(0xFFFFD700), Color(0xFFFFA000)],
-                            ),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: const Text(
-                            "VIP 6",
-                            style: TextStyle(
-                              color: Colors.black,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    GestureDetector(
-                      onTap: _copyId,
-                      child: Row(
-                        children: [
-                          Text(
-                            "ID: $userId",
-                            style: const TextStyle(color: Colors.white70, fontSize: 13),
-                          ),
-                          const SizedBox(width: 4),
-                          const Icon(Icons.copy, size: 14, color: Color(0xFFFFD700)),
-                        ],
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF7FBFB),
+      body: SingleChildScrollView(
+        child: Column(
+          children: [
+            const SizedBox(height: 48),
+            // Header: Profile, Name, ID, Badges
+            _buildHeader(),
+
+            const SizedBox(height: 14),
+
+            // Social Counters (Followed, Following, Friends)
+            _buildSocialCounters(),
+
+            const SizedBox(height: 14),
+
+            // VIP Club Banner
+            _buildVipClubBanner(),
+
+            const SizedBox(height: 14),
+
+            // Coins & Points Bar
+            _buildBalanceBar(),
+
+            const SizedBox(height: 16),
+
+            // 8 Main Action Icons (Recharge, Store, Invitation, Backpack, Lucky Island, Level, Task, Badge)
+            _buildFirstGrid(),
+
+            const SizedBox(height: 16),
+
+            // Promo Banner
+            _buildPromoBanner(),
+
+            const SizedBox(height: 16),
+
+            // Second Grid (Host Center, Agency, Coin Seller, Support, About, Setting, Network Line)
+            _buildSecondGrid(),
+
+            const SizedBox(height: 32),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeader() {
+    return Padding(
+
+padding: const EdgeInsets.symmetric(horizontal: 16.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          // Avatar
+          GestureDetector(
+            onTap: _editProfileDialog,
+            child: Container(
+              width: 72,
+              height: 72,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: const Color(0xFFFFD700), width: 2),
+                image: const DecorationImage(
+                  image: NetworkImage(
+                    "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=200&auto=format&fit=crop",
+                  ),
+                  fit: BoxFit.cover,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 14),
+          // User Information
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      _userName,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87,
                       ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.edit, size: 16, color: Colors.black45),
+                      onPressed: _editProfileDialog,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
                     ),
                   ],
                 ),
-              ),
-              IconButton(
-                icon: const Icon(Icons.settings_outlined, color: Colors.white, size: 24),
-                onPressed: () {},
-              ),
-            ],
+                const SizedBox(height: 4),
+                // Badges Row
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 4,
+                  children: [
+                    _levelBadge("💎 $_wealthLevel", Colors.teal),
+                    _levelBadge("💖 $_charmLevel", Colors.pinkAccent),
+                    _levelBadge("🎙️ $_hostLevel", Colors.purpleAccent),
+                    if (_isAgency)
+                      GestureDetector(
+                        onTap: _openAgencyDialog,
+                        child: _levelBadge("💼 AGENCY", Colors.lightBlue),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                // ID Row
+                GestureDetector(
+                  onTap: _copyId,
+                  child: Row(
+                    children: [
+                      Text(
+                        "ID: $_userId",
+                        style: const TextStyle(fontSize: 12, color: Colors.black54),
+                      ),
+                      const SizedBox(width: 4),
+                      const Icon(Icons.copy, size: 13, color: Colors.black38),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: 20),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _statItem("14", "Following"),
-              _verticalDivider(),
-              _statItem("1.2K", "Followers"),
-              _verticalDivider(),
-              _statItem("38", "Friends"),
-              _verticalDivider(),
-              _statItem("342", "Visitors"),
-            ],
+          IconButton(
+            icon: const Icon(Icons.mic, color: Color(0xFF00C9A7), size: 26),
+            onPressed: () => _showFeatureDetail("Voice Status", "Microphone is connected and active."),
           ),
         ],
       ),
     );
   }
 
-  Widget _statItem(String count, String label) {
+  Widget _levelBadge(String label, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color, width: 0.8),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold),
+      ),
+    );
+  }
+
+  Widget _buildSocialCounters() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      children: [
+        _statColumn("$_followed", "Followed"),
+        _divider(),
+        _statColumn("$_following", "Following"),
+        _divider(),
+        _statColumn("$_friends", "Friends"),
+      ],
+    );
+  }
+
+Widget _statColumn(String count, String label) {
     return Column(
       children: [
         Text(
           count,
-          style: const TextStyle(
-            color: Color(0xFFFFDF7A),
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-          ),
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87),
         ),
         const SizedBox(height: 2),
         Text(
           label,
-          style: const TextStyle(color: Colors.white60, fontSize: 12),
+          style: const TextStyle(fontSize: 12, color: Colors.black54),
         ),
       ],
     );
   }
 
-  Widget _verticalDivider() {
-    return Container(
-      width: 1,
-      height: 20,
-      color: Colors.white12,
-    );
+  Widget _divider() {
+    return Container(width: 1, height: 20, color: Colors.black12);
   }
 
-  Widget _buildWalletBanner() {
+  Widget _buildVipClubBanner() {
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(14),
         gradient: const LinearGradient(
-          colors: [Color(0xFFF9DC76), Color(0xFFD49E35)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+          colors: [Color(0xFF2C241D), Color(0xFF1B1611)],
         ),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFFD49E35).withOpacity(0.35),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
       ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-
-children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Color(0xFF996B1F),
+        children: [
+          const Icon(Icons.military_tech, color: Color(0xFFFFD700), size: 28),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: const [
+                Text(
+                  "VIP Club",
+                  style: TextStyle(
+                    color: Color(0xFFFFD700),
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
                 ),
-                child: const Text("🪙", style: TextStyle(fontSize: 24)),
-              ),
-              const SizedBox(width: 12),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    "Wallet Balance",
-                    style: TextStyle(
-                      color: Color(0xFF53380B),
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    "$_coins Coins",
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 20,
-                      fontWeight: FontWeight.w900,
-                      shadows: [
-                        Shadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 2)),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ],
+                Text(
+                  "Upgrade to VIP and get free coins daily",
+                  style: TextStyle(color: Colors.white70, fontSize: 11),
+                ),
+              ],
+            ),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF1E1B38),
-              foregroundColor: const Color(0xFFFFDF7A),
-              elevation: 4,
+              backgroundColor: const Color(0xFFD49E35),
+              foregroundColor: Colors.black,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
             ),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => WalletScreen(
-                    currentCoins: _coins,
-                    onCoinsRecharged: (newCoins) {
-                      setState(() => _coins = newCoins);
-                      widget.onCoinsUpdated(newCoins);
-                    },
-                  ),
-                ),
-              );
-            },
-            child: const Text("Recharge", style: TextStyle(fontWeight: FontWeight.bold)),
+            onPressed: () => _showFeatureDetail(
+              "VIP Club",
+              "VIP tiers give exclusive entry effects, luxury frames, and daily coin gifts.",
+            ),
+            child: const Text("Get VIP", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildVipAndWealthCards() {
+  Widget _buildBalanceBar() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
         children: [
-          // VIP Card
+          // Coins
           Expanded(
             child: Container(
-              height: 90,
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF2D2345), Color(0xFF1B152B)],
-                ),
-                border: Border.all(color: const Color(0xFFFFD700).withOpacity(0.4)),
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 4)],
               ),
               child: Row(
                 children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: const [
-                        Text(
-                          "VIP Privilege",
-                          style: TextStyle(
-                            color: Color(0xFFFFDF7A),
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
-                          ),
-                        ),
-                        SizedBox(height: 4),
-                        Text(
-                          "Active (Level 6)",
-                          style: TextStyle(color: Colors.white70, fontSize: 11),
-
-),
-                      ],
-                    ),
+                  const Text("🪙", style: TextStyle(fontSize: 22)),
+                  const SizedBox(width: 8),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text("Coins", style: TextStyle(color: Colors.black54, fontSize: 11)),
+                      Text(
+                        "$_coins",
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                      ),
+                    ],
                   ),
-                  const Text("👑", style: TextStyle(fontSize: 32)),
                 ],
               ),
             ),
           ),
-          const SizedBox(width: 10),
-          // Wealth Level Card
+          const SizedBox(width: 12),
+          // Points
           Expanded(
             child: Container(
-              height: 90,
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF0F3E3D), Color(0xFF092525)],
-                ),
-                border: Border.all(color: Colors.cyanAccent.withOpacity(0.4)),
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(14),
+
+boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 4)],
               ),
               child: Row(
                 children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: const [
-                        Text(
-                          "Wealth level",
-                          style: TextStyle(
-                            color: Colors.cyanAccent,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
-                          ),
+                  const Text("💎", style: TextStyle(fontSize: 22)),
+                  const SizedBox(width: 8),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text("Points", style: TextStyle(color: Colors.black54, fontSize: 11)),
+                      Text(
+                        "$_points",
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                          color: Color(0xFF00C9A7),
                         ),
-                        SizedBox(height: 4),
-                        Text(
-                          "LV. 17",
-                          style: TextStyle(
-                            color: Color(0xFFFFDF7A),
-                            fontWeight: FontWeight.w900,
-                            fontSize: 15,
-                          ),
-                        ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-                  const Text("💎", style: TextStyle(fontSize: 32)),
                 ],
               ),
             ),
@@ -412,131 +507,147 @@ children: [
     );
   }
 
-  Widget _buildGoldenToolsGrid() {
-    final List<Map<String, dynamic>> tools = [
-      {"icon": "🏅", "label": "Medal of\nHonor"},
-      {"icon": "🏰", "label": "Family"},
-      {"icon": "🛍️", "label": "Shop"},
-      {"icon": "💚", "label": "CP Nest"},
-      {"icon": "📜", "label": "Data Center"},
-      {"icon": "🎁", "label": "Task center"},
-      {"icon": "🎒", "label": "Backpack"},
-      {"icon": "👑", "label": "Aristocracy"},
+  Widget _buildFirstGrid() {
+    final items = [
+      {"icon": "💳", "name": "Recharge", "action": _openRecharge},
+      {"icon": "🏪", "name": "Store", "action": () => _showFeatureDetail("Store", "Purchase luxury avatar frames, mounts, and speech bubbles.")},
+      {"icon": "💌", "name": "Invitation", "action": () => _showFeatureDetail("Invitation", "Invite friends to get referral bonus coins.")},
+      {"icon": "🎒", "name": "Backpack", "action": () => _showFeatureDetail("Backpack", "Your active avatar items and inventory.")},
+      {"icon": "🏝️", "name": "Lucky Island", "action": () => _showFeatureDetail("Lucky Island", "Mini games, lucky draw, and treasure hunt.")},
+      {"icon": "⭐", "name": "Level", "action": () => _showFeatureDetail("Level", "Your wealth, charm, and broadcaster levels.")},
+      {"icon": "📋", "name": "Task", "action": () => _showFeatureDetail("Task", "Complete daily active missions for coin rewards.")},
+      {"icon": "🏅", "name": "Badge", "action": () => _showFeatureDetail("Badge", "Honorary badges from events and achievements.")},
     ];
 
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 14),
-      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 10),
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: const [
-          BoxShadow(
-            color: Colors.black12,
-            blurRadius: 8,
-            offset: Offset(0, 3),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 4)],
       ),
       child: GridView.builder(
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
-        itemCount: tools.length,
+        itemCount: items.length,
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 4,
-          mainAxisSpacing: 14,
+          mainAxisSpacing: 12,
           crossAxisSpacing: 8,
-          childAspectRatio: 0.85,
+          childAspectRatio: 0.9,
         ),
         itemBuilder: (context, index) {
-          final item = tools[index];
-          return Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                width: 52,
-                height: 52,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: const RadialGradient(
-                    colors: [Color(0xFFFFF4D0), Color(0xFFFFDE8A)],
-                  ),
-                  border: Border.all(color: const Color(0xFFD49E35), width: 1.5),
-                  boxShadow: [
-
-BoxShadow(
-                      color: const Color(0xFFFFD700).withOpacity(0.35),
-                      blurRadius: 6,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
+          final item = items[index];
+          return GestureDetector(
+            onTap: item["action"] as VoidCallback,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(item["icon"] as String, style: const TextStyle(fontSize: 26)),
+                const SizedBox(height: 6),
+                Text(
+                  item["name"] as String,
+                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500),
                 ),
-                child: Center(
-                  child: Text(
-                    item["icon"] as String,
-                    style: const TextStyle(fontSize: 26),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                item["label"] as String,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: Color(0xFF333333),
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  height: 1.1,
-                ),
-              ),
-            ],
+              ],
+            ),
           );
         },
       ),
     );
   }
 
-  Widget _buildSettingsList() {
+  Widget _buildPromoBanner() {
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 14),
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      height: 90,
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: const [
-          BoxShadow(
-            color: Colors.black12,
-            blurRadius: 8,
-            offset: Offset(0, 3),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(16),
+        gradient: const LinearGradient(
+          colors: [Color(0xFFFF3366), Color(0xFFFF5E36)],
+        ),
       ),
-      child: Column(
-        children: [
-          _settingsTile(Icons.headset_mic_outlined, "Customer Service & Help"),
-          const Divider(height: 1, indent: 50),
-          _settingsTile(Icons.security_outlined, "Account & Security"),
-          const Divider(height: 1, indent: 50),
-          _settingsTile(Icons.language_outlined, "Language Setting"),
-          const Divider(height: 1, indent: 50),
-          _settingsTile(Icons.info_outline, "About Habesha VIP"),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+
+children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: const [
+              Text(
+                "COIN RECHARGE",
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 16),
+              ),
+              Text(
+                "Up to 60% OFF on first USDT top-up",
+                style: TextStyle(color: Colors.white70, fontSize: 11),
+              ),
+            ],
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFFFD700),
+              foregroundColor: Colors.black,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            ),
+            onPressed: _openRecharge,
+            child: const Text("Top Up", style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
         ],
       ),
     );
   }
 
-  Widget _settingsTile(IconData icon, String title) {
-    return ListTile(
-      leading: Icon(icon, color: const Color(0xFFD49E35), size: 22),
-      title: Text(
-        title,
-        style: const TextStyle(
-          color: Color(0xFF333333),
-          fontSize: 14,
-          fontWeight: FontWeight.w500,
-        ),
+  Widget _buildSecondGrid() {
+    final items = [
+      {"icon": "🎙️", "name": "Host Center", "action": () => _showFeatureDetail("Host Center", "Broadcast duration, target diamond settlements, and stats.")},
+      {"icon": "💼", "name": "Agency", "action": _openAgencyDialog},
+      {"icon": "💵", "name": "Coin Seller", "action": () => _showFeatureDetail("Coin Seller", "Official reseller portal and distributor coins.")},
+      {"icon": "🎧", "name": "Support", "action": () => _showFeatureDetail("Customer Support", "24/7 Live support and ticket center.")},
+      {"icon": "ℹ️", "name": "About", "action": () => _showFeatureDetail("About Us", "Voice App Version 1.0.0 (Global Edition).")},
+      {"icon": "⚙️", "name": "Setting", "action": () => _showFeatureDetail("Settings", "Account privacy, notifications, and security.")},
+      {"icon": "🌐", "name": "Network Line", "action": () => _showFeatureDetail("Network Line", "Current line: High Speed Server 1 (Ping: 42ms).")},
+    ];
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 4)],
       ),
-      trailing: const Icon(Icons.chevron_right, color: Colors.black26, size: 20),
-      onTap: () {},
+      child: GridView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        itemCount: items.length,
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 4,
+          mainAxisSpacing: 12,
+          crossAxisSpacing: 8,
+          childAspectRatio: 0.9,
+        ),
+        itemBuilder: (context, index) {
+          final item = items[index];
+          return GestureDetector(
+            onTap: item["action"] as VoidCallback,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(item["icon"] as String, style: const TextStyle(fontSize: 26)),
+                const SizedBox(height: 6),
+                Text(
+                  item["name"] as String,
+                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
     );
   }
 }
