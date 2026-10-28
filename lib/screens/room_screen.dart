@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
+import 'package:svgaplayer_flutter/svgaplayer_flutter.dart';
 
 const String agoraAppId = "21091aff01114a66b580ce15b0f1b642";
 const String agoraToken = "";
@@ -11,24 +12,46 @@ class GiftModel {
   final String name;
   final String icon;
   final int cost;
+  final String svgaUrl;
 
   const GiftModel({
     required this.id,
     required this.name,
     required this.icon,
     this.cost = 0,
+    required this.svgaUrl,
   });
 }
 
 const List<GiftModel> availableGifts = [
-  GiftModel(id: "1", name: "Dandelion", icon: "🌸", cost: 0),
-  GiftModel(id: "2", name: "Origami Boat", icon: "💎", cost: 0),
-  GiftModel(id: "3", name: "UFO", icon: "🛸", cost: 0),
-  GiftModel(id: "4", name: "Phantom Mask", icon: "🎭", cost: 0),
-  GiftModel(id: "5", name: "Golden Book", icon: "📖", cost: 0),
-  GiftModel(id: "6", name: "Lantern", icon: "🏮", cost: 0),
-  GiftModel(id: "7", name: "Venus", icon: "🪐", cost: 0),
-  GiftModel(id: "8", name: "Romantic CD", icon: "💿", cost: 0),
+  GiftModel(
+    id: "1",
+    name: "Rocket",
+    icon: "🚀",
+    cost: 0,
+    svgaUrl: "https://raw.githubusercontent.com/svga/SVGA-Samples/master/rocket.svga",
+  ),
+  GiftModel(
+    id: "2",
+    name: "Sports Car",
+    icon: "🏎️",
+    cost: 0,
+    svgaUrl: "https://raw.githubusercontent.com/svga/SVGA-Samples/master/posche.svga",
+  ),
+  GiftModel(
+    id: "3",
+    name: "Crown Rose",
+    icon: "🌹",
+    cost: 0,
+    svgaUrl: "https://raw.githubusercontent.com/svga/SVGA-Samples/master/rose.svga",
+  ),
+  GiftModel(
+    id: "4",
+    name: "VIP Angel",
+    icon: "💎",
+    cost: 0,
+    svgaUrl: "https://raw.githubusercontent.com/svga/SVGA-Samples/master/angel.svga",
+  ),
 ];
 
 class VoicePartyRoomScreen extends StatefulWidget {
@@ -49,7 +72,8 @@ class VoicePartyRoomScreen extends StatefulWidget {
   State<VoicePartyRoomScreen> createState() => _VoicePartyRoomScreenState();
 }
 
-class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen> {
+class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen>
+    with SingleTickerProviderStateMixin {
   late int _currentCoins;
   late int _activeSeatCount;
   bool _isMicMuted = false;
@@ -61,6 +85,10 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen> {
   RtcEngine? _engine;
   bool _isEngineReady = false;
 
+  SVGAAnimationController? _svgaController;
+  bool _isPlayingAnimation = false;
+  String _currentPlayingGift = "";
+
   static const String royalBackgroundUrl =
       "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=1000&auto=format&fit=crop";
 
@@ -70,6 +98,7 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen> {
     _currentCoins = widget.initialCoins;
     _activeSeatCount = widget.seatCount;
     _seats = List.filled(_activeSeatCount, null);
+    _svgaController = SVGAAnimationController(vsync: this);
     _initVoiceEngine();
   }
 
@@ -114,7 +143,7 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen> {
           scenario: AudioScenarioType.audioScenarioGameStreaming,
         );
 
-        await _engine!.joinChannel(
+await _engine!.joinChannel(
           token: agoraToken,
           channelId: channelName,
           uid: 0,
@@ -133,7 +162,7 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen> {
     }
   }
 
-void _changeSeatLayout(int newCount) {
+  void _changeSeatLayout(int newCount) {
     setState(() {
       _activeSeatCount = newCount;
       _seats = List.filled(_activeSeatCount, null);
@@ -220,11 +249,37 @@ void _changeSeatLayout(int newCount) {
     }
   }
 
-  void _sendGift({required GiftModel gift, required String target}) {
+  Future<void> _playGiftAnimation(GiftModel gift) async {
+    if (_svgaController == null) return;
+    try {
+      final parser = SVGAParser.shared;
+      final videoItem = await parser.decodeFromURL(gift.svgaUrl);
+      setState(() {
+        _isPlayingAnimation = true;
+        _currentPlayingGift = gift.name;
+      });
+      _svgaController!.videoItem = videoItem;
+      _svgaController!
+          .reset()
+          .then((_) => _svgaController!.forward().whenComplete(() {
+                setState(() {
+                  _isPlayingAnimation = false;
+                });
+              }));
+    } catch (e) {
+      debugPrint("SVGA Play Error: $e");
+      setState(() {
+        _isPlayingAnimation = false;
+      });
+    }
+  }
+
+void _sendGift({required GiftModel gift, required String target}) {
     setState(() {
       _chatMessages.add("🎁 Kedir sent ${gift.name} to $target!");
     });
     Navigator.pop(context);
+    _playGiftAnimation(gift);
   }
 
   void _openGiftSheet() {
@@ -251,8 +306,7 @@ void _changeSeatLayout(int newCount) {
                     height: 4,
                     decoration: BoxDecoration(
                       color: Colors.white24,
-
-borderRadius: BorderRadius.circular(2),
+                      borderRadius: BorderRadius.circular(2),
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -311,7 +365,8 @@ borderRadius: BorderRadius.circular(2),
                             ),
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
+
+children: [
                                 Text(gift.icon, style: const TextStyle(fontSize: 32)),
                                 const SizedBox(height: 6),
                                 Text(
@@ -330,8 +385,7 @@ borderRadius: BorderRadius.circular(2),
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
                                     const Icon(Icons.monetization_on,
-
-size: 12, color: Color(0xFFFFD700)),
+                                        size: 12, color: Color(0xFFFFD700)),
                                     const SizedBox(width: 2),
                                     Text(
                                       "${gift.cost}",
@@ -401,7 +455,7 @@ size: 12, color: Color(0xFFFFD700)),
     );
   }
 
-  Widget _targetChip({
+Widget _targetChip({
     required String title,
     required bool isSelected,
     required VoidCallback onTap,
@@ -434,6 +488,7 @@ size: 12, color: Color(0xFFFFD700)),
   void dispose() {
     _engine?.leaveChannel();
     _engine?.release();
+    _svgaController?.dispose();
     _msgController.dispose();
     super.dispose();
   }
@@ -443,7 +498,7 @@ size: 12, color: Color(0xFFFFD700)),
     final int crossAxisCount = _activeSeatCount <= 8 ? 4 : 5;
     final double avatarSize = _activeSeatCount > 16 ? 48 : 58;
 
-return Scaffold(
+    return Scaffold(
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -463,180 +518,197 @@ return Scaffold(
           ),
         ],
       ),
-      body: Container(
-        decoration: BoxDecoration(
-          image: DecorationImage(
-            image: const NetworkImage(royalBackgroundUrl),
-            fit: BoxFit.cover,
-            colorFilter: ColorFilter.mode(
-              Colors.black.withOpacity(0.7),
-              BlendMode.darken,
+      body: Stack(
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              image: DecorationImage(
+                image: const NetworkImage(royalBackgroundUrl),
+                fit: BoxFit.cover,
+                colorFilter: ColorFilter.mode(
+                  Colors.black.withOpacity(0.7),
+                  BlendMode.darken,
+                ),
+              ),
             ),
-          ),
-        ),
-        child: Column(
-          children: [
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
-                child: GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: _activeSeatCount,
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: crossAxisCount,
-                    crossAxisSpacing: 10,
-                    mainAxisSpacing: 12,
-                    childAspectRatio: 0.75,
-                  ),
-                  itemBuilder: (context, index) {
-                    final isTaken = _seats[index] != null;
-                    final isMeSpeaking = _mySeatIndex == index && !_isMicMuted;
-                    final seatTitle = index == 0 ? "Host" : "No.${index + 1}";
+            child: Column(
+              children: [
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
+                    child: GridView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: _activeSeatCount,
+                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: crossAxisCount,
+                        crossAxisSpacing: 10,
+                        mainAxisSpacing: 12,
+                        childAspectRatio: 0.75,
+                      ),
+                      itemBuilder: (context, index) {
+                        final isTaken = _seats[index] != null;
+                        final isMeSpeaking = _mySeatIndex == index && !_isMicMuted;
+                        final seatTitle = index == 0 ? "Host" : "No.${index + 1}";
 
-                    return GestureDetector(
-                      onTap: () => _handleSeatTap(index),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Container(
-                            width: avatarSize,
-                            height: avatarSize,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              gradient: RadialGradient(
-                                colors: [
-                                  const Color(0xFFFFE082).withOpacity(0.3),
-                                  const Color(0xFF141226).withOpacity(0.85),
-                                ],
-                              ),
-                              border: Border.all(
-                                color: isMeSpeaking
-                                    ? Colors.greenAccent
-                                    : const Color(0xFFFFD700).withOpacity(0.85),
-                                width: isMeSpeaking ? 2.5 : 1.8,
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: isMeSpeaking
-                                      ? Colors.greenAccent.withOpacity(0.5)
-                                      : const Color(0xFFFFD700).withOpacity(0.35),
-                                  blurRadius: 10,
-                                  spreadRadius: 1,
-                                ),
-                              ],
-                            ),
-                            child: Center(
-                              child: isTaken
-                                  ? const Icon(
-                                      Icons.person,
-
-color: Color(0xFFFFD700),
-                                      size: 26,
-                                    )
-                                  : const Icon(
-                                      Icons.mic,
-                                      color: Color(0xFFFFD700),
-                                      size: 24,
-                                    ),
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            isTaken ? _seats[index]! : seatTitle,
-                            style: TextStyle(
-                              color: isTaken ? const Color(0xFFFFD700) : Colors.white70,
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold,
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 2),
-                          Row(
+                        return GestureDetector(
+                          onTap: () => _handleSeatTap(index),
+                          child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
-                            children: const [
-                              Icon(Icons.favorite, color: Colors.pinkAccent, size: 10),
-                              SizedBox(width: 2),
+                            children: [
+                              Container(
+                                width: avatarSize,
+                                height: avatarSize,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+
+gradient: RadialGradient(
+                                    colors: [
+                                      const Color(0xFFFFE082).withOpacity(0.3),
+                                      const Color(0xFF141226).withOpacity(0.85),
+                                    ],
+                                  ),
+                                  border: Border.all(
+                                    color: isMeSpeaking
+                                        ? Colors.greenAccent
+                                        : const Color(0xFFFFD700).withOpacity(0.85),
+                                    width: isMeSpeaking ? 2.5 : 1.8,
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: isMeSpeaking
+                                          ? Colors.greenAccent.withOpacity(0.5)
+                                          : const Color(0xFFFFD700).withOpacity(0.35),
+                                      blurRadius: 10,
+                                      spreadRadius: 1,
+                                    ),
+                                  ],
+                                ),
+                                child: Center(
+                                  child: isTaken
+                                      ? const Icon(
+                                          Icons.person,
+                                          color: Color(0xFFFFD700),
+                                          size: 26,
+                                        )
+                                      : const Icon(
+                                          Icons.mic,
+                                          color: Color(0xFFFFD700),
+                                          size: 24,
+                                        ),
+                                ),
+                              ),
+                              const SizedBox(height: 6),
                               Text(
-                                "0",
-                                style: TextStyle(color: Colors.white60, fontSize: 10),
+                                isTaken ? _seats[index]! : seatTitle,
+                                style: TextStyle(
+                                  color: isTaken ? const Color(0xFFFFD700) : Colors.white70,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 2),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: const [
+                                  Icon(Icons.favorite, color: Colors.pinkAccent, size: 10),
+                                  SizedBox(width: 2),
+                                  Text(
+                                    "0",
+                                    style: TextStyle(color: Colors.white60, fontSize: 10),
+                                  ),
+                                ],
                               ),
                             ],
                           ),
-                        ],
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ),
-            Container(
-              height: 120,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: ListView.builder(
-                itemCount: _chatMessages.length,
-                itemBuilder: (context, index) => Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 2.0),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: const Color(0x66000000),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text(
-                      _chatMessages[index],
-                      style: const TextStyle(color: Colors.white, fontSize: 12),
+                        );
+                      },
                     ),
                   ),
                 ),
-              ),
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              color: Colors.black.withOpacity(0.9),
-              child: Row(
-                children: [
-                  IconButton(
-                    icon: Icon(
-                      _isMicMuted ? Icons.mic_off : Icons.mic,
-                      color: _isMicMuted ? Colors.redAccent : Colors.greenAccent,
-                    ),
-                    onPressed: _toggleMic,
-                  ),
-                  Expanded(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      decoration: BoxDecoration(
-                        color: Colors.white12,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: TextField(
-                        controller: _msgController,
-                        style: const TextStyle(color: Colors.white, fontSize: 13),
-                        decoration: const InputDecoration(
-                          hintText: "Say something...",
-                          hintStyle: TextStyle(color: Colors.white54),
-                          border: InputBorder.none,
+                Container(
+                  height: 120,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: ListView.builder(
+                    itemCount: _chatMessages.length,
+                    itemBuilder: (context, index) => Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 2.0),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
 
-),
-                        onSubmitted: (val) {
-                          if (val.trim().isNotEmpty) {
-                            setState(() => _chatMessages.add("Kedir: $val"));
-                            _msgController.clear();
-                          }
-                        },
+decoration: BoxDecoration(
+                          color: const Color(0x66000000),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          _chatMessages[index],
+                          style: const TextStyle(color: Colors.white, fontSize: 12),
+                        ),
                       ),
                     ),
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.card_giftcard, color: Color(0xFFFFD700)),
-                    onPressed: _openGiftSheet,
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  color: Colors.black.withOpacity(0.9),
+                  child: Row(
+                    children: [
+                      IconButton(
+                        icon: Icon(
+                          _isMicMuted ? Icons.mic_off : Icons.mic,
+                          color: _isMicMuted ? Colors.redAccent : Colors.greenAccent,
+                        ),
+                        onPressed: _toggleMic,
+                      ),
+                      Expanded(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          decoration: BoxDecoration(
+                            color: Colors.white12,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: TextField(
+                            controller: _msgController,
+                            style: const TextStyle(color: Colors.white, fontSize: 13),
+                            decoration: const InputDecoration(
+                              hintText: "Say something...",
+                              hintStyle: TextStyle(color: Colors.white54),
+                              border: InputBorder.none,
+                            ),
+                            onSubmitted: (val) {
+                              if (val.trim().isNotEmpty) {
+                                setState(() => _chatMessages.add("Kedir: $val"));
+                                _msgController.clear();
+                              }
+                            },
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.card_giftcard, color: Color(0xFFFFD700)),
+                        onPressed: _openGiftSheet,
+                      ),
+                    ],
                   ),
-                ],
+                ),
+              ],
+            ),
+          ),
+
+          // ሙሉ ስክሪን የሚበርረው የ SVGA ስጦታ አኒሜሽን ንብርብር
+          if (_isPlayingAnimation && _svgaController != null)
+            IgnorePointer(
+              ignoring: true,
+              child: Center(
+                child: SizedBox(
+                  width: MediaQuery.of(context).size.width,
+                  height: MediaQuery.of(context).size.height,
+                  child: SVGAImage(_svgaController!),
+                ),
               ),
             ),
-          ],
-        ),
+        ],
       ),
     );
   }
