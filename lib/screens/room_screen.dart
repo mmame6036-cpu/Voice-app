@@ -3,6 +3,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:svgaplayer_flutter/svgaplayer_flutter.dart';
 import 'wallet_screen.dart';
+import '../widgets/lucky_wheel_dialog.dart';
 
 const String agoraAppId = "21091aff01114a66b580ce15b0f1b642";
 const String agoraToken = "";
@@ -280,7 +281,7 @@ _svgaController!.reset();
 
   void _sendGift({required GiftModel gift, required String target}) {
     setState(() {
-      _chatMessages.add("🎁 Kedir sent ${gift.name} to $target!");
+      _chatMessages.add("Gift sent: ${gift.name} to $target");
     });
     Navigator.pop(context);
     _playGiftAnimation(gift);
@@ -733,6 +734,25 @@ decoration: BoxDecoration(
                             },
                           ),
                         ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.sports_esports, color: Color(0xFFFFD700)),
+                        onPressed: () {
+                          showModalBottomSheet(
+                            context: context,
+                            isScrollControlled: true,
+                            backgroundColor: Colors.transparent,
+                            builder: (_) => LuckyWheelDialog(
+                              currentCoins: _currentCoins,
+                              onCoinsUpdated: (newCoins) {
+                                setState(() {
+                                  _currentCoins = newCoins;
+                                });
+                                widget.onCoinUpdate(newCoins);
+                              },
+                            ),
+                          );
+                        },
                       ),
                       IconButton(
                         icon: const Icon(Icons.card_giftcard, color: Color(0xFFFFD700)),
