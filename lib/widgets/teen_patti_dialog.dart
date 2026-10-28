@@ -141,7 +141,7 @@ class _TeenPattiDialogState extends State<TeenPattiDialog> {
     final isFlush = (suits[0] == suits[1] && suits[1] == suits[2]);
     final isStraight = (ranks[2] - ranks[1] == 1 && ranks[1] - ranks[0] == 1);
     final isTrail = (ranks[0] == ranks[1] && ranks[1] == ranks[2]);
-    final isPair = (ranks[0] == ranks[1]  ranks[1] == ranks[2]  ranks[0] == ranks[2]);
+    final isPair = (ranks[0] == ranks[1] || ranks[1] == ranks[2] || ranks[0] == ranks[2]);
 
 if (isTrail) {
       return HandResult(cards: cards, resultName: "Trail / Set", score: 5000 + ranks[2]);
