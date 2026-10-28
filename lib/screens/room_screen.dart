@@ -30,29 +30,29 @@ const List<GiftModel> availableGifts = [
     id: "1",
     name: "Rocket",
     icon: "🚀",
-    cost: 0,
-    svgaUrl: "https://raw.githubusercontent.com/svga/SVGA-Samples/master/rocket.svga",
+    cost: 100,
+    svgaUrl: "https://raw.githubusercontent.com/yyued/SVGAPlayer-Android/master/app/src/main/assets/rose.svga",
   ),
   GiftModel(
     id: "2",
     name: "Sports Car",
     icon: "🏎️",
-    cost: 0,
-    svgaUrl: "https://raw.githubusercontent.com/svga/SVGA-Samples/master/posche.svga",
+    cost: 300,
+    svgaUrl: "https://raw.githubusercontent.com/yyued/SVGAPlayer-Android/master/app/src/main/assets/posche.svga",
   ),
   GiftModel(
     id: "3",
     name: "Crown Rose",
     icon: "🌹",
-    cost: 0,
-    svgaUrl: "https://raw.githubusercontent.com/svga/SVGA-Samples/master/rose.svga",
+    cost: 50,
+    svgaUrl: "https://raw.githubusercontent.com/yyued/SVGAPlayer-Android/master/app/src/main/assets/rose_2.0.svga",
   ),
   GiftModel(
     id: "4",
     name: "VIP Angel",
     icon: "💎",
-    cost: 0,
-    svgaUrl: "https://raw.githubusercontent.com/svga/SVGA-Samples/master/angel.svga",
+    cost: 500,
+    svgaUrl: "https://raw.githubusercontent.com/yyued/SVGAPlayer-Android/master/app/src/main/assets/angel.svga",
   ),
 ];
 
@@ -129,23 +129,17 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen>
                 _chatMessages.add("Connected to voice network");
               });
             },
-            onAudioVolumeIndication: (
-              RtcConnection connection,
-              List<AudioVolumeInfo> speakers,
-              int totalVolume,
-              int speakerNumber,
-            ) {},
           ),
         );
 
-await _engine!.enableAudio();
+        await _engine!.enableAudio();
         await _engine!.enableSpatialAudio(true);
         await _engine!.setAudioProfile(
           profile: AudioProfileType.audioProfileMusicStandard,
           scenario: AudioScenarioType.audioScenarioGameStreaming,
         );
 
-        await _engine!.joinChannel(
+await _engine!.joinChannel(
           token: agoraToken,
           channelId: channelName,
           uid: 0,
@@ -261,8 +255,7 @@ await _engine!.enableAudio();
         _currentPlayingGift = gift.name;
       });
       _svgaController!.videoItem = videoItem;
-
-_svgaController!.reset();
+      _svgaController!.reset();
       await _svgaController!.forward();
       if (mounted) {
         setState(() {
@@ -279,10 +272,19 @@ _svgaController!.reset();
     }
   }
 
-  void _sendGift({required GiftModel gift, required String target}) {
+void _sendGift({required GiftModel gift, required String target}) {
+    if (_currentCoins < gift.cost) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Insufficient coins! Please recharge.")),
+      );
+      return;
+    }
+
     setState(() {
+      _currentCoins -= gift.cost;
       _chatMessages.add("Gift sent: ${gift.name} to $target");
     });
+    widget.onCoinUpdate(_currentCoins);
     Navigator.pop(context);
     _playGiftAnimation(gift);
   }
@@ -362,10 +364,10 @@ _svgaController!.reset();
                                   : const Color(0xFF1E1B38),
                               borderRadius: BorderRadius.circular(14),
                               border: Border.all(
-
-color: isSelected
+                                color: isSelected
                                     ? const Color(0xFFFFD700)
-                                    : Colors.white10,
+
+: Colors.white10,
                                 width: isSelected ? 2 : 1,
                               ),
                             ),
@@ -440,9 +442,9 @@ color: isSelected
                                           _currentCoins = newCoins;
                                         });
                                         setSheetState(() {});
+                                        widget.onCoinUpdate(newCoins);
 
-widget.onCoinUpdate(newCoins);
-                                      },
+},
                                     ),
                                   ),
                                 );
@@ -765,14 +767,10 @@ decoration: BoxDecoration(
             ),
           ),
           if (_isPlayingAnimation && _svgaController != null)
-            IgnorePointer(
-              ignoring: true,
-              child: Center(
-                child: SizedBox(
-                  width: MediaQuery.of(context).size.width,
-                  height: MediaQuery.of(context).size.height,
-                  child: SVGAImage(_svgaController!),
-                ),
+            Positioned.fill(
+              child: IgnorePointer(
+                ignoring: true,
+                child: SVGAImage(_svgaController!),
               ),
             ),
         ],
