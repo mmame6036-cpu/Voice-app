@@ -4,6 +4,7 @@ import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:svgaplayer_flutter/svgaplayer_flutter.dart';
 import 'wallet_screen.dart';
 import '../widgets/lucky_wheel_dialog.dart';
+import '../widgets/teen_patti_dialog.dart';
 
 const String agoraAppId = "21091aff01114a66b580ce15b0f1b642";
 const String agoraToken = "";
@@ -132,14 +133,14 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen>
           ),
         );
 
-        await _engine!.enableAudio();
+await _engine!.enableAudio();
         await _engine!.enableSpatialAudio(true);
         await _engine!.setAudioProfile(
           profile: AudioProfileType.audioProfileMusicStandard,
           scenario: AudioScenarioType.audioScenarioGameStreaming,
         );
 
-await _engine!.joinChannel(
+        await _engine!.joinChannel(
           token: agoraToken,
           channelId: channelName,
           uid: 0,
@@ -255,7 +256,8 @@ await _engine!.joinChannel(
         _currentPlayingGift = gift.name;
       });
       _svgaController!.videoItem = videoItem;
-      _svgaController!.reset();
+
+_svgaController!.reset();
       await _svgaController!.forward();
       if (mounted) {
         setState(() {
@@ -272,7 +274,7 @@ await _engine!.joinChannel(
     }
   }
 
-void _sendGift({required GiftModel gift, required String target}) {
+  void _sendGift({required GiftModel gift, required String target}) {
     if (_currentCoins < gift.cost) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Insufficient coins! Please recharge.")),
@@ -360,14 +362,14 @@ void _sendGift({required GiftModel gift, required String target}) {
                           child: Container(
                             decoration: BoxDecoration(
                               color: isSelected
-                                  ? const Color(0xFF2A244D)
+
+? const Color(0xFF2A244D)
                                   : const Color(0xFF1E1B38),
                               borderRadius: BorderRadius.circular(14),
                               border: Border.all(
                                 color: isSelected
                                     ? const Color(0xFFFFD700)
-
-: Colors.white10,
+                                    : Colors.white10,
                                 width: isSelected ? 2 : 1,
                               ),
                             ),
@@ -438,13 +440,13 @@ void _sendGift({required GiftModel gift, required String target}) {
                                     builder: (_) => WalletScreen(
                                       currentCoins: _currentCoins,
                                       onCoinsRecharged: (newCoins) {
-                                        setState(() {
+
+setState(() {
                                           _currentCoins = newCoins;
                                         });
                                         setSheetState(() {});
                                         widget.onCoinUpdate(newCoins);
-
-},
+                                      },
                                     ),
                                   ),
                                 );
@@ -545,12 +547,12 @@ void _sendGift({required GiftModel gift, required String target}) {
     super.dispose();
   }
 
-  @override
+@override
   Widget build(BuildContext context) {
     final int crossAxisCount = _activeSeatCount <= 8 ? 4 : 5;
     final double avatarSize = _activeSeatCount > 16 ? 48 : 58;
 
-return Scaffold(
+    return Scaffold(
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -630,11 +632,11 @@ return Scaffold(
                                       color: isMeSpeaking
                                           ? Colors.greenAccent.withOpacity(0.5)
                                           : const Color(0xFFFFD700).withOpacity(0.35),
-                                      blurRadius: 10,
+
+blurRadius: 10,
                                       spreadRadius: 1,
                                     ),
-
-],
+                                  ],
                                 ),
                                 child: Center(
                                   child: isTaken
@@ -712,11 +714,11 @@ return Scaffold(
                         ),
                         onPressed: _toggleMic,
                       ),
-                      Expanded(
+
+Expanded(
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 12),
-
-decoration: BoxDecoration(
+                          decoration: BoxDecoration(
                             color: Colors.white12,
                             borderRadius: BorderRadius.circular(20),
                           ),
@@ -742,16 +744,98 @@ decoration: BoxDecoration(
                         onPressed: () {
                           showModalBottomSheet(
                             context: context,
-                            isScrollControlled: true,
-                            backgroundColor: Colors.transparent,
-                            builder: (_) => LuckyWheelDialog(
-                              currentCoins: _currentCoins,
-                              onCoinsUpdated: (newCoins) {
-                                setState(() {
-                                  _currentCoins = newCoins;
-                                });
-                                widget.onCoinUpdate(newCoins);
-                              },
+                            backgroundColor: const Color(0xFF141226),
+                            shape: const RoundedRectangleBorder(
+                              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                            ),
+                            builder: (context) => Padding(
+                              padding: const EdgeInsets.all(20.0),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Container(
+                                    width: 40,
+                                    height: 4,
+                                    decoration: BoxDecoration(
+                                      color: Colors.white24,
+                                      borderRadius: BorderRadius.circular(2),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 16),
+                                  const Text(
+                                    "Select Mini-Game",
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 18,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 20),
+                                  ListTile(
+                                    leading: const CircleAvatar(
+                                      backgroundColor: Color(0xFF2A224E),
+                                      child: Text("🎰", style: TextStyle(fontSize: 20)),
+                                    ),
+                                    title: const Text(
+                                      "Lucky Spin Wheel",
+                                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                                    ),
+                                    subtitle: const Text(
+                                      "Spin and win mystery gifts & coins",
+                                      style: TextStyle(color: Colors.white54, fontSize: 12),
+                                    ),
+
+trailing: const Icon(Icons.chevron_right, color: Color(0xFFFFD700)),
+                                    onTap: () {
+                                      Navigator.pop(context);
+                                      showModalBottomSheet(
+                                        context: context,
+                                        isScrollControlled: true,
+                                        backgroundColor: Colors.transparent,
+                                        builder: (_) => LuckyWheelDialog(
+                                          currentCoins: _currentCoins,
+                                          onCoinsUpdated: (newCoins) {
+                                            setState(() => _currentCoins = newCoins);
+                                            widget.onCoinUpdate(newCoins);
+                                          },
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                  const Divider(color: Colors.white10),
+                                  ListTile(
+                                    leading: const CircleAvatar(
+                                      backgroundColor: Color(0xFF2A224E),
+                                      child: Text("🃏", style: TextStyle(fontSize: 20)),
+                                    ),
+                                    title: const Text(
+                                      "Teen Patti (3 Cards)",
+                                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                                    ),
+                                    subtitle: const Text(
+                                      "Bet on A, B, or C table and win big",
+                                      style: TextStyle(color: Colors.white54, fontSize: 12),
+                                    ),
+                                    trailing: const Icon(Icons.chevron_right, color: Color(0xFFFFD700)),
+                                    onTap: () {
+                                      Navigator.pop(context);
+                                      showModalBottomSheet(
+                                        context: context,
+                                        isScrollControlled: true,
+                                        backgroundColor: Colors.transparent,
+                                        builder: (_) => TeenPattiDialog(
+                                          currentCoins: _currentCoins,
+                                          onCoinsUpdated: (newCoins) {
+                                            setState(() => _currentCoins = newCoins);
+                                            widget.onCoinUpdate(newCoins);
+                                          },
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                  const SizedBox(height: 10),
+                                ],
+                              ),
                             ),
                           );
                         },
