@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
@@ -92,6 +93,7 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen>
 
   RtcEngine? _engine;
   bool _isEngineReady = false;
+  late final int _myUid;
 
   SVGAAnimationController? _svgaController;
   bool _isPlayingAnimation = false;
@@ -111,6 +113,7 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen>
     _currentCoins = widget.initialCoins;
     _activeSeatCount = widget.seatCount;
     _seats = List.filled(_activeSeatCount, null);
+    _myUid = Random().nextInt(899999) + 100000;
     _svgaController = SVGAAnimationController(vsync: this);
 
     _roomSettings = RoomSettingsData(
@@ -140,7 +143,7 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen>
         ));
 
 await _engine!.enableAudioVolumeIndication(
-          interval: 250,
+          interval: 200,
           smooth: 3,
           reportVad: true,
         );
@@ -149,7 +152,12 @@ await _engine!.enableAudioVolumeIndication(
           RtcEngineEventHandler(
             onJoinChannelSuccess: (RtcConnection connection, int elapsed) {
               setState(() {
-                _chatMessages.add("Connected to voice network");
+                _chatMessages.add("Connected to voice network (UID: $_myUid)");
+              });
+            },
+            onUserJoined: (RtcConnection connection, int remoteUid, int elapsed) {
+              setState(() {
+                _chatMessages.add("User $remoteUid joined");
               });
             },
             onAudioVolumeIndication: (
@@ -162,9 +170,9 @@ await _engine!.enableAudioVolumeIndication(
                 setState(() {
                   _speakingSeatIndices.clear();
                   for (var speaker in speakers) {
-                    if ((speaker.volume ?? 0) > 5) {
-                      if (speaker.uid == 0 && _mySeatIndex != null) {
-                        _speakingSeatIndices.add(_mySeatIndex!);
+                    if ((speaker.volume ?? 0) > 4) {
+                      if (speaker.uid == 0 || speaker.uid == _myUid) {
+                        if (_mySeatIndex != null) _speakingSeatIndices.add(_mySeatIndex!);
                       }
                     }
                   }
@@ -175,7 +183,6 @@ await _engine!.enableAudioVolumeIndication(
         );
 
         await _engine!.enableAudio();
-        await _engine!.enableSpatialAudio(true);
         await _engine!.setAudioProfile(
           profile: AudioProfileType.audioProfileMusicStandard,
           scenario: AudioScenarioType.audioScenarioGameStreaming,
@@ -184,7 +191,7 @@ await _engine!.enableAudioVolumeIndication(
         await _engine!.joinChannel(
           token: agoraToken,
           channelId: channelName,
-          uid: 0,
+          uid: _myUid,
           options: const ChannelMediaOptions(
             clientRoleType: ClientRoleType.clientRoleAudience,
             autoSubscribeAudio: true,
@@ -200,7 +207,69 @@ await _engine!.enableAudioVolumeIndication(
     }
   }
 
-  void _toggleRoomVoice() {
+  Future<void> _updateBroadcasterRole(bool isSpeaker) async {
+    if (_engine != null && _isEngineReady) {
+      if (isSpeaker) {
+        await _engine!.setClientRole(role: ClientRoleType.clientRoleBroadcaster);
+        await _engine!.updateChannelMediaOptions(
+          const ChannelMediaOptions(
+            clientRoleType: ClientRoleType.clientRoleBroadcaster,
+            publishMicrophoneTrack: true,
+            autoSubscribeAudio: true,
+          ),
+        );
+        await _engine!.muteLocalAudioStream(_isMicMuted);
+      } else {
+        await _engine!.setClientRole(role: ClientRoleType.clientRoleAudience);
+        await _engine!.updateChannelMediaOptions(
+          const ChannelMediaOptions(
+            clientRoleType: ClientRoleType.clientRoleAudience,
+            publishMicrophoneTrack: false,
+            autoSubscribeAudio: true,
+          ),
+        );
+      }
+    }
+  }
+
+  void _handleSeatTap(int index) {
+    if (_roomSettings.isAllMicClosed && index != 0 && _mySeatIndex != 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("All mics are closed by the host")),
+      );
+      return;
+    }
+
+    final user = _seats[index];
+    if (user != null && _mySeatIndex != index) {
+      _openSeatUserAction(index, user);
+      return;
+    }
+
+    setState(() {
+      if (_seats[index] == null) {
+        if (_mySeatIndex != null) _seats[_mySeatIndex!] = null;
+        _seats[index] = "User_$_myUid";
+        _mySeatIndex = index;
+        _updateBroadcasterRole(true);
+      } else if (_mySeatIndex == index) {
+        _seats[index] = null;
+        _mySeatIndex = null;
+        _updateBroadcasterRole(false);
+      }
+    });
+  }
+
+  Future<void> _toggleMic() async {
+    setState(() {
+      _isMicMuted = !_isMicMuted;
+    });
+    if (_engine != null && _isEngineReady && _mySeatIndex != null) {
+      await _engine!.muteLocalAudioStream(_isMicMuted);
+    }
+  }
+
+void _toggleRoomVoice() {
     setState(() {
       _roomSettings.isRoomAudioMuted = !_roomSettings.isRoomAudioMuted;
     });
@@ -213,8 +282,13 @@ await _engine!.enableAudioVolumeIndication(
   void _toggleAllMic() {
     setState(() {
       _roomSettings.isAllMicClosed = !_roomSettings.isAllMicClosed;
+      if (_roomSettings.isAllMicClosed) {
+        if (_mySeatIndex != 0) {
+          _isMicMuted = true;
+          _engine?.muteLocalAudioStream(true);
+        }
+      }
     });
-    _engine?.muteLocalAudioStream(_roomSettings.isAllMicClosed);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(_roomSettings.isAllMicClosed ? "All Mics Closed" : "All Mics Opened")),
     );
@@ -232,7 +306,7 @@ await _engine!.enableAudioVolumeIndication(
           keyboardType: TextInputType.number,
           style: const TextStyle(color: Colors.white),
           decoration: const InputDecoration(
-            hintText: "Enter 4-digit code (Empty to remove)",
+            hintText: "Enter 4-digit code (Leave blank to remove)",
             hintStyle: TextStyle(color: Colors.white38),
           ),
         ),
@@ -248,6 +322,9 @@ await _engine!.enableAudioVolumeIndication(
                 _roomSettings.password = txt.isEmpty ? null : txt;
               });
               Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(_roomSettings.password == null ? "Password removed" : "Password set successfully")),
+              );
             },
             child: const Text("Save"),
           ),
@@ -256,25 +333,163 @@ await _engine!.enableAudioVolumeIndication(
     );
   }
 
-  void _handleSeatTap(int index) {
-    final user = _seats[index];
-    if (user != null && _mySeatIndex != index) {
-      _openSeatUserAction(index, user);
-      return;
-    }
+  void _openAdminSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF141226),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => Container(
+        height: 320,
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              "Room Administrators",
+              style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 12),
+            Expanded(
+              child: ListView.builder(
+                itemCount: _seats.length,
+                itemBuilder: (context, idx) {
+                  final u = _seats[idx];
+                  if (u == null) return const SizedBox.shrink();
+                  final isAdmin = _roomSettings.admins.contains(u);
+                  return ListTile(
+                    leading: const CircleAvatar(
+                      backgroundColor: Color(0xFF2A224E),
+                      child: Icon(Icons.person, color: Color(0xFFFFD700)),
+                    ),
+                    title: Text(u, style: const TextStyle(color: Colors.white)),
+                    trailing: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: isAdmin ? Colors.redAccent : const Color(0xFF00C9A7),
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          if (isAdmin) {
 
-setState(() {
-      if (_seats[index] == null) {
-        if (_mySeatIndex != null) _seats[_mySeatIndex!] = null;
-        _seats[index] = "User_${index + 1}";
-        _mySeatIndex = index;
-        _updateBroadcasterRole(true);
-      } else if (_mySeatIndex == index) {
-        _seats[index] = null;
-        _mySeatIndex = null;
-        _updateBroadcasterRole(false);
-      }
-    });
+_roomSettings.admins.remove(u);
+                          } else {
+                            _roomSettings.admins.add(u);
+                          }
+                        });
+                        Navigator.pop(context);
+                      },
+                      child: Text(isAdmin ? "Remove Admin" : "Make Admin", style: const TextStyle(color: Colors.white)),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _openRedPacketDialog() {
+    int selectedAmount = 100;
+    int selectedCount = 5;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF1B162B),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) => StatefulBuilder(
+        builder: (ctx, setDialogState) => Container(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2)),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Center(
+                child: Text(
+                  "🧧 Send Red Packet",
+                  style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text("Total Coins in Red Packets", style: TextStyle(color: Colors.white70, fontSize: 13)),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [100, 500, 1000].map((amt) {
+                  final sel = selectedAmount == amt;
+                  return ChoiceChip(
+                    label: Text("🪙 $amt"),
+                    selected: sel,
+                    selectedColor: const Color(0xFFFFD700),
+                    backgroundColor: const Color(0xFF2A224E),
+                    labelStyle: TextStyle(color: sel ? Colors.black : Colors.white, fontWeight: FontWeight.bold),
+                    onSelected: (_) => setDialogState(() => selectedAmount = amt),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 16),
+              const Text("Red Packet Quantity", style: TextStyle(color: Colors.white70, fontSize: 13)),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [5, 10, 15, 20].map((qty) {
+                  final sel = selectedCount == qty;
+                  return ChoiceChip(
+                    label: Text("x$qty"),
+                    selected: sel,
+                    selectedColor: const Color(0xFFFFD700),
+                    backgroundColor: const Color(0xFF2A224E),
+                    labelStyle: TextStyle(color: sel ? Colors.black : Colors.white, fontWeight: FontWeight.bold),
+                    onSelected: (_) => setDialogState(() => selectedCount = qty),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFFF3366),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+
+shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                  ),
+                  onPressed: () {
+                    if (_currentCoins < selectedAmount) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text("Insufficient coins to send Red Packet!")),
+                      );
+                      return;
+                    }
+                    setState(() {
+                      _currentCoins -= selectedAmount;
+                      _chatMessages.add("🧧 Red Packet of $selectedAmount Coins dropped in room!");
+                    });
+                    widget.onCoinUpdate(_currentCoins);
+                    Navigator.pop(context);
+                  },
+                  child: const Text("Send Red Packets", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                ),
+              ),
+              const SizedBox(height: 10),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   void _openSeatUserAction(int index, String user) {
@@ -322,26 +537,6 @@ setState(() {
     );
   }
 
-  Future<void> _updateBroadcasterRole(bool isSpeaker) async {
-    if (_engine != null && _isEngineReady) {
-      if (isSpeaker) {
-        await _engine!.setClientRole(role: ClientRoleType.clientRoleBroadcaster);
-        await _engine!.muteLocalAudioStream(_isMicMuted);
-      } else {
-        await _engine!.setClientRole(role: ClientRoleType.clientRoleAudience);
-      }
-    }
-  }
-
-  Future<void> _toggleMic() async {
-    setState(() {
-      _isMicMuted = !_isMicMuted;
-    });
-    if (_engine != null && _isEngineReady && _mySeatIndex != null) {
-      await _engine!.muteLocalAudioStream(_isMicMuted);
-    }
-  }
-
   Future<void> _playGiftAnimation(GiftModel gift) async {
     if (_svgaController == null) return;
     try {
@@ -385,9 +580,8 @@ setState(() {
     _playGiftAnimation(gift);
   }
 
-  void _openGiftSheet() {
-
-showModalBottomSheet(
+void _openGiftSheet() {
+    showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: const Color(0xFF141226),
@@ -645,6 +839,10 @@ borderRadius: BorderRadius.circular(12),
 
   @override
   Widget build(BuildContext context) {
+    // Dynamic Responsive Seat Sizing for up to 30 seats
+    final double seatSize = _activeSeatCount > 20 ? 38.0 : 44.0;
+    final int crossCount = _activeSeatCount > 20 ? 6 : 5;
+
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: AppBar(
@@ -653,18 +851,18 @@ borderRadius: BorderRadius.circular(12),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios, color: Colors.white, size: 20),
           onPressed: () => Navigator.pop(context),
-        ),
+
+),
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               _roomSettings.roomName,
               style: const TextStyle(fontSize: 15, color: Colors.white, fontWeight: FontWeight.bold),
-
-),
+            ),
             Row(
               children: [
-                const Text("ID: 1753925", style: TextStyle(fontSize: 11, color: Colors.white70)),
+                Text("UID: $_myUid", style: const TextStyle(fontSize: 11, color: Colors.white70)),
                 if (_roomSettings.password != null) ...[
                   const SizedBox(width: 6),
                   const Icon(Icons.lock, color: Color(0xFFFFD700), size: 12),
@@ -701,23 +899,23 @@ borderRadius: BorderRadius.circular(12),
           SafeArea(
             child: Column(
               children: [
-                const SizedBox(height: 10),
+                const SizedBox(height: 6),
                 Expanded(
                   child: SingleChildScrollView(
                     child: Column(
                       children: [
                         _buildHostSeat(),
-                        const SizedBox(height: 14),
+                        const SizedBox(height: 10),
                         Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          padding: const EdgeInsets.symmetric(horizontal: 14),
                           child: GridView.builder(
                             shrinkWrap: true,
                             physics: const NeverScrollableScrollPhysics(),
                             itemCount: _activeSeatCount > 1 ? _activeSeatCount - 1 : 0,
-                            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: 5,
-                              mainAxisSpacing: 14,
-                              crossAxisSpacing: 12,
+                            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: crossCount,
+                              mainAxisSpacing: 10,
+                              crossAxisSpacing: 8,
                               childAspectRatio: 0.85,
                             ),
                             itemBuilder: (context, index) {
@@ -725,7 +923,7 @@ borderRadius: BorderRadius.circular(12),
                               final isTaken = _seats[seatIndex] != null;
                               final isSpeaking = (_mySeatIndex == seatIndex && !_isMicMuted) ||
                                   _speakingSeatIndices.contains(seatIndex);
-                              final isMuted = _mutedSeats.contains(seatIndex);
+                              final isMuted = _mutedSeats.contains(seatIndex) || _roomSettings.isAllMicClosed;
 
                               return GestureDetector(
                                 onTap: () => _handleSeatTap(seatIndex),
@@ -736,23 +934,23 @@ borderRadius: BorderRadius.circular(12),
                                       builder: (context, _) {
                                         final pulse = _pulseController.value;
                                         return Container(
-                                          width: 44,
-                                          height: 44,
+                                          width: seatSize,
+                                          height: seatSize,
                                           decoration: BoxDecoration(
                                             shape: BoxShape.circle,
                                             color: Colors.white.withOpacity(0.12),
-                                            border: Border.all(
+
+border: Border.all(
                                               color: isSpeaking
                                                   ? Colors.cyanAccent
                                                   : Colors.white24,
-
-width: isSpeaking ? (2.0 + pulse * 1.5) : 1,
+                                              width: isSpeaking ? (2.0 + pulse * 1.5) : 1,
                                             ),
                                             boxShadow: isSpeaking
                                                 ? [
                                                     BoxShadow(
                                                       color: Colors.cyanAccent.withOpacity(0.5),
-                                                      blurRadius: 10 + (pulse * 6),
+                                                      blurRadius: 8 + (pulse * 6),
                                                       spreadRadius: 2,
                                                     )
                                                   ]
@@ -761,19 +959,21 @@ width: isSpeaking ? (2.0 + pulse * 1.5) : 1,
                                           child: Center(
                                             child: isTaken
                                                 ? (isMuted
-                                                    ? const Icon(Icons.mic_off, color: Colors.redAccent, size: 20)
-                                                    : const Icon(Icons.person, color: Color(0xFFFFD700), size: 22))
-                                                : const Icon(Icons.chair, color: Colors.white70, size: 20),
+                                                    ? const Icon(Icons.mic_off, color: Colors.redAccent, size: 18)
+                                                    : const Icon(Icons.person, color: Color(0xFFFFD700), size: 20))
+                                                : (isMuted
+                                                    ? const Icon(Icons.lock, color: Colors.white38, size: 16)
+                                                    : const Icon(Icons.chair, color: Colors.white70, size: 18)),
                                           ),
                                         );
                                       },
                                     ),
-                                    const SizedBox(height: 4),
+                                    const SizedBox(height: 3),
                                     Text(
                                       isTaken ? _seats[seatIndex]! : "$seatIndex",
                                       style: TextStyle(
                                         color: isTaken ? const Color(0xFFFFD700) : Colors.white70,
-                                        fontSize: 10,
+                                        fontSize: 9,
                                         fontWeight: FontWeight.bold,
                                       ),
                                       maxLines: 1,
@@ -789,8 +989,9 @@ width: isSpeaking ? (2.0 + pulse * 1.5) : 1,
                     ),
                   ),
                 ),
+                // Chat Box Area
                 Container(
-                  height: 110,
+                  height: 90,
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   alignment: Alignment.bottomLeft,
                   child: ListView.builder(
@@ -798,14 +999,15 @@ width: isSpeaking ? (2.0 + pulse * 1.5) : 1,
                     itemCount: _chatMessages.length,
                     itemBuilder: (context, index) {
                       final msg = _chatMessages[_chatMessages.length - 1 - index];
-                      final isSystem = msg.startsWith("System:") || msg.startsWith("Announcement:");
+                      final isSystem = msg.startsWith("System:")  msg.startsWith("Announcement:")  msg.startsWith("🧧");
                       return Padding(
                         padding: const EdgeInsets.symmetric(vertical: 2.0),
                         child: Align(
                           alignment: Alignment.centerLeft,
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                            decoration: BoxDecoration(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+
+decoration: BoxDecoration(
                               color: isSystem ? Colors.purple.withOpacity(0.4) : Colors.black45,
                               borderRadius: BorderRadius.circular(12),
                             ),
@@ -814,8 +1016,7 @@ width: isSpeaking ? (2.0 + pulse * 1.5) : 1,
                               style: TextStyle(
                                 color: isSystem ? const Color(0xFFFFD700) : Colors.white,
                                 fontSize: 11,
-
-),
+                              ),
                             ),
                           ),
                         ),
@@ -823,10 +1024,11 @@ width: isSpeaking ? (2.0 + pulse * 1.5) : 1,
                     },
                   ),
                 ),
+                // Bottom Action Bar
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.65),
+                    color: Colors.black.withOpacity(0.75),
                     borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
                   ),
                   child: Row(
@@ -855,7 +1057,7 @@ width: isSpeaking ? (2.0 + pulse * 1.5) : 1,
                             ),
                             onSubmitted: (val) {
                               if (val.trim().isNotEmpty) {
-                                setState(() => _chatMessages.add("User: $val"));
+                                setState(() => _chatMessages.add("User_$_myUid: $val"));
                                 _msgController.clear();
                               }
                             },
@@ -882,7 +1084,8 @@ width: isSpeaking ? (2.0 + pulse * 1.5) : 1,
                                     decoration: BoxDecoration(
                                       color: Colors.white24,
                                       borderRadius: BorderRadius.circular(2),
-                                    ),
+
+),
                                   ),
                                   const SizedBox(height: 16),
                                   const Text(
@@ -893,8 +1096,7 @@ width: isSpeaking ? (2.0 + pulse * 1.5) : 1,
                                       fontSize: 18,
                                     ),
                                   ),
-
-const SizedBox(height: 20),
+                                  const SizedBox(height: 20),
                                   ListTile(
                                     leading: const CircleAvatar(
                                       backgroundColor: Color(0xFF2A224E),
@@ -945,7 +1147,8 @@ const SizedBox(height: 20),
                                             widget.onCoinUpdate(newCoins);
                                           },
                                         ),
-                                      );
+
+);
                                     },
                                   ),
                                 ],
@@ -959,8 +1162,7 @@ const SizedBox(height: 20),
                         onPressed: _openGiftSheet,
                       ),
                       IconButton(
-
-icon: const Icon(Icons.grid_view_rounded, color: Colors.white70),
+                        icon: const Icon(Icons.grid_view_rounded, color: Colors.white70),
                         onPressed: () {
                           showModalBottomSheet(
                             context: context,
@@ -970,7 +1172,8 @@ icon: const Icon(Icons.grid_view_rounded, color: Colors.white70),
                               onToggleRoomVoice: _toggleRoomVoice,
                               onToggleAllMic: _toggleAllMic,
                               onOpenPasswordDialog: _openPasswordDialog,
-                              onOpenAdminSheet: () {},
+                              onOpenAdminSheet: _openAdminSheet,
+                              onOpenRedPacket: _openRedPacketDialog,
                               onOpenRoomSettings: () {
                                 Navigator.push(
                                   context,
@@ -1027,8 +1230,8 @@ icon: const Icon(Icons.grid_view_rounded, color: Colors.white70),
             builder: (context, _) {
               final pulse = _pulseController.value;
               return Container(
-                width: 76,
-                height: 76,
+                width: 72,
+                height: 72,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   gradient: RadialGradient(
@@ -1037,7 +1240,8 @@ icon: const Icon(Icons.grid_view_rounded, color: Colors.white70),
                           ? Colors.cyanAccent.withOpacity(0.5)
                           : const Color(0xFF6C5CE7).withOpacity(0.4),
                       const Color(0xFF141226).withOpacity(0.85),
-                    ],
+
+],
                   ),
                   border: Border.all(
                     color: isSpeaking ? Colors.cyanAccent : const Color(0xFFFFD700),
@@ -1048,21 +1252,20 @@ icon: const Icon(Icons.grid_view_rounded, color: Colors.white70),
                       color: isSpeaking
                           ? Colors.cyanAccent.withOpacity(0.7)
                           : const Color(0xFFFFD700).withOpacity(0.4),
-                      blurRadius: 14 + (pulse * 8),
+                      blurRadius: 12 + (pulse * 8),
                       spreadRadius: 2 + (pulse * 3),
-
-),
+                    ),
                   ],
                 ),
                 child: Center(
                   child: isTaken
-                      ? const Icon(Icons.person, color: Color(0xFFFFD700), size: 36)
-                      : const Icon(Icons.chair, color: Color(0xFFFFD700), size: 32),
+                      ? const Icon(Icons.person, color: Color(0xFFFFD700), size: 34)
+                      : const Icon(Icons.chair, color: Color(0xFFFFD700), size: 30),
                 ),
               );
             },
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 4),
           Text(
             isTaken ? _seats[0]! : "1",
             style: const TextStyle(
