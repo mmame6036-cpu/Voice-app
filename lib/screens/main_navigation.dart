@@ -44,7 +44,10 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         onJoinRoom: _joinRoom,
       ),
       const MessagesScreen(),
-      Profilscreen(),
+      ProfileScreen(
+        currentCoins: _coins,
+        onCoinsUpdated: _updateCoins,
+      ),
     ];
 
     return Scaffold(
