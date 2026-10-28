@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
@@ -68,7 +69,7 @@ class VoicePartyRoomScreen extends StatefulWidget {
     required this.roomTitle,
     required this.initialCoins,
     required this.onCoinUpdate,
-    this.seatCount = 12,
+    this.seatCount = 28,
   });
 
   @override
@@ -76,13 +77,16 @@ class VoicePartyRoomScreen extends StatefulWidget {
 }
 
 class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   late int _currentCoins;
   late int _activeSeatCount;
   bool _isMicMuted = false;
   int? _mySeatIndex;
   late List<String?> _seats;
-  final List<String> _chatMessages = ["3D VIP Live Room Active."];
+  final List<String> _chatMessages = [
+    "System: Please protect your privacy and stay safe.",
+    "Announcement: Welcome to VIP Live Party!"
+  ];
   final TextEditingController _msgController = TextEditingController();
 
   RtcEngine? _engine;
@@ -90,10 +94,13 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen>
 
   SVGAAnimationController? _svgaController;
   bool _isPlayingAnimation = false;
-  String _currentPlayingGift = "";
 
-  static const String royalBackgroundUrl =
-      "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=1000&auto=format&fit=crop";
+  late AnimationController _pulseController;
+  final Set<int> _speakingSeatIndices = {};
+
+  // Anime Night Sky Background exactly matching the theme
+  static const String nightSkyBgUrl =
+      "https://images.unsplash.com/photo-1534447677768-be436bb09401?q=80&w=1080&auto=format&fit=crop";
 
   @override
   void initState() {
@@ -102,6 +109,12 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen>
     _activeSeatCount = widget.seatCount;
     _seats = List.filled(_activeSeatCount, null);
     _svgaController = SVGAAnimationController(vsync: this);
+
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    )..repeat(reverse: true);
+
     _initVoiceEngine();
   }
 
@@ -123,17 +136,36 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen>
           reportVad: true,
         );
 
-        _engine!.registerEventHandler(
+_engine!.registerEventHandler(
           RtcEngineEventHandler(
             onJoinChannelSuccess: (RtcConnection connection, int elapsed) {
               setState(() {
                 _chatMessages.add("Connected to voice network");
               });
             },
+            onAudioVolumeIndication: (
+              RtcConnection connection,
+              List<AudioVolumeInfo> speakers,
+              int totalVolume,
+              int speakerNumber,
+            ) {
+              if (mounted) {
+                setState(() {
+                  _speakingSeatIndices.clear();
+                  for (var speaker in speakers) {
+                    if ((speaker.volume ?? 0) > 5) {
+                      if (speaker.uid == 0 && _mySeatIndex != null) {
+                        _speakingSeatIndices.add(_mySeatIndex!);
+                      }
+                    }
+                  }
+                });
+              }
+            },
           ),
         );
 
-await _engine!.enableAudio();
+        await _engine!.enableAudio();
         await _engine!.enableSpatialAudio(true);
         await _engine!.setAudioProfile(
           profile: AudioProfileType.audioProfileMusicStandard,
@@ -189,7 +221,7 @@ await _engine!.enableAudio();
             Wrap(
               spacing: 12,
               runSpacing: 12,
-              children: [8, 12, 16, 20, 25, 30].map((count) {
+              children: [12, 16, 20, 24, 28].map((count) {
                 final isSelected = _activeSeatCount == count;
                 return ChoiceChip(
                   label: Text("$count Seats"),
@@ -226,7 +258,7 @@ await _engine!.enableAudio();
     });
   }
 
-  Future<void> _updateBroadcasterRole(bool isSpeaker) async {
+Future<void> _updateBroadcasterRole(bool isSpeaker) async {
     if (_engine != null && _isEngineReady) {
       if (isSpeaker) {
         await _engine!.setClientRole(role: ClientRoleType.clientRoleBroadcaster);
@@ -253,11 +285,9 @@ await _engine!.enableAudio();
       final videoItem = await parser.decodeFromURL(gift.svgaUrl);
       setState(() {
         _isPlayingAnimation = true;
-        _currentPlayingGift = gift.name;
       });
       _svgaController!.videoItem = videoItem;
-
-_svgaController!.reset();
+      _svgaController!.reset();
       await _svgaController!.forward();
       if (mounted) {
         setState(() {
@@ -341,7 +371,8 @@ _svgaController!.reset();
                   ),
                   const SizedBox(height: 14),
                   Expanded(
-                    child: GridView.builder(
+
+child: GridView.builder(
                       itemCount: availableGifts.length,
                       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                         crossAxisCount: 4,
@@ -362,8 +393,7 @@ _svgaController!.reset();
                           child: Container(
                             decoration: BoxDecoration(
                               color: isSelected
-
-? const Color(0xFF2A244D)
+                                  ? const Color(0xFF2A244D)
                                   : const Color(0xFF1E1B38),
                               borderRadius: BorderRadius.circular(14),
                               border: Border.all(
@@ -421,7 +451,8 @@ _svgaController!.reset();
                         Row(
                           children: [
                             const Icon(Icons.monetization_on,
-                                color: Color(0xFFFFD700), size: 18),
+
+color: Color(0xFFFFD700), size: 18),
                             const SizedBox(width: 4),
                             Text(
                               "$_currentCoins",
@@ -440,8 +471,7 @@ _svgaController!.reset();
                                     builder: (_) => WalletScreen(
                                       currentCoins: _currentCoins,
                                       onCoinsRecharged: (newCoins) {
-
-setState(() {
+                                        setState(() {
                                           _currentCoins = newCoins;
                                         });
                                         setSheetState(() {});
@@ -509,7 +539,7 @@ setState(() {
     );
   }
 
-  Widget _targetChip({
+Widget _targetChip({
     required String title,
     required bool isSelected,
     required VoidCallback onTap,
@@ -540,6 +570,7 @@ setState(() {
 
   @override
   void dispose() {
+    _pulseController.dispose();
     _engine?.leaveChannel();
     _engine?.release();
     _svgaController?.dispose();
@@ -547,18 +578,29 @@ setState(() {
     super.dispose();
   }
 
-@override
+  @override
   Widget build(BuildContext context) {
-    final int crossAxisCount = _activeSeatCount <= 8 ? 4 : 5;
-    final double avatarSize = _activeSeatCount > 16 ? 48 : 58;
-
     return Scaffold(
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: Text(
-          "${widget.roomTitle} ($_activeSeatCount Seats)",
-          style: const TextStyle(fontSize: 15, color: Colors.white, fontWeight: FontWeight.bold),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios, color: Colors.white, size: 20),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              widget.roomTitle,
+              style: const TextStyle(fontSize: 15, color: Colors.white, fontWeight: FontWeight.bold),
+            ),
+            const Text(
+              "ID: 9146075",
+              style: TextStyle(fontSize: 11, color: Colors.white70),
+            ),
+          ],
         ),
         actions: [
           IconButton(
@@ -567,166 +609,184 @@ setState(() {
             onPressed: _openSeatLayoutPicker,
           ),
           IconButton(
-            icon: const Icon(Icons.exit_to_app, color: Colors.redAccent),
+            icon: const Icon(Icons.share, color: Colors.white),
+            onPressed: () {},
+          ),
+          IconButton(
+            icon: const Icon(Icons.power_settings_new, color: Colors.redAccent),
             onPressed: () => Navigator.pop(context),
           ),
         ],
       ),
       body: Stack(
         children: [
+          // Background matching the video
           Container(
             decoration: BoxDecoration(
               image: DecorationImage(
-                image: const NetworkImage(royalBackgroundUrl),
+                image: const NetworkImage(nightSkyBgUrl),
                 fit: BoxFit.cover,
                 colorFilter: ColorFilter.mode(
-                  Colors.black.withOpacity(0.7),
+                  Colors.black.withOpacity(0.45),
                   BlendMode.darken,
                 ),
               ),
             ),
+          ),
+          SafeArea(
             child: Column(
               children: [
+                const SizedBox(height: 10),
+                // Host Area & Guest Seats Layout matching video
                 Expanded(
                   child: SingleChildScrollView(
-                    padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
-                    child: GridView.builder(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemCount: _activeSeatCount,
-                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: crossAxisCount,
-                        crossAxisSpacing: 10,
-                        mainAxisSpacing: 12,
-                        childAspectRatio: 0.75,
-                      ),
-                      itemBuilder: (context, index) {
-                        final isTaken = _seats[index] != null;
-                        final isMeSpeaking = _mySeatIndex == index && !_isMicMuted;
-                        final seatTitle = index == 0 ? "Host" : "No.${index + 1}";
+                    child: Column(
+                      children: [
+                        // Host Crown Seat (Seat 0)
+                        _buildHostSeat(),
+                        const SizedBox(height: 14),
+                        // 27 Guest Seats Grid
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          child: GridView.builder(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            itemCount: _activeSeatCount > 1 ? _activeSeatCount - 1 : 0,
+                            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
 
-                        return GestureDetector(
-                          onTap: () => _handleSeatTap(index),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Container(
-                                width: avatarSize,
-                                height: avatarSize,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  gradient: RadialGradient(
-                                    colors: [
-                                      const Color(0xFFFFE082).withOpacity(0.3),
-                                      const Color(0xFF141226).withOpacity(0.85),
-                                    ],
-                                  ),
-                                  border: Border.all(
-                                    color: isMeSpeaking
-                                        ? Colors.greenAccent
-                                        : const Color(0xFFFFD700).withOpacity(0.85),
-                                    width: isMeSpeaking ? 2.5 : 1.8,
-                                  ),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: isMeSpeaking
-                                          ? Colors.greenAccent.withOpacity(0.5)
-                                          : const Color(0xFFFFD700).withOpacity(0.35),
+crossAxisCount: 5,
+                              mainAxisSpacing: 14,
+                              crossAxisSpacing: 12,
+                              childAspectRatio: 0.85,
+                            ),
+                            itemBuilder: (context, index) {
+                              final seatIndex = index + 1;
+                              final isTaken = _seats[seatIndex] != null;
+                              final isSpeaking = (_mySeatIndex == seatIndex && !_isMicMuted) ||
+                                  _speakingSeatIndices.contains(seatIndex);
 
-blurRadius: 10,
-                                      spreadRadius: 1,
+                              return GestureDetector(
+                                onTap: () => _handleSeatTap(seatIndex),
+                                child: Column(
+                                  children: [
+                                    AnimatedBuilder(
+                                      animation: _pulseController,
+                                      builder: (context, _) {
+                                        final pulse = _pulseController.value;
+                                        return Container(
+                                          width: 44,
+                                          height: 44,
+                                          decoration: BoxDecoration(
+                                            shape: BoxShape.circle,
+                                            color: Colors.white.withOpacity(0.12),
+                                            border: Border.all(
+                                              color: isSpeaking
+                                                  ? Colors.cyanAccent
+                                                  : Colors.white24,
+                                              width: isSpeaking ? (2.0 + pulse * 1.5) : 1,
+                                            ),
+                                            boxShadow: isSpeaking
+                                                ? [
+                                                    BoxShadow(
+                                                      color: Colors.cyanAccent.withOpacity(0.5),
+                                                      blurRadius: 10 + (pulse * 6),
+                                                      spreadRadius: 2,
+                                                    )
+                                                  ]
+                                                : null,
+                                          ),
+                                          child: Center(
+                                            child: isTaken
+                                                ? const Icon(Icons.person, color: Color(0xFFFFD700), size: 22)
+                                                : const Icon(Icons.adb, color: Colors.white70, size: 20),
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      isTaken ? _seats[seatIndex]! : "$seatIndex",
+                                      style: TextStyle(
+                                        color: isTaken ? const Color(0xFFFFD700) : Colors.white70,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
                                     ),
                                   ],
                                 ),
-                                child: Center(
-                                  child: isTaken
-                                      ? const Icon(
-                                          Icons.person,
-                                          color: Color(0xFFFFD700),
-                                          size: 26,
-                                        )
-                                      : const Icon(
-                                          Icons.mic,
-                                          color: Color(0xFFFFD700),
-                                          size: 24,
-                                        ),
-                                ),
-                              ),
-                              const SizedBox(height: 6),
-                              Text(
-                                isTaken ? _seats[index]! : seatTitle,
-                                style: TextStyle(
-                                  color: isTaken ? const Color(0xFFFFD700) : Colors.white70,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              const SizedBox(height: 2),
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: const [
-                                  Icon(Icons.favorite, color: Colors.pinkAccent, size: 10),
-                                  SizedBox(width: 2),
-                                  Text(
-                                    "0",
-                                    style: TextStyle(color: Colors.white60, fontSize: 10),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        );
-                      },
+                              );
+                            },
+
+),
+                        ),
+                      ],
                     ),
                   ),
                 ),
+                // Chat Box Area
                 Container(
-                  height: 120,
+                  height: 110,
                   padding: const EdgeInsets.symmetric(horizontal: 16),
+                  alignment: Alignment.bottomLeft,
                   child: ListView.builder(
+                    reverse: true,
                     itemCount: _chatMessages.length,
-                    itemBuilder: (context, index) => Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 2.0),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                        decoration: BoxDecoration(
-                          color: const Color(0x66000000),
-                          borderRadius: BorderRadius.circular(10),
+                    itemBuilder: (context, index) {
+                      final msg = _chatMessages[_chatMessages.length - 1 - index];
+                      final isSystem = msg.startsWith("System:") || msg.startsWith("Announcement:");
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 2.0),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: isSystem ? Colors.purple.withOpacity(0.4) : Colors.black45,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              msg,
+                              style: TextStyle(
+                                color: isSystem ? const Color(0xFFFFD700) : Colors.white,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ),
                         ),
-                        child: Text(
-                          _chatMessages[index],
-                          style: const TextStyle(color: Colors.white, fontSize: 12),
-                        ),
-                      ),
-                    ),
+                      );
+                    },
                   ),
                 ),
+                // Bottom Action Bar
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  color: Colors.black.withOpacity(0.9),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.65),
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                  ),
                   child: Row(
                     children: [
                       IconButton(
                         icon: Icon(
                           _isMicMuted ? Icons.mic_off : Icons.mic,
-                          color: _isMicMuted ? Colors.redAccent : Colors.greenAccent,
+                          color: _isMicMuted ? Colors.redAccent : Colors.cyanAccent,
                         ),
                         onPressed: _toggleMic,
                       ),
-
-Expanded(
+                      Expanded(
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          padding: const EdgeInsets.symmetric(horizontal: 14),
                           decoration: BoxDecoration(
-                            color: Colors.white12,
+                            color: Colors.white.withOpacity(0.15),
                             borderRadius: BorderRadius.circular(20),
                           ),
                           child: TextField(
                             controller: _msgController,
                             style: const TextStyle(color: Colors.white, fontSize: 13),
                             decoration: const InputDecoration(
-                              hintText: "Say something...",
+                              hintText: "Say Hello...",
                               hintStyle: TextStyle(color: Colors.white54),
                               border: InputBorder.none,
                             ),
@@ -740,7 +800,8 @@ Expanded(
                         ),
                       ),
                       IconButton(
-                        icon: const Icon(Icons.sports_esports, color: Color(0xFFFFD700)),
+
+icon: const Icon(Icons.sports_esports, color: Color(0xFFFFD700)),
                         onPressed: () {
                           showModalBottomSheet(
                             context: context,
@@ -784,8 +845,7 @@ Expanded(
                                       "Spin and win mystery gifts & coins",
                                       style: TextStyle(color: Colors.white54, fontSize: 12),
                                     ),
-
-trailing: const Icon(Icons.chevron_right, color: Color(0xFFFFD700)),
+                                    trailing: const Icon(Icons.chevron_right, color: Color(0xFFFFD700)),
                                     onTap: () {
                                       Navigator.pop(context);
                                       showModalBottomSheet(
@@ -806,7 +866,8 @@ trailing: const Icon(Icons.chevron_right, color: Color(0xFFFFD700)),
                                   ListTile(
                                     leading: const CircleAvatar(
                                       backgroundColor: Color(0xFF2A224E),
-                                      child: Text("🃏", style: TextStyle(fontSize: 20)),
+
+child: Text("🃏", style: TextStyle(fontSize: 20)),
                                     ),
                                     title: const Text(
                                       "Teen Patti (3 Cards)",
@@ -857,6 +918,77 @@ trailing: const Icon(Icons.chevron_right, color: Color(0xFFFFD700)),
                 child: SVGAImage(_svgaController!),
               ),
             ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHostSeat() {
+    final isTaken = _seats[0] != null;
+    final isSpeaking = (_mySeatIndex == 0 && !_isMicMuted) || _speakingSeatIndices.contains(0);
+
+    return GestureDetector(
+      onTap: () => _handleSeatTap(0),
+      child: Column(
+        children: [
+          AnimatedBuilder(
+            animation: _pulseController,
+            builder: (context, _) {
+              final pulse = _pulseController.value;
+              return Container(
+                width: 76,
+                height: 76,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [
+                      isSpeaking
+                          ? Colors.cyanAccent.withOpacity(0.5)
+                          : const Color(0xFF6C5CE7).withOpacity(0.4),
+                      const Color(0xFF141226).withOpacity(0.85),
+                    ],
+                  ),
+                  border: Border.all(
+                    color: isSpeaking ? Colors.cyanAccent : const Color(0xFFFFD700),
+                    width: isSpeaking ? (2.5 + pulse * 1.5) : 2,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: isSpeaking
+
+? Colors.cyanAccent.withOpacity(0.7)
+                          : const Color(0xFFFFD700).withOpacity(0.4),
+                      blurRadius: 14 + (pulse * 8),
+                      spreadRadius: 2 + (pulse * 3),
+                    ),
+                  ],
+                ),
+                child: Center(
+                  child: isTaken
+                      ? const Icon(Icons.person, color: Color(0xFFFFD700), size: 36)
+                      : const Icon(Icons.mic, color: Color(0xFFFFD700), size: 32),
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 6),
+          Text(
+            isTaken ? _seats[0]! : "Host",
+            style: const TextStyle(
+              color: Color(0xFFFFD700),
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: const [
+              Icon(Icons.favorite, color: Colors.pinkAccent, size: 11),
+              SizedBox(width: 2),
+              Text("0", style: TextStyle(color: Colors.white70, fontSize: 10)),
+            ],
+          ),
         ],
       ),
     );
