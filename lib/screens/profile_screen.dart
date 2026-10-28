@@ -1,4 +1,3 @@
-KEDER:
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'wallet_screen.dart';
