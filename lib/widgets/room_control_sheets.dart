@@ -30,6 +30,7 @@ class BasicToolsSheet extends StatelessWidget {
   final VoidCallback onOpenPasswordDialog;
   final VoidCallback onOpenAdminSheet;
   final VoidCallback onOpenRoomSettings;
+  final VoidCallback onOpenRedPacket;
 
   const BasicToolsSheet({
     super.key,
@@ -39,6 +40,7 @@ class BasicToolsSheet extends StatelessWidget {
     required this.onOpenPasswordDialog,
     required this.onOpenAdminSheet,
     required this.onOpenRoomSettings,
+    required this.onOpenRedPacket,
   });
 
   @override
@@ -79,16 +81,26 @@ class BasicToolsSheet extends StatelessWidget {
                 },
               ),
               _toolItem(
-                icon: Icons.share,
+                icon: Icons.send_rounded,
                 label: "Share",
                 color: Colors.white,
-                onTap: () => Navigator.pop(context),
+                onTap: () {
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text("Room link copied to share!")),
+                  );
+                },
               ),
               _toolItem(
                 icon: Icons.music_note,
                 label: "Music",
                 color: Colors.white,
-                onTap: () => Navigator.pop(context),
+                onTap: () {
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text("BGM Music stream feature ready")),
+                  );
+                },
               ),
               _toolItem(
                 icon: Icons.settings,
@@ -104,9 +116,10 @@ class BasicToolsSheet extends StatelessWidget {
           const SizedBox(height: 20),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
+
+children: [
               _toolItem(
-                icon: Icons.group,
+                icon: Icons.person_add_alt_1,
                 label: "Room Admin",
                 color: Colors.white,
                 onTap: () {
@@ -117,8 +130,7 @@ class BasicToolsSheet extends StatelessWidget {
               _toolItem(
                 icon: settings.password != null ? Icons.lock : Icons.lock_open,
                 label: settings.password != null ? "Change Pass" : "Set Password",
-
-color: settings.password != null ? const Color(0xFFFFD700) : Colors.white,
+                color: settings.password != null ? const Color(0xFFFFD700) : Colors.white,
                 onTap: () {
                   Navigator.pop(context);
                   onOpenPasswordDialog();
@@ -142,6 +154,34 @@ color: settings.password != null ? const Color(0xFFFFD700) : Colors.white,
                   if (!settings.isAllMicClosed) onToggleAllMic();
                 },
               ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _toolItem(
+                icon: Icons.mail_outline,
+                label: "Red Packet",
+                color: Colors.redAccent,
+                onTap: () {
+                  Navigator.pop(context);
+                  onOpenRedPacket();
+                },
+              ),
+              _toolItem(
+                icon: Icons.checkroom,
+                label: "Backpack",
+                color: Colors.white70,
+                onTap: () => Navigator.pop(context),
+              ),
+              _toolItem(
+                icon: Icons.auto_awesome,
+                label: "Effect Setting",
+                color: const Color(0xFFFFD700),
+                onTap: () => Navigator.pop(context),
+              ),
+              const SizedBox(width: 50),
             ],
           ),
           const SizedBox(height: 16),
@@ -213,7 +253,7 @@ class _RoomSettingsScreenState extends State<RoomSettingsScreen> {
     _seatCount = widget.settings.seatCount;
   }
 
-  @override
+@override
   void dispose() {
     _titleController.dispose();
     _descController.dispose();
@@ -250,8 +290,7 @@ class _RoomSettingsScreenState extends State<RoomSettingsScreen> {
               runSpacing: 12,
               children: allowedLayouts.map((count) {
                 final isSelected = _seatCount == count;
-
-return ChoiceChip(
+                return ChoiceChip(
                   label: Text("$count Seats"),
                   selected: isSelected,
                   selectedColor: const Color(0xFFFFD700),
@@ -282,13 +321,14 @@ return ChoiceChip(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (_) => Container(
+        height: 350,
         padding: const EdgeInsets.all(16),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              "Kick User Out of Seat",
+              "Room Blacklist & Kick Out",
               style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 12),
@@ -310,6 +350,9 @@ return ChoiceChip(
                       onPressed: () {
                         widget.onKickSeat(index);
                         Navigator.pop(context);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text("$user kicked out of seat")),
+                        );
                       },
                       child: const Text("Kick", style: TextStyle(color: Colors.white)),
                     ),
@@ -323,7 +366,7 @@ return ChoiceChip(
     );
   }
 
-  @override
+@override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF6F7F9),
@@ -356,8 +399,7 @@ return ChoiceChip(
                 TextField(
                   controller: _titleController,
                   decoration: const InputDecoration(
-
-labelText: "Room Name",
+                    labelText: "Room Name",
                     border: UnderlineInputBorder(),
                   ),
                 ),
