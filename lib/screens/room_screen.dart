@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:svgaplayer_flutter/svgaplayer_flutter.dart';
+import 'wallet_screen.dart';
 
 const String agoraAppId = "21091aff01114a66b580ce15b0f1b642";
 const String agoraToken = "";
@@ -136,14 +137,14 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen>
           ),
         );
 
-        await _engine!.enableAudio();
+await _engine!.enableAudio();
         await _engine!.enableSpatialAudio(true);
         await _engine!.setAudioProfile(
           profile: AudioProfileType.audioProfileMusicStandard,
           scenario: AudioScenarioType.audioScenarioGameStreaming,
         );
 
-await _engine!.joinChannel(
+        await _engine!.joinChannel(
           token: agoraToken,
           channelId: channelName,
           uid: 0,
@@ -259,7 +260,8 @@ await _engine!.joinChannel(
         _currentPlayingGift = gift.name;
       });
       _svgaController!.videoItem = videoItem;
-      _svgaController!.reset();
+
+_svgaController!.reset();
       await _svgaController!.forward();
       if (mounted) {
         setState(() {
@@ -276,7 +278,7 @@ await _engine!.joinChannel(
     }
   }
 
-void _sendGift({required GiftModel gift, required String target}) {
+  void _sendGift({required GiftModel gift, required String target}) {
     setState(() {
       _chatMessages.add("🎁 Kedir sent ${gift.name} to $target!");
     });
@@ -359,7 +361,8 @@ void _sendGift({required GiftModel gift, required String target}) {
                                   : const Color(0xFF1E1B38),
                               borderRadius: BorderRadius.circular(14),
                               border: Border.all(
-                                color: isSelected
+
+color: isSelected
                                     ? const Color(0xFFFFD700)
                                     : Colors.white10,
                                 width: isSelected ? 2 : 1,
@@ -367,8 +370,7 @@ void _sendGift({required GiftModel gift, required String target}) {
                             ),
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
-
-children: [
+                              children: [
                                 Text(gift.icon, style: const TextStyle(fontSize: 32)),
                                 const SizedBox(height: 6),
                                 Text(
@@ -424,6 +426,51 @@ children: [
                                 fontSize: 15,
                               ),
                             ),
+                            const SizedBox(width: 8),
+                            GestureDetector(
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => WalletScreen(
+                                      currentCoins: _currentCoins,
+                                      onCoinsRecharged: (newCoins) {
+                                        setState(() {
+                                          _currentCoins = newCoins;
+                                        });
+                                        setSheetState(() {});
+
+widget.onCoinUpdate(newCoins);
+                                      },
+                                    ),
+                                  ),
+                                );
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF2B224F),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                      color: const Color(0xFFFFD700), width: 0.8),
+                                ),
+                                child: const Row(
+                                  children: [
+                                    Text(
+                                      "Recharge",
+                                      style: TextStyle(
+                                        color: Color(0xFFFFD700),
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    Icon(Icons.chevron_right,
+                                        size: 14, color: Color(0xFFFFD700)),
+                                  ],
+                                ),
+                              ),
+                            ),
                           ],
                         ),
                         ElevatedButton(
@@ -457,7 +504,7 @@ children: [
     );
   }
 
-Widget _targetChip({
+  Widget _targetChip({
     required String title,
     required bool isSelected,
     required VoidCallback onTap,
@@ -500,7 +547,7 @@ Widget _targetChip({
     final int crossAxisCount = _activeSeatCount <= 8 ? 4 : 5;
     final double avatarSize = _activeSeatCount > 16 ? 48 : 58;
 
-    return Scaffold(
+return Scaffold(
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -563,8 +610,7 @@ Widget _targetChip({
                                 height: avatarSize,
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
-
-gradient: RadialGradient(
+                                  gradient: RadialGradient(
                                     colors: [
                                       const Color(0xFFFFE082).withOpacity(0.3),
                                       const Color(0xFF141226).withOpacity(0.85),
@@ -584,7 +630,8 @@ gradient: RadialGradient(
                                       blurRadius: 10,
                                       spreadRadius: 1,
                                     ),
-                                  ],
+
+],
                                 ),
                                 child: Center(
                                   child: isTaken
@@ -638,8 +685,7 @@ gradient: RadialGradient(
                       padding: const EdgeInsets.symmetric(vertical: 2.0),
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-
-decoration: BoxDecoration(
+                        decoration: BoxDecoration(
                           color: const Color(0x66000000),
                           borderRadius: BorderRadius.circular(10),
                         ),
@@ -666,7 +712,8 @@ decoration: BoxDecoration(
                       Expanded(
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 12),
-                          decoration: BoxDecoration(
+
+decoration: BoxDecoration(
                             color: Colors.white12,
                             borderRadius: BorderRadius.circular(20),
                           ),
@@ -697,8 +744,6 @@ decoration: BoxDecoration(
               ],
             ),
           ),
-
-          // ሙሉ ስክሪን የሚበርረው የ SVGA ስጦታ አኒሜሽን ንብርብር
           if (_isPlayingAnimation && _svgaController != null)
             IgnorePointer(
               ignoring: true,
