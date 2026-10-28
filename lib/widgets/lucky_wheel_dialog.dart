@@ -94,7 +94,6 @@ class _LuckyWheelDialogState extends State<LuckyWheelDialog>
         _coins += reward.coins;
       });
       widget.onCoinsUpdated(_coins);
-
       _showWinDialog(reward);
     });
   }
@@ -102,6 +101,7 @@ class _LuckyWheelDialogState extends State<LuckyWheelDialog>
   void _showWinDialog(WheelReward reward) {
     showDialog(
       context: context,
+      barrierDismissible: false,
       builder: (_) => AlertDialog(
         backgroundColor: const Color(0xFF1E1B38),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -122,7 +122,7 @@ class _LuckyWheelDialogState extends State<LuckyWheelDialog>
             const SizedBox(height: 6),
             Text(
               "+${reward.coins} Coins",
-              style: const TextStyle(color: Color(0xFFFFD700), fontSize: 14, fontWeight: FontWeight.bold),
+              style: const TextStyle(color: Color(0xFFFFD700), fontSize: 15, fontWeight: FontWeight.bold),
 
 ),
           ],
@@ -135,7 +135,10 @@ class _LuckyWheelDialogState extends State<LuckyWheelDialog>
                 foregroundColor: Colors.black,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
               ),
-              onPressed: () => Navigator.pop(context),
+              onPressed: () {
+                Navigator.pop(context);
+                setState(() {});
+              },
               child: const Text("Claim", style: TextStyle(fontWeight: FontWeight.bold)),
             ),
           ),
@@ -183,7 +186,7 @@ class _LuckyWheelDialogState extends State<LuckyWheelDialog>
                   const SizedBox(width: 4),
                   Text(
                     "$_coins",
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
                   ),
                 ],
               ),
@@ -235,9 +238,9 @@ class _LuckyWheelDialogState extends State<LuckyWheelDialog>
                       ],
                     ),
                     child: const Center(
-                      child: Text("🎰", style: TextStyle(fontSize: 22)),
 
-),
+child: Text("🎰", style: TextStyle(fontSize: 22)),
+                    ),
                   ),
                 ],
               ),
@@ -291,7 +294,6 @@ class _WheelPainter extends CustomPainter {
         paint,
       );
 
-      // Icon drawing
       final textAngle = startAngle + sweepAngle / 2;
       final textRadius = radius * 0.65;
       final textOffset = Offset(
