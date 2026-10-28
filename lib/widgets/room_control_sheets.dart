@@ -20,7 +20,7 @@ class RoomSettingsData {
     List<String>? admins,
     List<String>? blacklistedUsers,
   })  : admins = admins ?? [],
-        blacklistedUsers = blacklistedUsers ?? [];
+       blacklistedUsers = blacklistedUsers ?? [];
 }
 
 class BasicToolsSheet extends StatelessWidget {
