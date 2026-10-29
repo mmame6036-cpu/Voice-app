@@ -21,14 +21,14 @@ class _StoreScreenState extends State<StoreScreen> {
   static const Color goldColor = Color(0xFFFFD700);
   static const Color emeraldColor = Color(0xFF00E676);
 
-  final List> _categories = [
+  final List _categories = [
     {"name": "Avatar Frame", "icon": Icons.account_circle_outlined, "color": Colors.amber},
     {"name": "Entry Effect", "icon": Icons.auto_awesome, "color": Colors.purpleAccent},
     {"name": "Chat Bubble", "icon": Icons.chat_bubble_outline, "color": Colors.blueAccent},
     {"name": "Profile Card", "icon": Icons.badge_outlined, "color": Colors.teal},
   ];
 
-  final List> _items = [
+  final List _items = [
     {"name": "Gold Dragon", "icon": "🐉", "price": 1000, "days": "30 Days"},
     {"name": "Neon Crown", "icon": "👑", "price": 800, "days": "30 Days"},
     {"name": "Cyber Wings", "icon": "🪽", "price": 1500, "days": "30 Days"},
