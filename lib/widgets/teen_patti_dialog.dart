@@ -3,29 +3,11 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 
 class CardItem {
-  final String value;
-  final String suit;
-  final Color suitColor;
-  final int rank;
+  final String suit; // ♠, ♥, ♦, ♣
+  final String rank; // 2..10, J, Q, K, A
+  final int value;   // 2..14
 
-  const CardItem({
-    required this.value,
-    required this.suit,
-    required this.suitColor,
-    required this.rank,
-  });
-}
-
-class HandResult {
-  final List<CardItem> cards;
-  final String resultName;
-  final int score;
-
-  const HandResult({
-    required this.cards,
-    required this.resultName,
-    required this.score,
-  });
+  CardItem({required this.suit, required this.rank, required this.value});
 }
 
 class TeenPattiDialog extends StatefulWidget {
@@ -44,58 +26,55 @@ class TeenPattiDialog extends StatefulWidget {
 
 class _TeenPattiDialogState extends State<TeenPattiDialog> {
   late int _coins;
-  int _selectedChip = 3000;
-  int _betA = 0;
-  int _betB = 0;
-  int _betC = 0;
+  int _selectedChip = 100;
+  final List<int> _chipValues = [50, 100, 500, 1000];
 
-  int _potA = 6000;
-  int _potB = 18000;
-  int _potC = 480000;
+  int _betOnA = 0;
+  int _betOnB = 0;
 
+  Timer? _gameTimer;
+  int _countdown = 15;
   bool _isDealing = false;
-  String? _winningSide;
+  String _gameResultText = "Place your bets on Player A or Player B!";
 
-  List<CardItem> _cardsA = [];
-  List<CardItem> _cardsB = [];
-  List<CardItem> _cardsC = [];
+  List<CardItem> _handA = [];
+  List<CardItem> _handB = [];
 
-  String _resultA = "High card";
-  String _resultB = "Pair";
-  String _resultC = "High card";
-
-  final List<int> _chipOptions = [3000, 30000, 300000, 600000];
+  final List<String> _suits = ["♠", "♥", "♦", "♣"];
+  final List<String> _ranks = ["2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A"];
 
   @override
   void initState() {
     super.initState();
     _coins = widget.currentCoins;
-    _initDefaultCards();
+    _startRound();
   }
 
-  void _initDefaultCards() {
-    _cardsA = const [
-      CardItem(value: "6", suit: "♠", suitColor: Colors.black87, rank: 6),
-      CardItem(value: "J", suit: "♠", suitColor: Colors.black87, rank: 11),
-      CardItem(value: "4", suit: "♣", suitColor: Colors.black87, rank: 4),
-    ];
-    _cardsB = const [
-      CardItem(value: "3", suit: "♥", suitColor: Colors.red, rank: 3),
-      CardItem(value: "Q", suit: "♦", suitColor: Colors.red, rank: 12),
-      CardItem(value: "3", suit: "♣", suitColor: Colors.black87, rank: 3),
-    ];
-    _cardsC = const [
-      CardItem(value: "5", suit: "♠", suitColor: Colors.black87, rank: 5),
-      CardItem(value: "8", suit: "♥", suitColor: Colors.red, rank: 8),
-      CardItem(value: "4", suit: "♦", suitColor: Colors.red, rank: 4),
-    ];
+  void _startRound() {
+    _countdown = 15;
+    _isDealing = false;
+    _betOnA = 0;
+    _betOnB = 0;
+    _handA = [];
+    _handB = [];
+    _gameResultText = "Place your bets (15s)!";
+
+    _gameTimer?.cancel();
+    _gameTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (_countdown > 0) {
+        setState(() => _countdown--);
+      } else {
+        _gameTimer?.cancel();
+        _resolveRound();
+      }
+    });
   }
 
   void _placeBet(String side) {
-    if (_isDealing) return;
+    if (_isDealing || _countdown == 0) return;
     if (_coins < _selectedChip) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Insufficient coins to bet!")),
+        const SnackBar(content: Text("Insufficient coins to place bet!")),
       );
       return;
     }
@@ -103,480 +82,307 @@ class _TeenPattiDialogState extends State<TeenPattiDialog> {
     setState(() {
       _coins -= _selectedChip;
       if (side == "A") {
-        _betA += _selectedChip;
-        _potA += _selectedChip;
-      } else if (side == "B") {
-        _betB += _selectedChip;
-        _potB += _selectedChip;
-      } else if (side == "C") {
-        _betC += _selectedChip;
-        _potC += _selectedChip;
+        _betOnA += _selectedChip;
+      } else {
+        _betOnB += _selectedChip;
       }
     });
     widget.onCoinsUpdated(_coins);
   }
 
-  CardItem _generateRandomCard(Random r) {
-    final suits = [
-      {"symbol": "♠", "color": Colors.black87},
-      {"symbol": "♥", "color": Colors.red},
-      {"symbol": "♣", "color": Colors.black87},
-      {"symbol": "♦", "color": Colors.red},
-    ];
-    final values = ["2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A"];
-    final valIdx = r.nextInt(values.length);
-    final suitObj = suits[r.nextInt(suits.length)];
-
-    return CardItem(
-      value: values[valIdx],
-      suit: suitObj["symbol"] as String,
-      suitColor: suitObj["color"] as Color,
-      rank: valIdx + 2,
-    );
-  }
-
-  HandResult _evaluateHand(List<CardItem> cards) {
-    final ranks = cards.map((c) => c.rank).toList()..sort();
-    final suits = cards.map((c) => c.suit).toList();
-    final isFlush = (suits[0] == suits[1] && suits[1] == suits[2]);
-    final isStraight = (ranks[2] - ranks[1] == 1 && ranks[1] - ranks[0] == 1);
-    final isTrail = (ranks[0] == ranks[1] && ranks[1] == ranks[2]);
-    final isPair = (ranks[0] == ranks[1] || ranks[1] == ranks[2] || ranks[0] == ranks[2]);
-
-if (isTrail) {
-      return HandResult(cards: cards, resultName: "Trail / Set", score: 5000 + ranks[2]);
-    } else if (isStraight && isFlush) {
-      return HandResult(cards: cards, resultName: "Pure Sequence", score: 4000 + ranks[2]);
-    } else if (isStraight) {
-      return HandResult(cards: cards, resultName: "Sequence", score: 3000 + ranks[2]);
-    } else if (isFlush) {
-      return HandResult(cards: cards, resultName: "Color / Flush", score: 2000 + ranks[2]);
-    } else if (isPair) {
-      return HandResult(cards: cards, resultName: "Pair", score: 1000 + ranks[1]);
-    } else {
-      return HandResult(cards: cards, resultName: "High card", score: ranks[2]);
+  List<CardItem> _drawHand(Random rng) {
+    List<CardItem> hand = [];
+    for (int i = 0; i < 3; i++) {
+      int valIndex = rng.nextInt(_ranks.length);
+      int suitIndex = rng.nextInt(_suits.length);
+      hand.add(CardItem(
+        suit: _suits[suitIndex],
+        rank: _ranks[valIndex],
+        value: valIndex + 2,
+      ));
     }
+    hand.sort((a, b) => b.value.compareTo(a.value));
+    return hand;
   }
 
-  void _startRound() {
-    if (_betA == 0 && _betB == 0 && _betC == 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Please place a bet on A, B, or C first!")),
-      );
-      return;
+  // Calculate hand score (Trio > Straight Flush > Flush > Straight > Pair > High Card)
+  int _evaluateHand(List<CardItem> hand) {
+    bool isFlush = hand[0].suit == hand[1].suit && hand[1].suit == hand[2].suit;
+    bool isTrio = hand[0].value == hand[1].value && hand[1].value == hand[2].value;
+    bool isStraight = (hand[0].value - hand[1].value == 1) && (hand[1].value - hand[2].value == 1);
+    bool isPair = hand[0].value == hand[1].value  hand[1].value == hand[2].value  hand[0].value == hand[2].value;
+
+    if (isTrio) return 60000 + hand[0].value;
+    if (isFlush && isStraight) return 50000 + hand[0].value;
+    if (isStraight) return 40000 + hand[0].value;
+    if (isFlush) return 30000 + hand[0].value;
+    if (isPair) {
+      int pairVal = (hand[0].value == hand[1].value) ? hand[0].value : hand[1].value;
+      return 20000 + pairVal;
+    }
+    return 10000 + hand[0].value * 100 + hand[1].value * 10 + hand[2].value;
+  }
+
+  void _resolveRound() {
+    setState(() => _isDealing = true);
+    final rng = Random();
+    _handA = _drawHand(rng);
+    _handB = _drawHand(rng);
+
+    int scoreA = _evaluateHand(_handA);
+    int scoreB = _evaluateHand(_handB);
+
+    int winnings = 0;
+    String outcome = "";
+
+if (scoreA > scoreB) {
+      outcome = "Player A Wins!";
+      if (_betOnA > 0) winnings += (_betOnA * 2);
+    } else if (scoreB > scoreA) {
+      outcome = "Player B Wins!";
+      if (_betOnB > 0) winnings += (_betOnB * 2);
+    } else {
+      outcome = "Tie Game! Bets returned.";
+      winnings += (_betOnA + _betOnB);
+    }
+
+    if (winnings > 0) {
+      _coins += winnings;
+      widget.onCoinsUpdated(_coins);
+      outcome += " You won 🪙$winnings!";
     }
 
     setState(() {
-      _isDealing = true;
-      _winningSide = null;
+      _gameResultText = outcome;
     });
 
-    final random = Random();
-
-    Timer(const Duration(milliseconds: 1600), () {
-      final handA = _evaluateHand(List.generate(3, (_) => _generateRandomCard(random)));
-      final handB = _evaluateHand(List.generate(3, (_) => _generateRandomCard(random)));
-      final handC = _evaluateHand(List.generate(3, (_) => _generateRandomCard(random)));
-
-      String winner = "A";
-      int maxScore = handA.score;
-
-      if (handB.score > maxScore) {
-        winner = "B";
-        maxScore = handB.score;
-      }
-      if (handC.score > maxScore) {
-        winner = "C";
-      }
-
-      int winnings = 0;
-      if (winner == "A" && _betA > 0) winnings += (_betA * 2.8).toInt();
-      if (winner == "B" && _betB > 0) winnings += (_betB * 2.8).toInt();
-      if (winner == "C" && _betC > 0) winnings += (_betC * 2.8).toInt();
-
-      setState(() {
-        _cardsA = handA.cards;
-        _resultA = handA.resultName;
-        _cardsB = handB.cards;
-        _resultB = handB.resultName;
-        _cardsC = handC.cards;
-        _resultC = handC.resultName;
-        _winningSide = winner;
-        _isDealing = false;
-        _coins += winnings;
-        _betA = 0;
-        _betB = 0;
-        _betC = 0;
-      });
-
-      widget.onCoinsUpdated(_coins);
-
-      if (winnings > 0) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: const Color(0xFF2E7D32),
-            content: Text("Winner is $winner! You won $winnings Coins!"),
-          ),
-        );
-      }
+    // Start next round in 5 seconds
+    Future.delayed(const Duration(seconds: 5), () {
+      if (mounted) _startRound();
     });
   }
 
-  String _formatNumber(int num) {
-    if (num >= 1000000) return "${(num / 1000000).toStringAsFixed(2)}M";
-    if (num >= 1000) return "${(num / 1000).toStringAsFixed(0)}K";
-    return "$num";
+  @override
+  void dispose() {
+    _gameTimer?.cancel();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 640,
+      height: 520,
       decoration: const BoxDecoration(
-        color: Color(0xFFE8B270),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        color: Color(0xFF141226),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Column(
         children: [
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-            decoration: const BoxDecoration(
-              color: Color(0xFFD49955),
-              borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.arrow_back_ios, color: Colors.white, size: 20),
-                  onPressed: () => Navigator.pop(context),
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2)),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                "🃏 Teen Patti 3-Cards",
+                style: TextStyle(color: Color(0xFFFFD700), fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.white10,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFFFFD700), width: 0.8),
                 ),
-                const Text(
-                  "TeenPatti",
-                  style: TextStyle(
-                    color: Color(0xFFFFF3DB),
-                    fontSize: 26,
-                    fontWeight: FontWeight.w900,
-
-shadows: [
-                      Shadow(color: Color(0xFF7A4512), blurRadius: 4, offset: Offset(0, 2)),
-                    ],
-                  ),
-                ),
-                Row(
+                child: Row(
                   children: [
-                    _topSmallIcon(Icons.people),
-                    const SizedBox(width: 8),
-                    _topSmallIcon(Icons.volume_up),
-                    const SizedBox(width: 8),
-                    _topSmallIcon(Icons.help_outline),
+                    const Icon(Icons.timer, color: Color(0xFFFFD700), size: 14),
+                    const SizedBox(width: 4),
+                    Text("$_countdown s", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
                   ],
                 ),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                _avatarWidget("xkecu...", "👦"),
-                _avatarWidget("white...", "😎"),
-                _avatarWidget("vân", "👮"),
-                _avatarWidget("Tuan...", "🧢"),
-                _avatarWidget("Tuan...", "⚪"),
-              ],
-            ),
-          ),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: _bettingBox(
-                      label: "A",
-                      color: const Color(0xFF00A859),
-                      chairIcon: "🛋️",
-                      pot: _potA,
-                      userBet: _betA,
-                      cards: _cardsA,
-                      result: _resultA,
-                      isWinner: _winningSide == "A",
-                      onTap: () => _placeBet("A"),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: _bettingBox(
-                      label: "B",
-                      color: const Color(0xFF0091DA),
-                      chairIcon: "🛋️",
-                      pot: _potB,
-                      userBet: _betB,
-                      cards: _cardsB,
-                      result: _resultB,
-                      isWinner: _winningSide == "B",
-                      onTap: () => _placeBet("B"),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: _bettingBox(
-                      label: "C",
-                      color: const Color(0xFFD63031),
-                      chairIcon: "🛋️",
-                      pot: _potC,
-                      userBet: _betC,
-                      cards: _cardsC,
-                      result: _resultC,
-                      isWinner: _winningSide == "C",
-                      onTap: () => _placeBet("C"),
-                    ),
-                  ),
-                ],
               ),
-            ),
+            ],
           ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            color: const Color(0xFFDCA15D),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF8B4F1B),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: const Color(0xFFFFD700), width: 1.2),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.monetization_on, color: Color(0xFFFFD700), size: 18),
-                      const SizedBox(width: 4),
-                      Text(
-                        "$_coins",
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
+          const SizedBox(height: 8),
+          Text(
+            _gameResultText,
+            style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 12),
 
-fontSize: 13,
-                        ),
-                      ),
+          // Cards Arena (Player A vs Player B)
+          Row(
+            children: [
+              Expanded(child: _buildPlayerArena("Player A", _handA, Colors.blueAccent)),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 8),
+                child: Text("VS", style: TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.w900, fontSize: 18)),
+              ),
+              Expanded(child: _buildPlayerArena("Player B", _handB, Colors.purpleAccent)),
+            ],
+          ),
+
+          const SizedBox(height: 14),
+
+          // Betting Areas
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF1F284F),
+                    side: const BorderSide(color: Colors.blueAccent),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                  onPressed: () => _placeBet("A"),
+                  child: Column(
+                    children: [
+
+const Text("Bet Player A", style: TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 2),
+                      Text("Bet: 🪙$_betOnA", style: const TextStyle(color: Colors.white, fontSize: 11)),
                     ],
                   ),
                 ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: _chipOptions.map((chip) {
-                        final isSelected = _selectedChip == chip;
-                        return GestureDetector(
-                          onTap: () => setState(() => _selectedChip = chip),
-                          child: Container(
-                            margin: const EdgeInsets.only(right: 6),
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: _getChipColor(chip),
-                              border: Border.all(
-                                color: isSelected ? Colors.white : Colors.black26,
-                                width: isSelected ? 2.5 : 1,
-                              ),
-                              boxShadow: isSelected
-                                  ? [
-                                      BoxShadow(
-                                        color: Colors.white.withOpacity(0.6),
-                                        blurRadius: 6,
-                                        spreadRadius: 1,
-                                      )
-                                    ]
-                                  : null,
-                            ),
-                            child: CircleAvatar(
-                              radius: 18,
-                              backgroundColor: Colors.transparent,
-                              child: Text(
-                                _formatNumber(chip),
-                                style: const TextStyle(
-                                  color: Colors.black87,
-                                  fontWeight: FontWeight.w900,
-                                  fontSize: 10,
-                                ),
-                              ),
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                  ),
-                ),
-                ElevatedButton(
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF5AB6D8),
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    backgroundColor: const Color(0xFF381F4F),
+                    side: const BorderSide(color: Colors.purpleAccent),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                   ),
-                  onPressed: _isDealing ? null : _startRound,
-                  child: Text(
-                    _isDealing ? "Dealing..." : "Deal",
-                    style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13),
+                  onPressed: () => _placeBet("B"),
+                  child: Column(
+                    children: [
+                      const Text("Bet Player B", style: TextStyle(color: Colors.purpleAccent, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 2),
+                      Text("Bet: 🪙$_betOnB", style: const TextStyle(color: Colors.white, fontSize: 11)),
+                    ],
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
+          ),
+
+          const Spacer(),
+
+          // Chips Selection & User Balance
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.monetization_on, color: Color(0xFFFFD700), size: 18),
+                  const SizedBox(width: 4),
+                  Text("$_coins", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+                ],
+              ),
+              Row(
+                children: _chipValues.map((val) {
+                  final isSelected = _selectedChip == val;
+                  return GestureDetector(
+                    onTap: () => setState(() => _selectedChip = val),
+                    child: Container(
+                      margin: const EdgeInsets.only(left: 6),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: isSelected ? const Color(0xFFFFD700) : const Color(0xFF221F3A),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: const Color(0xFFFFD700), width: isSelected ? 2 : 0.8),
+                      ),
+                      child: Text(
+                        "$val",
+                        style: TextStyle(
+                          color: isSelected ? Colors.black : const Color(0xFFFFD700),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 10,
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPlayerArena(String name, List<CardItem> hand, Color themeColor) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.06),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: themeColor.withOpacity(0.4)),
+      ),
+      child: Column(
+        children: [
+          Text(name, style: TextStyle(color: themeColor, fontWeight: FontWeight.bold, fontSize: 13)),
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: hand.isEmpty
+                ? [
+                    _cardBack(),
+
+const SizedBox(width: 4),
+                    _cardBack(),
+                    const SizedBox(width: 4),
+                    _cardBack(),
+                  ]
+                : hand.map((c) => Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 2),
+                    child: _cardFront(c),
+                  )).toList(),
           ),
         ],
       ),
     );
   }
 
-  Color _getChipColor(int chip) {
-    if (chip == 3000) return const Color(0xFF68D8D6);
-    if (chip == 30000) return const Color(0xFF7AE582);
-    if (chip == 300000) return const Color(0xFF00B4D8);
-    return const Color(0xFFFFAA00);
-  }
-
-  Widget _topSmallIcon(IconData icon) {
+  Widget _cardBack() {
     return Container(
-      padding: const EdgeInsets.all(6),
-      decoration: const BoxDecoration(
-        color: Color(0xFF8B4F1B),
-        shape: BoxShape.circle,
+      width: 32,
+      height: 48,
+      decoration: BoxDecoration(
+        color: const Color(0xFF6C5CE7),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: Colors.white30),
       ),
-      child: Icon(icon, color: Colors.white, size: 16),
+      child: const Center(child: Text("🂠", style: TextStyle(color: Colors.white60, fontSize: 16))),
     );
   }
 
-  Widget _avatarWidget(String name, String emoji) {
-    return Column(
-      children: [
-        CircleAvatar(
-
-radius: 16,
-          backgroundColor: const Color(0xFFF7D08A),
-          child: Text(emoji, style: const TextStyle(fontSize: 14)),
-        ),
-        const SizedBox(height: 2),
-        Text(name, style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold)),
-      ],
-    );
-  }
-
-  Widget _bettingBox({
-    required String label,
-    required Color color,
-    required String chairIcon,
-    required int pot,
-    required int userBet,
-    required List<CardItem> cards,
-    required String result,
-    required bool isWinner,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        decoration: BoxDecoration(
-          color: color,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: isWinner ? const Color(0xFFFFD700) : Colors.white24,
-            width: isWinner ? 3.5 : 1.2,
-          ),
-          boxShadow: isWinner
-              ? [
-                  BoxShadow(
-                    color: const Color(0xFFFFD700).withOpacity(0.7),
-                    blurRadius: 12,
-                    spreadRadius: 2,
-                  )
-                ]
-              : null,
-        ),
-        child: Column(
-          children: [
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 2),
-              decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.2),
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
-              ),
-              child: Text(
-                "POT: ${_formatNumber(pot)}",
-                style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-                textAlign: TextAlign.center,
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              "You: $userBet",
-              style: const TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 6),
-            Container(
-              margin: const EdgeInsets.symmetric(horizontal: 6),
-              padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: cards.map((c) {
-                  return Column(
-                    children: [
-                      Text(
-                        c.value,
-                        style: TextStyle(
-                          color: c.suitColor,
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      Text(
-                        c.suit,
-                        style: TextStyle(color: c.suitColor, fontSize: 12),
-                      ),
-                    ],
-                  );
-                }).toList(),
-              ),
-            ),
-            const SizedBox(height: 4),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(
-                color: Colors.redAccent,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Text(
-                result,
-                style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
-              ),
-            ),
-            const Spacer(),
-            CircleAvatar(
-              radius: 14,
-              backgroundColor: Colors.white.withOpacity(0.25),
-
-child: Text(
-                label,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w900,
-                  fontSize: 14,
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-          ],
-        ),
+  Widget _cardFront(CardItem c) {
+    bool isRed = c.suit == "♥" || c.suit == "♦";
+    return Container(
+      width: 32,
+      height: 48,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: Colors.black12),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(c.rank, style: TextStyle(color: isRed ? Colors.red : Colors.black, fontSize: 11, fontWeight: FontWeight.bold, height: 1.0)),
+          Text(c.suit, style: TextStyle(color: isRed ? Colors.red : Colors.black, fontSize: 10, height: 1.0)),
+        ],
       ),
     );
   }
