@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 
 class StoreScreen extends StatefulWidget {
   final int userCoins;
-  final Function(int) onCoinsDeducted;
+  final Function(int)? onCoinsDeducted;
 
   const StoreScreen({
     super.key,
     required this.userCoins,
-    required this.onCoinsDeducted,
+    this.onCoinsDeducted,
   });
 
   @override
@@ -15,116 +15,186 @@ class StoreScreen extends StatefulWidget {
 }
 
 class _StoreScreenState extends State<StoreScreen> {
-  // የተመረጠው ምድብ መለያ (Default: Popular)
   int _selectedCategoryIndex = 0;
+  late int _coins;
 
-  // 8ቱ ዋና ዋና ምድቦች
-  final List<String> _categories =[
-    {"name": "Popular", "icon": Icons.local_fire_department, "color": Colors.orangeAccent},
-    {"name": "Frame", "icon": Icons.motion_photos_on, "color": const Color(0xFF00C9A7)},
-    {"name": "Entry", "icon": Icons.rocket_launch, "color": Colors.redAccent},
-    {"name": "Special ID", "icon": Icons.badge, "color": Colors.amber},
-    {"name": "Theme", "icon": Icons.wallpaper, "color": Colors.purpleAccent},
-    {"name": "Room Card", "icon": Icons.credit_card, "color": Colors.deepPurpleAccent},
-    {"name": "Room Frame", "icon": Icons.palette, "color": Colors.blueAccent},
-    {"name": "Profile Card", "icon": Icons.style, "color": Colors.teal},
+  static const Color goldColor = Color(0xFFFFD700);
+  static const Color emeraldColor = Color(0xFF00E676);
+
+  // ትክክለኛው የዳታ አይነት (Type) እዚህ ተስተካክሏል
+  final List> _categories = [
+    {"name": "Avatar Frame", "icon": Icons.account_circle_outlined, "color": Colors.amber},
+    {"name": "Entry Effect", "icon": Icons.auto_awesome, "color": Colors.purpleAccent},
+    {"name": "Chat Bubble", "icon": Icons.chat_bubble_outline, "color": Colors.blueAccent},
+    {"name": "Profile Card", "icon": Icons.badge_outlined, "color": Colors.teal},
+  ];
+
+  final List> _items = [
+    {"name": "Gold Dragon", "icon": "🐉", "price": 1000, "days": "30 Days"},
+    {"name": "Neon Crown", "icon": "👑", "price": 800, "days": "30 Days"},
+    {"name": "Cyber Wings", "icon": "🪽", "price": 1500, "days": "30 Days"},
+    {"name": "Supercar Red", "icon": "🏎️", "price": 3000, "days": "30 Days"},
+    {"name": "Golden Pegasus", "icon": "🦄", "price": 5000, "days": "30 Days"},
+    {"name": "Cyber Yacht", "icon": "🛥️", "price": 4000, "days": "30 Days"},
   ];
 
   @override
-  Widget build(BuildContext context) {
-    final currentCategory = _categories[_selectedCategoryIndex]["name"] as String;
+  void initState() {
+    super.initState();
+    _coins = widget.userCoins;
+  }
 
+  void _buyItem(Map<String, dynamic> item) {
+    final price = item["price"] as int;
+    if (_coins < price) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Insufficient coins to purchase!")),
+      );
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1B2E),
+        title: Text("Buy ${item['name']}?", style: const TextStyle(color: Colors.white)),
+        content: Text("Cost: 🪙$price for ${item['days']}.", style: const TextStyle(color: Colors.white70)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Cancel", style: TextStyle(color: Colors.white60)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: goldColor),
+            onPressed: () {
+              setState(() => _coins -= price);
+              widget.onCoinsDeducted?.call(_coins);
+              Navigator.pop(ctx);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text("Successfully bought ${item['name']}!")),
+              );
+            },
+            child: const Text("Confirm", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF7FBFB),
+      backgroundColor: const Color(0xFF0F0E17),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF00C9A7),
+        backgroundColor: const Color(0xFF171524),
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios, color: Colors.white, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text(
-          "Store",
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
-        ),
-        centerTitle: true,
+        title: const Text("VIP Mall & Store", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.shopping_bag_outlined, color: Colors.white),
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text("Backpack")),
-              );
-            },
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: [
+                const Icon(Icons.monetization_on, color: goldColor, size: 18),
+                const SizedBox(width: 4),
+                Text("$_coins", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+
+],
+            ),
           ),
         ],
       ),
       body: Column(
         children: [
-          // 1. የላይኛው የ 8ቱ ምድቦች መምረጫ ሳጥን (Header Container)
+          // የምድብ ዝርዝር መምረጫ
           Container(
-            margin: const EdgeInsets.all(14),
-            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.04),
-                  blurRadius: 8,
-                  offset: const Offset(0, 3),
-                ),
-              ],
-            ),
-            child: GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
+            height: 60,
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
               itemCount: _categories.length,
+              itemBuilder: (context, index) {
+                final cat = _categories[index];
+                final isSelected = _selectedCategoryIndex == index;
+                return GestureDetector(
+                  onTap: () => setState(() => _selectedCategoryIndex = index),
+                  child: Container(
+                    margin: const EdgeInsets.only(right: 10),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: isSelected ? emeraldColor.withOpacity(0.2) : const Color(0xFF1E1B2E),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: isSelected ? emeraldColor : Colors.white12,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(cat["icon"] as IconData, color: isSelected ? emeraldColor : Colors.white54, size: 18),
+                        const SizedBox(width: 6),
+                        Text(
+                          cat["name"] as String,
+                          style: TextStyle(
+                            color: isSelected ? Colors.white : Colors.white70,
+                            fontSize: 12,
+                            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+
+          // የዕቃዎች ዝርዝር (Grid)
+          Expanded(
+            child: GridView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: _items.length,
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 4,
-                mainAxisSpacing: 10,
-                crossAxisSpacing: 6,
-                childAspectRatio: 0.95,
+                crossAxisCount: 2,
+                mainAxisSpacing: 14,
+                crossAxisSpacing: 14,
+                childAspectRatio: 0.85,
               ),
               itemBuilder: (context, idx) {
-                final cat = _categories[idx];
-                final isSelected = _selectedCategoryIndex == idx;
-
-                return GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      _selectedCategoryIndex = idx;
-                    });
-                  },
+                final itm = _items[idx];
+                return Container(
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1E1B2E),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.white12),
+                  ),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Container(
-                        width: 44,
-                        height: 44,
-                        decoration: BoxDecoration(
-
-color: (cat["color"] as Color).withOpacity(isSelected ? 0.25 : 0.08),
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: isSelected ? const Color(0xFF00C9A7) : Colors.transparent,
-                            width: 2,
-                          ),
-                        ),
-                        child: Icon(
-                          cat["icon"] as IconData,
-                          color: cat["color"] as Color,
-                          size: 22,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
+                      Text(itm["icon"] as String, style: const TextStyle(fontSize: 48)),
+                      const SizedBox(height: 8),
                       Text(
-                        cat["name"] as String,
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                          color: isSelected ? const Color(0xFF00C9A7) : Colors.black87,
+                        itm["name"] as String,
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                      ),
+                      Text(
+                        itm["days"] as String,
+                        style: const TextStyle(color: Colors.white54, fontSize: 11),
+                      ),
+                      const SizedBox(height: 8),
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: goldColor,
+                          foregroundColor: Colors.black,
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+
+shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                         ),
+                        onPressed: () => _buyItem(itm),
+                        child: Text("🪙 ${itm['price']}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
                       ),
                     ],
                   ),
@@ -132,71 +202,6 @@ color: (cat["color"] as Color).withOpacity(isSelected ? 0.25 : 0.08),
               },
             ),
           ),
-
-          // 2. የተመረጠው ምድብ ርዕስ ባነር
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  currentCategory,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black87,
-                  ),
-                ),
-                Text(
-                  "Total items: 0",
-                  style: const TextStyle(fontSize: 12, color: Colors.black38),
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 8),
-
-          // 3. ከስር እቃዎቹ የሚጫኑበት ዝግጁ ባዶ ቦታ (Functional Empty Body Placeholder)
-          Expanded(
-            child: Container(
-              margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              width: double.infinity,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.black12, style: BorderStyle.solid),
-              ),
-              child: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      _categories[_selectedCategoryIndex]["icon"] as IconData,
-                      size: 56,
-                      color: (_categories[_selectedCategoryIndex]["color"] as Color).withOpacity(0.5),
-                    ),
-                    const SizedBox(height: 14),
-                    Text(
-                      "$currentCategory Section",
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black87,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      "ምንም እቃ አልተጫነም፤ እቃዎችን ለመጫን ዝግጁ ነው።",
-                      style: const TextStyle(fontSize: 12, color: Colors.black45),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-
-          const SizedBox(height: 16),
         ],
       ),
     );
