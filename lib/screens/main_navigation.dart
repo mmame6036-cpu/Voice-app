@@ -25,7 +25,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => VoicePartyRoomScreen(
+        builder: (_) => RoomScreen(
           roomTitle: roomTitle,
           initialCoins: _coins,
           onCoinUpdate: _updateCoins,
