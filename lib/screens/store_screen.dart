@@ -19,7 +19,7 @@ class _StoreScreenState extends State<StoreScreen> {
   int _selectedCategoryIndex = 0;
 
   // 8ቱ ዋና ዋና ምድቦች
-  final List<string> _categories =[
+  final List<String> _categories =[
     {"name": "Popular", "icon": Icons.local_fire_department, "color": Colors.orangeAccent},
     {"name": "Frame", "icon": Icons.motion_photos_on, "color": const Color(0xFF00C9A7)},
     {"name": "Entry", "icon": Icons.rocket_launch, "color": Colors.redAccent},
