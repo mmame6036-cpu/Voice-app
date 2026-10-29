@@ -1,27 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-
-class CoinPackage {
-  final int coins;
-  final String priceUsd;
-  final String? bonus;
-
-  const CoinPackage({
-    required this.coins,
-    required this.priceUsd,
-    this.bonus,
-  });
-}
 
 class WalletScreen extends StatefulWidget {
   final int currentCoins;
-  final int currentDiamonds;
   final Function(int) onCoinsRecharged;
 
   const WalletScreen({
     super.key,
     required this.currentCoins,
-    this.currentDiamonds = 0,
     required this.onCoinsRecharged,
   });
 
@@ -31,347 +16,381 @@ class WalletScreen extends StatefulWidget {
 
 class _WalletScreenState extends State<WalletScreen> {
   late int _coins;
-  late int _diamonds;
-  int _selectedPackageIndex = 0;
+  int _selectedPackageIdx = 0;
+  final TextEditingController _userIdController = TextEditingController(text: "1753925");
+  String _selectedCountry = "All country";
 
-  static const String binancePayId = "849201842";
-  static const String usdtTrc20Address = "TXaB84KL92kLqP192MNbvRx782JqLkP12Z";
-
-  final List<CoinPackage> _packages = const [
-    CoinPackage(coins: 1000, priceUsd: "\$1.00", bonus: null),
-    CoinPackage(coins: 5500, priceUsd: "\$5.00", bonus: "+500 Free"),
-    CoinPackage(coins: 12000, priceUsd: "\$10.00", bonus: "+2,000 Free"),
-    CoinPackage(coins: 38000, priceUsd: "\$30.00", bonus: "+8,000 Free"),
-    CoinPackage(coins: 65000, priceUsd: "\$50.00", bonus: "+15,000 Free"),
-    CoinPackage(coins: 140000, priceUsd: "\$100.00", bonus: "+40,000 Free"),
+  // በምስሉ መሰረት የተቀመጡ የኮይን ፓኬጆች እና የዶላር ዋጋቸው
+  final List<Map<String, dynamic>> _coinPackages = [
+    {"coins": 70000, "price": "\$10", "usd": 10},
+    {"coins": 210000, "price": "\$30", "usd": 30},
+    {"coins": 350000, "price": "\$50", "usd": 50},
+    {"coins": 700000, "price": "\$100", "usd": 100},
+    {"coins": 1400000, "price": "\$200", "usd": 200},
+    {"coins": 3500000, "price": "\$500", "usd": 500},
   ];
 
   @override
   void initState() {
     super.initState();
     _coins = widget.currentCoins;
-    _diamonds = widget.currentDiamonds;
   }
 
-  void _showBinancePaymentSheet(CoinPackage pkg) {
-    showModalBottomSheet(
+  void _processBinancePay() {
+    final pkg = _coinPackages[_selectedPackageIdx];
+    final coinsToAdd = pkg["coins"] as int;
+    final priceStr = pkg["price"] as String;
+
+    showDialog(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: const Color(0xFF141226),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (context) {
-        return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.white24,
-                  borderRadius: BorderRadius.circular(2),
-                ),
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: const [
+            Icon(Icons.currency_bitcoin, color: Color(0xFFF3BA2F)), // Binance Gold
+            SizedBox(width: 8),
+            Text(
+              "Binance Pay",
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.black),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text("Target Account: ID ${_userIdController.text}", style: const TextStyle(color: Colors.black54)),
+            const SizedBox(height: 8),
+            Text("Selected Package: 🪙 $coinsToAdd Coins", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+            const SizedBox(height: 4),
+            Text("Amount: $priceStr (USDT)", style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 16)),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFBFBFB),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.black12),
               ),
-              const SizedBox(height: 16),
-              const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+              child: const Row(
                 children: [
-                  Icon(Icons.currency_bitcoin, color: Color(0xFFF0B90B), size: 28),
-                  SizedBox(width: 8),
-                  Text(
-                    "Binance Pay / USDT",
-                    style: TextStyle(
-                      color: Color(0xFFF0B90B),
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
+                  Icon(Icons.lock, size: 14, color: Color(0xFF00C9A7)),
+                  SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      "Secure crypto settlement via Binance Pay API",
+                      style: TextStyle(fontSize: 11, color: Colors.black87),
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1E1B38),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.white12),
-                ),
-                child: Column(
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text("Recharge Package:", style: TextStyle(color: Colors.white70)),
-                        Text("${pkg.coins} Coins",
-                            style: const TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold)),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-
-mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text("Amount Due:", style: TextStyle(color: Colors.white70)),
-                        Text("${pkg.priceUsd} (USDT)",
-                            style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 16)),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 14),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text("Binance Pay ID", style: TextStyle(color: Colors.white60, fontSize: 12)),
-                subtitle: const Text(binancePayId, style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
-                trailing: IconButton(
-                  icon: const Icon(Icons.copy, color: Color(0xFFF0B90B)),
-                  onPressed: () {
-                    Clipboard.setData(const ClipboardData(text: binancePayId));
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text("Binance Pay ID copied!")),
-                    );
-                  },
-                ),
-              ),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text("USDT Deposit (TRC20)", style: TextStyle(color: Colors.white60, fontSize: 12)),
-                subtitle: const Text(
-                  usdtTrc20Address,
-                  style: TextStyle(color: Colors.white, fontSize: 12),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                trailing: IconButton(
-                  icon: const Icon(Icons.copy, color: Color(0xFFF0B90B)),
-                  onPressed: () {
-                    Clipboard.setData(const ClipboardData(text: usdtTrc20Address));
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text("USDT Address copied!")),
-                    );
-                  },
-                ),
-              ),
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                height: 48,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFF0B90B),
-                    foregroundColor: Colors.black,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-                  ),
-                  onPressed: () {
-                    Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text("Payment submitted. Coins will be credited once verified on blockchain!"),
-                      ),
-                    );
-                  },
-                  child: const Text("I Have Transferred", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                ),
-              ),
-              const SizedBox(height: 10),
-            ],
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Cancel", style: TextStyle(color: Colors.black54)),
           ),
-        );
-      },
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFF3BA2F), // Binance Yellow
+              foregroundColor: Colors.black,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: () {
+              Navigator.pop(ctx);
+              setState(() {
+                _coins += coinsToAdd;
+              });
+              widget.onCoinsRecharged(_coins);
+
+ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  backgroundColor: const Color(0xFF00C9A7),
+                  content: Text("Binance Pay successful! 🪙 $coinsToAdd Coins added."),
+                ),
+              );
+            },
+            child: const Text("Pay with Binance", style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0F0C20),
+      backgroundColor: const Color(0xFFF8F9FA),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF141226),
-        elevation: 0,
-        title: const Text(
-          "My Wallet",
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
-        ),
+        backgroundColor: Colors.white,
+        elevation: 0.5,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: Colors.white, size: 20),
+          icon: const Icon(Icons.arrow_back_ios, color: Colors.black87, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
+        title: const Text(
+          "Recharge",
+          style: TextStyle(color: Colors.black, fontSize: 17, fontWeight: FontWeight.bold),
+        ),
+        centerTitle: true,
       ),
       body: SingleChildScrollView(
-
-padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(20),
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF2E2452), Color(0xFF1B1633)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // User ID Section
+              const Text(
+                "User ID",
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black87),
+              ),
+              const SizedBox(height: 8),
+              Container(
+                height: 48,
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.black12),
                 ),
-                border: Border.all(color: const Color(0xFFFFD700).withOpacity(0.4), width: 1.2),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFFFFD700).withOpacity(0.12),
-                    blurRadius: 16,
-                    spreadRadius: 2,
-                  ),
-                ],
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  Column(
-                    children: [
-                      const Row(
-                        children: [
-                          Icon(Icons.monetization_on, color: Color(0xFFFFD700), size: 22),
-                          SizedBox(width: 6),
-                          Text("Coins Balance", style: TextStyle(color: Colors.white70, fontSize: 13)),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        "$_coins",
-                        style: const TextStyle(
-                          color: Color(0xFFFFD700),
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _userIdController,
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                        decoration: const InputDecoration(
+                          border: InputBorder.none,
+                          isDense: true,
                         ),
-                      ),
-                    ],
-                  ),
-                  Container(width: 1, height: 45, color: Colors.white12),
-                  Column(
-                    children: [
-                      const Row(
-                        children: [
-                          Icon(Icons.diamond, color: Colors.cyanAccent, size: 22),
-                          SizedBox(width: 6),
-                          Text("Diamonds", style: TextStyle(color: Colors.white70, fontSize: 13)),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        "$_diamonds",
-                        style: const TextStyle(
-                          color: Colors.cyanAccent,
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 24),
-            const Text(
-              "Select Recharge Package (USDT)",
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
-            ),
-            const SizedBox(height: 14),
-            GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: _packages.length,
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                crossAxisSpacing: 12,
-                mainAxisSpacing: 12,
-                childAspectRatio: 1.25,
-              ),
-              itemBuilder: (context, index) {
-                final pkg = _packages[index];
-                final isSelected = _selectedPackageIndex == index;
-
-                return GestureDetector(
-                  onTap: () => setState(() => _selectedPackageIndex = index),
-                  child: Container(
-
-padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: isSelected ? const Color(0xFF261E47) : const Color(0xFF161329),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: isSelected ? const Color(0xFFF0B90B) : Colors.white10,
-                        width: isSelected ? 2 : 1,
                       ),
                     ),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(Icons.monetization_on, color: Color(0xFFFFD700), size: 18),
-                            const SizedBox(width: 4),
-                            Text(
-                              "${pkg.coins}",
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
+                    GestureDetector(
+                      onTap: () {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text("User ID ${_userIdController.text} confirmed")),
+                        );
+                      },
+                      child: const Text(
+                        "Confirm",
+                        style: TextStyle(
+                          color: Color(0xFF00C9A7),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 18),
+
+              // Country/Region Section
+              const Text(
+                "Country/Region",
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black87),
+              ),
+              const SizedBox(height: 8),
+              Container(
+                height: 48,
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.black12),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    value: _selectedCountry,
+
+isExpanded: true,
+                    icon: const Icon(Icons.arrow_drop_down, color: Colors.black87),
+                    items: ["All country", "Ethiopia", "United States", "Saudi Arabia", "UAE"]
+                        .map((c) => DropdownMenuItem(
+                              value: c,
+                              child: Text(c, style: const TextStyle(fontSize: 13, color: Colors.black87)),
+                            ))
+                        .toList(),
+                    onChanged: (val) {
+                      if (val != null) setState(() => _selectedCountry = val);
+                    },
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 14),
+
+              // Official Agency Recharge Banner
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF3D6),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  children: const [
+                    Text("🏷️", style: TextStyle(fontSize: 14)),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        "Official Agency Recharge",
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF4A3408),
+                        ),
+                      ),
+                    ),
+                    Text(
+                      "20% off >",
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.deepOrangeAccent,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 20),
+
+              // Recharge Method
+              const Text(
+                "Recharge",
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black87),
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: const Color(0xFF00C9A7), width: 1.5),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            width: 24,
+                            height: 24,
+                            decoration: const BoxDecoration(
+                              color: Color(0xFFF3BA2F),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Center(
+                              child: Text(
+                                "B",
+                                style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 13),
                               ),
                             ),
-                          ],
+                          ),
+                          const SizedBox(width: 8),
+                          const Text(
+                            "Binance (USDT)",
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.black87),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 16),
+
+// Coin Cards Grid
+              GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: _coinPackages.length,
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 3,
+                  mainAxisSpacing: 10,
+                  crossAxisSpacing: 10,
+                  childAspectRatio: 0.95,
+                ),
+                itemBuilder: (context, idx) {
+                  final pkg = _coinPackages[idx];
+                  final isSelected = _selectedPackageIdx == idx;
+
+                  return GestureDetector(
+                    onTap: () => setState(() => _selectedPackageIdx = idx),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: isSelected ? const Color(0xFF00C9A7) : Colors.black12,
+                          width: isSelected ? 1.5 : 1.0,
                         ),
-                        if (pkg.bonus != null) ...[
-                          const SizedBox(height: 4),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: Colors.pinkAccent.withOpacity(0.2),
-                              borderRadius: BorderRadius.circular(8),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.02),
+                            blurRadius: 4,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Text("🪙", style: TextStyle(fontSize: 22)),
+                          const SizedBox(height: 6),
+                          Text(
+                            "${pkg['coins']}",
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black87,
                             ),
-                            child: Text(
-                              pkg.bonus!,
-                              style: const TextStyle(color: Colors.pinkAccent, fontSize: 10, fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            "${pkg['price']}",
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.deepOrangeAccent,
                             ),
                           ),
                         ],
-                        const SizedBox(height: 8),
-                        Text(
-                          pkg.priceUsd,
-                          style: TextStyle(
-                            color: isSelected ? const Color(0xFFF0B90B) : Colors.white60,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
+                  );
+                },
+              ),
+
+              const SizedBox(height: 28),
+
+              // Confirm Button
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF00C9A7),
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
                   ),
-                );
-              },
-            ),
-            const SizedBox(height: 30),
-            SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFF0B90B),
-                  foregroundColor: Colors.black,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
-                  elevation: 5,
-                ),
-                onPressed: () => _showBinancePaymentSheet(_packages[_selectedPackageIndex]),
-                child: const Text(
-                  "Pay via Binance (USDT)",
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                  onPressed: _processBinancePay,
+                  child: Text(
+                    "Recharge with Binance (${_coinPackages[_selectedPackageIdx]['price']})",
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
+                  ),
                 ),
               ),
-            ),
-          ],
+              const SizedBox(height: 20),
+            ],
+          ),
         ),
       ),
     );
