@@ -22,18 +22,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String _userName = "User Name";
   late String _userId;
   late int _coins;
-  double _points = 23946.56;
+  double _points = 0.00;
 
   // Levels & Badges
-  int _wealthLevel = 17;
-  int _charmLevel = 14;
-  int _hostLevel = 1;
-  bool _isAgency = true;
+  int _wealthLevel = 0;
+  int _charmLevel = 0;
+  int _hostLevel = 0;
+  bool _isAgency = false;
 
   // Social Stats
-  int _followed = 3117;
-  int _following = 519;
-  int _friends = 103;
+  int _followed = 0;
+  int _following = 0;
+  int _friends = 0;
 
   @override
   void initState() {
