@@ -13,7 +13,7 @@ class MainNavigationScreen extends StatefulWidget {
 
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
   int _currentIndex = 0;
-  int _coins = 1250;
+  int _coins = 0;
 
   void _updateCoins(int newCoins) {
     setState(() {
