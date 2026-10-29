@@ -21,7 +21,6 @@ class _StoreScreenState extends State<StoreScreen> {
   static const Color goldColor = Color(0xFFFFD700);
   static const Color emeraldColor = Color(0xFF00E676);
 
-  // ትክክለኛው የዳታ አይነት (Type) እዚህ ተስተካክሏል
   final List> _categories = [
     {"name": "Avatar Frame", "icon": Icons.account_circle_outlined, "color": Colors.amber},
     {"name": "Entry Effect", "icon": Icons.auto_awesome, "color": Colors.purpleAccent},
@@ -101,15 +100,14 @@ class _StoreScreenState extends State<StoreScreen> {
                 const Icon(Icons.monetization_on, color: goldColor, size: 18),
                 const SizedBox(width: 4),
                 Text("$_coins", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-
-],
+              ],
             ),
           ),
-        ],
+
+],
       ),
       body: Column(
         children: [
-          // የምድብ ዝርዝር መምረጫ
           Container(
             height: 60,
             padding: const EdgeInsets.symmetric(vertical: 8),
@@ -151,8 +149,6 @@ class _StoreScreenState extends State<StoreScreen> {
               },
             ),
           ),
-
-          // የዕቃዎች ዝርዝር (Grid)
           Expanded(
             child: GridView.builder(
               padding: const EdgeInsets.all(16),
@@ -190,9 +186,9 @@ class _StoreScreenState extends State<StoreScreen> {
                           backgroundColor: goldColor,
                           foregroundColor: Colors.black,
                           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
 
-shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                        ),
+),
                         onPressed: () => _buyItem(itm),
                         child: Text("🪙 ${itm['price']}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
                       ),
