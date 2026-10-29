@@ -85,6 +85,8 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen>
   bool _isMicMuted = false;
   int? _mySeatIndex;
   late List<String?> _seats;
+  late List<int> _seatGiftsCount; // ለእያንዳንዱ ወንበር የተላከ ሳንቲም/ፖይንት መቁጠሪያ
+
   final List<String> _chatMessages = [
     "System: Please protect your privacy and stay safe.",
     "Announcement: Welcome to VIP Live Party!"
@@ -97,6 +99,7 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen>
 
   SVGAAnimationController? _svgaController;
   bool _isPlayingAnimation = false;
+  String _currentGiftBanner = "";
 
   late AnimationController _pulseController;
   final Set<int> _speakingSeatIndices = {};
@@ -113,6 +116,7 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen>
     _currentCoins = widget.initialCoins;
     _activeSeatCount = widget.seatCount;
     _seats = List.filled(_activeSeatCount, null);
+    _seatGiftsCount = List.filled(_activeSeatCount, 0); // 0 ተደርጎ ይጀምራል
     _myUid = Random().nextInt(899999) + 100000;
     _svgaController = SVGAAnimationController(vsync: this);
 
@@ -133,7 +137,7 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen>
   Future<void> _initVoiceEngine() async {
     await [Permission.microphone].request();
 
-    if (agoraAppId.length > 5) {
+if (agoraAppId.length > 5) {
       try {
         _engine = createAgoraRtcEngine();
         await _engine!.initialize(const RtcEngineContext(
@@ -142,7 +146,7 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen>
           audioScenario: AudioScenarioType.audioScenarioGameStreaming,
         ));
 
-await _engine!.enableAudioVolumeIndication(
+        await _engine!.enableAudioVolumeIndication(
           interval: 200,
           smooth: 3,
           reportVad: true,
@@ -260,7 +264,7 @@ await _engine!.enableAudioVolumeIndication(
     });
   }
 
-  Future<void> _toggleMic() async {
+Future<void> _toggleMic() async {
     setState(() {
       _isMicMuted = !_isMicMuted;
     });
@@ -269,7 +273,7 @@ await _engine!.enableAudioVolumeIndication(
     }
   }
 
-void _toggleRoomVoice() {
+  void _toggleRoomVoice() {
     setState(() {
       _roomSettings.isRoomAudioMuted = !_roomSettings.isRoomAudioMuted;
     });
@@ -366,13 +370,13 @@ void _toggleRoomVoice() {
                     title: Text(u, style: const TextStyle(color: Colors.white)),
                     trailing: ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: isAdmin ? Colors.redAccent : const Color(0xFF00C9A7),
+
+backgroundColor: isAdmin ? Colors.redAccent : const Color(0xFF00C9A7),
                       ),
                       onPressed: () {
                         setState(() {
                           if (isAdmin) {
-
-_roomSettings.admins.remove(u);
+                            _roomSettings.admins.remove(u);
                           } else {
                             _roomSettings.admins.add(u);
                           }
@@ -460,12 +464,12 @@ _roomSettings.admins.remove(u);
               const SizedBox(height: 20),
               SizedBox(
                 width: double.infinity,
-                child: ElevatedButton(
+
+child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFFF3366),
                     padding: const EdgeInsets.symmetric(vertical: 14),
-
-shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
                   ),
                   onPressed: () {
                     if (_currentCoins < selectedAmount) {
@@ -537,20 +541,22 @@ shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
     );
   }
 
-  Future<void> _playGiftAnimation(GiftModel gift) async {
+  Future<void> _playGiftAnimation(GiftModel gift, String bannerText) async {
     if (_svgaController == null) return;
     try {
-      final parser = SVGAParser.shared;
-      final videoItem = await parser.decodeFromURL(gift.svgaUrl);
       setState(() {
         _isPlayingAnimation = true;
+        _currentGiftBanner = bannerText;
       });
+      final parser = SVGAParser.shared;
+      final videoItem = await parser.decodeFromURL(gift.svgaUrl);
       _svgaController!.videoItem = videoItem;
       _svgaController!.reset();
       await _svgaController!.forward();
       if (mounted) {
         setState(() {
           _isPlayingAnimation = false;
+          _currentGiftBanner = "";
         });
       }
     } catch (e) {
@@ -558,12 +564,13 @@ shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       if (mounted) {
         setState(() {
           _isPlayingAnimation = false;
+          _currentGiftBanner = "";
         });
       }
     }
   }
 
-  void _sendGift({required GiftModel gift, required String target}) {
+  void _sendGift({required GiftModel gift, required String target, int? targetSeatIndex}) {
     if (_currentCoins < gift.cost) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Insufficient coins! Please recharge.")),
@@ -573,14 +580,29 @@ shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
 
     setState(() {
       _currentCoins -= gift.cost;
-      _chatMessages.add("Gift sent: ${gift.name} to $target");
+
+// ተቀባዩ ወንበር ላይ ሳንቲሙን/ፖይንቱን ማሳደግ
+      if (targetSeatIndex != null && targetSeatIndex < _seatGiftsCount.length) {
+        _seatGiftsCount[targetSeatIndex] += gift.cost;
+      } else if (target == "All Seats") {
+        for (int i = 0; i < _seatGiftsCount.length; i++) {
+          if (_seats[i] != null) {
+            _seatGiftsCount[i] += gift.cost;
+          }
+        }
+      }
+
+      _chatMessages.add("User_$_myUid sent ${gift.name} ${gift.icon} to $target");
     });
+
     widget.onCoinUpdate(_currentCoins);
     Navigator.pop(context);
-    _playGiftAnimation(gift);
+
+    final banner = "User_$_myUid sent ${gift.name} to $target";
+    _playGiftAnimation(gift, banner);
   }
 
-void _openGiftSheet() {
+  void _openGiftSheet() {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -591,6 +613,7 @@ void _openGiftSheet() {
       builder: (context) {
         GiftModel selectedGift = availableGifts[0];
         String selectedTarget = "All Seats";
+        int? selectedSeatIndex;
 
         return StatefulBuilder(
           builder: (context, setSheetState) {
@@ -615,14 +638,20 @@ void _openGiftSheet() {
                         _targetChip(
                           title: "All Seats",
                           isSelected: selectedTarget == "All Seats",
-                          onTap: () => setSheetState(() => selectedTarget = "All Seats"),
+                          onTap: () => setSheetState(() {
+                            selectedTarget = "All Seats";
+                            selectedSeatIndex = null;
+                          }),
                         ),
                         ...List.generate(_activeSeatCount, (i) {
-                          final seatLabel = "Seat ${i + 1}";
+                          final seatLabel = i == 0 ? "Host (1)" : "Seat ${i + 1}";
                           return _targetChip(
                             title: seatLabel,
                             isSelected: selectedTarget == seatLabel,
-                            onTap: () => setSheetState(() => selectedTarget = seatLabel),
+                            onTap: () => setSheetState(() {
+                              selectedTarget = seatLabel;
+                              selectedSeatIndex = i;
+                            }),
                           );
                         }),
                       ],
@@ -649,7 +678,8 @@ void _openGiftSheet() {
                             });
                           },
                           child: Container(
-                            decoration: BoxDecoration(
+
+decoration: BoxDecoration(
                               color: isSelected
                                   ? const Color(0xFF2A244D)
                                   : const Color(0xFF1E1B38),
@@ -666,8 +696,7 @@ void _openGiftSheet() {
                               children: [
                                 Text(gift.icon, style: const TextStyle(fontSize: 32)),
                                 const SizedBox(height: 6),
-
-Text(
+                                Text(
                                   gift.name,
                                   style: const TextStyle(
                                     color: Colors.white,
@@ -727,7 +756,8 @@ Text(
                                   context,
                                   MaterialPageRoute(
                                     builder: (_) => WalletScreen(
-                                      currentCoins: _currentCoins,
+
+currentCoins: _currentCoins,
                                       onCoinsRecharged: (newCoins) {
                                         setState(() {
                                           _currentCoins = newCoins;
@@ -744,8 +774,7 @@ Text(
                                     horizontal: 8, vertical: 3),
                                 decoration: BoxDecoration(
                                   color: const Color(0xFF2B224F),
-
-borderRadius: BorderRadius.circular(12),
+                                  borderRadius: BorderRadius.circular(12),
                                   border: Border.all(
                                       color: const Color(0xFFFFD700), width: 0.8),
                                 ),
@@ -780,6 +809,7 @@ borderRadius: BorderRadius.circular(12),
                           onPressed: () => _sendGift(
                             gift: selectedGift,
                             target: selectedTarget,
+                            targetSeatIndex: selectedSeatIndex,
                           ),
                           child: const Text(
                             "Send",
@@ -827,7 +857,7 @@ borderRadius: BorderRadius.circular(12),
     );
   }
 
-  @override
+@override
   void dispose() {
     _pulseController.dispose();
     _engine?.leaveChannel();
@@ -839,7 +869,6 @@ borderRadius: BorderRadius.circular(12),
 
   @override
   Widget build(BuildContext context) {
-    // Dynamic Responsive Seat Sizing for up to 30 seats
     final double seatSize = _activeSeatCount > 20 ? 38.0 : 44.0;
     final int crossCount = _activeSeatCount > 20 ? 6 : 5;
 
@@ -851,8 +880,7 @@ borderRadius: BorderRadius.circular(12),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios, color: Colors.white, size: 20),
           onPressed: () => Navigator.pop(context),
-
-),
+        ),
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -916,7 +944,7 @@ borderRadius: BorderRadius.circular(12),
                               crossAxisCount: crossCount,
                               mainAxisSpacing: 10,
                               crossAxisSpacing: 8,
-                              childAspectRatio: 0.85,
+                              childAspectRatio: 0.82,
                             ),
                             itemBuilder: (context, index) {
                               final seatIndex = index + 1;
@@ -924,10 +952,12 @@ borderRadius: BorderRadius.circular(12),
                               final isSpeaking = (_mySeatIndex == seatIndex && !_isMicMuted) ||
                                   _speakingSeatIndices.contains(seatIndex);
                               final isMuted = _mutedSeats.contains(seatIndex) || _roomSettings.isAllMicClosed;
+                              final giftPoints = _seatGiftsCount[seatIndex];
 
                               return GestureDetector(
                                 onTap: () => _handleSeatTap(seatIndex),
-                                child: Column(
+
+child: Column(
                                   children: [
                                     AnimatedBuilder(
                                       animation: _pulseController,
@@ -939,8 +969,7 @@ borderRadius: BorderRadius.circular(12),
                                           decoration: BoxDecoration(
                                             shape: BoxShape.circle,
                                             color: Colors.white.withOpacity(0.12),
-
-border: Border.all(
+                                            border: Border.all(
                                               color: isSpeaking
                                                   ? Colors.cyanAccent
                                                   : Colors.white24,
@@ -979,6 +1008,20 @@ border: Border.all(
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                     ),
+                                    // የተቀበለው ሳንቲም/ፖይንት ባጅ
+                                    if (giftPoints > 0)
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                        decoration: BoxDecoration(
+                                          color: Colors.pink.withOpacity(0.3),
+                                          borderRadius: BorderRadius.circular(6),
+
+),
+                                        child: Text(
+                                          "💖 $giftPoints",
+                                          style: const TextStyle(color: Colors.pinkAccent, fontSize: 8, fontWeight: FontWeight.bold),
+                                        ),
+                                      ),
                                   ],
                                 ),
                               );
@@ -999,15 +1042,14 @@ border: Border.all(
                     itemCount: _chatMessages.length,
                     itemBuilder: (context, index) {
                       final msg = _chatMessages[_chatMessages.length - 1 - index];
-                      final isSystem = msg.startsWith("System:") || msg.startsWith("Announcement:") ||  msg.startsWith("🧧");
+                      final isSystem = msg.startsWith("System:")  msg.startsWith("Announcement:")  msg.startsWith("🧧");
                       return Padding(
                         padding: const EdgeInsets.symmetric(vertical: 2.0),
                         child: Align(
                           alignment: Alignment.centerLeft,
                           child: Container(
                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-
-decoration: BoxDecoration(
+                            decoration: BoxDecoration(
                               color: isSystem ? Colors.purple.withOpacity(0.4) : Colors.black45,
                               borderRadius: BorderRadius.circular(12),
                             ),
@@ -1053,7 +1095,8 @@ decoration: BoxDecoration(
                             decoration: const InputDecoration(
                               hintText: "Say Hello...",
                               hintStyle: TextStyle(color: Colors.white54),
-                              border: InputBorder.none,
+
+border: InputBorder.none,
                             ),
                             onSubmitted: (val) {
                               if (val.trim().isNotEmpty) {
@@ -1084,8 +1127,7 @@ decoration: BoxDecoration(
                                     decoration: BoxDecoration(
                                       color: Colors.white24,
                                       borderRadius: BorderRadius.circular(2),
-
-),
+                                    ),
                                   ),
                                   const SizedBox(height: 16),
                                   const Text(
@@ -1122,7 +1164,8 @@ decoration: BoxDecoration(
                                         ),
                                       );
                                     },
-                                  ),
+
+),
                                   const Divider(color: Colors.white10),
                                   ListTile(
                                     leading: const CircleAvatar(
@@ -1147,8 +1190,7 @@ decoration: BoxDecoration(
                                             widget.onCoinUpdate(newCoins);
                                           },
                                         ),
-
-);
+                                      );
                                     },
                                   ),
                                 ],
@@ -1189,6 +1231,8 @@ decoration: BoxDecoration(
                                           _roomSettings = newSet;
                                           _activeSeatCount = newSet.seatCount;
                                           _seats = List.filled(_activeSeatCount, null);
+
+_seatGiftsCount = List.filled(_activeSeatCount, 0);
                                         });
                                       },
                                     ),
@@ -1205,6 +1249,28 @@ decoration: BoxDecoration(
               ],
             ),
           ),
+          // Banner & SVGA Animation Overlay
+          if (_isPlayingAnimation)
+            Positioned(
+              top: 100,
+              left: 20,
+              right: 20,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFFFF3366), Color(0xFFFFD700)],
+                  ),
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: const [BoxShadow(color: Colors.black45, blurRadius: 10)],
+                ),
+                child: Text(
+                  _currentGiftBanner,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                ),
+              ),
+            ),
           if (_isPlayingAnimation && _svgaController != null)
             Positioned.fill(
               child: IgnorePointer(
@@ -1220,6 +1286,7 @@ decoration: BoxDecoration(
   Widget _buildHostSeat() {
     final isTaken = _seats[0] != null;
     final isSpeaking = (_mySeatIndex == 0 && !_isMicMuted) || _speakingSeatIndices.contains(0);
+    final hostGifts = _seatGiftsCount[0];
 
     return GestureDetector(
       onTap: () => _handleSeatTap(0),
@@ -1240,8 +1307,7 @@ decoration: BoxDecoration(
                           ? Colors.cyanAccent.withOpacity(0.5)
                           : const Color(0xFF6C5CE7).withOpacity(0.4),
                       const Color(0xFF141226).withOpacity(0.85),
-
-],
+                    ],
                   ),
                   border: Border.all(
                     color: isSpeaking ? Colors.cyanAccent : const Color(0xFFFFD700),
@@ -1271,9 +1337,22 @@ decoration: BoxDecoration(
             style: const TextStyle(
               color: Color(0xFFFFD700),
               fontSize: 12,
-              fontWeight: FontWeight.bold,
+
+fontWeight: FontWeight.bold,
             ),
           ),
+          if (hostGifts > 0)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+              decoration: BoxDecoration(
+                color: Colors.pink.withOpacity(0.3),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text(
+                "💖 $hostGifts",
+                style: const TextStyle(color: Colors.pinkAccent, fontSize: 9, fontWeight: FontWeight.bold),
+              ),
+            ),
         ],
       ),
     );
