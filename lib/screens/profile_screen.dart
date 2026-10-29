@@ -16,12 +16,12 @@ import 'settings_screen.dart';
 import '../widgets/lucky_island_dialog.dart';
 
 class ProfileScreen extends StatefulWidget {
-  final int initialCoins;
+  final int currentCoins;
   final Function(int)? onCoinsUpdated;
 
   const ProfileScreen({
     super.key,
-    this.initialCoins = 0,
+    this.currentCoins = 0,
     this.onCoinsUpdated,
   });
 
@@ -42,7 +42,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   void initState() {
     super.initState();
-    _coins = widget.initialCoins;
+    _coins = widget.currentCoins;
   }
 
   void _updateCoins(int newAmount) {
@@ -84,7 +84,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           IconButton(
             icon: const Icon(Icons.settings_outlined, color: Colors.white70),
             onPressed: () {
-              Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen()));
+              Navigator.push(context, MaterialPageRoute(builder: (_) => SettingsScreen()));
             },
           ),
         ],
@@ -103,7 +103,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
               child: Row(
                 children: [
-                  // ባዶ የፕሮፋይል ቦታ
                   Container(
                     width: 60,
                     height: 60,
@@ -123,11 +122,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       children: [
                         Text(
                           _userName,
+                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
 
-style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
-                        ),
+),
                         const SizedBox(height: 6),
-                        // ቋሚ ID 1000 እና መቅጃው
                         GestureDetector(
                           onTap: _copyId,
                           child: Row(
@@ -205,8 +203,7 @@ style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.
                       foregroundColor: Colors.black,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-
-elevation: 0,
+                      elevation: 0,
                     ),
                     onPressed: () {
                       Navigator.push(context, MaterialPageRoute(builder: (_) => const CoinSellerScreen()));
@@ -217,7 +214,7 @@ elevation: 0,
               ),
             ),
 
-            const SizedBox(height: 16),
+const SizedBox(height: 16),
 
             // 3. Entertainment & Assets (Store, Backpack, Invitation, Lucky Island)
             _buildSectionCard(
@@ -281,7 +278,7 @@ elevation: 0,
                   Navigator.push(context, MaterialPageRoute(builder: (_) => const CoinSellerScreen()));
                 }),
                 _buildGridItem(Icons.settings_suggest_outlined, "Settings", emeraldColor, () {
-                  Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen()));
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => SettingsScreen()));
                 }),
               ],
             ),
@@ -294,8 +291,7 @@ elevation: 0,
   }
 
   Widget _buildSectionCard(String title, List<Widget> items) {
-
-return Container(
+    return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
       decoration: BoxDecoration(
         color: const Color(0xFF1E1B2E),
@@ -306,7 +302,8 @@ return Container(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: const EdgeInsets.only(left: 6, bottom: 12),
+
+padding: const EdgeInsets.only(left: 6, bottom: 12),
             child: Text(
               title,
               style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white54),
