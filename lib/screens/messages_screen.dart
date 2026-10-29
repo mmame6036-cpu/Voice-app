@@ -7,157 +7,154 @@ class MessagesScreen extends StatefulWidget {
   State<MessagesScreen> createState() => _MessagesScreenState();
 }
 
-class _MessagesScreenState extends State<MessagesScreen> with SingleTickerProviderStateMixin {
-  late TabController _tabController;
-
-  final List<Map<String, dynamic>> _chats = [
+class _MessagesScreenState extends State<MessagesScreen> {
+  final List<Map<String, dynamic>> _systemNotices = [
     {
-      "name": "Amina",
-      "avatar": "👩",
-      "lastMsg": "በክፍሉ ውስጥ ተገናኝተን እናውራ!",
-      "time": "10:45 AM",
-      "unread": 2,
-      "online": true,
+      "title": "Official Announcement",
+      "subtitle": "Welcome to VIP Voice App! Protect your account.",
+      "time": "Just now",
+      "icon": Icons.campaign,
+      "color": Colors.orangeAccent,
     },
     {
-      "name": "Yonas (VIP)",
-      "avatar": "🧔",
-      "lastMsg": "ስጦታውን ልኬልሃለሁ ተመልከተው 🎁",
-      "time": "ትናንት",
-      "unread": 0,
-      "online": false,
-    },
-    {
-      "name": "Selam",
-      "avatar": "🧕",
-      "lastMsg": "ወደ ጢስ አባይ ክፍል እየመጣሁ ነው 🌊",
-      "time": "ትናንት",
-      "unread": 1,
-      "online": true,
+      "title": "Wallet & Rewards",
+      "subtitle": "Recharge bonuses and daily free coins are active.",
+      "time": "10:30 AM",
+      "icon": Icons.monetization_on,
+      "color": const Color(0xFFFFD700),
     },
   ];
 
-  @override
-  void initState() {
-    super.initState();
-    _tabController = TabController(length: 3, vsync: this);
-  }
+  final List<Map<String, dynamic>> _chats = [
+    {
+      "name": "Customer Support",
+      "lastMessage": "Hello! How can we assist you today?",
+      "time": "Yesterday",
+      "unread": 1,
+      "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200&auto=format&fit=crop",
+    },
+    {
+      "name": "Agency Manager",
+      "lastMessage": "Your daily hosting target is active. Keep it up!",
+      "time": "2 days ago",
+      "unread": 0,
+      "avatar": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=200&auto=format&fit=crop",
+    },
+  ];
 
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
+  void _openChatRoom(String name) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => PrivateChatScreen(userName: name),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0F0F1E),
+      backgroundColor: const Color(0xFFF7FBFB),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF16162A),
-        elevation: 0,
+        backgroundColor: Colors.white,
+        elevation: 0.5,
         title: const Text(
           "Messages",
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: Colors.white),
+          style: TextStyle(color: Colors.black, fontSize: 18, fontWeight: FontWeight.bold),
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.done_all, color: Color(0xFFFFD700)),
-            tooltip: "ሁሉንም እንደተነበበ አድርግ",
+            icon: const Icon(Icons.done_all, color: Colors.black54),
+            tooltip: "Mark all as read",
             onPressed: () {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text("ሁሉም መልዕክቶች እንደተነበቡ ተደርገዋል")),
+                const SnackBar(content: Text("All messages marked as read")),
               );
             },
           ),
         ],
-        bottom: TabBar(
-          controller: _tabController,
-          indicatorColor: const Color(0xFFFFD700),
-          labelColor: const Color(0xFFFFD700),
-          unselectedLabelColor: Colors.white60,
-          tabs: const [
-            Tab(text: "Chats"),
-            Tab(text: "System"),
-            Tab(text: "Invites"),
-          ],
-        ),
       ),
-      body: TabBarView(
-        controller: _tabController,
+      body: ListView(
         children: [
-          // 1. የግል ቻቶች (Chats List)
-          _buildChatList(),
-
-          // 2. የሲስተም ማሳወቂያዎች (System Notices)
-          _buildSystemNotices(),
-
-          // 3. የክፍል ጥሪዎች (Party Invites)
-          _buildInvitesList(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildChatList() {
-    return Column(
-      children: [
-        // የፍለጋ ሳጥን (Search Bar)
-        Padding(
-          padding: const EdgeInsets.all(12.0),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            decoration: BoxDecoration(
-              color: const Color(0xFF1E1B38),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: const TextField(
-              style: TextStyle(color: Colors.white),
-              decoration: InputDecoration(
-                hintText: "መልዕክት ወይም ጓደኛ ፈልግ...",
-                hintStyle: TextStyle(color: Colors.white38, fontSize: 13),
-                icon: Icon(Icons.search, color: Colors.white38, size: 20),
-                border: InputBorder.none,
-              ),
+          const SizedBox(height: 12),
+          // Quick Notice Badges (System, Activity, Interactions)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _quickAction(Icons.notifications_active, "Notice", Colors.blueAccent),
+                _quickAction(Icons.favorite, "Interaction", Colors.pinkAccent),
+                _quickAction(Icons.person_add, "Followers", const Color(0xFF00C9A7)),
+              ],
             ),
           ),
-        ),
+          const SizedBox(height: 16),
+          const Divider(height: 1),
 
-        // የቻቶች ዝርዝር (Chat List)
-        Expanded(
-          child: ListView.separated(
-            itemCount: _chats.length,
-            separatorBuilder: (_, __) => const Divider(color: Colors.white10, height: 1),
-            itemBuilder: (context, index) {
-              final chat = _chats[index];
-              return ListTile(
+          // System Notices
+          ..._systemNotices.map((notice) => ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: (notice["color"] as Color).withOpacity(0.15),
+                  child: Icon(notice["icon"] as IconData, color: notice["color"] as Color),
+                ),
+                title: Text(
+                  notice["title"],
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                ),
+                subtitle: Text(
+                  notice["subtitle"],
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 12, color: Colors.black54),
+                ),
+                trailing: Text(
+                  notice["time"],
+                  style: const TextStyle(fontSize: 11, color: Colors.black38),
+
+),
                 onTap: () {
-                  Navigator.push(
-                    context,
-
-MaterialPageRoute(
-                      builder: (_) => ChatConversationScreen(userName: chat["name"]),
+                  showDialog(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      title: Text(notice["title"]),
+                      content: Text(notice["subtitle"]),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx),
+                          child: const Text("OK"),
+                        )
+                      ],
                     ),
                   );
                 },
+              )),
+
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Text(
+              "Recent Chats",
+              style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black45, fontSize: 12),
+            ),
+          ),
+
+          // User Chats
+          ..._chats.map((chat) => ListTile(
                 leading: Stack(
                   children: [
                     CircleAvatar(
-                      radius: 24,
-                      backgroundColor: const Color(0xFF23233E),
-                      child: Text(chat["avatar"], style: const TextStyle(fontSize: 22)),
+                      backgroundImage: NetworkImage(chat["avatar"]),
                     ),
-                    if (chat["online"])
+                    if (chat["unread"] > 0)
                       Positioned(
                         right: 0,
-                        bottom: 0,
+                        top: 0,
                         child: Container(
-                          width: 12,
-                          height: 12,
-                          decoration: BoxDecoration(
-                            color: Colors.greenAccent,
+                          width: 10,
+                          height: 10,
+                          decoration: const BoxDecoration(
+                            color: Colors.redAccent,
                             shape: BoxShape.circle,
-                            border: Border.all(color: const Color(0xFF0F0F1E), width: 2),
                           ),
                         ),
                       ),
@@ -165,174 +162,87 @@ MaterialPageRoute(
                 ),
                 title: Text(
                   chat["name"],
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                 ),
                 subtitle: Text(
-                  chat["lastMsg"],
+                  chat["lastMessage"],
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: Colors.white60, fontSize: 13),
+                  style: const TextStyle(fontSize: 12, color: Colors.black54),
                 ),
-                trailing: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(chat["time"], style: const TextStyle(color: Colors.white38, fontSize: 11)),
-                    const SizedBox(height: 4),
-                    if (chat["unread"] > 0)
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFFD700),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Text(
-                          "${chat['unread']}",
-                          style: const TextStyle(color: Colors.black, fontSize: 10, fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                  ],
+                trailing: Text(
+                  chat["time"],
+                  style: const TextStyle(fontSize: 11, color: Colors.black38),
                 ),
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildSystemNotices() {
-    return ListView(
-      padding: const EdgeInsets.all(12),
-      children: [
-        _systemCard(
-          title: "የአካውንት ደህንነት ማስታወቂያ",
-          desc: "እንኳን ወደ 3D Voice Party በደህና መጡ! የአካውንቶን መረጃ ለማንም አያጋሩ።",
-          time: "ዛሬ",
-          icon: Icons.security,
-        ),
-        _systemCard(
-          title: "የኮይን ስጦታ ተበርክቶሎታል!",
-          desc: "የመጀመሪያ መግቢያህን በማክበር 1,250 ነፃ ኮይኖች ተሸልመሃል።",
-          time: "ትናንት",
-          icon: Icons.monetization_on,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildInvitesList() {
-    return ListView(
-      padding: const EdgeInsets.all(12),
-      children: [
-        Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: const Color(0xFF1E1B38),
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: Row(
-            children: [
-              const CircleAvatar(
-                backgroundColor: Color(0xFFFFD700),
-                child: Icon(Icons.spatial_audio, color: Colors.black),
-              ),
-              const SizedBox(width: 12),
-              const Expanded(
-                child: Column(
-
-crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text("Kedir Umer ጠርቶዎታል", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                    Text("ክፍል: Abay Falls 3D Lounge 🌊", style: TextStyle(color: Colors.white60, fontSize: 12)),
-                  ],
-                ),
-              ),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFFFD700),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-                onPressed: () {},
-                child: const Text("ግባ", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _systemCard({required String title, required String desc, required String time, required IconData icon}) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1E1B38),
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          CircleAvatar(
-            backgroundColor: Colors.blueAccent.withOpacity(0.2),
-            child: Icon(icon, color: Colors.blueAccent),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
-                const SizedBox(height: 4),
-                Text(desc, style: const TextStyle(color: Colors.white60, fontSize: 12)),
-                const SizedBox(height: 6),
-                Text(time, style: const TextStyle(color: Colors.white38, fontSize: 10)),
-              ],
-            ),
-          ),
+                onTap: () => _openChatRoom(chat["name"]),
+              )),
         ],
       ),
     );
   }
+
+  Widget _quickAction(IconData icon, String label, Color color) {
+    return Column(
+      children: [
+        Container(
+          width: 52,
+          height: 52,
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.12),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(icon, color: color, size: 24),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          label,
+          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.black87),
+        ),
+      ],
+    );
+  }
 }
 
-// ==================== የቀጥታ የግል ውይይት ገጽ (CHAT ROOM) ====================
-class ChatConversationScreen extends StatefulWidget {
+// 1-on-1 Chat Screen
+class PrivateChatScreen extends StatefulWidget {
   final String userName;
-  const ChatConversationScreen({super.key, required this.userName});
+
+  const PrivateChatScreen({super.key, required this.userName});
 
   @override
-  State<ChatConversationScreen> createState() => _ChatConversationScreenState();
+  State<PrivateChatScreen> createState() => _PrivateChatScreenState();
 }
 
-class _ChatConversationScreenState extends State<ChatConversationScreen> {
-  final TextEditingController _textController = TextEditingController();
-  final List<Map<String, dynamic>> _messages = [
-    {"sender": "them", "text": "ሰላም ከድር እንዴት ነህ?"},
-    {"sender": "me", "text": "አለውልህ! አዲሱ 3D ድምፅ አፕ ተመችቶሃል?"},
-    {"sender": "them", "text": "በጣም አሪፍ ነው፤ የአባይ ፏፏቴ ዳራውም ያምራል!"},
-  ];
+class _PrivateChatScreenState extends State<PrivateChatScreen> {
+  final List<String> _messages = ["Hello! Welcome to private chat."];
+  final TextEditingController _controller = TextEditingController();
 
-  void _sendMessage() {
-    if (_textController.text.trim().isNotEmpty) {
+  void _send() {
+    final txt = _controller.text.trim();
+    if (txt.isNotEmpty) {
       setState(() {
-        _messages.add({
-          "sender": "me",
-          "text": _textController.text.trim(),
-        });
+        _messages.add(txt);
       });
-      _textController.clear();
+      _controller.clear();
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0F0F1E),
+      backgroundColor: const Color(0xFFF7FBFB),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF16162A),
-        title: Text(widget.userName, style: const TextStyle(color: Colors.white, fontSize: 17)),
+        backgroundColor: Colors.white,
+        elevation: 0.5,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios, color: Colors.black, size: 20),
+
+onPressed: () => Navigator.pop(context),
+        ),
+        title: Text(
+          widget.userName,
+          style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 16),
+        ),
       ),
       body: Column(
         children: [
@@ -340,22 +250,22 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
             child: ListView.builder(
               padding: const EdgeInsets.all(16),
               itemCount: _messages.length,
-              itemBuilder: (context, index) {
-                final isMe = _messages[index]["sender"] == "me";
+              itemBuilder: (context, idx) {
+                final isMe = idx > 0;
                 return Align(
                   alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
                   child: Container(
-                    margin: const EdgeInsets.only(bottom: 10),
-
-padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    margin: const EdgeInsets.symmetric(vertical: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                     decoration: BoxDecoration(
-                      color: isMe ? const Color(0xFFFFD700) : const Color(0xFF1E1B38),
+                      color: isMe ? const Color(0xFF00C9A7) : Colors.white,
                       borderRadius: BorderRadius.circular(16),
+                      boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 2)],
                     ),
                     child: Text(
-                      _messages[index]["text"],
+                      _messages[idx],
                       style: TextStyle(
-                        color: isMe ? Colors.black : Colors.white,
+                        color: isMe ? Colors.white : Colors.black87,
                         fontSize: 14,
                       ),
                     ),
@@ -366,33 +276,35 @@ padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           ),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            color: const Color(0xFF16162A),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF23233E),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: TextField(
-                      controller: _textController,
-                      style: const TextStyle(color: Colors.white),
-                      decoration: const InputDecoration(
-                        hintText: "መልዕክት ፃፍ...",
-                        hintStyle: TextStyle(color: Colors.white38),
-                        border: InputBorder.none,
+            color: Colors.white,
+            child: SafeArea(
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF0F3F4),
+                        borderRadius: BorderRadius.circular(20),
                       ),
-                      onSubmitted: (_) => _sendMessage(),
+                      child: TextField(
+                        controller: _controller,
+                        decoration: const InputDecoration(
+                          hintText: "Type a message...",
+                          border: InputBorder.none,
+                          isDense: true,
+                        ),
+                        onSubmitted: (_) => _send(),
+                      ),
                     ),
                   ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.send, color: Color(0xFFFFD700)),
-                  onPressed: _sendMessage,
-                ),
-              ],
+                  const SizedBox(width: 8),
+                  IconButton(
+                    icon: const Icon(Icons.send, color: Color(0xFF00C9A7)),
+                    onPressed: _send,
+                  ),
+                ],
+              ),
             ),
           ),
         ],
