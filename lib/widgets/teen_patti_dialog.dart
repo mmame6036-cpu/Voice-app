@@ -1,4 +1,4 @@
-import 'dart:async';
+oimport 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 
@@ -110,7 +110,7 @@ class _TeenPattiDialogState extends State<TeenPattiDialog> {
     bool isFlush = hand[0].suit == hand[1].suit && hand[1].suit == hand[2].suit;
     bool isTrio = hand[0].value == hand[1].value && hand[1].value == hand[2].value;
     bool isStraight = (hand[0].value - hand[1].value == 1) && (hand[1].value - hand[2].value == 1);
-    bool isPair = hand[0].value == hand[1].value  hand[1].value == hand[2].value  hand[0].value == hand[2].value;
+    bool isPair = hand[0].value == hand[1].value || hand[1].value == hand[2].value || hand[0].value == hand[2].value;
 
     if (isTrio) return 60000 + hand[0].value;
     if (isFlush && isStraight) return 50000 + hand[0].value;
