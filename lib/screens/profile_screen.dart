@@ -2,7 +2,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'wallet_screen.dart';
-import 'profile_sub_screen.dart
+import 'profile_sub_screens.dart';
 
 class ProfileScreen extends StatefulWidget {
   final int currentCoins;
@@ -19,7 +19,7 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  // Dynamic User State (Can be edited by user)
+  // Dynamic User State
   String _userName = "User Name";
   late String _userId;
   late int _coins;
@@ -199,6 +199,35 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  void _openStore() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => StoreScreen(
+          userCoins: _coins,
+          onCoinsDeducted: (newCoins) {
+            setState(() => _coins = newCoins);
+            widget.onCoinsUpdated(newCoins);
+          },
+        ),
+      ),
+    );
+  }
+
+  void _openBackpack() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const BackpackScreen()),
+    );
+  }
+
+  void _openHostCenter() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => HostCenterScreen(currentPoints: _points)),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -227,7 +256,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
             const SizedBox(height: 16),
 
-            // 8 Main Action Icons (Recharge, Store, Invitation, Backpack, Lucky Island, Level, Task, Badge)
+            // 8 Main Action Icons
             _buildFirstGrid(),
 
             const SizedBox(height: 16),
@@ -237,7 +266,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
             const SizedBox(height: 16),
 
-            // Second Grid (Host Center, Agency, Coin Seller, Support, About, Setting, Network Line)
+// Second Grid
             _buildSecondGrid(),
 
             const SizedBox(height: 32),
@@ -249,8 +278,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Widget _buildHeader() {
     return Padding(
-
-padding: const EdgeInsets.symmetric(horizontal: 16.0),
+      padding: const EdgeInsets.symmetric(horizontal: 16.0),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
@@ -354,7 +382,7 @@ padding: const EdgeInsets.symmetric(horizontal: 16.0),
     );
   }
 
-  Widget _buildSocialCounters() {
+Widget _buildSocialCounters() {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: [
@@ -367,7 +395,7 @@ padding: const EdgeInsets.symmetric(horizontal: 16.0),
     );
   }
 
-Widget _statColumn(String count, String label) {
+  Widget _statColumn(String count, String label) {
     return Column(
       children: [
         Text(
@@ -468,7 +496,8 @@ Widget _statColumn(String count, String label) {
                   ),
                 ],
               ),
-            ),
+
+),
           ),
           const SizedBox(width: 12),
           // Points
@@ -478,8 +507,7 @@ Widget _statColumn(String count, String label) {
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(14),
-
-boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 4)],
+                boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 4)],
               ),
               child: Row(
                 children: [
@@ -511,9 +539,9 @@ boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 4)],
   Widget _buildFirstGrid() {
     final items = [
       {"icon": "💳", "name": "Recharge", "action": _openRecharge},
-      {"icon": "🏪", "name": "Store", "action": () => _showFeatureDetail("Store", "Purchase luxury avatar frames, mounts, and speech bubbles.")},
+      {"icon": "🏪", "name": "Store", "action": _openStore},
       {"icon": "💌", "name": "Invitation", "action": () => _showFeatureDetail("Invitation", "Invite friends to get referral bonus coins.")},
-      {"icon": "🎒", "name": "Backpack", "action": () => _showFeatureDetail("Backpack", "Your active avatar items and inventory.")},
+      {"icon": "🎒", "name": "Backpack", "action": _openBackpack},
       {"icon": "🏝️", "name": "Lucky Island", "action": () => _showFeatureDetail("Lucky Island", "Mini games, lucky draw, and treasure hunt.")},
       {"icon": "⭐", "name": "Level", "action": () => _showFeatureDetail("Level", "Your wealth, charm, and broadcaster levels.")},
       {"icon": "📋", "name": "Task", "action": () => _showFeatureDetail("Task", "Complete daily active missions for coin rewards.")},
@@ -567,13 +595,13 @@ boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 4)],
         borderRadius: BorderRadius.circular(16),
         gradient: const LinearGradient(
           colors: [Color(0xFFFF3366), Color(0xFFFF5E36)],
-        ),
+
+),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
-
-children: [
+        children: [
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisAlignment: MainAxisAlignment.center,
@@ -604,7 +632,7 @@ children: [
 
   Widget _buildSecondGrid() {
     final items = [
-      {"icon": "🎙️", "name": "Host Center", "action": () => _showFeatureDetail("Host Center", "Broadcast duration, target diamond settlements, and stats.")},
+      {"icon": "🎙️", "name": "Host Center", "action": _openHostCenter},
       {"icon": "💼", "name": "Agency", "action": _openAgencyDialog},
       {"icon": "💵", "name": "Coin Seller", "action": () => _showFeatureDetail("Coin Seller", "Official reseller portal and distributor coins.")},
       {"icon": "🎧", "name": "Support", "action": () => _showFeatureDetail("Customer Support", "24/7 Live support and ticket center.")},
