@@ -2,27 +2,28 @@ import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 class AgoraService {
-  static const String appId = "YOUR_AGORA_APP_ID";
+  static const String appId = "21091aff01114a66b580ce15b0f1b642";
+  static const String token = "";
 
-  late RtcEngine _engine;
-  bool _isInitialized = false;
+  RtcEngine? _engine;
+  bool _isReady = false;
 
-  Future<void> initAgora({
+  Future<void> initEngine({
     required Function(int uid) onUserJoined,
     required Function(int uid) onUserOffline,
-    required Function(bool isMuted) onMicrophoneChanged,
   }) async {
-    if (_isInitialized) return;
+    if (_isReady) return;
 
     await [Permission.microphone].request();
 
     _engine = createAgoraRtcEngine();
-    await _engine.initialize(const RtcEngineContext(
+    await _engine!.initialize(const RtcEngineContext(
       appId: appId,
       channelProfile: ChannelProfileType.channelProfileLiveBroadcasting,
+      audioScenario: AudioScenarioType.audioScenarioGameStreaming,
     ));
 
-    _engine.registerEventHandler(
+    _engine!.registerEventHandler(
       RtcEngineEventHandler(
         onJoinChannelSuccess: (RtcConnection connection, int elapsed) {},
         onUserJoined: (RtcConnection connection, int remoteUid, int elapsed) {
@@ -34,69 +35,78 @@ class AgoraService {
       ),
     );
 
-    await _engine.enableAudio();
-    await _engine.setAudioProfile(
+    await _engine!.enableAudio();
+    await _engine!.setAudioProfile(
       profile: AudioProfileType.audioProfileMusicStandard,
       scenario: AudioScenarioType.audioScenarioGameStreaming,
     );
 
-    _isInitialized = true;
+    _isReady = true;
   }
 
-  Future<void> joinVoiceRoom({
+  Future<void> joinRoom({
     required String channelId,
     required int uid,
-    required bool isBroadcaster,
+    required bool isSpeaker,
   }) async {
-    if (!_isInitialized) return;
+    if (!_isReady || _engine == null) return;
 
-    await _engine.setClientRole(
-      role: isBroadcaster 
-          ? ClientRoleType.clientRoleBroadcaster 
+    await _engine!.setClientRole(
+      role: isSpeaker
+          ? ClientRoleType.clientRoleBroadcaster
           : ClientRoleType.clientRoleAudience,
     );
 
-    await _engine.joinChannel(
-      token: "",
+    await _engine!.joinChannel(
+      token: token,
       channelId: channelId,
       uid: uid,
-      options: const ChannelMediaOptions(
+      options: ChannelMediaOptions(
+        clientRoleType: isSpeaker
+            ? ClientRoleType.clientRoleBroadcaster
+            : ClientRoleType.clientRoleAudience,
         autoSubscribeAudio: true,
-        publishMicrophoneTrack: true,
-        clientRoleType: ClientRoleType.clientRoleAudience,
+        publishMicrophoneTrack: isSpeaker,
       ),
     );
   }
 
-  Future<void> updateRole({required bool isBroadcaster}) async {
-    if (!_isInitialized) return;
-    await _engine.setClientRole(
-      role: isBroadcaster 
-          ? ClientRoleType.clientRoleBroadcaster 
+  Future<void> switchRole({required bool isSpeaker}) async {
+    if (!_isReady || _engine == null) return;
+
+    await _engine!.setClientRole(
+      role: isSpeaker
+          ? ClientRoleType.clientRoleBroadcaster
           : ClientRoleType.clientRoleAudience,
     );
-    if (!isBroadcaster) {
-      await _engine.muteLocalAudioStream(true);
+
+    await _engine!.updateChannelMediaOptions(
+      ChannelMediaOptions(
+        clientRoleType: isSpeaker
+            ? ClientRoleType.clientRoleBroadcaster
+            : ClientRoleType.clientRoleAudience,
+        publishMicrophoneTrack: isSpeaker,
+        autoSubscribeAudio: true,
+      ),
+    );
+
+    if (!isSpeaker) {
+      await _engine!.muteLocalAudioStream(true);
     } else {
-      await _engine.muteLocalAudioStream(false);
+      await _engine!.muteLocalAudioStream(false);
     }
   }
 
-  Future<void> toggleMute(bool isMuted) async {
-    if (!_isInitialized) return;
-    await _engine.muteLocalAudioStream(isMuted);
+  Future<void> setMicrophoneMute(bool isMuted) async {
+    if (!_isReady || _engine == null) return;
+    await _engine!.muteLocalAudioStream(isMuted);
   }
 
   Future<void> leaveRoom() async {
-    if (!_isInitialized) return;
-    await _engine.leaveChannel();
-  }
-
-  Future<void> dispose() async {
-    if (_isInitialized) {
-      await _engine.leaveChannel();
-      await _engine.release();
-      _isInitialized = false;
+    if (_engine != null && _isReady) {
+      await _engine!.leaveChannel();
+      await _engine!.release();
+      _isReady = false;
     }
   }
 }
