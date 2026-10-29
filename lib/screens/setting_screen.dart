@@ -1,288 +1,246 @@
 import 'package:flutter/material.dart';
 
-class SupportScreen extends StatefulWidget {
-  const SupportScreen({super.key});
+class SettingsScreen extends StatefulWidget {
+  const SettingsScreen({super.key});
 
   @override
-  State<SupportScreen> createState() => _SupportScreenState();
+  State<SettingsScreen> createState() => _SettingsScreenState();
 }
 
-class _SupportScreenState extends State<SupportScreen> {
-  // የተመረጠው የችግር አይነት
-  int _selectedCategoryIndex = 0;
-  final List<String> _issueCategories = [
-    "Recharge Issue",
-    "Account / Security",
-    "Room & Voice",
-    "Report User",
-    "Other Feedback",
-  ];
+class _SettingsScreenState extends State<SettingsScreen> {
+  bool _pushNotifications = true;
+  bool _roomSounds = true;
+
+  static const Color goldColor = Color(0xFFFFD700);
+  static const Color emeraldColor = Color(0xFF00E676);
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
+      backgroundColor: const Color(0xFF0F0E17),
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0.5,
+        backgroundColor: const Color(0xFF171524),
+        elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: Colors.black87, size: 20),
+          icon: const Icon(Icons.arrow_back_ios, color: Colors.white, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
-          "Customer Service & Help",
+          "Settings",
           style: TextStyle(
-            color: Colors.black87,
-            fontSize: 17,
+            color: Colors.white,
+            fontSize: 18,
             fontWeight: FontWeight.bold,
           ),
         ),
         centerTitle: true,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.history, color: Colors.black54),
-            onPressed: () {},
-          ),
-        ],
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 1. የቀጥታ ቻት ባነር (Live Support Banner)
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF00C9A7), Color(0xFF00BFA5)],
+            // 1. የመለያ እና ደህንነት ማስተካከያ (Account & Security)
+            _buildSectionHeader("Account & Security"),
+            _buildSettingsContainer([
+              _buildListTile(
+                icon: Icons.phone_android,
+                iconColor: emeraldColor,
+                title: "Bind Phone Number",
+                subtitle: "Protect your account",
+                trailingText: "Not Linked",
+                onTap: () {},
+              ),
+              const Divider(height: 1, indent: 52, color: Colors.white10),
+              _buildListTile(
+                icon: Icons.lock_outline,
+                iconColor: goldColor,
+                title: "Login Password",
+                subtitle: "Set account password",
+                trailingText: "",
+                onTap: () {},
+              ),
+              const Divider(height: 1, indent: 52, color: Colors.white10),
+              _buildListTile(
+                icon: Icons.security,
+                iconColor: emeraldColor,
+                title: "Payment Password",
+                subtitle: "Protect coin transactions",
+                trailingText: "Set",
+                onTap: () {},
+              ),
+              const Divider(height: 1, indent: 52, color: Colors.white10),
+              _buildListTile(
+                icon: Icons.block,
+                iconColor: Colors.redAccent,
+                title: "Blacklist",
+                subtitle: "Manage blocked users",
+                trailingText: "",
+                onTap: () {},
+              ),
+            ]),
+
+            const SizedBox(height: 20),
+
+            // 2. የማሳወቂያ እና ድምፅ ቅንብሮች (Notifications & Sounds)
+            _buildSectionHeader("Notifications & Audio"),
+            _buildSettingsContainer([
+              SwitchListTile(
+                secondary: Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: goldColor.withOpacity(0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.notifications_none, color: goldColor, size: 20),
                 ),
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFF00C9A7).withOpacity(0.3),
-                    blurRadius: 8,
-                    offset: const Offset(0, 3),
+                title: const Text(
+                  "Push Notifications",
+                  style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w500),
+                ),
+                subtitle: const Text(
+                  "Messages, room invites and gifts",
+                  style: TextStyle(color: Colors.white38, fontSize: 11),
+                ),
+                activeColor: emeraldColor,
+
+value: _pushNotifications,
+                onChanged: (val) => setState(() => _pushNotifications = val),
+              ),
+              const Divider(height: 1, indent: 52, color: Colors.white10),
+              SwitchListTile(
+                secondary: Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: emeraldColor.withOpacity(0.12),
+                    shape: BoxShape.circle,
                   ),
-                ],
+                  child: const Icon(Icons.volume_up_outlined, color: emeraldColor, size: 20),
+                ),
+                title: const Text(
+                  "Room Sound Effects",
+                  style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w500),
+                ),
+                subtitle: const Text(
+                  "In-room gift and game sounds",
+                  style: TextStyle(color: Colors.white38, fontSize: 11),
+                ),
+                activeColor: emeraldColor,
+                value: _roomSounds,
+                onChanged: (val) => setState(() => _roomSounds = val),
               ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 50,
-                    height: 50,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.support_agent, color: Colors.white, size: 30),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: const [
-                        Text(
-                          "Online Support 24/7",
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 15,
-                          ),
-                        ),
-                        SizedBox(height: 4),
-                        Text(
-                          "Instant chat with official customer service",
-                          style: TextStyle(color: Colors.white70, fontSize: 11),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: const Text(
-                      "Chat Now",
-                      style: TextStyle(
-                        color: Color(0xFF00C9A7),
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            ]),
 
-            const SizedBox(height: 24),
+            const SizedBox(height: 20),
 
-// 2. ተደጋግመው የሚጠየቁ ጥያቄዎች (FAQ Section)
-            const Text(
-              "Frequently Asked Questions",
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.bold,
-                color: Colors.black87,
+            // 3. አጠቃላይ የአፑ ሁኔታ (General)
+            _buildSectionHeader("General"),
+            _buildSettingsContainer([
+              _buildListTile(
+                icon: Icons.language,
+                iconColor: emeraldColor,
+                title: "Language",
+                subtitle: "App display language",
+                trailingText: "English",
+                onTap: () {},
               ),
-            ),
-            const SizedBox(height: 10),
-            Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: Colors.black12),
-              ),
-              child: Column(
-                children: [
-                  _buildFaqItem("Recharge delayed? How to recover coins?"),
-                  const Divider(height: 1, color: Colors.black12),
-                  _buildFaqItem("How to become an official host or agent?"),
-                  const Divider(height: 1, color: Colors.black12),
-                  _buildFaqItem("Voice stutter or microphone permissions guide"),
-                  const Divider(height: 1, color: Colors.black12),
-                  _buildFaqItem("Community safety and rules violation policy"),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 24),
-
-            // 3. የቅሬታ ማቅረቢያ ቅጽ (Feedback Ticket Form)
-            const Text(
-              "Submit a Ticket / Report",
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.bold,
-                color: Colors.black87,
-              ),
-            ),
-            const SizedBox(height: 10),
-
-            // የምድብ መምረጫ
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: List.generate(_issueCategories.length, (idx) {
-                  final isSelected = _selectedCategoryIndex == idx;
-                  return GestureDetector(
-                    onTap: () => setState(() => _selectedCategoryIndex = idx),
-                    child: Container(
-                      margin: const EdgeInsets.only(right: 8),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: isSelected ? const Color(0xFF00C9A7) : Colors.white,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: isSelected ? const Color(0xFF00C9A7) : Colors.black12,
-                        ),
-                      ),
-                      child: Text(
-                        _issueCategories[idx],
-                        style: TextStyle(
-                          color: isSelected ? Colors.white : Colors.black87,
-                          fontSize: 12,
-                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                        ),
-                      ),
+              const Divider(height: 1, indent: 52, color: Colors.white10),
+              _buildListTile(
+                icon: Icons.cleaning_services_outlined,
+                iconColor: goldColor,
+                title: "Clear Cache",
+                subtitle: "Free up storage space",
+                trailingText: "0.0 MB",
+                onTap: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text("Cache cleared successfully"),
+                      duration: Duration(seconds: 1),
                     ),
                   );
-                }),
+                },
               ),
-            ),
-
-            const SizedBox(height: 14),
-
-            // የጽሁፍ ማስገቢያ ሳጥን
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: Colors.black12),
+              const Divider(height: 1, indent: 52, color: Colors.white10),
+              _buildListTile(
+                icon: Icons.info_outline,
+                iconColor: emeraldColor,
+                title: "About Us",
+                subtitle: "Version info & updates",
+                trailingText: "v1.0.0",
+                onTap: () {},
               ),
-              child: const TextField(
-                maxLines: 4,
-                decoration: InputDecoration(
-                  hintText: "Describe your problem in detail (e.g. Transaction ID, Room ID)...",
-                  hintStyle: TextStyle(color: Colors.black38, fontSize: 13),
-                  border: InputBorder.none,
-                ),
+              const Divider(height: 1, indent: 52, color: Colors.white10),
+              _buildListTile(
+                icon: Icons.description_outlined,
+                iconColor: goldColor,
+                title: "Privacy Policy & Terms",
+                subtitle: "Legal agreements",
+                trailingText: "",
+                onTap: () {},
               ),
-            ),
+            ]),
 
-            const SizedBox(height: 14),
+            const SizedBox(height: 28),
 
-// የስክሪንሾት ማያያዣ ቦታ (Upload Screenshot Placeholder)
-            Row(
-              children: [
-                Container(
-                  width: 70,
-                  height: 70,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.black12, style: BorderStyle.solid),
-                  ),
-                  child: const Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.add_a_photo_outlined, color: Colors.black38, size: 24),
-                      SizedBox(height: 4),
-                      Text("Upload", style: TextStyle(color: Colors.black38, fontSize: 10)),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 12),
-                const Expanded(
-                  child: Text(
-                    "Attach screenshots or payment proofs (Max 3 images)",
-                    style: TextStyle(color: Colors.black45, fontSize: 11),
-                  ),
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 24),
-
-            // ማቅረቢያ ቁልፍ (Submit Button)
+            // 4. ከመለያ መውጫ (Log Out)
             SizedBox(
               width: double.infinity,
               height: 48,
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF00C9A7),
+                  backgroundColor: const Color(0xFF1E1B2E),
+                  foregroundColor: Colors.redAccent,
+                  elevation: 0,
+                  side: const BorderSide(color: Colors.redAccent, width: 1.2),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(24),
                   ),
-                  elevation: 0,
                 ),
-                onPressed: () {},
+                onPressed: () {
+                  showDialog(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+
+backgroundColor: const Color(0xFF1E1B2E),
+                      title: const Text("Log Out", style: TextStyle(color: Colors.white)),
+                      content: const Text(
+                        "Are you sure you want to log out of your account?",
+                        style: TextStyle(color: Colors.white70),
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx),
+                          child: const Text("Cancel", style: TextStyle(color: Colors.white60)),
+                        ),
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+                          onPressed: () => Navigator.pop(ctx),
+                          child: const Text("Log Out", style: TextStyle(color: Colors.white)),
+                        ),
+                      ],
+                    ),
+                  );
+                },
                 child: const Text(
-                  "Submit Ticket",
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  "Log Out",
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
                 ),
               ),
             ),
 
-            const SizedBox(height: 24),
+            const SizedBox(height: 14),
 
-            // 4. ማህበራዊ አቋራጮች (Telegram & WhatsApp Support)
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                _buildSocialSupportItem(Icons.send, "Telegram", Colors.lightBlue),
-                const SizedBox(width: 24),
-                _buildSocialSupportItem(Icons.chat, "WhatsApp", Colors.green),
-                const SizedBox(width: 24),
-                _buildSocialSupportItem(Icons.email_outlined, "Email", Colors.orangeAccent),
-              ],
+            // አካውንት ማጥፊያ (Delete Account)
+            Center(
+              child: TextButton(
+                onPressed: () {},
+                child: const Text(
+                  "Delete Account",
+                  style: TextStyle(color: Colors.white38, fontSize: 12),
+                ),
+              ),
             ),
             const SizedBox(height: 16),
           ],
@@ -291,36 +249,67 @@ class _SupportScreenState extends State<SupportScreen> {
     );
   }
 
-  Widget _buildFaqItem(String question) {
-    return ListTile(
-      dense: true,
-      title: Text(
-        question,
-        style: const TextStyle(fontSize: 13, color: Colors.black87),
+  Widget _buildSectionHeader(String title) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 4, bottom: 8),
+      child: Text(
+        title,
+        style: const TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.bold,
+          color: Colors.white54,
+        ),
       ),
-      trailing: const Icon(Icons.arrow_forward_ios, size: 12, color: Colors.black38),
-      onTap: () {},
     );
   }
 
-  Widget _buildSocialSupportItem(IconData icon, String name, Color color) {
-    return Column(
-      children: [
-        Container(
-          width: 44,
-          height: 44,
-          decoration: BoxDecoration(
-            color: color.withOpacity(0.12),
-            shape: BoxShape.circle,
-          ),
-          child: Icon(icon, color: color, size: 22),
+  Widget _buildSettingsContainer(List<Widget> children) {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E1B2E),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white10),
+      ),
+      child: Column(children: children),
+    );
+  }
+
+  Widget _buildListTile({
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required String subtitle,
+    required String trailingText,
+    required VoidCallback onTap,
+  }) {
+    return ListTile(
+      leading: Container(
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(
+          color: iconColor.withOpacity(0.12),
+          shape: BoxShape.circle,
         ),
-        const SizedBox(height: 6),
-        Text(
-          name,
-          style: const TextStyle(fontSize: 11, color: Colors.black54),
-        ),
-      ],
+        child: Icon(icon, color: iconColor, size: 20),
+      ),
+      title: Text(
+        title,
+        style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w500),
+      ),
+      subtitle: Text(
+        subtitle,
+        style: const TextStyle(color: Colors.white38, fontSize: 11),
+      ),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (trailingText.isNotEmpty)
+            Text(trailingText, style: const TextStyle(color: Colors.white54, fontSize: 12)),
+          const SizedBox(width: 4),
+          const Icon(Icons.arrow_forward_ios, size: 12, color: Colors.white38),
+        ],
+      ),
+      onTap: onTap,
     );
   }
 }
