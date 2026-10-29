@@ -1042,7 +1042,7 @@ child: Column(
                     itemCount: _chatMessages.length,
                     itemBuilder: (context, index) {
                       final msg = _chatMessages[_chatMessages.length - 1 - index];
-                      final isSystem = msg.startsWith("System:")  msg.startsWith("Announcement:")  msg.startsWith("🧧");
+                      final isSystem = msg.startsWith("System:") || msg.startsWith("Announcement:") || msg.startsWith("🧧");
                       return Padding(
                         padding: const EdgeInsets.symmetric(vertical: 2.0),
                         child: Align(
