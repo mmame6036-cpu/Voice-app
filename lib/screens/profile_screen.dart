@@ -2,6 +2,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'wallet_screen.dart';
+import 'profile_sub_screen.dart
 
 class ProfileScreen extends StatefulWidget {
   final int currentCoins;
