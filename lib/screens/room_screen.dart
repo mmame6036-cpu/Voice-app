@@ -59,6 +59,22 @@ const List<GiftModel> availableGifts = [
 
 const List<int> giftMultipliers = [1, 3, 7, 10, 33, 77, 100];
 
+class GiftComboData {
+  final String senderName;
+  final String targetName;
+  final String giftName;
+  final String giftIcon;
+  final int comboCount;
+
+  GiftComboData({
+    required this.senderName,
+    required this.targetName,
+    required this.giftName,
+    required this.giftIcon,
+    required this.comboCount,
+  });
+}
+
 class RoomScreen extends StatefulWidget {
   final String roomTitle;
   final int initialCoins;
@@ -100,7 +116,15 @@ class _RoomScreenState extends State<RoomScreen>
 
   SVGAAnimationController? _svgaController;
   bool _isPlayingAnimation = false;
-  String _currentGiftBanner = "";
+
+  // Floating Combo Banner Properties
+  GiftComboData? _activeComboData;
+  Timer? _comboDismissTimer;
+  late AnimationController _comboScaleController;
+  late Animation<double> _comboScaleAnimation;
+  int _currentComboStreak = 0;
+  DateTime? _lastGiftTimestamp;
+  String? _lastGiftTargetKey;
 
   late AnimationController _pulseController;
   final Set<int> _speakingSeatIndices = {};
@@ -127,10 +151,23 @@ class _RoomScreenState extends State<RoomScreen>
       seatCount: _activeSeatCount,
     );
 
-    _pulseController = AnimationController(
+_pulseController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 900),
     )..repeat(reverse: true);
+
+    _comboScaleController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 250),
+    );
+
+    _comboScaleAnimation = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween(begin: 1.0, end: 1.55), weight: 50),
+      TweenSequenceItem(tween: Tween(begin: 1.55, end: 1.0), weight: 50),
+    ]).animate(CurvedAnimation(
+      parent: _comboScaleController,
+      curve: Curves.easeOutBack,
+    ));
 
     _initVoiceEngine();
   }
@@ -140,8 +177,7 @@ class _RoomScreenState extends State<RoomScreen>
       await _agoraService.initEngine(
         onUserJoined: (uid) {
           if (mounted) {
-
-setState(() {
+            setState(() {
               _chatMessages.add("User $uid joined");
             });
           }
@@ -250,7 +286,8 @@ setState(() {
           keyboardType: TextInputType.number,
           style: const TextStyle(color: Colors.white),
           decoration: const InputDecoration(
-            hintText: "Enter 4-digit code (Leave blank to remove)",
+
+hintText: "Enter 4-digit code (Leave blank to remove)",
             hintStyle: TextStyle(color: Colors.white38),
           ),
         ),
@@ -277,7 +314,7 @@ setState(() {
     );
   }
 
-void _openAdminSheet() {
+  void _openAdminSheet() {
     showModalBottomSheet(
       context: context,
       backgroundColor: const Color(0xFF141226),
@@ -357,7 +394,8 @@ void _openAdminSheet() {
                   width: 40,
                   height: 4,
                   decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2)),
-                ),
+
+),
               ),
               const SizedBox(height: 16),
               const Center(
@@ -375,8 +413,7 @@ void _openAdminSheet() {
                   final sel = selectedAmount == amt;
                   return ChoiceChip(
                     label: Text("🪙 $amt"),
-
-selected: sel,
+                    selected: sel,
                     selectedColor: const Color(0xFFFFD700),
                     backgroundColor: const Color(0xFF2A224E),
                     labelStyle: TextStyle(color: sel ? Colors.black : Colors.white, fontWeight: FontWeight.bold),
@@ -444,7 +481,8 @@ selected: sel,
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (_) => Padding(
-        padding: const EdgeInsets.all(16),
+
+padding: const EdgeInsets.all(16),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -462,8 +500,7 @@ selected: sel,
                   }
                 });
                 Navigator.pop(context);
-
-},
+              },
             ),
             ListTile(
               leading: const Icon(Icons.exit_to_app, color: Colors.redAccent),
@@ -481,12 +518,11 @@ selected: sel,
     );
   }
 
-  Future<void> _playGiftAnimation(GiftModel gift, String bannerText) async {
+  Future<void> _playGiftAnimation(GiftModel gift) async {
     if (_svgaController == null) return;
     try {
       setState(() {
         _isPlayingAnimation = true;
-        _currentGiftBanner = bannerText;
       });
       final parser = SVGAParser.shared;
       final videoItem = await parser.decodeFromURL(gift.svgaUrl);
@@ -496,7 +532,6 @@ selected: sel,
       if (mounted) {
         setState(() {
           _isPlayingAnimation = false;
-          _currentGiftBanner = "";
         });
       }
     } catch (e) {
@@ -504,10 +539,52 @@ selected: sel,
       if (mounted) {
         setState(() {
           _isPlayingAnimation = false;
-          _currentGiftBanner = "";
         });
       }
     }
+  }
+
+  void _triggerFloatingGiftCombo({
+    required GiftModel gift,
+    required String target,
+    required int multiplier,
+  }) {
+    final now = DateTime.now();
+    final targetKey = "${gift.id}_$target";
+
+    if (_lastGiftTargetKey == targetKey &&
+        _lastGiftTimestamp != null &&
+        now.difference(_lastGiftTimestamp!).inSeconds < 4) {
+      _currentComboStreak += multiplier;
+    } else {
+      _currentComboStreak = multiplier;
+    }
+
+    _lastGiftTargetKey = targetKey;
+    _lastGiftTimestamp = now;
+
+    _comboDismissTimer?.cancel();
+
+    setState(() {
+      _activeComboData = GiftComboData(
+        senderName: "User_$_myUid",
+        targetName: target,
+        giftName: gift.name,
+        giftIcon: gift.icon,
+        comboCount: _currentComboStreak,
+      );
+    });
+
+    _comboScaleController.reset();
+    _comboScaleController.forward();
+
+    _comboDismissTimer = Timer(const Duration(milliseconds: 2800), () {
+      if (mounted) {
+        setState(() {
+          _activeComboData = null;
+        });
+      }
+    });
   }
 
   void _sendGift({
@@ -544,11 +621,11 @@ selected: sel,
     widget.onCoinUpdate(_currentCoins);
     Navigator.pop(context);
 
-    final banner = "User_$_myUid sent ${gift.name} x$multiplier to $target";
-    _playGiftAnimation(gift, banner);
+    _triggerFloatingGiftCombo(gift: gift, target: target, multiplier: multiplier);
+    _playGiftAnimation(gift);
   }
 
-  void _openGiftSheet() {
+void _openGiftSheet() {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -587,8 +664,7 @@ selected: sel,
                           isSelected: selectedTarget == "All Seats",
                           onTap: () {
                             setSheetState(() {
-
-selectedTarget = "All Seats";
+                              selectedTarget = "All Seats";
                               selectedSeatIndex = null;
                             });
                             setState(() {
@@ -640,7 +716,8 @@ selectedTarget = "All Seats";
                               color: isSelected
                                   ? const Color(0xFF2A244D)
                                   : const Color(0xFF1E1B38),
-                              borderRadius: BorderRadius.circular(14),
+
+borderRadius: BorderRadius.circular(14),
                               border: Border.all(
                                 color: isSelected
                                     ? const Color(0xFFFFD700)
@@ -667,8 +744,7 @@ selectedTarget = "All Seats";
                                 const SizedBox(height: 4),
                                 Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
-
-children: [
+                                  children: [
                                     const Icon(Icons.monetization_on,
                                         size: 12, color: Color(0xFFFFD700)),
                                     const SizedBox(width: 2),
@@ -715,7 +791,8 @@ children: [
                               "x$mult",
                               style: TextStyle(
                                 color: isChosen ? Colors.black : Colors.white70,
-                                fontWeight: FontWeight.bold,
+
+fontWeight: FontWeight.bold,
                                 fontSize: 12,
                               ),
                             ),
@@ -749,8 +826,7 @@ children: [
                                 MaterialPageRoute(
                                   builder: (_) => WalletScreen(
                                     currentCoins: _currentCoins,
-
-onCoinsRecharged: (newCoins) {
+                                    onCoinsRecharged: (newCoins) {
                                       setState(() {
                                         _currentCoins = newCoins;
                                       });
@@ -796,7 +872,8 @@ onCoinsRecharged: (newCoins) {
                               horizontal: 28, vertical: 12),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(24),
-                          ),
+
+),
                         ),
                         onPressed: () => _sendGift(
                           gift: selectedGift,
@@ -853,9 +930,11 @@ onCoinsRecharged: (newCoins) {
     );
   }
 
-@override
+  @override
   void dispose() {
     _pulseController.dispose();
+    _comboScaleController.dispose();
+    _comboDismissTimer?.cancel();
     _agoraService.leaveRoom();
     _svgaController?.dispose();
     _msgController.dispose();
@@ -914,7 +993,8 @@ onCoinsRecharged: (newCoins) {
                 fit: BoxFit.cover,
                 colorFilter: ColorFilter.mode(
                   Colors.black.withOpacity(0.45),
-                  BlendMode.darken,
+
+BlendMode.darken,
                 ),
               ),
             ),
@@ -950,8 +1030,7 @@ onCoinsRecharged: (newCoins) {
                               final giftPoints = _seatGiftsCount[seatIndex];
 
                               return GestureDetector(
-
-onTap: () => _handleSeatTap(seatIndex),
+                                onTap: () => _handleSeatTap(seatIndex),
                                 child: Column(
                                   children: [
                                     AnimatedBuilder(
@@ -977,12 +1056,13 @@ onTap: () => _handleSeatTap(seatIndex),
                                             boxShadow: _isAllSeatsTargeted
                                                 ? [
                                                     BoxShadow(
-                                                      color: const Color(0xFFFFD700).withOpacity(0.7),
+                                                      color: const Color(0xFFFFD700).withOpacity(0.8),
                                                       blurRadius: 10,
                                                       spreadRadius: 2,
                                                     )
                                                   ]
-                                                : (isSpeaking
+
+: (isSpeaking
                                                     ? [
                                                         BoxShadow(
                                                           color: Colors.cyanAccent.withOpacity(0.5),
@@ -1008,8 +1088,7 @@ onTap: () => _handleSeatTap(seatIndex),
                                     Text(
                                       isTaken ? _seats[seatIndex]! : "$seatIndex",
                                       style: TextStyle(
-
-color: isTaken ? const Color(0xFFFFD700) : Colors.white70,
+                                        color: isTaken ? const Color(0xFFFFD700) : Colors.white70,
                                         fontSize: 9,
                                         fontWeight: FontWeight.bold,
                                       ),
@@ -1048,7 +1127,8 @@ color: isTaken ? const Color(0xFFFFD700) : Colors.white70,
                     itemBuilder: (context, index) {
                       final msg = _chatMessages[_chatMessages.length - 1 - index];
                       final isSystem = msg.startsWith("System:") || msg.startsWith("Announcement:") || msg.startsWith("🧧");
-                      return Padding(
+
+return Padding(
                         padding: const EdgeInsets.symmetric(vertical: 2.0),
                         child: Align(
                           alignment: Alignment.centerLeft,
@@ -1085,8 +1165,7 @@ color: isTaken ? const Color(0xFFFFD700) : Colors.white70,
                           color: _isMicMuted ? Colors.redAccent : Colors.cyanAccent,
                         ),
                         onPressed: _toggleMic,
-
-),
+                      ),
                       Expanded(
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 14),
@@ -1125,7 +1204,8 @@ color: isTaken ? const Color(0xFFFFD700) : Colors.white70,
                               child: Column(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Container(
+
+Container(
                                     width: 40,
                                     height: 4,
                                     decoration: BoxDecoration(
@@ -1156,8 +1236,7 @@ color: isTaken ? const Color(0xFFFFD700) : Colors.white70,
                                     onTap: () {
                                       Navigator.pop(context);
                                       showModalBottomSheet(
-
-context: context,
+                                        context: context,
                                         isScrollControlled: true,
                                         backgroundColor: Colors.transparent,
                                         builder: (_) => LuckyWheelDialog(
@@ -1189,7 +1268,8 @@ context: context,
                                         backgroundColor: Colors.transparent,
                                         builder: (_) => TeenPattiDialog(
                                           currentCoins: _currentCoins,
-                                          onCoinsUpdated: (newCoins) {
+
+onCoinsUpdated: (newCoins) {
                                             setState(() => _currentCoins = newCoins);
                                             widget.onCoinUpdate(newCoins);
                                           },
@@ -1224,8 +1304,7 @@ context: context,
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(
-
-builder: (_) => RoomSettingsScreen(
+                                    builder: (_) => RoomSettingsScreen(
                                       settings: _roomSettings,
                                       currentSeats: _seats,
                                       onKickSeat: (idx) {
@@ -1253,27 +1332,101 @@ builder: (_) => RoomSettingsScreen(
               ],
             ),
           ),
-          if (_isPlayingAnimation)
+          
+          // Floating Live Gift Combo Banner
+          if (_activeComboData != null)
             Positioned(
-              top: 100,
-              left: 20,
-              right: 20,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFFFF3366), Color(0xFFFFD700)],
+              left: 16,
+              top: 110,
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF8E2DE2), Color(0xFF4A00E0)],
+                      ),
+                      borderRadius: BorderRadius.circular(30),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.purpleAccent.withOpacity(0.5),
+                          blurRadius: 10,
+
+offset: const Offset(0, 4),
+                        ),
+                      ],
+                      border: Border.all(color: const Color(0xFFFFD700), width: 1.5),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const CircleAvatar(
+                          radius: 16,
+                          backgroundColor: Color(0xFFFFD700),
+                          child: Icon(Icons.person, color: Colors.black, size: 20),
+                        ),
+                        const SizedBox(width: 8),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              _activeComboData!.senderName,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            Text(
+                              "Sent ${_activeComboData!.giftName} to ${_activeComboData!.targetName}",
+                              style: const TextStyle(
+                                color: Color(0xFFFFD700),
+                                fontSize: 10,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          _activeComboData!.giftIcon,
+                          style: const TextStyle(fontSize: 26),
+                        ),
+                      ],
+                    ),
                   ),
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: const [BoxShadow(color: Colors.black45, blurRadius: 10)],
-                ),
-                child: Text(
-                  _currentGiftBanner,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
-                ),
+                  const SizedBox(width: 8),
+                  ScaleTransition(
+                    scale: _comboScaleAnimation,
+                    child: ShaderMask(
+                      shaderCallback: (bounds) => const LinearGradient(
+                        colors: [Color(0xFFFFEE00), Color(0xFFFF3366)],
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                      ).createShader(bounds),
+                      child: Text(
+                        "x${_activeComboData!.comboCount}",
+                        style: const TextStyle(
+                          fontSize: 32,
+                          fontWeight: FontWeight.w900,
+                          fontStyle: FontStyle.italic,
+                          color: Colors.white,
+                          shadows: [
+                            Shadow(
+                              color: Colors.black,
+                              blurRadius: 6,
+                              offset: Offset(2, 2),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
+
+          // Full Screen SVGA Gift Animation
           if (_isPlayingAnimation && _svgaController != null)
             Positioned.fill(
               child: IgnorePointer(
@@ -1296,7 +1449,8 @@ builder: (_) => RoomSettingsScreen(
       child: Column(
         children: [
           AnimatedBuilder(
-            animation: _pulseController,
+
+animation: _pulseController,
             builder: (context, _) {
               final pulse = _pulseController.value;
               return Container(
@@ -1321,8 +1475,7 @@ builder: (_) => RoomSettingsScreen(
                   boxShadow: [
                     BoxShadow(
                       color: _isAllSeatsTargeted
-
-? const Color(0xFFFFD700).withOpacity(0.8)
+                          ? const Color(0xFFFFD700).withOpacity(0.8)
                           : (isSpeaking
                               ? Colors.cyanAccent.withOpacity(0.7)
                               : const Color(0xFFFFD700).withOpacity(0.4)),
