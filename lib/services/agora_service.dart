@@ -11,6 +11,7 @@ class AgoraService {
   Future<void> initEngine({
     required Function(int uid) onUserJoined,
     required Function(int uid) onUserOffline,
+    required Function(List<AudioVolumeInfo> speakers) onVolumeChanged,
   }) async {
     if (_isReady) return;
 
@@ -23,6 +24,13 @@ class AgoraService {
       audioScenario: AudioScenarioType.audioScenarioGameStreaming,
     ));
 
+    // የድምፅ መለኪያውን ማብራት
+    await _engine!.enableAudioVolumeIndication(
+      interval: 200,
+      smooth: 3,
+      reportVad: true,
+    );
+
     _engine!.registerEventHandler(
       RtcEngineEventHandler(
         onJoinChannelSuccess: (RtcConnection connection, int elapsed) {},
@@ -31,6 +39,14 @@ class AgoraService {
         },
         onUserOffline: (RtcConnection connection, int remoteUid, UserOfflineReasonType reason) {
           onUserOffline(remoteUid);
+        },
+        onAudioVolumeIndication: (
+          RtcConnection connection,
+          List<AudioVolumeInfo> speakers,
+          int totalVolume,
+          int speakerNumber,
+        ) {
+          onVolumeChanged(speakers);
         },
       ),
     );
