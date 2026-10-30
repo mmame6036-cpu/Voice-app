@@ -189,6 +189,22 @@ _pulseController = AnimationController(
             });
           }
         },
+        onVolumeChanged: (speakers) {
+          if (mounted) {
+            setState(() {
+              _speakingSeatIndices.clear();
+              for (var speaker in speakers) {
+                if ((speaker.volume ?? 0) > 4) {
+                  if (speaker.uid == 0 || speaker.uid == _myUid) {
+                    if (_mySeatIndex != null) {
+                      _speakingSeatIndices.add(_mySeatIndex!);
+                    }
+                  }
+                }
+              }
+            });
+          }
+        },
       );
 
       await _agoraService.joinRoom(
