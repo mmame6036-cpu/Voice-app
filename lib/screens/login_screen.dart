@@ -1,5 +1,6 @@
-import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'main_navigation.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -10,12 +11,13 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final GoogleSignIn _googleSignIn = GoogleSignIn();
+
   bool _isLoading = false;
   String _loadingMethod = "";
 
-  void _navigateToHome({required String name, required String loginType}) {
-    final generatedUid = "${Random().nextInt(899999) + 1000000}";
-
+  void _navigateToHome() {
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
@@ -30,11 +32,34 @@ class _LoginScreenState extends State<LoginScreen> {
       _loadingMethod = "Google";
     });
 
-    await Future.delayed(const Duration(milliseconds: 1500));
+    try {
+      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
+      if (googleUser == null) {
+        setState(() => _isLoading = false);
+        return;
+      }
 
-    if (mounted) {
-      setState(() => _isLoading = false);
-      _navigateToHome(name: "Google User", loginType: "Google");
+      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+      final OAuthCredential credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+
+      final UserCredential userCredential = await _auth.signInWithCredential(credential);
+
+      if (userCredential.user != null && mounted) {
+        _navigateToHome();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Google sign in failed: $e")),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -42,6 +67,8 @@ class _LoginScreenState extends State<LoginScreen> {
     final phoneController = TextEditingController();
     final otpController = TextEditingController();
     bool codeSent = false;
+    String currentVerificationId = "";
+    bool isProcessing = false;
 
     showModalBottomSheet(
       context: context,
@@ -89,8 +116,11 @@ class _LoginScreenState extends State<LoginScreen> {
                   style: const TextStyle(color: Colors.white),
                   decoration: InputDecoration(
                     prefixIcon: const Icon(Icons.phone, color: Color(0xFFFFD700)),
-                    hintText: "+251 9XX XXX XXX",
-                    hintStyle: const TextStyle(color: Colors.white38),
+                    hintText: "9XXXXXXXX",
+                    prefixText: "+251 ",
+                    prefixStyle: const TextStyle(color: Colors.white),
+
+hintStyle: const TextStyle(color: Colors.white38),
                     filled: true,
                     fillColor: Colors.white.withOpacity(0.08),
                     border: OutlineInputBorder(
@@ -109,28 +139,66 @@ class _LoginScreenState extends State<LoginScreen> {
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(14),
-
-),
+                      ),
                     ),
-                    onPressed: () {
-                      if (phoneController.text.trim().length >= 9) {
-                        setSheetState(() => codeSent = true);
-                      } else {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text("Please enter a valid phone number")),
-                        );
-                      }
-                    },
-                    child: const Text("Send Code (OTP)", style: TextStyle(fontWeight: FontWeight.bold)),
+                    onPressed: isProcessing
+                        ? null
+                        : () async {
+                            final rawNumber = phoneController.text.trim();
+                            if (rawNumber.length < 9) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text("Please enter a valid phone number")),
+                              );
+                              return;
+                            }
+
+                            setSheetState(() => isProcessing = true);
+                            final fullPhone = "+251$rawNumber";
+
+                            await _auth.verifyPhoneNumber(
+                              phoneNumber: fullPhone,
+                              verificationCompleted: (PhoneAuthCredential credential) async {
+                                await _auth.signInWithCredential(credential);
+                                if (mounted) {
+                                  Navigator.pop(ctx);
+                                  _navigateToHome();
+                                }
+                              },
+                              verificationFailed: (FirebaseAuthException e) {
+                                setSheetState(() => isProcessing = false);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text("Failed: ${e.message}")),
+                                );
+                              },
+                              codeSent: (String verificationId, int? resendToken) {
+                                setSheetState(() {
+                                  currentVerificationId = verificationId;
+                                  codeSent = true;
+                                  isProcessing = false;
+                                });
+                              },
+                              codeAutoRetrievalTimeout: (String verificationId) {
+                                currentVerificationId = verificationId;
+                              },
+                            );
+                          },
+                    child: isProcessing
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2),
+                          )
+                        : const Text("Send Code (OTP)", style: TextStyle(fontWeight: FontWeight.bold)),
                   ),
                 ),
               ] else ...[
                 Text(
-                  "Code sent to ${phoneController.text.trim()}",
+                  "Code sent to +251 ${phoneController.text.trim()}",
                   style: const TextStyle(color: Colors.white54, fontSize: 12),
                 ),
                 const SizedBox(height: 10),
-                TextField(
+
+TextField(
                   controller: otpController,
                   keyboardType: TextInputType.number,
                   maxLength: 6,
@@ -159,13 +227,38 @@ class _LoginScreenState extends State<LoginScreen> {
                         borderRadius: BorderRadius.circular(14),
                       ),
                     ),
-                    onPressed: () {
-                      if (otpController.text.trim().length >= 4) {
-                        Navigator.pop(ctx);
-                        _navigateToHome(name: "Phone User", loginType: "Phone");
-                      }
-                    },
-                    child: const Text("Verify & Login", style: TextStyle(fontWeight: FontWeight.bold)),
+                    onPressed: isProcessing
+                        ? null
+                        : () async {
+                            final code = otpController.text.trim();
+                            if (code.length < 6) return;
+
+                            setSheetState(() => isProcessing = true);
+
+                            try {
+                              final credential = PhoneAuthProvider.credential(
+                                verificationId: currentVerificationId,
+                                smsCode: code,
+                              );
+                              final result = await _auth.signInWithCredential(credential);
+                              if (result.user != null && mounted) {
+                                Navigator.pop(ctx);
+                                _navigateToHome();
+                              }
+                            } catch (e) {
+                              setSheetState(() => isProcessing = false);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text("Invalid verification code: $e")),
+                              );
+                            }
+                          },
+                    child: isProcessing
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                          )
+                        : const Text("Verify & Login", style: TextStyle(fontWeight: FontWeight.bold)),
                   ),
                 ),
               ],
@@ -200,7 +293,8 @@ class _LoginScreenState extends State<LoginScreen> {
                   fontSize: 28,
                   fontWeight: FontWeight.bold,
                   letterSpacing: 2.0,
-                ),
+
+),
               ),
               const SizedBox(height: 6),
               const Text(
@@ -214,7 +308,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
               const Spacer(flex: 3),
 
-if (_isLoading)
+              if (_isLoading)
                 Column(
                   children: [
                     const CircularProgressIndicator(color: Color(0xFFFFD700)),
@@ -227,7 +321,6 @@ if (_isLoading)
                   ],
                 ),
 
-              // 1. Google Button
               _loginButton(
                 icon: const Text(
                   "G",
@@ -245,7 +338,6 @@ if (_isLoading)
 
               const SizedBox(height: 14),
 
-              // 2. Phone Button
               _loginButton(
                 icon: const Icon(Icons.phone_android, size: 20, color: Colors.white70),
                 text: "Continue with Phone",
