@@ -2,7 +2,8 @@ import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 class AgoraService {
-  static const String appId = "21091aff01114a66b580ce15b0f1b642";
+  // አዲሱ የ NILE-Live App ID
+  static const String appId = "d00a25d96dfc44cc866cd8f41c496b36";
   static const String token = "";
 
   RtcEngine? _engine;
@@ -11,7 +12,7 @@ class AgoraService {
   Future<void> initEngine({
     required Function(int uid) onUserJoined,
     required Function(int uid) onUserOffline,
-    required Function(List<AudioVolumeInfo> speakers) onVolumeChanged,
+    Function(List<AudioVolumeInfo> speakers)? onVolumeChanged,
   }) async {
     if (_isReady) return;
 
@@ -24,7 +25,7 @@ class AgoraService {
       audioScenario: AudioScenarioType.audioScenarioGameStreaming,
     ));
 
-    // የድምፅ መለኪያውን ማብራት
+    // የድምፅ መለኪያውን ማብራት (ሰው ሲያወራ አኒሜሽን እንዲያሳይ)
     await _engine!.enableAudioVolumeIndication(
       interval: 200,
       smooth: 3,
@@ -46,7 +47,9 @@ class AgoraService {
           int totalVolume,
           int speakerNumber,
         ) {
-          onVolumeChanged(speakers);
+          if (onVolumeChanged != null) {
+            onVolumeChanged(speakers);
+          }
         },
       ),
     );
