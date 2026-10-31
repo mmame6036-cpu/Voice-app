@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import '../services/user_service.dart';
+import 'profile_setup_screen.dart';
 import 'main_navigation.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -13,17 +15,35 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final GoogleSignIn _googleSignIn = GoogleSignIn();
+  final UserService _userService = UserService();
 
   bool _isLoading = false;
   String _loadingMethod = "";
 
-  void _navigateToHome() {
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (_) => const MainNavigationScreen(),
-      ),
-    );
+  Future<void> _handleUserRouting(User user) async {
+    final existingUser = await _userService.getUser(user.uid);
+
+    if (!mounted) return;
+
+    if (existingUser != null) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const MainNavigationScreen(),
+        ),
+      );
+    } else {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ProfileSetupScreen(
+            uid: user.uid,
+            defaultName: user.displayName ?? '',
+            phoneNumber: user.phoneNumber ?? '',
+          ),
+        ),
+      );
+    }
   }
 
   Future<void> _handleGoogleSignIn() async {
@@ -47,8 +67,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
       final UserCredential userCredential = await _auth.signInWithCredential(credential);
 
-      if (userCredential.user != null && mounted) {
-        _navigateToHome();
+      if (userCredential.user != null) {
+        await _handleUserRouting(userCredential.user!);
       }
     } catch (e) {
       if (mounted) {
@@ -105,7 +125,8 @@ class _LoginScreenState extends State<LoginScreen> {
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 18,
-                  fontWeight: FontWeight.bold,
+
+fontWeight: FontWeight.bold,
                 ),
               ),
               const SizedBox(height: 12),
@@ -119,8 +140,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     hintText: "9XXXXXXXX",
                     prefixText: "+251 ",
                     prefixStyle: const TextStyle(color: Colors.white),
-
-hintStyle: const TextStyle(color: Colors.white38),
+                    hintStyle: const TextStyle(color: Colors.white38),
                     filled: true,
                     fillColor: Colors.white.withOpacity(0.08),
                     border: OutlineInputBorder(
@@ -158,10 +178,10 @@ hintStyle: const TextStyle(color: Colors.white38),
                             await _auth.verifyPhoneNumber(
                               phoneNumber: fullPhone,
                               verificationCompleted: (PhoneAuthCredential credential) async {
-                                await _auth.signInWithCredential(credential);
-                                if (mounted) {
+                                final result = await _auth.signInWithCredential(credential);
+                                if (result.user != null && mounted) {
                                   Navigator.pop(ctx);
-                                  _navigateToHome();
+                                  await _handleUserRouting(result.user!);
                                 }
                               },
                               verificationFailed: (FirebaseAuthException e) {
@@ -182,7 +202,8 @@ hintStyle: const TextStyle(color: Colors.white38),
                               },
                             );
                           },
-                    child: isProcessing
+
+child: isProcessing
                         ? const SizedBox(
                             height: 20,
                             width: 20,
@@ -197,8 +218,7 @@ hintStyle: const TextStyle(color: Colors.white38),
                   style: const TextStyle(color: Colors.white54, fontSize: 12),
                 ),
                 const SizedBox(height: 10),
-
-TextField(
+                TextField(
                   controller: otpController,
                   keyboardType: TextInputType.number,
                   maxLength: 6,
@@ -243,7 +263,7 @@ TextField(
                               final result = await _auth.signInWithCredential(credential);
                               if (result.user != null && mounted) {
                                 Navigator.pop(ctx);
-                                _navigateToHome();
+                                await _handleUserRouting(result.user!);
                               }
                             } catch (e) {
                               setSheetState(() => isProcessing = false);
@@ -256,7 +276,7 @@ TextField(
                         ? const SizedBox(
                             height: 20,
                             width: 20,
-                            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                            child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2),
                           )
                         : const Text("Verify & Login", style: TextStyle(fontWeight: FontWeight.bold)),
                   ),
@@ -269,7 +289,7 @@ TextField(
     );
   }
 
-  @override
+@override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF0A0714),
@@ -279,7 +299,6 @@ TextField(
           child: Column(
             children: [
               const Spacer(flex: 2),
-
               const Icon(
                 Icons.graphic_eq,
                 color: Color(0xFFFFD700),
@@ -293,8 +312,7 @@ TextField(
                   fontSize: 28,
                   fontWeight: FontWeight.bold,
                   letterSpacing: 2.0,
-
-),
+                ),
               ),
               const SizedBox(height: 6),
               const Text(
@@ -305,9 +323,7 @@ TextField(
                   fontWeight: FontWeight.w400,
                 ),
               ),
-
               const Spacer(flex: 3),
-
               if (_isLoading)
                 Column(
                   children: [
@@ -320,7 +336,6 @@ TextField(
                     const SizedBox(height: 30),
                   ],
                 ),
-
               _loginButton(
                 icon: const Text(
                   "G",
@@ -335,9 +350,7 @@ TextField(
                 textColor: Colors.black87,
                 onTap: _isLoading ? () {} : _handleGoogleSignIn,
               ),
-
               const SizedBox(height: 14),
-
               _loginButton(
                 icon: const Icon(Icons.phone_android, size: 20, color: Colors.white70),
                 text: "Continue with Phone",
@@ -345,9 +358,7 @@ TextField(
                 textColor: Colors.white,
                 onTap: _isLoading ? () {} : _handlePhoneSignIn,
               ),
-
               const Spacer(flex: 1),
-
               const Text(
                 "By continuing, you agree to our Terms & Privacy Policy.",
                 style: TextStyle(color: Colors.white38, fontSize: 11),
