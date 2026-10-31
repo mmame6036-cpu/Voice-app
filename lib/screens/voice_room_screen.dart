@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import '../services/agora_service.dart';
 
 class VoiceRoomScreen extends StatefulWidget {
@@ -24,41 +25,53 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> {
   bool _isMuted = false;
   int? _mySeatIndex;
 
-  // Default is set to 30 seats, can be adjusted dynamically up to 30
+  // እስከ 30 ወንበር ድረስ የሚስተካከል
   int _totalSeats = 30;
   late List<String?> _seats;
+  final Set<int> _activeSpeakers = {};
 
   @override
   void initState() {
     super.initState();
     _seats = List.filled(30, null);
-    _seats[0] = widget.hostName; // Seat 0 belongs to the Room Host
-    _initializeAgoraRoom();
+    _seats[0] = widget.hostName; // ወንበር 0 የክፍሉ ባለቤት (Host) ነው
+    _setupAgoraRoom();
   }
 
-  Future<void> _initializeAgoraRoom() async {
-    await _agoraService.initAgora(
+  Future<void> _setupAgoraRoom() async {
+    await _agoraService.initEngine(
       onUserJoined: (uid) {},
       onUserOffline: (uid) {},
+      onVolumeChanged: (List<AudioVolumeInfo> speakers) {
+        if (!mounted) return;
+        setState(() {
+          _activeSpeakers.clear();
+          for (var speaker in speakers) {
+            if ((speaker.volume ?? 0) > 10) {
+              _activeSpeakers.add(speaker.uid ?? 0);
+            }
+          }
+        });
+      },
     );
 
-    await _agoraService.joinVoiceRoom(
+    await _agoraService.joinRoom(
       channelId: widget.roomId,
       uid: widget.userNumericId,
-      isBroadcaster: false,
+      isSpeaker: false,
     );
   }
 
   void _handleSeatTap(int index) async {
     if (_mySeatIndex == index) {
-      // Leave current seat and become audience
+      // ከወንበር መውረድ (አድማጭ ብቻ መሆን)
       setState(() {
         _seats[index] = null;
         _mySeatIndex = null;
       });
-      await _agoraService.switchRole(isBroadcaster: false);
+      await _agoraService.switchRole(isSpeaker: false);
     } else if (_seats[index] == null) {
-      // Take the empty seat and enable broadcaster role
+      // ክፍት ወንበር ላይ መቀመጥ (ተናጋሪ መሆን)
       setState(() {
         if (_mySeatIndex != null) {
           _seats[_mySeatIndex!] = null;
@@ -66,7 +79,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> {
         _seats[index] = "Me";
         _mySeatIndex = index;
       });
-      await _agoraService.switchRole(isBroadcaster: true);
+      await _agoraService.switchRole(isSpeaker: true);
     }
   }
 
@@ -74,7 +87,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> {
     setState(() {
       _isMuted = !_isMuted;
     });
-    _agoraService.muteLocalAudio(_isMuted);
+    _agoraService.setMicrophoneMute(_isMuted);
   }
 
   void _adjustSeats(int delta) {
@@ -113,20 +126,20 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> {
           ],
         ),
         actions: [
-          // Seat adjustment buttons (+ / -)
           IconButton(
             icon: const Icon(Icons.remove_circle_outline, color: Colors.white60),
-            tooltip: "Reduce seats",
+            tooltip: "ወንበር ቀንስ",
             onPressed: _totalSeats > 4 ? () => _adjustSeats(-2) : null,
           ),
           IconButton(
             icon: const Icon(Icons.add_circle_outline, color: Color(0xFFFFD700)),
-            tooltip: "Increase seats up to 30",
+            tooltip: "እስከ 30 ወንበር ጨምር",
             onPressed: _totalSeats < 30 ? () => _adjustSeats(2) : null,
           ),
           IconButton(
             icon: const Icon(Icons.logout, color: Colors.redAccent),
-            onPressed: () => Navigator.pop(context),
+
+onPressed: () => Navigator.pop(context),
           ),
         ],
       ),
@@ -134,11 +147,10 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> {
         child: Column(
           children: [
             const SizedBox(height: 10),
-            // Host Badge
+            // Host Section
             Center(
               child: Column(
-
-children: [
+                children: [
                   Container(
                     width: 70,
                     height: 70,
@@ -168,7 +180,7 @@ children: [
               ),
             ),
             const SizedBox(height: 16),
-            // Dynamic Seats Grid (Up to 30 seats)
+            // Dynamic Seats Grid (እስከ 30 ወንበር)
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16.0),
@@ -176,7 +188,7 @@ children: [
                   physics: const BouncingScrollPhysics(),
                   itemCount: _totalSeats,
                   gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 5, // 5 columns fits 30 seats cleanly
+                    crossAxisCount: 5,
                     mainAxisSpacing: 14,
                     crossAxisSpacing: 10,
                     childAspectRatio: 0.75,
@@ -217,18 +229,18 @@ children: [
                               color: isOccupied ? Colors.white : Colors.white38,
                               fontSize: 10,
                               fontWeight: isOccupied ? FontWeight.bold : FontWeight.normal,
-                            ),
+
+),
                             overflow: TextOverflow.ellipsis,
                           ),
                         ],
                       ),
                     );
-
-},
+                  },
                 ),
               ),
             ),
-            // Bottom Controls Bar
+            // Bottom Action Bar
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
               decoration: const BoxDecoration(
