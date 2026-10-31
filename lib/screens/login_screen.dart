@@ -13,27 +13,23 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isLoading = false;
   String _loadingMethod = "";
 
-  // ወደ ዋናው ገጽ የመሸጋገሪያ ፈንክሽን
   void _navigateToHome({required String name, required String loginType}) {
-    // ለአዲሱ ተጠቃሚ ራንደም ID ማመንጨት
     final generatedUid = "${Random().nextInt(899999) + 1000000}";
 
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
-        builder: (_) => MainNavigationScreen(),
+        builder: (_) => const MainNavigationScreen(),
       ),
     );
   }
 
-  // 1. Continue with Google
   Future<void> _handleGoogleSignIn() async {
     setState(() {
       _isLoading = true;
       _loadingMethod = "Google";
     });
 
-    // የማረጋገጫ ሂደት ማስመሰያ (እውነተኛው Firebase ሲገናኝ በዚህ ይተካል)
     await Future.delayed(const Duration(milliseconds: 1500));
 
     if (mounted) {
@@ -42,7 +38,6 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  // 2. Continue with Phone
   void _handlePhoneSignIn() {
     final phoneController = TextEditingController();
     final otpController = TextEditingController();
@@ -112,10 +107,10 @@ class _LoginScreenState extends State<LoginScreen> {
                       backgroundColor: const Color(0xFFFFD700),
                       foregroundColor: Colors.black,
                       padding: const EdgeInsets.symmetric(vertical: 14),
-
-shape: RoundedRectangleBorder(
+                      shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(14),
-                      ),
+
+),
                     ),
                     onPressed: () {
                       if (phoneController.text.trim().length >= 9) {
@@ -181,21 +176,6 @@ shape: RoundedRectangleBorder(
     );
   }
 
-  // 3. Continue with Facebook
-  Future<void> _handleFacebookSignIn() async {
-    setState(() {
-      _isLoading = true;
-      _loadingMethod = "Facebook";
-    });
-
-    await Future.delayed(const Duration(milliseconds: 1500));
-
-    if (mounted) {
-      setState(() => _isLoading = false);
-      _navigateToHome(name: "Facebook User", loginType: "Facebook");
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -207,7 +187,6 @@ shape: RoundedRectangleBorder(
             children: [
               const Spacer(flex: 2),
 
-              // Logo & App Header
               const Icon(
                 Icons.graphic_eq,
                 color: Color(0xFFFFD700),
@@ -215,18 +194,17 @@ shape: RoundedRectangleBorder(
               ),
               const SizedBox(height: 12),
               const Text(
-                "3D Voice Party",
-
-style: TextStyle(
+                "NILE",
+                style: TextStyle(
                   color: Colors.white,
-                  fontSize: 26,
+                  fontSize: 28,
                   fontWeight: FontWeight.bold,
-                  letterSpacing: 0.5,
+                  letterSpacing: 2.0,
                 ),
               ),
               const SizedBox(height: 6),
               const Text(
-                "Tis Abay Live Lounge",
+                "Live Voice Lounge",
                 style: TextStyle(
                   color: Colors.white54,
                   fontSize: 13,
@@ -236,7 +214,7 @@ style: TextStyle(
 
               const Spacer(flex: 3),
 
-              if (_isLoading)
+if (_isLoading)
                 Column(
                   children: [
                     const CircularProgressIndicator(color: Color(0xFFFFD700)),
@@ -276,20 +254,8 @@ style: TextStyle(
                 onTap: _isLoading ? () {} : _handlePhoneSignIn,
               ),
 
-              const SizedBox(height: 14),
-
-              // 3. Facebook Button
-              _loginButton(
-                icon: const Icon(Icons.facebook, size: 22, color: Colors.white),
-                text: "Continue with Facebook",
-                bgColor: const Color(0xFF1877F2),
-                textColor: Colors.white,
-                onTap: _isLoading ? () {} : _handleFacebookSignIn,
-              ),
-
               const Spacer(flex: 1),
 
-              // Terms & Privacy Policy
               const Text(
                 "By continuing, you agree to our Terms & Privacy Policy.",
                 style: TextStyle(color: Colors.white38, fontSize: 11),
