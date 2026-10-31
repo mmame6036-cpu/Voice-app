@@ -18,8 +18,8 @@ class VoiceRoomScreen extends StatefulWidget {
     required this.roomId,
     required this.hostName,
     required this.userNumericId,
-    required this.userUid,
-    required this.userName,
+    this.userUid = "user_guest_id",
+    this.userName = "Me",
   });
 
   @override
@@ -145,9 +145,9 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> {
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.remove_circle_outline, color: Colors.white60),
 
-tooltip: "Reduce Seats",
+icon: const Icon(Icons.remove_circle_outline, color: Colors.white60),
+            tooltip: "Reduce Seats",
             onPressed: _totalSeats > 4 ? () => _adjustSeats(-2) : null,
           ),
           IconButton(
@@ -233,10 +233,10 @@ tooltip: "Reduce Seats",
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Container(
-                                width: 48,
-                                height: 48,
 
-decoration: BoxDecoration(
+width: 48,
+                                height: 48,
+                                decoration: BoxDecoration(
                                   shape: BoxShape.circle,
                                   color: isOccupied
                                       ? (isMe ? const Color(0xFF00C9A7) : const Color(0xFF6C5CE7))
