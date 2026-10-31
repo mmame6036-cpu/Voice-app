@@ -17,8 +17,8 @@ class RoomService {
   }) async {
     final doc = await _roomsCollection.doc(roomId).get();
     if (!doc.exists) {
-      final List?> initialSeats = List.filled(30, null);
-      initialSeats[0] = {
+      final List<dynamic> seatsList = List.filled(30, null);
+      seatsList[0] = {
         'uid': hostUid,
         'name': hostName,
         'isMuted': false,
@@ -30,7 +30,7 @@ class RoomService {
         'hostUid': hostUid,
         'hostName': hostName,
         'totalSeats': 30,
-        'seats': initialSeats,
+        'seats': seatsList,
         'createdAt': FieldValue.serverTimestamp(),
       });
     }
