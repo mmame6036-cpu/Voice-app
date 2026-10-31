@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'home_screen.dart';
 import 'messages_screen.dart';
 import 'profile_screen.dart';
-import 'room_screen.dart';
+import 'voice_room_screen.dart';
 
 class MainNavigationScreen extends StatefulWidget {
   const MainNavigationScreen({super.key});
@@ -25,11 +25,11 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => RoomScreen(
+        builder: (_) => VoiceRoomScreen(
           roomTitle: roomTitle,
-          initialCoins: _coins,
-          onCoinUpdate: _updateCoins,
-          seatCount: 12,
+          roomId: "nile_${roomTitle.toLowerCase().replaceAll(' ', '_')}",
+          hostName: "Host",
+          userNumericId: 100001, // የተጠቃሚው ልዩ ቁጥር
         ),
       ),
     );
