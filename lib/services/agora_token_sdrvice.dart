@@ -2,8 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class AgoraTokenService {
-  // Replace this URL once your backend server is deployed
-  static const String _serverBaseUrl = "https://your-token-server.com/rtcToken";
+  static const String _serverBaseUrl = "https://nile-token-server.onrender.com/rtcToken";
 
   static Future<String?> fetchToken({
     required String channelName,
@@ -14,14 +13,13 @@ class AgoraTokenService {
       final role = isPublisher ? "publisher" : "subscriber";
       final uri = Uri.parse("$_serverBaseUrl?channelName=$channelName&uid=$uid&role=$role");
       
-      final response = await http.get(uri).timeout(const Duration(seconds: 10));
+      final response = await http.get(uri).timeout(const Duration(seconds: 12));
 
       if (response.statusCode == 200) {
         final Map<String, dynamic> data = jsonDecode(response.body);
         return data['token'] as String?;
       }
     } catch (_) {
-      // In case server is offline during initial testing
       return null;
     }
     return null;
