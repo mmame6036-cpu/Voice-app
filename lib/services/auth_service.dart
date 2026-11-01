@@ -15,12 +15,12 @@ class AuthService {
     return 100000 + random.nextInt(900000);
   }
 
-  Future> syncUserProfile(User user, {String? defaultName}) async {
+  Future syncUserProfile(User user, {String? defaultName}) async {
     final docRef = _firestore.collection('users').doc(user.uid);
     final doc = await docRef.get();
 
     if (doc.exists && doc.data() != null) {
-      return doc.data()!;
+      return doc.data();
     }
 
     final numericId = _generateNumericId();
@@ -38,7 +38,7 @@ class AuthService {
     return userData;
   }
 
-  Future?> signInWithGoogle() async {
+  Future signInWithGoogle() async {
     try {
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
       if (googleUser == null) return null;
@@ -80,7 +80,7 @@ class AuthService {
     );
   }
 
-  Future?> verifyOtp({
+  Future verifyOtp({
     required String verificationId,
     required String smsCode,
   }) async {
@@ -99,7 +99,7 @@ class AuthService {
     return null;
   }
 
-  Future?> getCurrentUserProfile() async {
+  Future getCurrentUserProfile() async {
     if (currentUser == null) return null;
     final doc = await _firestore.collection('users').doc(currentUser!.uid).get();
     return doc.data();
