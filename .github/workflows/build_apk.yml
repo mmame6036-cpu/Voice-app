@@ -25,18 +25,12 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Recreate Android Platform
+      - name: Recreate Android with Matching Package
         run: |
           rm -rf android
-          flutter create . --platforms=android --project-name=voice_app
+          flutter create . --platforms=android --org=com.example --project-name=voiceapp
 
-      - name: Restore Firebase Config
-        run: |
-          if [ -f google-services.json ]; then
-            cp google-services.json android/app/
-          fi
-
-      - name: Configure Permissions and Gradle
+      - name: Configure Gradle and Permissions
         run: |
           mkdir -p ~/.gradle
           cat << 'EOF' > ~/.gradle/init.gradle
@@ -46,6 +40,7 @@ jobs:
                       android {
                           compileSdkVersion 34
                           defaultConfig {
+                              applicationId "Com.example.voiceapp"
                               minSdkVersion 23
                               targetSdkVersion 34
                           }
@@ -55,6 +50,12 @@ jobs:
           }
           EOF
           sed -i '/<manifest/a \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.RECORD_AUDIO"/>\n    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>' android/app/src/main/AndroidManifest.xml
+
+      - name: Copy Firebase Config
+        run: |
+          if [ -f google-services.json ]; then
+            cp google-services.json android/app/
+          fi
 
       - name: Setup Fixed Debug Keystore
         run: |
