@@ -18,7 +18,6 @@ app.get('/rtcToken', (req, res) => {
     return res.status(400).json({ error: 'channelName and numeric uid are required' });
   }
 
-  // Token valid for 24 hours
   const expirationTimeInSeconds = 86400;
   const currentTimestamp = Math.floor(Date.now() / 1000);
   const privilegeExpiredTs = currentTimestamp + expirationTimeInSeconds;
@@ -32,7 +31,7 @@ app.get('/rtcToken', (req, res) => {
       roleType,
       privilegeExpiredTs
     );
-    return res.json({ token });
+    return res.json({ token: token });
   } catch (err) {
     return res.status(500).json({ error: 'Failed to generate token' });
   }
@@ -44,5 +43,5 @@ app.get('/health', (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(Server running on port ${PORT});
+  console.log('Server running on port ' + PORT);
 });
