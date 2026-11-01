@@ -1,8 +1,9 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:http/http.dart' as http;
 import '../services/agora_service.dart';
-import '../services/agora_token_service.dart';
 
 class VoiceRoomScreen extends StatefulWidget {
   final String roomTitle;
@@ -42,6 +43,21 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> {
     _setupAgora();
   }
 
+  Future<String?> _fetchToken({required String channelName, required int uid, required bool isPublisher}) async {
+    try {
+      final role = isPublisher ? "publisher" : "subscriber";
+      final uri = Uri.parse("https://nile-token-server.onrender.com/rtcToken?channelName=$channelName&uid=$uid&role=$role");
+      final response = await http.get(uri).timeout(const Duration(seconds: 12));
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data = jsonDecode(response.body);
+        return data['token'] as String?;
+      }
+    } catch (_) {
+      return null;
+    }
+    return null;
+  }
+
   Future<void> _setupAgora() async {
     final status = await Permission.microphone.request();
     if (status != PermissionStatus.granted && mounted) {
@@ -56,8 +72,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> {
       onVolumeChanged: (speakers) {},
     );
 
-    // Fetch dynamic secure token from Render backend
-    final dynamicToken = await AgoraTokenService.fetchToken(
+    final dynamicToken = await _fetchToken(
       channelName: widget.roomId,
       uid: widget.userNumericId,
       isPublisher: false,
@@ -132,7 +147,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> {
     super.dispose();
   }
 
-  @override
+@override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF0D0A1C),
@@ -148,8 +163,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> {
             ),
             Text(
               _isConnecting ? "Connecting to secure server..." : "Room ID: ${widget.roomId} • $_totalSeats Seats",
-
-style: TextStyle(
+              style: TextStyle(
                 fontSize: 11,
                 color: _isConnecting ? const Color(0xFFFFD700) : Colors.white54,
               ),
@@ -233,7 +247,8 @@ style: TextStyle(
                         children: [
                           Container(
                             width: 48,
-                            height: 48,
+
+height: 48,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
                               color: isOccupied
@@ -244,8 +259,7 @@ style: TextStyle(
                                 width: 1.5,
                               ),
                             ),
-
-child: Icon(
+                            child: Icon(
                               isOccupied ? Icons.person : Icons.event_seat,
                               color: isOccupied ? Colors.white : Colors.white24,
                               size: 22,
