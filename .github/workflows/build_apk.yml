@@ -25,12 +25,18 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Recreate Android with Clean Structure
+      - name: Recreate Android Platform
         run: |
           rm -rf android
           flutter create . --platforms=android --org=com.example --project-name=voiceapp
 
-      - name: Configure Gradle for App Only
+      - name: Copy Firebase Config
+        run: |
+          if [ -f google-services.json ]; then
+            cp google-services.json android/app/
+          fi
+
+      - name: Configure Gradle and Permissions
         run: |
           mkdir -p ~/.gradle
           cat << 'EOF' > ~/.gradle/init.gradle
@@ -45,23 +51,10 @@ jobs:
                           }
                       }
                   }
-                  if (project.name == "app" && project.hasProperty("android")) {
-                      android {
-                          defaultConfig {
-                              applicationId "Com.example.voiceapp"
-                          }
-                      }
-                  }
               }
           }
           EOF
           sed -i '/<manifest/a \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.RECORD_AUDIO"/>\n    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>' android/app/src/main/AndroidManifest.xml
-
-      - name: Copy Firebase Config
-        run: |
-          if [ -f google-services.json ]; then
-            cp google-services.json android/app/
-          fi
 
       - name: Setup Fixed Debug Keystore
         run: |
