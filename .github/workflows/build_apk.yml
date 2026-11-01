@@ -25,12 +25,12 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Recreate Android with Matching Package
+      - name: Recreate Android with Clean Structure
         run: |
           rm -rf android
           flutter create . --platforms=android --org=com.example --project-name=voiceapp
 
-      - name: Configure Gradle and Permissions
+      - name: Configure Gradle for App Only
         run: |
           mkdir -p ~/.gradle
           cat << 'EOF' > ~/.gradle/init.gradle
@@ -40,9 +40,15 @@ jobs:
                       android {
                           compileSdkVersion 34
                           defaultConfig {
-                              applicationId "Com.example.voiceapp"
                               minSdkVersion 23
                               targetSdkVersion 34
+                          }
+                      }
+                  }
+                  if (project.name == "app" && project.hasProperty("android")) {
+                      android {
+                          defaultConfig {
+                              applicationId "Com.example.voiceapp"
                           }
                       }
                   }
