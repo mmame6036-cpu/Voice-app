@@ -19,7 +19,7 @@ class AuthService {
     final docRef = _firestore.collection('users').doc(user.uid);
     final doc = await docRef.get();
 
-    if (doc.exists) {
+    if (doc.exists && doc.data() != null) {
       return doc.data()!;
     }
 
@@ -27,7 +27,7 @@ class AuthService {
     final userData = {
       'uid': user.uid,
       'numericId': numericId,
-      'name': user.displayName ?? defaultName ?? 'User_${numericId % 10000}',
+      'name': user.displayName ?? defaultName ?? 'User_$numericId',
       'email': user.email ?? '',
       'phone': user.phoneNumber ?? '',
       'coins': 100,
