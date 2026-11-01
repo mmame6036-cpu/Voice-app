@@ -25,10 +25,16 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Recreate Android with Modern V2 Embedding
+      - name: Recreate Android Platform
         run: |
           rm -rf android
-          flutter create . --platforms=android
+          flutter create . --platforms=android --project-name=voice_app
+
+      - name: Restore Firebase Config
+        run: |
+          if [ -f google-services.json ]; then
+            cp google-services.json android/app/
+          fi
 
       - name: Configure Permissions and Gradle
         run: |
@@ -50,7 +56,7 @@ jobs:
           EOF
           sed -i '/<manifest/a \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.RECORD_AUDIO"/>\n    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>' android/app/src/main/AndroidManifest.xml
 
-      - name: Setup Fixed Debug Key
+      - name: Setup Fixed Debug Keystore
         run: |
           mkdir -p ~/.android
           keytool -genkey -v -keystore ~/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
