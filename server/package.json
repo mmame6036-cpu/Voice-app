@@ -1,0 +1,14 @@
+{
+  "name": "agora-token-server",
+  "version": "1.0.0",
+  "description": "Secure Agora Token Generation Service",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "agora-token": "^2.0.3",
+    "cors": "^2.8.5",
+    "express": "^4.19.2"
+  }
+}
