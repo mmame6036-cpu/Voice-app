@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'services/auth_service.dart';
+import 'screens/auth_screen.dart';
 import 'screens/main_navigation.dart';
 
 void main() async {
@@ -12,10 +14,8 @@ class NileApp extends StatelessWidget {
 
   Future<FirebaseApp> _initializeFirebase() async {
     try {
-      // First attempt to initialize using native resources
       return await Firebase.initializeApp();
     } catch (_) {
-      // Fallback for Android when google-services.json values are missing
       return await Firebase.initializeApp(
         options: const FirebaseOptions(
           apiKey: "AIzaSyDummyKeyForNileLiveProductionFallback",
@@ -40,7 +40,7 @@ class NileApp extends StatelessWidget {
         future: _initializeFirebase(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.done) {
-            return const MainNavigationScreen();
+            return const AuthWrapper();
           }
 
           if (snapshot.hasError) {
@@ -48,7 +48,7 @@ class NileApp extends StatelessWidget {
           }
 
           return const Scaffold(
-            backgroundColor: const Color(0xFF0D0A1C),
+            backgroundColor: Color(0xFF0D0A1C),
             body: Center(
               child: CircularProgressIndicator(
                 color: Color(0xFFFFD700),
@@ -57,6 +57,61 @@ class NileApp extends StatelessWidget {
           );
         },
       ),
+    );
+  }
+}
+
+class AuthWrapper extends StatefulWidget {
+  const AuthWrapper({super.key});
+
+  @override
+  State<AuthWrapper> createState() => _AuthWrapperState();
+}
+
+class _AuthWrapperState extends State<AuthWrapper> {
+  final AuthService _authService = AuthService();
+  bool _isLoading = true;
+  bool _isLoggedIn = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkStatus();
+  }
+
+  Future<void> _checkStatus() async {
+    final user = _authService.currentUser;
+    if (mounted) {
+      setState(() {
+        _isLoggedIn = user != null;
+        _isLoading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(
+        backgroundColor: Color(0xFF0D0A1C),
+        body: Center(
+          child: CircularProgressIndicator(
+            color: Color(0xFFFFD700),
+          ),
+        ),
+      );
+    }
+
+    if (_isLoggedIn) {
+      return const MainNavigationScreen();
+    }
+
+    return AuthScreen(
+      onLoginSuccess: () {
+        setState(() {
+          _isLoggedIn = true;
+        });
+      },
     );
   }
 }
