@@ -21,11 +21,14 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.19.6'
           channel: 'stable'
-          cache: true
 
-      - name: Configure Gradle & Permissions
+      - name: Create Android Platform
+        run: |
+          rm -rf android
+          flutter create . --platforms=android
+
+      - name: Configure Gradle and Permissions
         run: |
           mkdir -p ~/.gradle
           cat << 'EOF' > ~/.gradle/init.gradle
@@ -43,10 +46,9 @@ jobs:
               }
           }
           EOF
-          # Add Permissions to AndroidManifest.xml
           sed -i '/<manifest/a \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.RECORD_AUDIO"/>\n    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>' android/app/src/main/AndroidManifest.xml
 
-      - name: Setup Fixed Debug Key
+      - name: Setup Fixed Debug Keystore
         run: |
           mkdir -p ~/.android
           keytool -genkey -v -keystore ~/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
