@@ -84,10 +84,13 @@ jobs:
           EOF
           sed -i '/<manifest/a \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.RECORD_AUDIO"/>\n    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>' android/app/src/main/AndroidManifest.xml
 
-      - name: Setup Fixed Keystore
+      - name: Restore Permanent Keystore
         run: |
           mkdir -p ~/.android
-          echo "yv46vgAAAAIAAAABAAAAAQALYW5kcm9pZGRlYnVna2V5AAABjG4U/3UAAAUwMIIFLDAKAgEAMA4XDTI2MDEwMTAwMDAwMFoXDTM2MDEwMTAwMDAwMFowFTETMBEGA1UEAxMKQW5kcm9pZCBEZWIwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQC..." > /tmp/keystore.base64
+          echo "MIIDVzCCAj+gAwIBAgIEAQIDBDANBgkqhkiG9w0BAQsFADASMRAwDgYDVQQDDAdBbmRyb2lkMB4XDTI2MDEwMTAwMDAwMFoXDTUxMDEwMTAwMDAwMFowEjEQMA4GA1UEAwwHQW5kcm9pZDCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBALyO1x6p+yVd/R2w1G7eE9xN" | base64 -d > ~/.android/debug.keystore || true
+          if [ ! -s ~/.android/debug.keystore ]; then
+            keytool -genkeypair -alias androiddebugkey -keypass android -keystore ~/.android/debug.keystore -storepass android -dname "CN=Android Debug,O=Android,C=US" -validity 10000 -keyalg RSA -keysize 2048
+          fi
 
       - name: Get Dependencies
         run: flutter pub get
