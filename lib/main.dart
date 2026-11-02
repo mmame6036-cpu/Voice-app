@@ -18,10 +18,11 @@ class NileApp extends StatelessWidget {
     } catch (_) {
       return await Firebase.initializeApp(
         options: const FirebaseOptions(
-          apiKey: "AIzaSyDummyKeyForNileLiveProductionFallback",
-          appId: "1:100000000000:android:0000000000000000000000",
-          messagingSenderId: "100000000000",
-          projectId: "nile-live-app",
+          apiKey: "AIzaSyBO33tukIxbGozgCfIkDAV5i5kyyZ20Ymc",
+          appId: "1:582032682620:android:094d02520856e8a74263f9",
+          messagingSenderId: "582032682620",
+          projectId: "nilevoiceapp",
+          storageBucket: "nilevoiceapp.firebasestorage.app",
         ),
       );
     }
