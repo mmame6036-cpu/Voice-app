@@ -1,109 +1,84 @@
-name: Build Flutter APK
-
-on:
-  push:
-    branches: [ main ]
-  workflow_dispatch:
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'zulu'
-          java-version: '17'
-
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.19.6'
-          channel: 'stable'
-          cache: true
-
-      - name: Backup Firebase Config
-        run: |
-          find . -name "*google-services*.json" -exec cp {} /tmp/google-services.json \; || true
-
-      - name: Recreate Android Platform
-        run: |
-          rm -rf android
-          flutter create . --platforms=android --org=com.example --project-name=voiceapp
-
-      - name: Restore Firebase Config & Setup Plugins
-        run: |
-          mkdir -p android/app
-          if [ -f /tmp/google-services.json ]; then
-            cp /tmp/google-services.json android/app/google-services.json
-          elif [ -f google-services.json ]; then
-            cp google-services.json android/app/google-services.json
-          fi
-
-          # Verify file exists
-          if [ ! -f android/app/google-services.json ]; then
-            echo "ERROR: google-services.json file not found!"
-            exit 1
-          fi
-
-          # Add Google Services classpath to root build.gradle
-          cat << 'EOF' > android/build.gradle.tmp
-          buildscript {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-              dependencies {
-                  classpath "com.google.gms:google-services:4.4.1"
-              }
+{
+  "project_info": {
+    "project_number": "930914296582",
+    "project_id": "voiceapp-9bdf4",
+    "storage_bucket": "voiceapp-9bdf4.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:930914296582:android:7aeeb619b8149e9b6c3487",
+        "android_client_info": {
+          "package_name": "Com.example.voiceapp"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "930914296582-knbdi679to6dvppph328s7tkgaaivggk.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "Com.example.voiceapp",
+            "certificate_hash": "0d008fc9e824c0b232ae949f8030862f87ee7801"
           }
-          EOF
-          cat android/build.gradle >> android/build.gradle.tmp
-          mv android/build.gradle.tmp android/build.gradle
-
-          # Apply plugin to app build.gradle
-          echo 'apply plugin: "com.google.gms.google-services"' >> android/app/build.gradle
-
-      - name: Configure Gradle Settings and Permissions
-        run: |
-          mkdir -p ~/.gradle
-          cat << 'EOF' > ~/.gradle/init.gradle
-          allprojects {
-              afterEvaluate { project ->
-                  if (project.hasProperty("android")) {
-                      android {
-                          compileSdkVersion 34
-                          defaultConfig {
-                              minSdkVersion 23
-                              targetSdkVersion 34
-                          }
-                      }
-                  }
-              }
+        },
+        {
+          "client_id": "930914296582-qmvi22tga53v3nv6scg1dkjpjlug8qv8.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAABOsNzfYrbMNbbZxG8R75DtDQJIyWnkY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "930914296582-qmvi22tga53v3nv6scg1dkjpjlug8qv8.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:930914296582:android:85c93627e884f6236c3487",
+        "android_client_info": {
+          "package_name": "com.example.voiceapp"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "930914296582-fksacon4ernka00k7471en2egobte9h8.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.voiceapp",
+            "certificate_hash": "0d008fc9e824c0b232ae949f8030862f87ee7801"
           }
-          EOF
-          sed -i '/<manifest/a \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.RECORD_AUDIO"/>\n    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>' android/app/src/main/AndroidManifest.xml
-
-      - name: Setup Fixed Keystore
-        run: |
-          mkdir -p ~/.android
-          keytool -genkeypair -alias androiddebugkey -keypass android -keystore ~/.android/debug.keystore -storepass android -dname "CN=Android Debug,O=Android,C=US" -validity 10000 -keyalg RSA -keysize 2048
-
-      - name: Get Dependencies
-        run: flutter pub get
-
-      - name: Build Debug APK
-        run: flutter build apk --debug
-
-      - name: Print Exact APK SHA Fingerprint
-        run: |
-          keytool -printcert -jarfile build/app/outputs/flutter-apk/app-debug.apk
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: voice-app-apk
-          path: build/app/outputs/flutter-apk/app-debug.apk
+        },
+        {
+          "client_id": "930914296582-qmvi22tga53v3nv6scg1dkjpjlug8qv8.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAABOsNzfYrbMNbbZxG8R75DtDQJIyWnkY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "930914296582-qmvi22tga53v3nv6scg1dkjpjlug8qv8.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
