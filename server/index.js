@@ -38,7 +38,9 @@ app.post('/auth/custom-token', async (req, res) => {
     return res.status(400).json({ error: 'identifier is required' });
   }
 
-  const sanitizedUid = user_${identifier.toString().replace(/[^a-zA-Z0-9_]/g, '_')};
+  // Backtick ስህተት እንዳይፈጥር በተራ + ተቀናጅቷል
+  const cleanedId = String(identifier).replace(/[^a-zA-Z0-9_]/g, '_');
+  const sanitizedUid = 'user_' + cleanedId;
 
   try {
     const customToken = await admin.auth().createCustomToken(sanitizedUid);
