@@ -9,28 +9,47 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Firebase Admin Initialization
-const secretPath = fs.existsSync('/etc/secrets/serviceAccountKey.json')
-  ? '/etc/secrets/serviceAccountKey.json'
-  : path.join(__dirname, 'serviceAccountKey.json');
+// --- FIREBASE ADMIN INITIALIZATION ---
+let serviceAccount = null;
+const possiblePaths = [
+  '/etc/secrets/serviceAccountKey.json',
+  path.join(__dirname, 'serviceAccountKey.json'),
+  path.join(__dirname, '../serviceAccountKey.json')
+];
 
-try {
-  const serviceAccount = require(secretPath);
-  if (!admin.apps.length) {
-    admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount)
-    });
+for (const p of possiblePaths) {
+  if (fs.existsSync(p)) {
+    try {
+      const fileData = fs.readFileSync(p, 'utf8');
+      serviceAccount = JSON.parse(fileData);
+      console.log('Found and loaded serviceAccountKey at:', p);
+      break;
+    } catch (err) {
+      console.error('Error parsing JSON from', p, err.message);
+    }
   }
-  console.log('Firebase Admin initialized successfully');
-} catch (error) {
-  console.error('Firebase Admin init error:', error.message);
 }
 
-// Agora Credentials
+if (serviceAccount) {
+  try {
+    if (!admin.apps || admin.apps.length === 0) {
+      admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount)
+      });
+    }
+    console.log('Firebase Admin initialized successfully!');
+  } catch (err) {
+    console.error('Firebase Admin init error:', err.message);
+  }
+} else {
+  console.error('serviceAccountKey.json could not be found in known paths');
+}
+
+// --- AGORA CREDENTIALS ---
 const APP_ID = 'd00a25d96dfc44cc866cd8f41c496b36';
 const APP_CERTIFICATE = 'f612162b922c4dc4857cf5ab274c0108';
 
-// Firebase Custom Token Endpoint
+// --- FIREBASE CUSTOM TOKEN ENDPOINT ---
 app.post('/auth/custom-token', async (req, res) => {
   const { identifier } = req.body;
 
@@ -38,7 +57,6 @@ app.post('/auth/custom-token', async (req, res) => {
     return res.status(400).json({ error: 'identifier is required' });
   }
 
-  // Backtick ስህተት እንዳይፈጥር በተራ + ተቀናጅቷል
   const cleanedId = String(identifier).replace(/[^a-zA-Z0-9_]/g, '_');
   const sanitizedUid = 'user_' + cleanedId;
 
@@ -55,7 +73,7 @@ app.post('/auth/custom-token', async (req, res) => {
   }
 });
 
-// Agora RTC Token Endpoint
+// --- AGORA RTC TOKEN ENDPOINT ---
 app.get('/rtcToken', (req, res) => {
   const channelName = req.query.channelName;
   const uid = parseInt(req.query.uid, 10);
