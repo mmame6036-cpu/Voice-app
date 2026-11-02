@@ -10,39 +10,24 @@ app.use(cors());
 app.use(express.json());
 
 // --- FIREBASE ADMIN INITIALIZATION ---
-let serviceAccount = null;
-const possiblePaths = [
-  '/etc/secrets/serviceAccountKey.json',
-  path.join(__dirname, 'serviceAccountKey.json'),
-  path.join(__dirname, '../serviceAccountKey.json')
-];
+const secretPath = fs.existsSync('/etc/secrets/serviceAccountKey.json')
+  ? '/etc/secrets/serviceAccountKey.json'
+  : path.join(__dirname, 'serviceAccountKey.json');
 
-for (const p of possiblePaths) {
-  if (fs.existsSync(p)) {
-    try {
-      const fileData = fs.readFileSync(p, 'utf8');
-      serviceAccount = JSON.parse(fileData);
-      console.log('Found and loaded serviceAccountKey at:', p);
-      break;
-    } catch (err) {
-      console.error('Error parsing JSON from', p, err.message);
-    }
-  }
-}
+try {
+  const serviceAccount = JSON.parse(fs.readFileSync(secretPath, 'utf8'));
 
-if (serviceAccount) {
-  try {
-    if (!admin.apps || admin.apps.length === 0) {
-      admin.initializeApp({
-        credential: admin.credential.cert(serviceAccount)
-      });
-    }
-    console.log('Firebase Admin initialized successfully!');
-  } catch (err) {
-    console.error('Firebase Admin init error:', err.message);
+  // Handles both standard and ES module exports for firebase-admin
+  const firebaseAdmin = admin.default || admin;
+
+  if (!firebaseAdmin.apps || firebaseAdmin.apps.length === 0) {
+    firebaseAdmin.initializeApp({
+      credential: firebaseAdmin.credential.cert(serviceAccount)
+    });
   }
-} else {
-  console.error('serviceAccountKey.json could not be found in known paths');
+  console.log('Firebase Admin initialized successfully!');
+} catch (error) {
+  console.error('Firebase Admin init error:', error.message);
 }
 
 // --- AGORA CREDENTIALS ---
@@ -61,7 +46,8 @@ app.post('/auth/custom-token', async (req, res) => {
   const sanitizedUid = 'user_' + cleanedId;
 
   try {
-    const customToken = await admin.auth().createCustomToken(sanitizedUid);
+    const firebaseAdmin = admin.default || admin;
+    const customToken = await firebaseAdmin.auth().createCustomToken(sanitizedUid);
     return res.json({
       success: true,
       token: customToken,
