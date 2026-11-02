@@ -87,7 +87,7 @@ jobs:
       - name: Setup Fixed Keystore
         run: |
           mkdir -p ~/.android
-          keytool -genkeypair -alias androiddebugkey -keypass android -keystore ~/.android/debug.keystore -storepass android -dname "CN=Android Debug,O=Android,C=US" -validity 10000 -keyalg RSA -keysize 2048
+          echo "yv46vgAAAAIAAAABAAAAAQALYW5kcm9pZGRlYnVna2V5AAABjG4U/3UAAAUwMIIFLDAKAgEAMA4XDTI2MDEwMTAwMDAwMFoXDTM2MDEwMTAwMDAwMFowFTETMBEGA1UEAxMKQW5kcm9pZCBEZWIwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQC..." > /tmp/keystore.base64
 
       - name: Get Dependencies
         run: flutter pub get
