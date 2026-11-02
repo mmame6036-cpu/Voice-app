@@ -25,19 +25,31 @@ jobs:
           channel: 'stable'
           cache: true
 
+      - name: Backup Firebase Config
+        run: |
+          find . -name "*google-services*.json" -exec cp {} /tmp/google-services.json \; || true
+
       - name: Recreate Android Platform
         run: |
           rm -rf android
           flutter create . --platforms=android --org=com.example --project-name=voiceapp
 
-      - name: Setup Google Services Repositories & Plugin
+      - name: Restore Firebase Config & Setup Plugins
         run: |
-          # Copy google-services.json to app folder
-          if [ -f google-services.json ]; then
-            cp google-services.json android/app/
+          mkdir -p android/app
+          if [ -f /tmp/google-services.json ]; then
+            cp /tmp/google-services.json android/app/google-services.json
+          elif [ -f google-services.json ]; then
+            cp google-services.json android/app/google-services.json
           fi
 
-          # Properly inject buildscript with repositories and dependency
+          # Verify file exists
+          if [ ! -f android/app/google-services.json ]; then
+            echo "ERROR: google-services.json file not found!"
+            exit 1
+          fi
+
+          # Add Google Services classpath to root build.gradle
           cat << 'EOF' > android/build.gradle.tmp
           buildscript {
               repositories {
@@ -52,7 +64,7 @@ jobs:
           cat android/build.gradle >> android/build.gradle.tmp
           mv android/build.gradle.tmp android/build.gradle
 
-          # Apply Google Services plugin to android/app/build.gradle
+          # Apply plugin to app build.gradle
           echo 'apply plugin: "com.google.gms.google-services"' >> android/app/build.gradle
 
       - name: Configure Gradle Settings and Permissions
