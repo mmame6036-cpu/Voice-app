@@ -46,6 +46,31 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  Future<void> _handleGuestSignIn() async {
+    setState(() {
+      _isLoading = true;
+      _loadingMethod = "Guest";
+    });
+
+    try {
+      final UserCredential userCredential = await _auth.signInAnonymously();
+
+      if (userCredential.user != null) {
+        await _handleUserRouting(userCredential.user!);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Guest sign in failed: $e")),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
   Future<void> _handleGoogleSignIn() async {
     setState(() {
       _isLoading = true;
@@ -108,7 +133,8 @@ class _LoginScreenState extends State<LoginScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+
+children: [
               Center(
                 child: Container(
                   width: 40,
@@ -125,8 +151,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 18,
-
-fontWeight: FontWeight.bold,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
               const SizedBox(height: 12),
@@ -191,7 +216,8 @@ fontWeight: FontWeight.bold,
                                 );
                               },
                               codeSent: (String verificationId, int? resendToken) {
-                                setSheetState(() {
+
+setSheetState(() {
                                   currentVerificationId = verificationId;
                                   codeSent = true;
                                   isProcessing = false;
@@ -202,8 +228,7 @@ fontWeight: FontWeight.bold,
                               },
                             );
                           },
-
-child: isProcessing
+                    child: isProcessing
                         ? const SizedBox(
                             height: 20,
                             width: 20,
@@ -271,7 +296,8 @@ child: isProcessing
                                 SnackBar(content: Text("Invalid verification code: $e")),
                               );
                             }
-                          },
+
+},
                     child: isProcessing
                         ? const SizedBox(
                             height: 20,
@@ -289,7 +315,7 @@ child: isProcessing
     );
   }
 
-@override
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF0A0714),
@@ -358,6 +384,8 @@ child: isProcessing
                 textColor: Colors.white,
                 onTap: _isLoading ? () {} : _handlePhoneSignIn,
               ),
+              const SizedBox(height: 14),
+              _guestButton(),
               const Spacer(flex: 1),
               const Text(
                 "By continuing, you agree to our Terms & Privacy Policy.",
@@ -367,6 +395,38 @@ child: isProcessing
               const SizedBox(height: 16),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _guestButton() {
+    return SizedBox(
+      width: double.infinity,
+      height: 50,
+      child: OutlinedButton(
+        style: OutlinedButton.styleFrom(
+          side: const BorderSide(color: Color(0xFFFFD700), width: 1.2),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(25),
+          ),
+
+),
+        onPressed: _isLoading ? null : _handleGuestSignIn,
+        child: const Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.person_outline, size: 20, color: Color(0xFFFFD700)),
+            SizedBox(width: 10),
+            Text(
+              "Continue as Guest",
+              style: TextStyle(
+                color: Color(0xFFFFD700),
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
         ),
       ),
     );
