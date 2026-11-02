@@ -1,7 +1,8 @@
 const express = require('express');
 const cors = require('cors');
 const { RtcTokenBuilder, RtcRole } = require('agora-token');
-const admin = require('firebase-admin');
+const { initializeApp, cert, getApps } = require('firebase-admin/app');
+const { getAuth } = require('firebase-admin/auth');
 const fs = require('fs');
 const path = require('path');
 
@@ -17,12 +18,9 @@ const secretPath = fs.existsSync('/etc/secrets/serviceAccountKey.json')
 try {
   const serviceAccount = JSON.parse(fs.readFileSync(secretPath, 'utf8'));
 
-  // Handles both standard and ES module exports for firebase-admin
-  const firebaseAdmin = admin.default || admin;
-
-  if (!firebaseAdmin.apps || firebaseAdmin.apps.length === 0) {
-    firebaseAdmin.initializeApp({
-      credential: firebaseAdmin.credential.cert(serviceAccount)
+  if (getApps().length === 0) {
+    initializeApp({
+      credential: cert(serviceAccount)
     });
   }
   console.log('Firebase Admin initialized successfully!');
@@ -46,8 +44,8 @@ app.post('/auth/custom-token', async (req, res) => {
   const sanitizedUid = 'user_' + cleanedId;
 
   try {
-    const firebaseAdmin = admin.default || admin;
-    const customToken = await firebaseAdmin.auth().createCustomToken(sanitizedUid);
+    // getAuth() ይጠራል - ለ v12+ ትክክለኛው አሰራር ይሄ ነው
+    const customToken = await getAuth().createCustomToken(sanitizedUid);
     return res.json({
       success: true,
       token: customToken,
