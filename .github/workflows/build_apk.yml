@@ -32,7 +32,7 @@ jobs:
       - name: Recreate Android Platform
         run: |
           rm -rf android
-          flutter create . --platforms=android --org=com.example --project-name=voiceapp
+          flutter create . --platforms=android --org=com.nile --project-name=voiceapp
 
       - name: Restore Firebase Config & Setup Plugins
         run: |
@@ -90,7 +90,7 @@ jobs:
       - name: Setup Fixed Keystore
         run: |
           mkdir -p ~/.android
-          keytool -genkeypair -alias androiddebugkey -keypass android -keystore ~/.android/debug.keystore -storepass android -dname "CN=Android Debug,O=Android,C=US" -validity 10000 -keyalg RSA -keysize 2048
+          keytool -genkeypair -alias androiddebugkey -keypass android -keystore ~/.android/debug.keystore -storepass android -dname "CN=Android Debug,O=Android,C=US" -validity 10000 -keyalg RSA -keysize 2048 -sigalg SHA256withRSA
 
       - name: Get Dependencies
         run: flutter pub get
