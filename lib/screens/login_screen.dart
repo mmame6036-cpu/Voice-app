@@ -1,6 +1,7 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:google_sign_in/google_sign_in.dart';
 import '../services/user_service.dart';
 import 'Profile_setup_screen.dart';
 import 'main_navigation.dart';
@@ -14,11 +15,13 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final FirebaseAuth _auth = FirebaseAuth.instance;
-  final GoogleSignIn _googleSignIn = GoogleSignIn();
   final UserService _userService = UserService();
 
   bool _isLoading = false;
-  String _loadingMethod = "";
+  String _loadingMessage = "";
+
+  // Render Server URL
+  static const String _serverBaseUrl = "https://nile-token-server.onrender.com";
 
   Future<void> _handleUserRouting(User user) async {
     final existingUser = await _userService.getUser(user.uid);
@@ -46,22 +49,41 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  Future<void> _handleGuestSignIn() async {
+  // --- Direct Server-Side Custom Token Authentication ---
+  Future<void> _loginWithServer(String identifier) async {
     setState(() {
       _isLoading = true;
-      _loadingMethod = "Guest";
+      _loadingMessage = "Connecting to NILE server...";
     });
 
     try {
-      final UserCredential userCredential = await _auth.signInAnonymously();
+      final response = await http.post(
+        Uri.parse("$_serverBaseUrl/auth/custom-token"),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({"identifier": identifier}),
+      ).timeout(const Duration(seconds: 25));
 
-      if (userCredential.user != null) {
-        await _handleUserRouting(userCredential.user!);
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data["success"] == true && data["token"] != null) {
+          final String customToken = data["token"];
+
+          // Authenticate with Firebase directly using Custom Token
+          final UserCredential cred = await _auth.signInWithCustomToken(customToken);
+
+          if (cred.user != null && mounted) {
+            await _handleUserRouting(cred.user!);
+          }
+        } else {
+          throw Exception("Server failed to generate token");
+        }
+      } else {
+        throw Exception("Server returned code ${response.statusCode}");
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Guest sign in failed: $e")),
+          SnackBar(content: Text("Login error: $e")),
         );
       }
     } finally {
@@ -71,49 +93,15 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  Future<void> _handleGoogleSignIn() async {
-    setState(() {
-      _isLoading = true;
-      _loadingMethod = "Google";
-    });
-
-    try {
-      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
-      if (googleUser == null) {
-        setState(() => _isLoading = false);
-        return;
-      }
-
-      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
-      final OAuthCredential credential = GoogleAuthProvider.credential(
-        accessToken: googleAuth.accessToken,
-        idToken: googleAuth.idToken,
-      );
-
-      final UserCredential userCredential = await _auth.signInWithCredential(credential);
-
-      if (userCredential.user != null) {
-        await _handleUserRouting(userCredential.user!);
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Google sign in failed: $e")),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
-    }
+  // Quick Guest Login
+  Future<void> _handleGuestLogin() async {
+    final guestId = "guest_${DateTime.now().millisecondsSinceEpoch}";
+    await _loginWithServer(guestId);
   }
 
-  void _handlePhoneSignIn() {
+  void _handlePhoneSheet() {
     final phoneController = TextEditingController();
-    final otpController = TextEditingController();
-    bool codeSent = false;
-    String currentVerificationId = "";
-    bool isProcessing = false;
+    bool isSubmitting = false;
 
     showModalBottomSheet(
       context: context,
@@ -133,11 +121,11 @@ class _LoginScreenState extends State<LoginScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
-
-children: [
+            children: [
               Center(
                 child: Container(
-                  width: 40,
+
+width: 40,
                   height: 4,
                   decoration: BoxDecoration(
                     color: Colors.white24,
@@ -146,168 +134,69 @@ children: [
                 ),
               ),
               const SizedBox(height: 16),
-              Text(
-                codeSent ? "Enter Verification Code" : "Phone Login",
-                style: const TextStyle(
+              const Text(
+                "Phone Login",
+                style: TextStyle(
                   color: Colors.white,
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
                 ),
               ),
               const SizedBox(height: 12),
-              if (!codeSent) ...[
-                TextField(
-                  controller: phoneController,
-                  keyboardType: TextInputType.phone,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: InputDecoration(
-                    prefixIcon: const Icon(Icons.phone, color: Color(0xFFFFD700)),
-                    hintText: "9XXXXXXXX",
-                    prefixText: "+251 ",
-                    prefixStyle: const TextStyle(color: Colors.white),
-                    hintStyle: const TextStyle(color: Colors.white38),
-                    filled: true,
-                    fillColor: Colors.white.withOpacity(0.08),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: BorderSide.none,
-                    ),
+              TextField(
+                controller: phoneController,
+                keyboardType: TextInputType.phone,
+                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(
+                  prefixIcon: const Icon(Icons.phone, color: Color(0xFFFFD700)),
+                  hintText: "9XXXXXXXX",
+                  prefixText: "+251 ",
+                  prefixStyle: const TextStyle(color: Colors.white),
+                  hintStyle: const TextStyle(color: Colors.white38),
+                  filled: true,
+                  fillColor: Colors.white.withOpacity(0.08),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide.none,
                   ),
                 ),
-                const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFFFD700),
-                      foregroundColor: Colors.black,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFFFD700),
+                    foregroundColor: Colors.black,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
                     ),
-                    onPressed: isProcessing
-                        ? null
-                        : () async {
-                            final rawNumber = phoneController.text.trim();
-                            if (rawNumber.length < 9) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text("Please enter a valid phone number")),
-                              );
-                              return;
-                            }
-
-                            setSheetState(() => isProcessing = true);
-                            final fullPhone = "+251$rawNumber";
-
-                            await _auth.verifyPhoneNumber(
-                              phoneNumber: fullPhone,
-                              verificationCompleted: (PhoneAuthCredential credential) async {
-                                final result = await _auth.signInWithCredential(credential);
-                                if (result.user != null && mounted) {
-                                  Navigator.pop(ctx);
-                                  await _handleUserRouting(result.user!);
-                                }
-                              },
-                              verificationFailed: (FirebaseAuthException e) {
-                                setSheetState(() => isProcessing = false);
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text("Failed: ${e.message}")),
-                                );
-                              },
-                              codeSent: (String verificationId, int? resendToken) {
-
-setSheetState(() {
-                                  currentVerificationId = verificationId;
-                                  codeSent = true;
-                                  isProcessing = false;
-                                });
-                              },
-                              codeAutoRetrievalTimeout: (String verificationId) {
-                                currentVerificationId = verificationId;
-                              },
+                  ),
+                  onPressed: isSubmitting
+                      ? null
+                      : () async {
+                          final rawNumber = phoneController.text.trim();
+                          if (rawNumber.length < 9) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text("Please enter a valid phone number")),
                             );
-                          },
-                    child: isProcessing
-                        ? const SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2),
-                          )
-                        : const Text("Send Code (OTP)", style: TextStyle(fontWeight: FontWeight.bold)),
-                  ),
-                ),
-              ] else ...[
-                Text(
-                  "Code sent to +251 ${phoneController.text.trim()}",
-                  style: const TextStyle(color: Colors.white54, fontSize: 12),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: otpController,
-                  keyboardType: TextInputType.number,
-                  maxLength: 6,
-                  style: const TextStyle(color: Colors.white, letterSpacing: 4, fontSize: 18),
-                  textAlign: TextAlign.center,
-                  decoration: InputDecoration(
-                    hintText: "123456",
-                    hintStyle: const TextStyle(color: Colors.white24),
-                    filled: true,
-                    fillColor: Colors.white.withOpacity(0.08),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: BorderSide.none,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF00C9A7),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                    ),
-                    onPressed: isProcessing
-                        ? null
-                        : () async {
-                            final code = otpController.text.trim();
-                            if (code.length < 6) return;
+                            return;
+                          }
 
-                            setSheetState(() => isProcessing = true);
-
-                            try {
-                              final credential = PhoneAuthProvider.credential(
-                                verificationId: currentVerificationId,
-                                smsCode: code,
-                              );
-                              final result = await _auth.signInWithCredential(credential);
-                              if (result.user != null && mounted) {
-                                Navigator.pop(ctx);
-                                await _handleUserRouting(result.user!);
-                              }
-                            } catch (e) {
-                              setSheetState(() => isProcessing = false);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text("Invalid verification code: $e")),
-                              );
-                            }
-
-},
-                    child: isProcessing
-                        ? const SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2),
-                          )
-                        : const Text("Verify & Login", style: TextStyle(fontWeight: FontWeight.bold)),
-                  ),
+                          setSheetState(() => isSubmitting = true);
+                          Navigator.pop(ctx);
+                          await _loginWithServer("251$rawNumber");
+                        },
+                  child: isSubmitting
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2),
+                        )
+                      : const Text("Continue", style: TextStyle(fontWeight: FontWeight.bold)),
                 ),
-              ],
+              ),
             ],
           ),
         ),
@@ -337,7 +226,8 @@ setSheetState(() {
                   color: Colors.white,
                   fontSize: 28,
                   fontWeight: FontWeight.bold,
-                  letterSpacing: 2.0,
+
+letterSpacing: 2.0,
                 ),
               ),
               const SizedBox(height: 6),
@@ -356,36 +246,27 @@ setSheetState(() {
                     const CircularProgressIndicator(color: Color(0xFFFFD700)),
                     const SizedBox(height: 14),
                     Text(
-                      "Signing in with $_loadingMethod...",
+                      _loadingMessage,
                       style: const TextStyle(color: Colors.white70, fontSize: 13),
                     ),
                     const SizedBox(height: 30),
                   ],
                 ),
-              _loginButton(
-                icon: const Text(
-                  "G",
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w900,
-                    color: Color(0xFF4285F4),
-                  ),
-                ),
-                text: "Continue with Google",
-                bgColor: Colors.white,
-                textColor: Colors.black87,
-                onTap: _isLoading ? () {} : _handleGoogleSignIn,
-              ),
-              const SizedBox(height: 14),
-              _loginButton(
-                icon: const Icon(Icons.phone_android, size: 20, color: Colors.white70),
+              _actionButton(
+                icon: const Icon(Icons.phone_android, size: 20, color: Colors.white),
                 text: "Continue with Phone",
                 bgColor: const Color(0xFF1E2235),
                 textColor: Colors.white,
-                onTap: _isLoading ? () {} : _handlePhoneSignIn,
+                onTap: _isLoading ? () {} : _handlePhoneSheet,
               ),
               const SizedBox(height: 14),
-              _guestButton(),
+              _actionButton(
+                icon: const Icon(Icons.person_outline, size: 20, color: Colors.black87),
+                text: "Quick Guest Entry",
+                bgColor: const Color(0xFFFFD700),
+                textColor: Colors.black87,
+                onTap: _isLoading ? () {} : _handleGuestLogin,
+              ),
               const Spacer(flex: 1),
               const Text(
                 "By continuing, you agree to our Terms & Privacy Policy.",
@@ -400,39 +281,7 @@ setSheetState(() {
     );
   }
 
-  Widget _guestButton() {
-    return SizedBox(
-      width: double.infinity,
-      height: 50,
-      child: OutlinedButton(
-        style: OutlinedButton.styleFrom(
-          side: const BorderSide(color: Color(0xFFFFD700), width: 1.2),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(25),
-          ),
-
-),
-        onPressed: _isLoading ? null : _handleGuestSignIn,
-        child: const Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.person_outline, size: 20, color: Color(0xFFFFD700)),
-            SizedBox(width: 10),
-            Text(
-              "Continue as Guest",
-              style: TextStyle(
-                color: Color(0xFFFFD700),
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _loginButton({
+  Widget _actionButton({
     required Widget icon,
     required String text,
     required Color bgColor,
