@@ -1,92 +1,229 @@
-const express = require('express');
-const cors = require('cors');
-const { RtcTokenBuilder, RtcRole } = require('agora-token');
-const admin = require('firebase-admin');
-const fs = require('fs');
-const path = require('path');
+import 'dart:convert';
+import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:firebase_auth/firebase_auth.dart';
 
-const app = express();
-app.use(cors());
-app.use(express.json());
+class AuthScreen extends StatefulWidget {
+  final VoidCallback onLoginSuccess;
 
-// --- FIREBASE ADMIN INITIALIZATION ---
-// Render secret files are mounted at /etc/secrets/ or current directory
-const secretPath = fs.existsSync('/etc/secrets/serviceAccountKey.json')
-  ? '/etc/secrets/serviceAccountKey.json'
-  : path.join(__dirname, 'serviceAccountKey.json');
+  const AuthScreen({super.key, required this.onLoginSuccess});
 
-try {
-  const serviceAccount = require(secretPath);
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount)
-  });
-  console.log('Firebase Admin initialized successfully using:', secretPath);
-} catch (error) {
-  console.error('Firebase Admin initialization error:', error.message);
+  @override
+  State<AuthScreen> createState() => _AuthScreenState();
 }
 
-// --- AGORA CREDENTIALS ---
-const APP_ID = 'd00a25d96dfc44cc866cd8f41c496b36';
-const APP_CERTIFICATE = 'f612162b922c4dc4857cf5ab274c0108';
+class _AuthScreenState extends State<AuthScreen> {
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final TextEditingController _phoneController = TextEditingController();
 
-// --- FIREBASE CUSTOM AUTH ENDPOINT ---
-app.post('/auth/custom-token', async (req, res) => {
-  const { identifier } = req.body;
+  bool _isLoading = false;
+  String _errorMessage = "";
 
-  if (!identifier) {
-    return res.status(400).json({ error: 'identifier is required' });
-  }
+  static const String _serverBaseUrl = "https://nile-token-server.onrender.com";
 
-  // Generate clean alphanumeric UID (e.g., user_251912345678)
-  const sanitizedUid = user_${identifier.toString().replace(/[^a-zA-Z0-9_]/g, '_')};
-
-  try {
-    const customToken = await admin.auth().createCustomToken(sanitizedUid);
-    return res.json({
-      success: true,
-      token: customToken,
-      uid: sanitizedUid
+  Future<void> _loginWithServer(String identifier) async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = "";
     });
-  } catch (err) {
-    console.error('Error creating custom token:', err);
-    return res.status(500).json({ error: 'Failed to create custom token' });
+
+    try {
+      final response = await http.post(
+        Uri.parse("$_serverBaseUrl/auth/custom-token"),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({"identifier": identifier}),
+      ).timeout(const Duration(seconds: 25));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data["success"] == true && data["token"] != null) {
+          final String customToken = data["token"];
+
+          // Authenticate with Firebase using Custom Token
+          final cred = await _auth.signInWithCustomToken(customToken);
+
+          if (cred.user != null && mounted) {
+            widget.onLoginSuccess();
+          }
+        } else {
+          throw Exception("Token creation failed");
+        }
+      } else {
+        throw Exception("Server status ${response.statusCode}");
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _errorMessage = e.toString();
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
   }
-});
 
-// --- AGORA RTC TOKEN ENDPOINT ---
-app.get('/rtcToken', (req, res) => {
-  const channelName = req.query.channelName;
-  const uid = parseInt(req.query.uid, 10);
-  const roleType = req.query.role === 'publisher' ? RtcRole.PUBLISHER : RtcRole.SUBSCRIBER;
-
-  if (!channelName || isNaN(uid)) {
-    return res.status(400).json({ error: 'channelName and numeric uid are required' });
+  void _handlePhoneLogin() {
+    final rawNumber = _phoneController.text.trim();
+    if (rawNumber.length < 9) {
+      setState(() {
+        _errorMessage = "Please enter a valid phone number";
+      });
+      return;
+    }
+    _loginWithServer("251$rawNumber");
   }
 
-  const expirationTimeInSeconds = 86400;
-  const currentTimestamp = Math.floor(Date.now() / 1000);
-  const privilegeExpiredTs = currentTimestamp + expirationTimeInSeconds;
+  void _handleGuestLogin() {
+    final guestId = "guest_${DateTime.now().millisecondsSinceEpoch}";
+    _loginWithServer(guestId);
+  }
 
-  try {
-    const token = RtcTokenBuilder.buildTokenWithUid(
-      APP_ID,
-      APP_CERTIFICATE,
-      channelName,
-      uid,
-      roleType,
-      privilegeExpiredTs
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF0D0A1C),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 40.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              const SizedBox(height: 30),
+              Container(
+                width: 70,
+                height: 70,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: const Color(0xFFFFD700).withOpacity(0.15),
+                ),
+                child: const Icon(
+                  Icons.graphic_eq,
+                  color: Color(0xFFFFD700),
+                  size: 38,
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                "Welcome",
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 26,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                "Sign in to start your voice room",
+                style: TextStyle(
+                  color: Colors.white54,
+                  fontSize: 14,
+                ),
+              ),
+              const SizedBox(height: 40),
+              TextField(
+                controller: _phoneController,
+
+keyboardType: TextInputType.phone,
+                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(
+                  prefixIcon: const Icon(Icons.phone, color: Color(0xFFFFD700)),
+                  hintText: "9XXXXXXXX",
+                  prefixText: "+251 ",
+                  prefixStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                  hintStyle: const TextStyle(color: Colors.white38),
+                  filled: true,
+                  fillColor: Colors.white.withOpacity(0.06),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFFFD700),
+                    foregroundColor: Colors.black,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    elevation: 0,
+                  ),
+                  onPressed: _isLoading ? null : _handlePhoneLogin,
+                  child: _isLoading
+                      ? const SizedBox(
+                          height: 22,
+                          width: 22,
+                          child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2.5),
+                        )
+                      : const Text(
+                          "Continue with Phone",
+                          style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                        ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(child: Divider(color: Colors.white.withOpacity(0.15))),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 16),
+                    child: Text("OR", style: TextStyle(color: Colors.white38, fontSize: 12)),
+                  ),
+                  Expanded(child: Divider(color: Colors.white.withOpacity(0.15))),
+                ],
+              ),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    side: BorderSide(color: Colors.white.withOpacity(0.2)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                  onPressed: _isLoading ? null : _handleGuestLogin,
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.person_outline, color: Colors.white, size: 20),
+                      SizedBox(width: 10),
+                      Text(
+                        "Quick Guest Entry",
+                        style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              if (_errorMessage.isNotEmpty) ...[
+                const SizedBox(height: 24),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: Colors.redAccent.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(10),
+
+border: Border.all(color: Colors.redAccent.withOpacity(0.4)),
+                  ),
+                  child: Text(
+                    _errorMessage,
+                    style: const TextStyle(color: Colors.redAccent, fontSize: 12),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
     );
-    return res.json({ token: token });
-  } catch (err) {
-    return res.status(500).json({ error: 'Failed to generate token' });
   }
-});
-
-app.get('/health', (req, res) => {
-  res.send('Agora and Auth Server is running smoothly');
-});
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log('Server running on port ' + PORT);
-});
+}
