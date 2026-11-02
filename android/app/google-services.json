@@ -14,11 +14,11 @@
       },
       "oauth_client": [
         {
-          "client_id": "582032682620-4lovonkhu8qbi2sokkrgra0kgsd000aa.apps.googleusercontent.com",
+          "client_id": "582032682620-g4eskoq75q4qp6qa36bs1uj3g53sh7ic.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
             "package_name": "com.nile.voiceapp",
-            "certificate_hash": "0d008fc9e824c0b232ae949f8030862f87ee7801"
+            "certificate_hash": "228cefc5bfbbb6da93215e75e0d8da9477d7dad0"
           }
         },
         {
