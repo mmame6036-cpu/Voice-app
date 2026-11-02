@@ -1,78 +1,41 @@
 {
   "project_info": {
-    "project_number": "930914296582",
-    "project_id": "voiceapp-9bdf4",
-    "storage_bucket": "voiceapp-9bdf4.firebasestorage.app"
+    "project_number": "582032682620",
+    "project_id": "nilevoiceapp",
+    "storage_bucket": "nilevoiceapp.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:930914296582:android:7aeeb619b8149e9b6c3487",
+        "mobilesdk_app_id": "1:582032682620:android:094d02520856e8a74263f9",
         "android_client_info": {
-          "package_name": "Com.example.voiceapp"
+          "package_name": "com.nile.voiceapp"
         }
       },
       "oauth_client": [
         {
-          "client_id": "930914296582-knbdi679to6dvppph328s7tkgaaivggk.apps.googleusercontent.com",
+          "client_id": "582032682620-4lovonkhu8qbi2sokkrgra0kgsd000aa.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
-            "package_name": "Com.example.voiceapp",
+            "package_name": "com.nile.voiceapp",
             "certificate_hash": "0d008fc9e824c0b232ae949f8030862f87ee7801"
           }
         },
         {
-          "client_id": "930914296582-qmvi22tga53v3nv6scg1dkjpjlug8qv8.apps.googleusercontent.com",
+          "client_id": "582032682620-fn1e41hjm4i63c3rovhj5scl1m6bn3qs.apps.googleusercontent.com",
           "client_type": 3
         }
       ],
       "api_key": [
         {
-          "current_key": "AIzaSyAABOsNzfYrbMNbbZxG8R75DtDQJIyWnkY"
+          "current_key": "AIzaSyBO33tukIxbGozgCfIkDAV5i5kyyZ20Ymc"
         }
       ],
       "services": {
         "appinvite_service": {
           "other_platform_oauth_client": [
             {
-              "client_id": "930914296582-qmvi22tga53v3nv6scg1dkjpjlug8qv8.apps.googleusercontent.com",
-              "client_type": 3
-            }
-          ]
-        }
-      }
-    },
-    {
-      "client_info": {
-        "mobilesdk_app_id": "1:930914296582:android:85c93627e884f6236c3487",
-        "android_client_info": {
-          "package_name": "com.example.voiceapp"
-        }
-      },
-      "oauth_client": [
-        {
-          "client_id": "930914296582-fksacon4ernka00k7471en2egobte9h8.apps.googleusercontent.com",
-          "client_type": 1,
-          "android_info": {
-            "package_name": "com.example.voiceapp",
-            "certificate_hash": "0d008fc9e824c0b232ae949f8030862f87ee7801"
-          }
-        },
-        {
-          "client_id": "930914296582-qmvi22tga53v3nv6scg1dkjpjlug8qv8.apps.googleusercontent.com",
-          "client_type": 3
-        }
-      ],
-      "api_key": [
-        {
-          "current_key": "AIzaSyAABOsNzfYrbMNbbZxG8R75DtDQJIyWnkY"
-        }
-      ],
-      "services": {
-        "appinvite_service": {
-          "other_platform_oauth_client": [
-            {
-              "client_id": "930914296582-qmvi22tga53v3nv6scg1dkjpjlug8qv8.apps.googleusercontent.com",
+              "client_id": "582032682620-fn1e41hjm4i63c3rovhj5scl1m6bn3qs.apps.googleusercontent.com",
               "client_type": 3
             }
           ]
