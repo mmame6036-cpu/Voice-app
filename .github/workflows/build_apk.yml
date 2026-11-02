@@ -77,19 +77,6 @@ jobs:
                               minSdkVersion 23
                               targetSdkVersion 34
                           }
-                          signingConfigs {
-                              debug {
-                                  storeFile file("${System.getProperty('user.home')}/.android/debug.keystore")
-                                  storePassword "android"
-                                  keyAlias "androiddebugkey"
-                                  keyPassword "android"
-                              }
-                          }
-                          buildTypes {
-                              debug {
-                                  signingConfig signingConfigs.debug
-                              }
-                          }
                       }
                   }
               }
@@ -100,7 +87,7 @@ jobs:
       - name: Setup Fixed Keystore
         run: |
           mkdir -p ~/.android
-          keytool -genkeypair -alias androiddebugkey -keypass android -keystore ~/.android/debug.keystore -storepass android -dname "CN=Android Debug,O=Android,C=US" -validity 10000 -keyalg RSA -keysize 2048 -sigalg SHA256withRSA
+          keytool -genkeypair -alias androiddebugkey -keypass android -keystore ~/.android/debug.keystore -storepass android -dname "CN=Android Debug,O=Android,C=US" -validity 10000 -keyalg RSA -keysize 2048
 
       - name: Get Dependencies
         run: flutter pub get
@@ -112,7 +99,7 @@ jobs:
         run: |
           keytool -printcert -jarfile build/app/outputs/flutter-apk/app-debug.apk
 
-- name: Upload APK
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: voice-app-apk
