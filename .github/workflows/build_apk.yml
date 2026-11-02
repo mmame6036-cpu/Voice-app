@@ -87,10 +87,8 @@ jobs:
       - name: Restore Permanent Keystore
         run: |
           mkdir -p ~/.android
-          echo "MIIDVzCCAj+gAwIBAgIEAQIDBDANBgkqhkiG9w0BAQsFADASMRAwDgYDVQQDDAdBbmRyb2lkMB4XDTI2MDEwMTAwMDAwMFoXDTUxMDEwMTAwMDAwMFowEjEQMA4GA1UEAwwHQW5kcm9pZDCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBALyO1x6p+yVd/R2w1G7eE9xN" | base64 -d > ~/.android/debug.keystore || true
-          if [ ! -s ~/.android/debug.keystore ]; then
-            keytool -genkeypair -alias androiddebugkey -keypass android -keystore ~/.android/debug.keystore -storepass android -dname "CN=Android Debug,O=Android,C=US" -validity 10000 -keyalg RSA -keysize 2048
-          fi
+          rm -f ~/.android/debug.keystore
+          keytool -genkeypair -alias androiddebugkey -keypass android -keystore ~/.android/debug.keystore -storepass android -dname "CN=Android Debug,O=Android,C=US" -validity 10000 -keyalg RSA -keysize 2048
 
       - name: Get Dependencies
         run: flutter pub get
