@@ -316,7 +316,7 @@ void _changeSeatCount(int newCount) {
             return Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
               child: Column(
-                mainAxisSize: MainAxisSize.min,
+                mainAxisSize: dynamic,
                 children: [
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -437,7 +437,7 @@ onTap: () => _executeGiftSend(
             child: Image.asset(
               asset,
               fit: BoxFit.contain,
-              errorBuilder: (_, , _) => const Icon(
+              errorBuilder: (context, error, stackTrace) => const Icon(
                 Icons.card_giftcard,
                 color: Color(0xFFFFD700),
                 size: 28,
@@ -508,9 +508,9 @@ onTap: () => _executeGiftSend(
             ),
             Text(
               _isConnecting
-                  ? "Connecting..."
 
-: "ID: ${widget.roomId} • $_totalSeats Seats",
+? "Connecting..."
+                  : "ID: ${widget.roomId} • $_totalSeats Seats",
               style: TextStyle(
                 fontSize: 11,
                 color: _isConnecting ? const Color(0xFFFFD700) : Colors.white54,
@@ -603,16 +603,16 @@ onTap: () => _executeGiftSend(
                               Stack(
                                 clipBehavior: Clip.none,
                                 alignment: Alignment.center,
-                                children: [
 
-// 1. Host Crown Crest Badge
+children: [
+                                  // 1. Host Crown Crest Badge
                                   if (isHostSeat)
                                     Positioned(
                                       top: -15,
                                       child: Image.asset(
                                         'assets/images/lv3.png',
                                         width: 36,
-                                        errorBuilder: (_, , _) => const Icon(
+                                        errorBuilder: (context, error, stackTrace) => const Icon(
                                           Icons.military_tech,
                                           color: Color(0xFFFFD700),
                                           size: 18,
@@ -627,7 +627,7 @@ onTap: () => _executeGiftSend(
                                       child: Image.asset(
                                         'assets/images/2.png',
                                         width: 28,
-                                        errorBuilder: (_, , _) => const Icon(
+                                        errorBuilder: (context, error, stackTrace) => const Icon(
                                           Icons.star,
                                           color: Color(0xFFFFD700),
                                           size: 16,
@@ -673,15 +673,14 @@ onTap: () => _executeGiftSend(
                                     },
                                   ),
 
-                                  // 4. Frames: VIP 4 for Seats 2-7, VIP 1 for occupied others
-
-if (isCrownSeat)
+// 4. Frames: VIP 4 for Seats 2-7, VIP 1 for occupied others
+                                  if (isCrownSeat)
                                     Positioned.fill(
                                       child: IgnorePointer(
                                         child: Image.asset(
                                           'assets/images/4.png',
                                           fit: BoxFit.contain,
-                                          errorBuilder: (_, , _) => const SizedBox.shrink(),
+                                          errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
                                         ),
                                       ),
                                     )
@@ -691,7 +690,7 @@ if (isCrownSeat)
                                         child: Image.asset(
                                           'assets/images/1.png',
                                           fit: BoxFit.contain,
-                                          errorBuilder: (_, , _) => const SizedBox.shrink(),
+                                          errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
                                         ),
                                       ),
                                     ),
@@ -739,14 +738,15 @@ if (isCrownSeat)
                                       : (isOccupied ? Colors.white : Colors.white38),
                                   fontSize: 9.5,
                                   fontWeight: isOccupied
-                                      ? FontWeight.bold
+
+? FontWeight.bold
                                       : FontWeight.normal,
                                 ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
 
-Container(
+                              Container(
                                 margin: const EdgeInsets.only(top: 1.5),
                                 padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
                                 decoration: BoxDecoration(
@@ -815,7 +815,8 @@ Container(
                                 TextSpan(
                                   text: item.message,
                                   style: TextStyle(
-                                    color: item.isSystem ? Colors.white70 : Colors.white,
+
+color: item.isSystem ? Colors.white70 : Colors.white,
                                     fontSize: 12,
                                   ),
                                 ),
@@ -828,7 +829,7 @@ Container(
                   ),
                 ),
 
-// Bottom Bar
+                // Bottom Bar
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: const BoxDecoration(
