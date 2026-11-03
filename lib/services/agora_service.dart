@@ -12,6 +12,7 @@ class AgoraService {
     required Function(List<AudioVolumeInfo> speakers) onVolumeChanged,
   }) async {
     _engine = createAgoraRtcEngine();
+    
     await _engine!.initialize(const RtcEngineContext(
       appId: appId,
       channelProfile: ChannelProfileType.channelProfileLiveBroadcasting,
@@ -26,18 +27,38 @@ class AgoraService {
         onUserOffline: (RtcConnection connection, int remoteUid, UserOfflineReasonType reason) {
           onUserOffline(remoteUid);
         },
-        onAudioVolumeIndication: (RtcConnection connection, List<AudioVolumeInfo> speakers, int totalVolume, int speakerNumber) {
+        onAudioVolumeIndication: (
+          RtcConnection connection,
+          List<AudioVolumeInfo> speakers,
+          int totalVolume,
+          int speakerNumber,
+        ) {
           onVolumeChanged(speakers);
         },
       ),
     );
 
-    await _engine!.enableAudio();
+    // 1. Studio Quality Audio Profile (Ultra HD Music & Speech)
+    await _engine!.setAudioProfile(
+      profile: AudioProfileType.audioProfileMusicStandard,
+      scenario: AudioScenarioType.audioScenarioGameStreaming,
+    );
+
+    // 2. Enable Real-Time Speaking Wave Detection
     await _engine!.enableAudioVolumeIndication(
       interval: 200,
       smooth: 3,
       reportVad: true,
     );
+
+    // 3. Clear Voice Parameters (Echo Cancellation & AI Noise Filter)
+    await _engine!.setParameters('{"che.audio.opensles":true}');
+    await _engine!.setParameters('{"che.audio.aec.enable":true}');
+    await _engine!.setParameters('{"che.audio.ans.enable":true}');
+    await _engine!.setParameters('{"che.audio.agc.enable":true}');
+
+    // 4. Activate Audio Module
+    await _engine!.enableAudio();
   }
 
   Future<void> joinRoom({
