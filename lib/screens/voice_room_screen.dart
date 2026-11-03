@@ -55,7 +55,8 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
   late List<bool> _seatMutes;
   bool _isConnecting = true;
 
-  int _myCoins = 826260;
+  // ለመፈተሻ የተዘጋጀ 1,000,000 ሳንቲም
+  int _myCoins = 1000000;
 
   // አኒሜሽኖች
   late AnimationController _waveController;
@@ -66,7 +67,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
   int _animTargetSeatIndex = 0;
   bool _isGiftToAll = false;
 
-  // Combo ቁልፍ አሰራር (ልክ በቪዲዮው መሰረት)
+  // Combo አሰራር (3 ሰከንድ ክብ ቆጣሪ)
   bool _showComboButton = false;
   int _comboCount = 0;
   Timer? _comboTimer;
@@ -467,15 +468,9 @@ void _scrollToBottom() {
     _startComboTimer();
   }
 
-  // --- የስጦታ መላኪያ ሳጥን (ልክ በቪዲዮው መሰረት) ---
+  // --- የስጦታ መላኪያ ሳጥን (በቪዲዮው መሰረት) ---
   void _openGiftSheet() {
-    int? selectedSeatIndex;
-    bool isAllSelected = false;
-    int selectedMultiplier = 1;
-    final List<int> multipliers = [1, 3, 7, 10, 30, 50, 77, 100];
-    int selectedGiftId = 1;
-
-    // ወንበር ላይ የተቀመጡ ሰዎችን ማዘጋጀት
+    // 1. ወንበር ላይ የተቀመጡ ሰዎችን ዝርዝር ማዘጋጀት
     final List> activeUsers = [];
     for (int i = 0; i < _totalSeats; i++) {
       if (_seats[i] != null) {
@@ -486,9 +481,11 @@ void _scrollToBottom() {
       }
     }
 
-    if (activeUsers.isNotEmpty) {
-      selectedSeatIndex = activeUsers.first['seatIndex'];
-    }
+    int? selectedSeatIndex = activeUsers.isNotEmpty ? activeUsers.first['seatIndex'] : null;
+    bool isAllSelected = false;
+    int selectedMultiplier = 1;
+    final List<int> multipliers = [1, 3, 7, 10, 30, 50, 77, 100];
+    int selectedGiftId = 1;
 
     final giftsList = [
       {"id": 1, "name": "Fragrant Flowers", "price": 100, "asset": "assets/images/lv3.png"},
@@ -520,53 +517,67 @@ void _scrollToBottom() {
                     child: Row(
                       children: [
                         Expanded(
-                          child: ListView(
-                            scrollDirection: Axis.horizontal,
-                            children: activeUsers.map((user) {
-                              final isCurrent = !isAllSelected && selectedSeatIndex == user['seatIndex'];
-                              final seatNum = user['seatIndex'] + 1;
-                              final initial = (user['name'] as String).isNotEmpty ? (user['name'] as String)[0].toUpperCase() : "U";
+                          child: activeUsers.isEmpty
+                              ? const Center(
+                                  child: Text(
+                                    "No users seated",
+                                    style: TextStyle(color: Colors.white54, fontSize: 12),
+                                  ),
+                                )
+                              : ListView(
+                                  scrollDirection: Axis.horizontal,
+                                  children: activeUsers.map((user) {
+                                    final isCurrent = !isAllSelected && selectedSeatIndex == user['seatIndex'];
+                                    final seatNum = (user['seatIndex'] as int) + 1;
+                                    final userName = user['name'] as String;
+                                    final initial = userName.isNotEmpty ? userName[0].toUpperCase() : "U";
 
-                              return GestureDetector(
-                                onTap: () {
-                                  setSheetState(() {
-                                    isAllSelected = false;
-                                    selectedSeatIndex = user['seatIndex'];
-
-});
-                                },
-                                child: Container(
-                                  margin: const EdgeInsets.only(right: 12),
-                                  child: Column(
-                                    children: [
-                                      Container(
-                                        width: 38,
-                                        height: 38,
-                                        decoration: BoxDecoration(
-                                          shape: BoxShape.circle,
-                                          gradient: const LinearGradient(
-                                            colors: [Color(0xFFE91E63), Color(0xFF9C27B0)],
-                                          ),
-                                          border: Border.all(
-                                            color: isCurrent ? const Color(0xFFFFD700) : Colors.transparent,
-                                            width: 2.2,
-                                          ),
-                                        ),
-                                        child: Center(
-                                          child: Text(
-                                            initial,
-                                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
-                                          ),
+return GestureDetector(
+                                      onTap: () {
+                                        setSheetState(() {
+                                          isAllSelected = false;
+                                          selectedSeatIndex = user['seatIndex'] as int;
+                                        });
+                                      },
+                                      child: Container(
+                                        margin: const EdgeInsets.only(right: 12),
+                                        child: Column(
+                                          children: [
+                                            Container(
+                                              width: 38,
+                                              height: 38,
+                                              decoration: BoxDecoration(
+                                                shape: BoxShape.circle,
+                                                gradient: const LinearGradient(
+                                                  colors: [Color(0xFFE91E63), Color(0xFF9C27B0)],
+                                                ),
+                                                border: Border.all(
+                                                  color: isCurrent ? const Color(0xFFFFD700) : Colors.transparent,
+                                                  width: 2.2,
+                                                ),
+                                              ),
+                                              child: Center(
+                                                child: Text(
+                                                  initial,
+                                                  style: const TextStyle(
+                                                    color: Colors.white,
+                                                    fontWeight: FontWeight.bold,
+                                                    fontSize: 16,
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              "No.$seatNum",
+                                              style: const TextStyle(color: Colors.white60, fontSize: 10),
+                                            ),
+                                          ],
                                         ),
                                       ),
-                                      const SizedBox(height: 2),
-                                      Text("No.$seatNum", style: const TextStyle(color: Colors.white60, fontSize: 10)),
-                                    ],
-                                  ),
+                                    );
+                                  }).toList(),
                                 ),
-                              );
-                            }).toList(),
-                          ),
                         ),
 
                         // "All" ምርጫ (ለሁሉም)
@@ -590,13 +601,18 @@ void _scrollToBottom() {
                                     color: const Color(0xFFFFD700),
                                     border: Border.all(
                                       color: isAllSelected ? Colors.white : Colors.transparent,
-                                      width: 2.2,
+
+width: 2.2,
                                     ),
                                   ),
                                   child: const Center(
                                     child: Text(
                                       "All",
-                                      style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 14),
+                                      style: TextStyle(
+                                        color: Colors.black,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 14,
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -612,7 +628,7 @@ void _scrollToBottom() {
 
                   const Divider(color: Colors.white12, height: 16),
 
-// 2. የስጦታዎች ዝርዝር
+                  // 2. የስጦታዎች ዝርዝር
                   GridView.builder(
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
@@ -646,12 +662,17 @@ void _scrollToBottom() {
                                 item['asset'] as String,
                                 height: 42,
                                 fit: BoxFit.contain,
-                                errorBuilder: (c, e, s) => const Icon(Icons.card_giftcard, color: Color(0xFFFFD700), size: 30),
+                                errorBuilder: (c, e, s) =>
+                                    const Icon(Icons.card_giftcard, color: Color(0xFFFFD700), size: 30),
                               ),
                               const SizedBox(height: 4),
                               Text(
                                 item['name'] as String,
-                                style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -659,8 +680,12 @@ void _scrollToBottom() {
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
                                   const Icon(Icons.monetization_on, color: Color(0xFFFFD700), size: 10),
-                                  const SizedBox(width: 2),
-                                  Text("${item['price']}", style: const TextStyle(color: Color(0xFFFFD700), fontSize: 10)),
+
+const SizedBox(width: 2),
+                                  Text(
+                                    "${item['price']}",
+                                    style: const TextStyle(color: Color(0xFFFFD700), fontSize: 10),
+                                  ),
                                 ],
                               ),
                             ],
@@ -681,7 +706,11 @@ void _scrollToBottom() {
                           const SizedBox(width: 4),
                           Text(
                             "$_myCoins",
-                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
                           ),
                         ],
                       ),
@@ -690,13 +719,18 @@ void _scrollToBottom() {
                       // የስጦታ ማባዣ ቁልፍ (1, 3, 7, 10, 30, 50, 77, 100)
                       PopupMenuButton<int>(
                         color: const Color(0xFF241C48),
-
-initialValue: selectedMultiplier,
+                        initialValue: selectedMultiplier,
                         onSelected: (val) => setSheetState(() => selectedMultiplier = val),
                         itemBuilder: (context) => multipliers
                             .map((m) => PopupMenuItem<int>(
                                   value: m,
-                                  child: Text("$m", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                  child: Text(
+                                    "$m",
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
                                 ))
                             .toList(),
                         child: Container(
@@ -708,7 +742,14 @@ initialValue: selectedMultiplier,
                           ),
                           child: Row(
                             children: [
-                              Text("$selectedMultiplier", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                              Text(
+                                "$selectedMultiplier",
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                ),
+                              ),
                               const SizedBox(width: 4),
                               const Icon(Icons.arrow_drop_up, color: Colors.white70, size: 18),
                             ],
@@ -725,7 +766,8 @@ initialValue: selectedMultiplier,
                           foregroundColor: Colors.black,
                           padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 10),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                        ),
+
+),
                         onPressed: () {
                           if (!isAllSelected && selectedSeatIndex == null) {
                             ScaffoldMessenger.of(context).showSnackBar(
@@ -795,7 +837,7 @@ initialValue: selectedMultiplier,
       }
     });
 
-_lastSentGiftConfig = {
+    _lastSentGiftConfig = {
       'targetSeat': targetSeat,
       'isAll': isAll,
       'cost': cost,
@@ -862,7 +904,7 @@ _lastSentGiftConfig = {
     final double seatDimension = _totalSeats > 20 ? 44.0 : 50.0;
     final size = MediaQuery.of(context).size;
 
-    return Scaffold(
+return Scaffold(
       backgroundColor: const Color(0xFF090614),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
@@ -905,8 +947,7 @@ _lastSentGiftConfig = {
                 .toList(),
           ),
           IconButton(
-
-icon: const Icon(Icons.power_settings_new, color: Colors.redAccent),
+            icon: const Icon(Icons.power_settings_new, color: Colors.redAccent),
             onPressed: () => Navigator.pop(context),
           ),
         ],
@@ -950,7 +991,8 @@ icon: const Icon(Icons.power_settings_new, color: Colors.redAccent),
                                 alignment: Alignment.center,
                                 children: [
                                   if (isHostSeat && isOccupied)
-                                    Positioned(
+
+Positioned(
                                       top: -15,
                                       child: Image.asset('assets/images/lv3.png', width: 36, errorBuilder: (c, e, s) => const SizedBox.shrink()),
                                     ),
@@ -977,8 +1019,7 @@ icon: const Icon(Icons.power_settings_new, color: Colors.redAccent),
                                                     spreadRadius: 2 + (wave * 3),
                                                   ),
                                                 ]
-
-: null,
+                                              : null,
                                         ),
                                         child: Center(
                                           child: Icon(
@@ -1010,7 +1051,8 @@ icon: const Icon(Icons.power_settings_new, color: Colors.redAccent),
                                       bottom: -2,
                                       right: -2,
                                       child: Container(
-                                        padding: const EdgeInsets.all(2.5),
+
+padding: const EdgeInsets.all(2.5),
                                         decoration: BoxDecoration(
                                           shape: BoxShape.circle,
                                           color: isMuted ? Colors.redAccent : const Color(0xFF00C9A7),
@@ -1040,8 +1082,7 @@ icon: const Icon(Icons.power_settings_new, color: Colors.redAccent),
                                 ),
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
-
-children: [
+                                  children: [
                                     const Text("🎁", style: TextStyle(fontSize: 8)),
                                     const SizedBox(width: 2),
                                     Text("$giftsCount",
@@ -1081,7 +1122,8 @@ children: [
                           padding: const EdgeInsets.symmetric(vertical: 3.0),
                           child: RichText(
                             text: TextSpan(
-                              children: [
+
+children: [
                                 TextSpan(
                                   text: item.isSystem ? "📢 ${item.sender}: " : "${item.sender}: ",
                                   style: TextStyle(
@@ -1122,8 +1164,7 @@ children: [
                       ),
                       Expanded(
                         child: Container(
-
-padding: const EdgeInsets.symmetric(horizontal: 14),
+                          padding: const EdgeInsets.symmetric(horizontal: 14),
                           decoration: BoxDecoration(
                             color: Colors.white.withOpacity(0.08),
                             borderRadius: BorderRadius.circular(20),
@@ -1166,7 +1207,7 @@ padding: const EdgeInsets.symmetric(horizontal: 14),
                   final col = _animTargetSeatIndex % crossAxis;
                   final row = _animTargetSeatIndex ~/ crossAxis;
 
-                  final targetX = _isGiftToAll ? (size.width * 0.5) : ((col + 0.5) * (size.width / crossAxis));
+final targetX = _isGiftToAll ? (size.width * 0.5) : ((col + 0.5) * (size.width / crossAxis));
                   final targetY = _isGiftToAll ? (size.height * 0.25) : (60.0 + (row * 65.0));
 
                   final startX = size.width * 0.85;
@@ -1198,7 +1239,7 @@ padding: const EdgeInsets.symmetric(horizontal: 14),
                 },
               ),
 
-            // 5. ልክ በቪዲዮው ላይ እንዳለው ክብ ቆጣሪ ያለው COMBO BUTTON
+            // 5. ክብ ቆጣሪ ያለው Combo ቁልፍ
             if (_showComboButton)
               Positioned(
                 bottom: 65,
@@ -1208,8 +1249,7 @@ padding: const EdgeInsets.symmetric(horizontal: 14),
                   child: Stack(
                     alignment: Alignment.center,
                     children: [
-
-// የሚሽከረከረው የ 3 ሰከንድ ክብ ቆጣሪ
+                      // የሚሽከረከረው የ 3 ሰከንድ ክብ ቆጣሪ
                       SizedBox(
                         width: 74,
                         height: 74,
@@ -1253,7 +1293,8 @@ padding: const EdgeInsets.symmetric(horizontal: 14),
                             ),
                             if (_comboCount > 1)
                               Text(
-                                "x$_comboCount",
+
+"x$_comboCount",
                                 style: const TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.w900, fontSize: 13),
                               ),
                           ],
