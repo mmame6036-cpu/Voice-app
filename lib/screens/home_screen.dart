@@ -51,8 +51,7 @@ class _HomeScreenState extends State<HomeScreen> {
       "color": const Color(0xFF1E3C38),
     },
   ];
-
-  Future<void> _handleEnterMyRoom() async {
+   Future<void> _handleEnterMyRoom() async {
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -79,28 +78,28 @@ class _HomeScreenState extends State<HomeScreen> {
       );
 
       if (mounted) {
-        Navigator.pop(context); // ሎዲንጉን ያጠፋል
-        // በቀጥታ ወደ ድምፅ ክፍሉ ያስገባል
+        Navigator.pop(context);
         Navigator.push(
           context,
           MaterialPageRoute(
             builder: (context) => VoiceRoomScreen(
-              roomName: roomTitle,
+              roomTitle: roomTitle,
+              roomId: roomId,
               hostName: hostName,
+              userNumericId: hostUid.hashCode.abs() % 1000000,
+              userUid: hostUid,
+              userName: hostName,
             ),
           ),
         );
       }
-    } catch (e) {
+    } catch (_) {
       if (mounted) {
         Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error entering room: $e")),
-        );
       }
     }
   }
-
+  
   @override
   Widget build(BuildContext context) {
     return SafeArea(
