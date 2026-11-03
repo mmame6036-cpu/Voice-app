@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:http/http.dart' as http;
+import 'package:socket_io_client/socket_io_client.dart' as IO;
 import '../services/agora_service.dart';
 
 class RoomChatMessage {
@@ -42,6 +43,8 @@ class VoiceRoomScreen extends StatefulWidget {
 class _VoiceRoomScreenState extends State<VoiceRoomScreen>
     with TickerProviderStateMixin {
   final AgoraService _agoraService = AgoraService();
+  IO.Socket? _socket;
+
   bool _isMuted = false;
   int? _mySeatIndex;
   int _totalSeats = 30;
@@ -65,6 +68,8 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
   final List<RoomChatMessage> _messages = [];
   final TextEditingController _chatController = TextEditingController();
   final ScrollController _chatScrollController = ScrollController();
+
+  final String _serverUrl = "https://nile-token-server.onrender.com";
 
   @override
   void initState() {
@@ -112,6 +117,101 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
     });
 
     _setupAgora();
+    _connectSocket();
+  }
+
+  void _connectSocket() {
+    try {
+      _socket = IO.io(
+        _serverUrl,
+        IO.OptionBuilder()
+            .setTransports(['websocket'])
+            .disableAutoConnect()
+            .build(),
+      );
+
+      _socket!.connect();
+
+      _socket!.onConnect((_) {
+        _socket!.emit('join_room', {
+          'roomId': widget.roomId,
+          'userName': widget.userName,
+          'hostName': widget.hostName,
+        });
+      });
+
+      _socket!.on('room_state_sync', (data) {
+
+if (!mounted || data == null) return;
+        setState(() {
+          if (data['seats'] != null) {
+            final List incomingSeats = data['seats'];
+            for (int i = 0; i < incomingSeats.length && i < 30; i++) {
+              _seats[i] = incomingSeats[i] as String?;
+              if (_seats[i] == widget.userName) {
+                _mySeatIndex = i;
+              }
+            }
+          }
+          if (data['seatGifts'] != null) {
+            final List incomingGifts = data['seatGifts'];
+            for (int i = 0; i < incomingGifts.length && i < 30; i++) {
+              _seatGifts[i] = (incomingGifts[i] as num).toInt();
+            }
+          }
+        });
+      });
+
+      _socket!.on('seat_state_updated', (data) {
+        if (!mounted || data == null) return;
+        setState(() {
+          final List incomingSeats = data['seats'];
+          for (int i = 0; i < incomingSeats.length && i < 30; i++) {
+            _seats[i] = incomingSeats[i] as String?;
+          }
+          if (_mySeatIndex != null && _seats[_mySeatIndex!] != widget.userName) {
+            _mySeatIndex = null;
+            _agoraService.switchRole(isSpeaker: false);
+          }
+        });
+      });
+
+      _socket!.on('gift_broadcast', (data) {
+        if (!mounted || data == null) return;
+        final targetIndex = (data['targetSeatIndex'] as num).toInt();
+        final sender = data['senderName'] ?? "Someone";
+        final giftName = data['giftName'] ?? "Gift";
+        final giftAsset = data['giftAsset'] ?? 'assets/images/lv3.png';
+
+        setState(() {
+          if (data['seatGifts'] != null) {
+            final List gifts = data['seatGifts'];
+            for (int i = 0; i < gifts.length && i < 30; i++) {
+              _seatGifts[i] = (gifts[i] as num).toInt();
+            }
+          }
+          _messages.add(RoomChatMessage(
+            sender: "System",
+            message: "$sender sent $giftName to Seat ${targetIndex + 1}!",
+            isSystem: true,
+          ));
+        });
+        _scrollToBottom();
+        _triggerGiftAnimation(giftAsset.toString());
+      });
+
+      _socket!.on('chat_message_received', (data) {
+        if (!mounted || data == null) return;
+        setState(() {
+          _messages.add(RoomChatMessage(
+            sender: data['sender'] ?? 'User',
+            message: data['message'] ?? '',
+            isSystem: data['isSystem'] ?? false,
+          ));
+        });
+        _scrollToBottom();
+      });
+    } catch (_) {}
   }
 
   Future<String?> _fetchToken({
@@ -122,7 +222,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
     try {
       final role = isPublisher ? "publisher" : "subscriber";
       final uri = Uri.parse(
-          "https://nile-token-server.onrender.com/rtcToken?channelName=$channelName&uid=$uid&role=$role");
+          "$_serverUrl/rtcToken?channelName=$channelName&uid=$uid&role=$role");
       final response =
           await http.get(uri).timeout(const Duration(seconds: 12));
       if (response.statusCode == 200) {
@@ -135,7 +235,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
     return null;
   }
 
-Future<void> _setupAgora() async {
+  Future<void> _setupAgora() async {
     final status = await Permission.microphone.request();
     if (status != PermissionStatus.granted && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -145,28 +245,8 @@ Future<void> _setupAgora() async {
     }
 
     await _agoraService.initEngine(
-      onUserJoined: (uid) {
-        if (!mounted) return;
-        setState(() {
-          _messages.add(RoomChatMessage(
-            sender: "System",
-            message: "User $uid joined the room.",
-            isSystem: true,
-          ));
-        });
-        _scrollToBottom();
-      },
-      onUserOffline: (uid) {
-        if (!mounted) return;
-        setState(() {
-          _messages.add(RoomChatMessage(
-            sender: "System",
-            message: "User $uid left the room.",
-            isSystem: true,
-          ));
-        });
-        _scrollToBottom();
-      },
+      onUserJoined: (uid) {},
+      onUserOffline: (uid) {},
       onVolumeChanged: (speakers) {
         if (!mounted) return;
         setState(() {
@@ -185,7 +265,7 @@ Future<void> _setupAgora() async {
       },
     );
 
-    final dynamicToken = await _fetchToken(
+final dynamicToken = await _fetchToken(
       channelName: widget.roomId,
       uid: widget.userNumericId,
       isPublisher: false,
@@ -218,14 +298,22 @@ Future<void> _setupAgora() async {
     final text = _chatController.text.trim();
     if (text.isEmpty) return;
 
-    setState(() {
-      _messages.add(RoomChatMessage(
-        sender: widget.userName,
-        message: text,
-      ));
-    });
+    if (_socket != null && _socket!.connected) {
+      _socket!.emit('send_chat', {
+        'roomId': widget.roomId,
+        'sender': widget.userName,
+        'message': text,
+      });
+    } else {
+      setState(() {
+        _messages.add(RoomChatMessage(
+          sender: widget.userName,
+          message: text,
+        ));
+      });
+      _scrollToBottom();
+    }
     _chatController.clear();
-    _scrollToBottom();
   }
 
   void _scrollToBottom() {
@@ -247,6 +335,12 @@ Future<void> _setupAgora() async {
         _mySeatIndex = null;
         _speakingSeatIndices.remove(index);
       });
+      _socket?.emit('seat_action', {
+        'roomId': widget.roomId,
+        'seatIndex': index,
+        'userName': widget.userName,
+        'isLeaving': true,
+      });
       await _agoraService.switchRole(isSpeaker: false);
       return;
     }
@@ -263,15 +357,32 @@ Future<void> _setupAgora() async {
         return;
       }
 
+      final previousSeat = _mySeatIndex;
       setState(() {
-        if (_mySeatIndex != null) {
-          _seats[_mySeatIndex!] = null;
-          _speakingSeatIndices.remove(_mySeatIndex!);
+        if (previousSeat != null) {
+          _seats[previousSeat] = null;
+          _speakingSeatIndices.remove(previousSeat);
         }
         _seats[index] = widget.userName;
         _mySeatIndex = index;
         _isMuted = false;
         _seatMutes[index] = false;
+      });
+
+      if (previousSeat != null) {
+        _socket?.emit('seat_action', {
+          'roomId': widget.roomId,
+          'seatIndex': previousSeat,
+          'userName': widget.userName,
+          'isLeaving': true,
+        });
+      }
+
+      _socket?.emit('seat_action', {
+        'roomId': widget.roomId,
+        'seatIndex': index,
+        'userName': widget.userName,
+        'isLeaving': false,
       });
 
       await _agoraService.switchRole(isSpeaker: true);
@@ -291,7 +402,7 @@ Future<void> _setupAgora() async {
     _agoraService.setMicrophoneMute(_isMuted);
   }
 
-void _changeSeatCount(int newCount) {
+  void _changeSeatCount(int newCount) {
     setState(() {
       _totalSeats = newCount;
       if (_mySeatIndex != null && _mySeatIndex! >= newCount) {
@@ -307,7 +418,8 @@ void _changeSeatCount(int newCount) {
     showModalBottomSheet(
       context: context,
       backgroundColor: const Color(0xFF141026),
-      shape: const RoundedRectangleBorder(
+
+shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (ctx) {
@@ -382,8 +494,7 @@ void _changeSeatCount(int newCount) {
                         name: "Gold Wings",
                         price: 300,
                         asset: 'assets/images/2.png',
-
-onTap: () => _executeGiftSend(
+                        onTap: () => _executeGiftSend(
                           ctx,
                           selectedSeat,
                           cost: 300,
@@ -394,7 +505,8 @@ onTap: () => _executeGiftSend(
                       _giftChoiceItem(
                         name: "Tiger VIP",
                         price: 500,
-                        asset: 'assets/images/4.png',
+
+asset: 'assets/images/4.png',
                         onTap: () => _executeGiftSend(
                           ctx,
                           selectedSeat,
@@ -462,16 +574,30 @@ onTap: () => _executeGiftSend(
     if (_myCoins >= cost) {
       setState(() {
         _myCoins -= cost;
-        _seatGifts[seatIndex] += cost;
-        _messages.add(RoomChatMessage(
-          sender: "System",
-          message: "${widget.userName} sent $name to Seat ${seatIndex + 1}!",
-          isSystem: true,
-        ));
       });
-      _scrollToBottom();
       Navigator.pop(ctx);
-      _triggerGiftAnimation(asset);
+
+      if (_socket != null && _socket!.connected) {
+        _socket!.emit('send_gift', {
+          'roomId': widget.roomId,
+          'senderName': widget.userName,
+          'targetSeatIndex': seatIndex,
+          'giftName': name,
+          'giftCost': cost,
+          'giftAsset': asset,
+        });
+      } else {
+        setState(() {
+          _seatGifts[seatIndex] += cost;
+          _messages.add(RoomChatMessage(
+            sender: "System",
+            message: "${widget.userName} sent $name to Seat ${seatIndex + 1}!",
+            isSystem: true,
+          ));
+        });
+        _scrollToBottom();
+        _triggerGiftAnimation(asset);
+      }
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Insufficient coins balance!")),
@@ -483,6 +609,8 @@ onTap: () => _executeGiftSend(
   void dispose() {
     _waveController.dispose();
     _giftFlyController.dispose();
+    _socket?.disconnect();
+    _socket?.dispose();
     _agoraService.leaveRoom();
     _chatController.dispose();
     _chatScrollController.dispose();
@@ -508,9 +636,9 @@ onTap: () => _executeGiftSend(
             ),
             Text(
               _isConnecting
+                  ? "Connecting..."
 
-? "Connecting..."
-                  : "ID: ${widget.roomId} • $_totalSeats Seats",
+: "ID: ${widget.roomId} • $_totalSeats Seats",
               style: TextStyle(
                 fontSize: 11,
                 color: _isConnecting ? const Color(0xFFFFD700) : Colors.white54,
@@ -603,10 +731,9 @@ onTap: () => _executeGiftSend(
                               Stack(
                                 clipBehavior: Clip.none,
                                 alignment: Alignment.center,
+                                children: [
 
-children: [
-                                  // 1. Host Crown Crest Badge
-                                  if (isHostSeat)
+if (isHostSeat)
                                     Positioned(
                                       top: -15,
                                       child: Image.asset(
@@ -620,7 +747,6 @@ children: [
                                       ),
                                     ),
 
-                                  // 2. Seats 2-7 Golden Wing Crown
                                   if (isCrownSeat)
                                     Positioned(
                                       top: -14,
@@ -635,7 +761,6 @@ children: [
                                       ),
                                     ),
 
-                                  // 3. Avatar Inner Circle
                                   AnimatedBuilder(
                                     animation: _waveController,
                                     builder: (context, child) {
@@ -673,11 +798,11 @@ children: [
                                     },
                                   ),
 
-// 4. Frames: VIP 4 for Seats 2-7, VIP 1 for occupied others
                                   if (isCrownSeat)
                                     Positioned.fill(
                                       child: IgnorePointer(
-                                        child: Image.asset(
+
+child: Image.asset(
                                           'assets/images/4.png',
                                           fit: BoxFit.contain,
                                           errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
@@ -695,7 +820,6 @@ children: [
                                       ),
                                     ),
 
-                                  // 5. Mic Status Badge
                                   if (isOccupied)
                                     Positioned(
                                       bottom: -2,
@@ -734,12 +858,11 @@ children: [
                                 isOccupied ? occupier : "${index + 1}",
                                 style: TextStyle(
                                   color: isCrownSeat
-                                      ? const Color(0xFFFFD700)
-                                      : (isOccupied ? Colors.white : Colors.white38),
+                                  ? const Color(0xFFFFD700)
+                                  : (isOccupied ? Colors.white : Colors.white38),
                                   fontSize: 9.5,
                                   fontWeight: isOccupied
-
-? FontWeight.bold
+                                      ? FontWeight.bold
                                       : FontWeight.normal,
                                 ),
                                 maxLines: 1,
@@ -747,7 +870,8 @@ children: [
                               ),
 
                               Container(
-                                margin: const EdgeInsets.only(top: 1.5),
+
+margin: const EdgeInsets.only(top: 1.5),
                                 padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
                                 decoration: BoxDecoration(
                                   color: giftsCount > 0
@@ -781,7 +905,6 @@ children: [
                   ),
                 ),
 
-                // Messages Container
                 Expanded(
                   flex: 4,
                   child: Container(
@@ -815,8 +938,7 @@ children: [
                                 TextSpan(
                                   text: item.message,
                                   style: TextStyle(
-
-color: item.isSystem ? Colors.white70 : Colors.white,
+                                    color: item.isSystem ? Colors.white70 : Colors.white,
                                     fontSize: 12,
                                   ),
                                 ),
@@ -829,8 +951,7 @@ color: item.isSystem ? Colors.white70 : Colors.white,
                   ),
                 ),
 
-                // Bottom Bar
-                Container(
+Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: const BoxDecoration(
                     color: Color(0xFF141026),
@@ -884,7 +1005,6 @@ color: item.isSystem ? Colors.white70 : Colors.white,
               ],
             ),
 
-            // Floating Gift Animation Overlay
             if (_isShowingGiftAnim)
               Positioned.fill(
                 child: IgnorePointer(
