@@ -12,7 +12,6 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// HTTP Server እና Socket.io ማዋቀር
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
@@ -104,13 +103,12 @@ app.get('/health', (req, res) => {
 // --- SOCKET.IO REAL-TIME LOGIC ---
 // ==========================================
 
-// የክፍሎችን ሁኔታ በሜሞሪ ለመያዝ
 const activeRooms = {};
 
 io.on('connection', (socket) => {
   console.log([Socket] Connected: ${socket.id});
 
-  // 1. ክፍል መቀላቀል
+  // 1. Join room
   socket.on('join_room', ({ roomId, userName, hostName }) => {
     socket.join(roomId);
     socket.roomId = roomId;
@@ -126,13 +124,11 @@ io.on('connection', (socket) => {
       }
     }
 
-    // አዲስ ለገባው ሰው የክፍሉን የወቅቱን መረጃ መስጠት
     socket.emit('room_state_sync', {
       seats: activeRooms[roomId].seats,
       seatGifts: activeRooms[roomId].seatGifts,
     });
 
-    // ለክፍሉ አባላት ማሳወቅ
     io.to(roomId).emit('chat_message_received', {
       sender: 'System',
       message: ${userName} joined the room.,
@@ -140,11 +136,11 @@ io.on('connection', (socket) => {
     });
   });
 
-// 2. ወንበር መያዝ ወይም መልቀቅ
+  // 2. Seat action
   socket.on('seat_action', ({ roomId, seatIndex, userName, isLeaving }) => {
     if (!activeRooms[roomId]) return;
 
-    if (isLeaving) {
+if (isLeaving) {
       if (activeRooms[roomId].seats[seatIndex] === userName) {
         activeRooms[roomId].seats[seatIndex] = null;
       }
@@ -157,15 +153,13 @@ io.on('connection', (socket) => {
     });
   });
 
-  // 3. ስጦታ መላክ (Real-time Gift Broadcast)
+  // 3. Send gift broadcast
   socket.on('send_gift', ({ roomId, senderName, targetSeatIndex, giftName, giftCost, giftAsset }) => {
     if (!activeRooms[roomId]) return;
 
-    // የስጦታውን ዋጋ በተቀባዩ ወንበር ላይ መደመር
     activeRooms[roomId].seatGifts[targetSeatIndex] =
       (activeRooms[roomId].seatGifts[targetSeatIndex] || 0) + giftCost;
 
-    // በክፍሉ ላሉ ስልኮች ሁሉ አኒሜሽኑ እንዲፈነዳና ቆጣሪው እንዲጨምር ማሰራጨት
     io.to(roomId).emit('gift_broadcast', {
       senderName,
       targetSeatIndex,
@@ -176,7 +170,7 @@ io.on('connection', (socket) => {
     });
   });
 
-  // 4. የቀጥታ ቻት መላክ
+  // 4. Send chat
   socket.on('send_chat', ({ roomId, sender, message }) => {
     io.to(roomId).emit('chat_message_received', {
       sender,
