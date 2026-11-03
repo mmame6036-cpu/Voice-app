@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
@@ -54,14 +55,23 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
   late List<bool> _seatMutes;
   bool _isConnecting = true;
 
-  int _myCoins = 2500;
+  int _myCoins = 826260;
 
+  // አኒሜሽኖች
   late AnimationController _waveController;
   late AnimationController _giftFlyController;
   late Animation<double> _giftFlyProgress;
   bool _isShowingGiftAnim = false;
   String _activeGiftAsset = 'assets/images/lv3.png';
   int _animTargetSeatIndex = 0;
+  bool _isGiftToAll = false;
+
+  // Combo ቁልፍ አሰራር (ልክ በቪዲዮው መሰረት)
+  bool _showComboButton = false;
+  int _comboCount = 0;
+  Timer? _comboTimer;
+  late AnimationController _comboRingController;
+  Map<String, dynamic>? _lastSentGiftConfig;
 
   final Set<int> _speakingSeatIndices = {};
   final List<int> _allowedSeatOptions = [6, 12, 20, 25, 30];
@@ -79,8 +89,6 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
     _seatGifts = List.filled(30, 0);
     _seatMutes = List.filled(30, false);
 
-    // 1 ቁጥር ወንበር በነባሪነት እንዳይቆለፍ ባዶ ሆኖ ይጀምራል (ማንም ሰው ወይም ሆስቱ መቀመጥ ይችላል)
-
     _waveController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 700),
@@ -88,7 +96,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
 
     _giftFlyController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1200),
+      duration: const Duration(milliseconds: 1100),
     );
 
     _giftFlyProgress = CurvedAnimation(
@@ -97,21 +105,21 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
     );
 
     _giftFlyController.addStatusListener((status) {
-      if (status == AnimationStatus.completed) {
-        if (mounted) {
-          setState(() {
-            _isShowingGiftAnim = false;
-          });
-        }
+      if (status == AnimationStatus.completed && mounted) {
+        setState(() => _isShowingGiftAnim = false);
       }
     });
+
+    _comboRingController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 3),
+    );
 
     _loadRoomGiftsFromFirestore();
     _setupAgora();
     _connectSocket();
   }
 
-  // ወጥተህ ስትገባ ስጦታው እንዳይጠፋ ከ Firestore በቋሚነት ያነባል
   Future<void> _loadRoomGiftsFromFirestore() async {
     try {
       final doc = await FirebaseFirestore.instance
@@ -132,8 +140,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
     } catch (_) {}
   }
 
-  // ስጦታ ሲላክ በቋሚነት Firestore ላይ ያስቀምጣል
-  Future<void> _saveRoomGiftsToFirestore() async {
+Future<void> _saveRoomGiftsToFirestore() async {
     try {
       await FirebaseFirestore.instance
           .collection('rooms')
@@ -145,7 +152,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
     } catch (_) {}
   }
 
-void _connectSocket() {
+  void _connectSocket() {
     try {
       _socket = IO.io(
         _serverUrl,
@@ -196,23 +203,37 @@ void _connectSocket() {
 
       _socket!.on('gift_broadcast', (data) {
         if (!mounted || data == null) return;
-        final targetIndex = (data['targetSeatIndex'] as num).toInt();
+        final isAll = data['isAll'] ?? false;
         final sender = data['senderName'] ?? "Someone";
         final giftName = data['giftName'] ?? "Gift";
         final giftCost = (data['giftCost'] as num?)?.toInt() ?? 0;
         final giftAsset = data['giftAsset'] ?? 'assets/images/lv3.png';
 
         setState(() {
-          _seatGifts[targetIndex] += giftCost;
-          _messages.add(RoomChatMessage(
-            sender: "System",
-            message: "$sender sent $giftName to Seat ${targetIndex + 1}!",
-            isSystem: true,
-          ));
+          if (isAll) {
+            for (int i = 0; i < _totalSeats; i++) {
+              if (_seats[i] != null) {
+                _seatGifts[i] += giftCost;
+              }
+            }
+            _messages.add(RoomChatMessage(
+              sender: "System",
+              message: "$sender sent $giftName to All Mics!",
+              isSystem: true,
+            ));
+          } else {
+            final targetIndex = (data['targetSeatIndex'] as num).toInt();
+            _seatGifts[targetIndex] += giftCost;
+            _messages.add(RoomChatMessage(
+              sender: "System",
+              message: "$sender sent $giftName to Seat ${targetIndex + 1}!",
+              isSystem: true,
+            ));
+          }
         });
         _scrollToBottom();
         _saveRoomGiftsToFirestore();
-        _triggerGiftAnimation(giftAsset.toString(), targetIndex);
+        _triggerGiftAnimation(giftAsset.toString(), data['targetSeatIndex'] ?? 0, isToAll: isAll);
       });
 
       _socket!.on('chat_message_received', (data) {
@@ -238,24 +259,20 @@ void _connectSocket() {
       final role = isPublisher ? "publisher" : "subscriber";
       final uri = Uri.parse(
           "$_serverUrl/rtcToken?channelName=$channelName&uid=$uid&role=$role");
-      final response =
-          await http.get(uri).timeout(const Duration(seconds: 12));
+      final response = await http.get(uri).timeout(const Duration(seconds: 12));
       if (response.statusCode == 200) {
         final Map<String, dynamic> data = jsonDecode(response.body);
         return data['token'] as String?;
       }
-    } catch (_) {
-      return null;
-    }
+    } catch (_) {}
     return null;
   }
 
-  Future<void> _setupAgora() async {
+Future<void> _setupAgora() async {
     final status = await Permission.microphone.request();
-    if (status != PermissionStatus.granted && mounted) {
+    if (!status.isGranted && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text("Microphone permission required for voice chat")),
+        const SnackBar(content: Text("Microphone permission required")),
       );
     }
 
@@ -266,8 +283,7 @@ void _connectSocket() {
         if (!mounted) return;
         setState(() {
           _speakingSeatIndices.clear();
-
-for (var speaker in speakers) {
+          for (var speaker in speakers) {
             final vol = speaker.volume ?? 0;
             if (vol > 4) {
               if (speaker.uid == 0 || speaker.uid == widget.userNumericId) {
@@ -294,59 +310,20 @@ for (var speaker in speakers) {
       isSpeaker: false,
     );
 
-    if (mounted) {
-      setState(() {
-        _isConnecting = false;
-      });
-    }
+    if (mounted) setState(() => _isConnecting = false);
   }
 
-  // ስጦታው ወደ ተመረጠው ወንበር አቅጣጫ እንዲበር ማድረግ
-  void _triggerGiftAnimation(String asset, int targetSeatIndex) {
+  void _triggerGiftAnimation(String asset, int targetSeatIndex, {bool isToAll = false}) {
     setState(() {
       _activeGiftAsset = asset;
       _animTargetSeatIndex = targetSeatIndex;
+      _isGiftToAll = isToAll;
       _isShowingGiftAnim = true;
     });
     _giftFlyController.reset();
     _giftFlyController.forward();
   }
 
-  void _sendMessage() {
-    final text = _chatController.text.trim();
-    if (text.isEmpty) return;
-
-    if (_socket != null && _socket!.connected) {
-      _socket!.emit('send_chat', {
-        'roomId': widget.roomId,
-        'sender': widget.userName,
-        'message': text,
-      });
-    } else {
-      setState(() {
-        _messages.add(RoomChatMessage(
-          sender: widget.userName,
-          message: text,
-        ));
-      });
-      _scrollToBottom();
-    }
-    _chatController.clear();
-  }
-
-  void _scrollToBottom() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_chatScrollController.hasClients) {
-        _chatScrollController.animateTo(
-          _chatScrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 250),
-          curve: Curves.easeOut,
-        );
-      }
-    });
-  }
-
-  // 1 ቁጥር ወንበርን ጨምሮ ማንኛውም ሰው ባዶ ወንበር ላይ መቀመጥ ይችላል
   void _handleSeatTap(int index) async {
     if (_mySeatIndex == index) {
       setState(() {
@@ -366,15 +343,7 @@ for (var speaker in speakers) {
 
     if (_seats[index] == null) {
       final status = await Permission.microphone.request();
-      if (!status.isGranted) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-                content: Text("Allow microphone access to take seat")),
-          );
-        }
-        return;
-      }
+      if (!status.isGranted) return;
 
       final previousSeat = _mySeatIndex;
       setState(() {
@@ -413,15 +382,13 @@ for (var speaker in speakers) {
       _isMuted = !_isMuted;
       if (_mySeatIndex != null) {
         _seatMutes[_mySeatIndex!] = _isMuted;
-        if (_isMuted) {
-          _speakingSeatIndices.remove(_mySeatIndex!);
-        }
+        if (_isMuted) _speakingSeatIndices.remove(_mySeatIndex!);
       }
     });
     _agoraService.setMicrophoneMute(_isMuted);
   }
 
-void _changeSeatCount(int newCount) {
+  void _changeSeatCount(int newCount) {
     setState(() {
       _totalSeats = newCount;
       if (_mySeatIndex != null && _mySeatIndex! >= newCount) {
@@ -432,110 +399,356 @@ void _changeSeatCount(int newCount) {
     });
   }
 
+  void _sendMessage() {
+    final text = _chatController.text.trim();
+    if (text.isEmpty) return;
+
+    if (_socket != null && _socket!.connected) {
+      _socket!.emit('send_chat', {
+        'roomId': widget.roomId,
+        'sender': widget.userName,
+        'message': text,
+      });
+    } else {
+      setState(() {
+        _messages.add(RoomChatMessage(sender: widget.userName, message: text));
+      });
+      _scrollToBottom();
+    }
+    _chatController.clear();
+  }
+
+void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_chatScrollController.hasClients) {
+        _chatScrollController.animateTo(
+          _chatScrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+  }
+
+  // --- COMBO BUTTON LOGIC (3 ሰከንድ ክብ ቆጣሪ) ---
+  void _startComboTimer() {
+    _comboTimer?.cancel();
+    _comboRingController.reset();
+    _comboRingController.forward();
+
+    _comboTimer = Timer(const Duration(seconds: 3), () {
+      if (mounted) {
+        setState(() {
+          _showComboButton = false;
+          _comboCount = 0;
+        });
+      }
+    });
+  }
+
+  void _onComboTapped() {
+    if (_lastSentGiftConfig == null) return;
+    setState(() {
+      _comboCount += 1;
+    });
+
+    final config = _lastSentGiftConfig!;
+    _executeGiftSend(
+      null,
+      targetSeat: config['targetSeat'],
+      isAll: config['isAll'],
+      cost: config['cost'],
+      multiplier: config['multiplier'],
+      name: config['name'],
+      asset: config['asset'],
+      fromCombo: true,
+    );
+
+    _startComboTimer();
+  }
+
+  // --- የስጦታ መላኪያ ሳጥን (ልክ በቪዲዮው መሰረት) ---
   void _openGiftSheet() {
-    int selectedSeat = 0;
+    int? selectedSeatIndex;
+    bool isAllSelected = false;
+    int selectedMultiplier = 1;
+    final List<int> multipliers = [1, 3, 7, 10, 30, 50, 77, 100];
+    int selectedGiftId = 1;
+
+    // ወንበር ላይ የተቀመጡ ሰዎችን ማዘጋጀት
+    final List> activeUsers = [];
+    for (int i = 0; i < _totalSeats; i++) {
+      if (_seats[i] != null) {
+        activeUsers.add({
+          'seatIndex': i,
+          'name': _seats[i]!,
+        });
+      }
+    }
+
+    if (activeUsers.isNotEmpty) {
+      selectedSeatIndex = activeUsers.first['seatIndex'];
+    }
+
+    final giftsList = [
+      {"id": 1, "name": "Fragrant Flowers", "price": 100, "asset": "assets/images/lv3.png"},
+      {"id": 2, "name": "Ice Cream", "price": 200, "asset": "assets/images/2.png"},
+      {"id": 3, "name": "Perfume Bottle", "price": 300, "asset": "assets/images/1.png"},
+      {"id": 4, "name": "Pink Sports Car", "price": 500, "asset": "assets/images/4.png"},
+    ];
+
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF141026),
+      backgroundColor: const Color(0xFF140F2D),
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (ctx) {
         return StatefulBuilder(
           builder: (context, setSheetState) {
+            final activeGift = giftsList.firstWhere((g) => g['id'] == selectedGiftId);
+
             return Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  // 1. የአግድም ተጠቃሚዎች መምረጫ (Horizontal User Selector)
+                  SizedBox(
+                    height: 60,
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: ListView(
+                            scrollDirection: Axis.horizontal,
+                            children: activeUsers.map((user) {
+                              final isCurrent = !isAllSelected && selectedSeatIndex == user['seatIndex'];
+                              final seatNum = user['seatIndex'] + 1;
+                              final initial = (user['name'] as String).isNotEmpty ? (user['name'] as String)[0].toUpperCase() : "U";
+
+                              return GestureDetector(
+                                onTap: () {
+                                  setSheetState(() {
+                                    isAllSelected = false;
+                                    selectedSeatIndex = user['seatIndex'];
+
+});
+                                },
+                                child: Container(
+                                  margin: const EdgeInsets.only(right: 12),
+                                  child: Column(
+                                    children: [
+                                      Container(
+                                        width: 38,
+                                        height: 38,
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          gradient: const LinearGradient(
+                                            colors: [Color(0xFFE91E63), Color(0xFF9C27B0)],
+                                          ),
+                                          border: Border.all(
+                                            color: isCurrent ? const Color(0xFFFFD700) : Colors.transparent,
+                                            width: 2.2,
+                                          ),
+                                        ),
+                                        child: Center(
+                                          child: Text(
+                                            initial,
+                                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text("No.$seatNum", style: const TextStyle(color: Colors.white60, fontSize: 10)),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        ),
+
+                        // "All" ምርጫ (ለሁሉም)
+                        GestureDetector(
+                          onTap: () {
+                            setSheetState(() {
+                              isAllSelected = true;
+                              selectedSeatIndex = null;
+                            });
+                          },
+                          child: Container(
+                            width: 44,
+                            margin: const EdgeInsets.only(left: 6),
+                            child: Column(
+                              children: [
+                                Container(
+                                  width: 38,
+                                  height: 38,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: const Color(0xFFFFD700),
+                                    border: Border.all(
+                                      color: isAllSelected ? Colors.white : Colors.transparent,
+                                      width: 2.2,
+                                    ),
+                                  ),
+                                  child: const Center(
+                                    child: Text(
+                                      "All",
+                                      style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 14),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                const Text("All Mics", style: TextStyle(color: Color(0xFFFFD700), fontSize: 9.5)),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const Divider(color: Colors.white12, height: 16),
+
+// 2. የስጦታዎች ዝርዝር
+                  GridView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: giftsList.length,
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 4,
+                      crossAxisSpacing: 10,
+                      mainAxisSpacing: 10,
+                      childAspectRatio: 0.82,
+                    ),
+                    itemBuilder: (context, index) {
+                      final item = giftsList[index];
+                      final isSelected = item['id'] == selectedGiftId;
+
+                      return GestureDetector(
+                        onTap: () => setSheetState(() => selectedGiftId = item['id'] as int),
+                        child: Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: isSelected ? const Color(0xFF28204D) : Colors.white.withOpacity(0.04),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: isSelected ? const Color(0xFFFFD700) : Colors.transparent,
+                              width: 1.5,
+                            ),
+                          ),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Image.asset(
+                                item['asset'] as String,
+                                height: 42,
+                                fit: BoxFit.contain,
+                                errorBuilder: (c, e, s) => const Icon(Icons.card_giftcard, color: Color(0xFFFFD700), size: 30),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                item['name'] as String,
+                                style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Icon(Icons.monetization_on, color: Color(0xFFFFD700), size: 10),
+                                  const SizedBox(width: 2),
+                                  Text("${item['price']}", style: const TextStyle(color: Color(0xFFFFD700), fontSize: 10)),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+
+                  const SizedBox(height: 14),
+
+                  // 3. ሳንቲም፣ የስጦታ ማባዣ (Multiplier) እና Send ቁልፍ
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Row(
                         children: [
-                          const Icon(Icons.monetization_on, color: Color(0xFFFFD700), size: 20),
-                          const SizedBox(width: 6),
+                          const Icon(Icons.monetization_on, color: Color(0xFFFFD700), size: 18),
+                          const SizedBox(width: 4),
                           Text(
-                            "Coins: $_myCoins",
-                            style: const TextStyle(
-                              color: Color(0xFFFFD700),
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14,
-                            ),
+                            "$_myCoins",
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
                           ),
                         ],
                       ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.08),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.white24),
-                        ),
-                        child: DropdownButton<int>(
-                          value: selectedSeat,
-                          dropdownColor: const Color(0xFF231C3D),
-                          underline: const SizedBox(),
-                          style: const TextStyle(color: Colors.white, fontSize: 13),
-                          items: List.generate(_totalSeats, (i) {
-                            return DropdownMenuItem<int>(
-                              value: i,
-                              child: Text("Seat ${i + 1}"),
-                            );
-                          }),
-                          onChanged: (val) {
-                            if (val != null) {
-                              setSheetState(() => selectedSeat = val);
-                            }
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                  const Divider(color: Colors.white12, height: 24),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
-                    children: [
-                      _giftChoiceItem(
-                        name: "Crown Crest",
-                        price: 100,
-                        asset: 'assets/images/lv3.png',
-                        onTap: () => _executeGiftSend(
-                          ctx,
-                          selectedSeat,
-                          cost: 100,
-                          name: "Crown Crest 🛡️",
-                          asset: 'assets/images/lv3.png',
-                        ),
-                      ),
-                      _giftChoiceItem(
-                        name: "Gold Wings",
-                        price: 300,
-                        asset: 'assets/images/2.png',
+                      const Spacer(),
 
-onTap: () => _executeGiftSend(
-                          ctx,
-                          selectedSeat,
-                          cost: 300,
-                          name: "Golden Wings 👑",
-                          asset: 'assets/images/2.png',
+                      // የስጦታ ማባዣ ቁልፍ (1, 3, 7, 10, 30, 50, 77, 100)
+                      PopupMenuButton<int>(
+                        color: const Color(0xFF241C48),
+
+initialValue: selectedMultiplier,
+                        onSelected: (val) => setSheetState(() => selectedMultiplier = val),
+                        itemBuilder: (context) => multipliers
+                            .map((m) => PopupMenuItem<int>(
+                                  value: m,
+                                  child: Text("$m", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                ))
+                            .toList(),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.08),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: Colors.white24),
+                          ),
+                          child: Row(
+                            children: [
+                              Text("$selectedMultiplier", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                              const SizedBox(width: 4),
+                              const Icon(Icons.arrow_drop_up, color: Colors.white70, size: 18),
+                            ],
+                          ),
                         ),
                       ),
-                      _giftChoiceItem(
-                        name: "Tiger VIP",
-                        price: 500,
-                        asset: 'assets/images/4.png',
-                        onTap: () => _executeGiftSend(
-                          ctx,
-                          selectedSeat,
-                          cost: 500,
-                          name: "Tiger VIP 🐯",
-                          asset: 'assets/images/4.png',
+
+                      const SizedBox(width: 10),
+
+                      // Send ቁልፍ
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFFFD700),
+                          foregroundColor: Colors.black,
+                          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 10),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                         ),
+                        onPressed: () {
+                          if (!isAllSelected && selectedSeatIndex == null) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text("Please select a seat or tap 'All'")),
+                            );
+                            return;
+                          }
+
+                          Navigator.pop(ctx);
+                          _executeGiftSend(
+                            ctx,
+                            targetSeat: selectedSeatIndex,
+                            isAll: isAllSelected,
+                            cost: activeGift['price'] as int,
+                            multiplier: selectedMultiplier,
+                            name: activeGift['name'] as String,
+                            asset: activeGift['asset'] as String,
+                          );
+                        },
+                        child: const Text("Send", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 16),
                 ],
               ),
             );
@@ -545,82 +758,87 @@ onTap: () => _executeGiftSend(
     );
   }
 
-  Widget _giftChoiceItem({
+  void _executeGiftSend(
+    BuildContext? ctx, {
+    required int? targetSeat,
+    required bool isAll,
+    required int cost,
+    required int multiplier,
     required String name,
-    required int price,
     required String asset,
-    required VoidCallback onTap,
+    bool fromCombo = false,
   }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Column(
-        children: [
-          Container(
-            width: 72,
-            height: 72,
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.06),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFFFFD700).withOpacity(0.4), width: 1.2),
-            ),
-            child: Image.asset(
-              asset,
-              fit: BoxFit.contain,
-              errorBuilder: (context, error, stackTrace) => const Icon(
-                Icons.card_giftcard,
-                color: Color(0xFFFFD700),
-                size: 28,
-              ),
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            name,
-            style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-          ),
-          Text(
-            "$price Coins",
-            style: const TextStyle(color: Color(0xFFFFD700), fontSize: 10),
-          ),
-        ],
-      ),
-    );
-  }
+    int activeSeatsCount = 0;
+    if (isAll) {
+      for (var s in _seats) {
+        if (s != null) activeSeatsCount++;
+      }
+      if (activeSeatsCount == 0) activeSeatsCount = 1;
+    }
 
-  void _executeGiftSend(BuildContext ctx, int seatIndex, {required int cost, required String name, required String asset}) {
-    if (_myCoins >= cost) {
-      setState(() {
-        _myCoins -= cost;
+    final totalCost = isAll ? (cost * multiplier * activeSeatsCount) : (cost * multiplier);
+
+    if (_myCoins < totalCost) {
+      if (ctx != null) {
+        ScaffoldMessenger.of(ctx).showSnackBar(
+          const SnackBar(content: Text("Insufficient coins balance!")),
+        );
+      }
+      return;
+    }
+
+    setState(() {
+      _myCoins -= totalCost;
+      if (!fromCombo) {
+        _comboCount = 1;
+        _showComboButton = true;
+      }
+    });
+
+_lastSentGiftConfig = {
+      'targetSeat': targetSeat,
+      'isAll': isAll,
+      'cost': cost,
+      'multiplier': multiplier,
+      'name': name,
+      'asset': asset,
+    };
+
+    _startComboTimer();
+
+    if (_socket != null && _socket!.connected) {
+      _socket!.emit('send_gift', {
+        'roomId': widget.roomId,
+        'senderName': widget.userName,
+        'targetSeatIndex': targetSeat ?? 0,
+        'isAll': isAll,
+        'giftName': "$name x$multiplier",
+        'giftCost': totalCost,
+        'giftAsset': asset,
       });
-      Navigator.pop(ctx);
-
-      if (_socket != null && _socket!.connected) {
-        _socket!.emit('send_gift', {
-          'roomId': widget.roomId,
-          'senderName': widget.userName,
-          'targetSeatIndex': seatIndex,
-          'giftName': name,
-          'giftCost': cost,
-          'giftAsset': asset,
-        });
-      } else {
-        setState(() {
-          _seatGifts[seatIndex] += cost;
+    } else {
+      setState(() {
+        if (isAll) {
+          for (int i = 0; i < _totalSeats; i++) {
+            if (_seats[i] != null) _seatGifts[i] += totalCost;
+          }
           _messages.add(RoomChatMessage(
             sender: "System",
-            message: "${widget.userName} sent $name to Seat ${seatIndex + 1}!",
+            message: "${widget.userName} sent $name x$multiplier to All Mics!",
             isSystem: true,
           ));
-        });
-        _scrollToBottom();
-        _saveRoomGiftsToFirestore();
-        _triggerGiftAnimation(asset, seatIndex);
-      }
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Insufficient coins balance!")),
-      );
+        } else {
+          _seatGifts[targetSeat!] += totalCost;
+          _messages.add(RoomChatMessage(
+            sender: "System",
+            message: "${widget.userName} sent $name x$multiplier to Seat ${targetSeat + 1}!",
+            isSystem: true,
+          ));
+        }
+      });
+      _scrollToBottom();
+      _saveRoomGiftsToFirestore();
+      _triggerGiftAnimation(asset, targetSeat ?? 0, isToAll: isAll);
     }
   }
 
@@ -628,6 +846,8 @@ onTap: () => _executeGiftSend(
   void dispose() {
     _waveController.dispose();
     _giftFlyController.dispose();
+    _comboRingController.dispose();
+    _comboTimer?.cancel();
     _socket?.disconnect();
     _socket?.dispose();
     _agoraService.leaveRoom();
@@ -642,7 +862,7 @@ onTap: () => _executeGiftSend(
     final double seatDimension = _totalSeats > 20 ? 44.0 : 50.0;
     final size = MediaQuery.of(context).size;
 
-return Scaffold(
+    return Scaffold(
       backgroundColor: const Color(0xFF090614),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
@@ -650,18 +870,10 @@ return Scaffold(
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Text(widget.roomTitle, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
             Text(
-              widget.roomTitle,
-              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
-            ),
-            Text(
-              _isConnecting
-                  ? "Connecting..."
-                  : "ID: ${widget.roomId} • My ID: ${widget.userNumericId}",
-              style: TextStyle(
-                fontSize: 11,
-                color: _isConnecting ? const Color(0xFFFFD700) : Colors.white54,
-              ),
+              _isConnecting ? "Connecting..." : "ID: ${widget.roomId} • My ID: ${widget.userNumericId}",
+              style: TextStyle(fontSize: 11, color: _isConnecting ? const Color(0xFFFFD700) : Colors.white54),
             ),
           ],
         ),
@@ -678,14 +890,7 @@ return Scaffold(
                 children: [
                   const Icon(Icons.event_seat, color: Color(0xFFFFD700), size: 14),
                   const SizedBox(width: 4),
-                  Text(
-                    "$_totalSeats",
-                    style: const TextStyle(
-                      color: Color(0xFFFFD700),
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
+                  Text("$_totalSeats", style: const TextStyle(color: Color(0xFFFFD700), fontSize: 12, fontWeight: FontWeight.bold)),
                 ],
               ),
             ),
@@ -694,22 +899,14 @@ return Scaffold(
             itemBuilder: (context) => _allowedSeatOptions
                 .map((count) => PopupMenuItem<int>(
                       value: count,
-                      child: Text(
-                        "$count Seats Layout",
-                        style: TextStyle(
-                          color: count == _totalSeats
-                              ? const Color(0xFFFFD700)
-                              : Colors.white,
-                          fontWeight: count == _totalSeats
-                              ? FontWeight.bold
-                              : FontWeight.normal,
-                        ),
-                      ),
+                      child: Text("$count Seats Layout",
+                          style: TextStyle(color: count == _totalSeats ? const Color(0xFFFFD700) : Colors.white)),
                     ))
                 .toList(),
           ),
           IconButton(
-            icon: const Icon(Icons.power_settings_new, color: Colors.redAccent),
+
+icon: const Icon(Icons.power_settings_new, color: Colors.redAccent),
             onPressed: () => Navigator.pop(context),
           ),
         ],
@@ -719,6 +916,7 @@ return Scaffold(
           children: [
             Column(
               children: [
+                // 1. የወንበሮች Grid
                 Expanded(
                   flex: 6,
                   child: Padding(
@@ -742,7 +940,7 @@ return Scaffold(
                         final bool isHostSeat = index == 0;
                         final bool isCrownSeat = index >= 1 && index <= 6;
 
-return GestureDetector(
+                        return GestureDetector(
                           onTap: () => _handleSeatTap(index),
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
@@ -754,54 +952,33 @@ return GestureDetector(
                                   if (isHostSeat && isOccupied)
                                     Positioned(
                                       top: -15,
-                                      child: Image.asset(
-                                        'assets/images/lv3.png',
-                                        width: 36,
-                                        errorBuilder: (context, error, stackTrace) => const Icon(
-                                          Icons.military_tech,
-                                          color: Color(0xFFFFD700),
-                                          size: 18,
-                                        ),
-                                      ),
+                                      child: Image.asset('assets/images/lv3.png', width: 36, errorBuilder: (c, e, s) => const SizedBox.shrink()),
                                     ),
-
                                   if (isCrownSeat && isOccupied)
                                     Positioned(
                                       top: -14,
-                                      child: Image.asset(
-                                        'assets/images/2.png',
-                                        width: 28,
-                                        errorBuilder: (context, error, stackTrace) => const Icon(
-                                          Icons.star,
-                                          color: Color(0xFFFFD700),
-                                          size: 16,
-                                        ),
-                                      ),
+                                      child: Image.asset('assets/images/2.png', width: 28, errorBuilder: (c, e, s) => const SizedBox.shrink()),
                                     ),
-
                                   AnimatedBuilder(
                                     animation: _waveController,
                                     builder: (context, child) {
                                       final wave = _waveController.value;
-
                                       return Container(
                                         width: seatDimension,
                                         height: seatDimension,
                                         decoration: BoxDecoration(
                                           shape: BoxShape.circle,
-                                          color: isOccupied
-                                              ? const Color(0xFF2C2454)
-                                              : Colors.white.withOpacity(0.06),
+                                          color: isOccupied ? const Color(0xFF2C2454) : Colors.white.withOpacity(0.06),
                                           boxShadow: isSpeaking
                                               ? [
                                                   BoxShadow(
-                                                    color: const Color(0xFF00E5FF)
-                                                        .withOpacity(0.5 + (wave * 0.4)),
+                                                    color: const Color(0xFF00E5FF).withOpacity(0.5 + (wave * 0.4)),
                                                     blurRadius: 10 + (wave * 8),
                                                     spreadRadius: 2 + (wave * 3),
                                                   ),
                                                 ]
-                                              : null,
+
+: null,
                                         ),
                                         child: Center(
                                           child: Icon(
@@ -809,110 +986,70 @@ return GestureDetector(
                                             color: isCrownSeat && isOccupied
                                                 ? const Color(0xFFFFD700)
                                                 : (isOccupied ? Colors.white : Colors.white24),
-
-size: seatDimension * 0.45,
+                                            size: seatDimension * 0.45,
                                           ),
                                         ),
                                       );
                                     },
                                   ),
-
                                   if (isOccupied)
                                     if (isCrownSeat)
                                       Positioned.fill(
                                         child: IgnorePointer(
-                                          child: Image.asset(
-                                            'assets/images/4.png',
-                                            fit: BoxFit.contain,
-                                            errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
-                                          ),
+                                          child: Image.asset('assets/images/4.png', fit: BoxFit.contain, errorBuilder: (c, e, s) => const SizedBox.shrink()),
                                         ),
                                       )
                                     else if (!isHostSeat)
                                       Positioned.fill(
                                         child: IgnorePointer(
-                                          child: Image.asset(
-                                            'assets/images/1.png',
-                                            fit: BoxFit.contain,
-                                            errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
-                                          ),
+                                          child: Image.asset('assets/images/1.png', fit: BoxFit.contain, errorBuilder: (c, e, s) => const SizedBox.shrink()),
                                         ),
                                       ),
-
                                   if (isOccupied)
                                     Positioned(
                                       bottom: -2,
                                       right: -2,
-                                      child: AnimatedBuilder(
-                                        animation: _waveController,
-                                        builder: (context, child) {
-                                          final wave = _waveController.value;
-                                          return Transform.scale(
-                                            scale: isSpeaking ? (1.0 + wave * 0.25) : 1.0,
-                                            child: Container(
-                                              padding: const EdgeInsets.all(2.5),
-                                              decoration: BoxDecoration(
-                                                shape: BoxShape.circle,
-                                                color: isMuted
-                                                    ? Colors.redAccent
-                                                    : (isSpeaking
-                                                        ? const Color(0xFF00E5FF)
-                                                        : const Color(0xFF00C9A7)),
-                                              ),
-                                              child: Icon(
-                                                isMuted ? Icons.mic_off : Icons.mic,
-                                                size: 11,
-                                                color: Colors.black,
-                                              ),
-                                            ),
-                                          );
-                                        },
+                                      child: Container(
+                                        padding: const EdgeInsets.all(2.5),
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          color: isMuted ? Colors.redAccent : const Color(0xFF00C9A7),
+                                        ),
+                                        child: Icon(isMuted ? Icons.mic_off : Icons.mic, size: 11, color: Colors.black),
                                       ),
                                     ),
                                 ],
                               ),
                               const SizedBox(height: 4),
-
                               Text(
                                 isOccupied ? occupier : "${index + 1}",
                                 style: TextStyle(
-                                  color: isOccupied
-                                      ? (isCrownSeat ? const Color(0xFFFFD700) : Colors.white)
-
-: Colors.white38,
+                                  color: isOccupied ? (isCrownSeat ? const Color(0xFFFFD700) : Colors.white) : Colors.white38,
                                   fontSize: 9.5,
-                                  fontWeight: isOccupied
-                                      ? FontWeight.bold
-                                      : FontWeight.normal,
+                                  fontWeight: isOccupied ? FontWeight.bold : FontWeight.normal,
                                 ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
-
                               Container(
                                 margin: const EdgeInsets.only(top: 1.5),
                                 padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
                                 decoration: BoxDecoration(
-                                  color: giftsCount > 0
-                                      ? const Color(0xFFFF1493).withOpacity(0.3)
-                                      : Colors.white.withOpacity(0.06),
+                                  color: giftsCount > 0 ? const Color(0xFFFF1493).withOpacity(0.3) : Colors.white.withOpacity(0.06),
                                   borderRadius: BorderRadius.circular(6),
                                 ),
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
-                                  children: [
+
+children: [
                                     const Text("🎁", style: TextStyle(fontSize: 8)),
                                     const SizedBox(width: 2),
-                                    Text(
-                                      "$giftsCount",
-                                      style: TextStyle(
-                                        color: giftsCount > 0
-                                            ? const Color(0xFFFFD700)
-                                            : Colors.white38,
-                                        fontSize: 8.5,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
+                                    Text("$giftsCount",
+                                        style: TextStyle(
+                                          color: giftsCount > 0 ? const Color(0xFFFFD700) : Colors.white38,
+                                          fontSize: 8.5,
+                                          fontWeight: FontWeight.bold,
+                                        )),
                                   ],
                                 ),
                               ),
@@ -924,6 +1061,7 @@ size: seatDimension * 0.45,
                   ),
                 ),
 
+                // 2. የውይይት መስኮት (Chat Area)
                 Expanded(
                   flex: 4,
                   child: Container(
@@ -947,20 +1085,14 @@ size: seatDimension * 0.45,
                                 TextSpan(
                                   text: item.isSystem ? "📢 ${item.sender}: " : "${item.sender}: ",
                                   style: TextStyle(
-                                    color: item.isSystem
-                                        ? const Color(0xFFFFD700)
-                                        : const Color(0xFF00E5FF),
+                                    color: item.isSystem ? const Color(0xFFFFD700) : const Color(0xFF00E5FF),
                                     fontWeight: FontWeight.bold,
                                     fontSize: 12,
                                   ),
                                 ),
                                 TextSpan(
-
-text: item.message,
-                                  style: TextStyle(
-                                    color: item.isSystem ? Colors.white70 : Colors.white,
-                                    fontSize: 12,
-                                  ),
+                                  text: item.message,
+                                  style: TextStyle(color: item.isSystem ? Colors.white70 : Colors.white, fontSize: 12),
                                 ),
                               ],
                             ),
@@ -971,6 +1103,7 @@ text: item.message,
                   ),
                 ),
 
+                // 3. የታችኛው የመቆጣጠሪያ ባር
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: const BoxDecoration(
@@ -982,16 +1115,15 @@ text: item.message,
                       IconButton(
                         icon: Icon(
                           _isMuted ? Icons.mic_off : Icons.mic,
-                          color: _mySeatIndex != null
-                              ? (_isMuted ? Colors.redAccent : const Color(0xFF00E5FF))
-                              : Colors.white24,
+                          color: _mySeatIndex != null ? (_isMuted ? Colors.redAccent : const Color(0xFF00E5FF)) : Colors.white24,
                           size: 26,
                         ),
                         onPressed: _mySeatIndex != null ? _toggleMute : null,
                       ),
                       Expanded(
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 14),
+
+padding: const EdgeInsets.symmetric(horizontal: 14),
                           decoration: BoxDecoration(
                             color: Colors.white.withOpacity(0.08),
                             borderRadius: BorderRadius.circular(20),
@@ -1025,50 +1157,111 @@ text: item.message,
               ],
             ),
 
-            // ስጦታው ከስር ተነስቶ ወደ ተመረጠው ወንበር አቅጣጫ የሚበርበት አኒሜሽን
+            // 4. ወደ ወንበር ወይም ወደ ሁሉም ወንበሮች የሚበር የስጦታ አኒሜሽን
             if (_isShowingGiftAnim)
               AnimatedBuilder(
                 animation: _giftFlyProgress,
                 builder: (context, child) {
                   final t = _giftFlyProgress.value;
-
-                  // የተመረጠው ወንበር በስክሪኑ ላይ ያለበትን የ Grid ረድፍና አምድ ማሰላት
                   final col = _animTargetSeatIndex % crossAxis;
                   final row = _animTargetSeatIndex ~/ crossAxis;
 
-                  final targetX = (col + 0.5) * (size.width / crossAxis);
-                  final targetY = 60.0 + (row * 65.0);
+                  final targetX = _isGiftToAll ? (size.width * 0.5) : ((col + 0.5) * (size.width / crossAxis));
+                  final targetY = _isGiftToAll ? (size.height * 0.25) : (60.0 + (row * 65.0));
 
                   final startX = size.width * 0.85;
                   final startY = size.height * 0.90;
 
                   final currentX = startX + (targetX - startX) * t;
                   final currentY = startY + (targetY - startY) * t;
-                  final scale = 0.5 + (0.9 * (1.0 - (t - 0.5).abs() * 2));
-                  final opacity = (1.0 - t * 0.4).clamp(0.0, 1.0);
+                  final scale = _isGiftToAll
+                      ? (0.6 + 1.2 * (1.0 - (t - 0.5).abs() * 2))
+                      : (0.5 + 0.9 * (1.0 - (t - 0.5).abs() * 2));
 
-return Positioned(
-                    left: currentX - 35,
-                    top: currentY - 35,
+                  return Positioned(
+                    left: currentX - 40,
+                    top: currentY - 40,
                     child: Opacity(
-                      opacity: opacity,
+                      opacity: (1.0 - t * 0.3).clamp(0.0, 1.0),
                       child: Transform.scale(
-                        scale: scale.clamp(0.4, 1.4),
+                        scale: scale.clamp(0.4, 2.0),
                         child: Image.asset(
                           _activeGiftAsset,
-                          width: 70,
-                          height: 70,
+                          width: 80,
+                          height: 80,
                           fit: BoxFit.contain,
-                          errorBuilder: (context, error, stackTrace) => const Icon(
-                            Icons.card_giftcard,
-                            color: Color(0xFFFFD700),
-                            size: 40,
-                          ),
+                          errorBuilder: (c, e, s) => const Icon(Icons.card_giftcard, color: Color(0xFFFFD700), size: 45),
                         ),
                       ),
                     ),
                   );
                 },
+              ),
+
+            // 5. ልክ በቪዲዮው ላይ እንዳለው ክብ ቆጣሪ ያለው COMBO BUTTON
+            if (_showComboButton)
+              Positioned(
+                bottom: 65,
+                right: 20,
+                child: GestureDetector(
+                  onTap: _onComboTapped,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+
+// የሚሽከረከረው የ 3 ሰከንድ ክብ ቆጣሪ
+                      SizedBox(
+                        width: 74,
+                        height: 74,
+                        child: AnimatedBuilder(
+                          animation: _comboRingController,
+                          builder: (context, child) {
+                            return CircularProgressIndicator(
+                              value: 1.0 - _comboRingController.value,
+                              strokeWidth: 3.5,
+                              color: const Color(0xFFFFD700),
+                              backgroundColor: Colors.white24,
+                            );
+                          },
+                        ),
+                      ),
+                      // ሮዝ ቀለም ያለው የ Combo ቁልፍ
+                      Container(
+                        width: 62,
+                        height: 62,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFFFF2A85), Color(0xFFBA00E5)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFFFF2A85).withOpacity(0.6),
+                              blurRadius: 14,
+                              spreadRadius: 2,
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Text(
+                              "Combo",
+                              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                            ),
+                            if (_comboCount > 1)
+                              Text(
+                                "x$_comboCount",
+                                style: const TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.w900, fontSize: 13),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
           ],
         ),
