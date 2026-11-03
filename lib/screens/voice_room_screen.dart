@@ -478,7 +478,7 @@ void _changeSeatCount(int newCount) {
     final List<int> multipliers = [1, 3, 7, 10, 30, 50, 77, 100];
     int selectedGiftId = 1;
 
-    final List> currentSeatedUsers = [];
+    final currentSeatedUsers = [];
     for (int i = 0; i < _totalSeats; i++) {
       if (_seats[i] != null) {
         currentSeatedUsers.add({
