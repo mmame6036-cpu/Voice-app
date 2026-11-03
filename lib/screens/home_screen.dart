@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import '../services/room_service.dart';
 
 class HomeScreen extends StatefulWidget {
   final int coins;
@@ -22,7 +24,7 @@ class _HomeScreenState extends State<HomeScreen> {
   static const String abayFallsUrl =
       "https://upload.wikimedia.org/wikipedia/commons/thumb/0/05/Blue_Nile_Falls_Ethiopia.jpg/1024px-Blue_Nile_Falls_Ethiopia.jpg";
 
-  final List<Map<String, dynamic>> _rooms = [
+  final List> _rooms = [
     {
       "title": "Abay Falls 3D Lounge 🌊",
       "host": "Kedir Umer",
@@ -49,195 +51,287 @@ class _HomeScreenState extends State<HomeScreen> {
     },
   ];
 
+  Future<void> _handleEnterMyRoom() async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(
+          color: Color(0xFFFFD700),
+        ),
+      ),
+    );
+
+    try {
+      final roomService = RoomService();
+      final user = FirebaseAuth.instance.currentUser;
+      final hostUid = user?.uid ?? 'guest_host';
+      final hostName = user?.displayName ?? 'Host';
+      final roomId = 'room_$hostUid';
+      final roomTitle = "$hostName's Lounge";
+
+      await roomService.enterMyRoom(
+        roomId: roomId,
+        roomTitle: roomTitle,
+        hostUid: hostUid,
+        hostName: hostName,
+      );
+
+      if (mounted) {
+        Navigator.pop(context);
+        widget.onJoinRoom(roomTitle);
+      }
+    } catch (_) {
+      if (mounted) {
+        Navigator.pop(context);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return SafeArea(
-      child: Column(
+      child: Stack(
         children: [
-          // አናት ላይ፦ በግራ (Follow, Party) | በቀኝ (Search, Square Box)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
-            child: Row(
-              children: [
-                GestureDetector(
-                  onTap: () => setState(() => _selectedTopTab = 0),
-                  child: Text(
-                    "Follow",
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: _selectedTopTab == 0 ? const Color(0xFFFFD700) : Colors.white60,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 18),
-                GestureDetector(
-                  onTap: () => setState(() => _selectedTopTab = 1),
-                  child: Column(
-                    children: [
-                      Text(
-                        "Party",
+          Column(
+            children: [
+              // Top Header: Follow / Party tabs, Search, Box Icon
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+                child: Row(
+                  children: [
+                    GestureDetector(
+                      onTap: () => setState(() => _selectedTopTab = 0),
+                      child: Text(
+                        "Follow",
                         style: TextStyle(
-                          fontSize: 20,
+                          fontSize: 18,
                           fontWeight: FontWeight.bold,
-                          color: _selectedTopTab == 1 ? Colors.white : Colors.white60,
+                          color: _selectedTopTab == 0 ? const Color(0xFFFFD700) : Colors.white60,
                         ),
                       ),
-                      if (_selectedTopTab == 1)
-                        Container(
-                          margin: const EdgeInsets.only(top: 4),
-                          width: 20,
-                          height: 3,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFFFD700),
-                            borderRadius: BorderRadius.circular(2),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-                const Spacer(),
-                IconButton(
-                  icon: const Icon(Icons.search, color: Colors.white, size: 26),
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text("Search rooms or users...")),
-                    );
-                  },
-                ),
-                Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF23233E),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: const Color(0xFFFFD700), width: 1.2),
-
-),
-                  child: IconButton(
-                    padding: EdgeInsets.zero,
-                    icon: const Icon(Icons.grid_view_rounded, color: Color(0xFFFFD700), size: 20),
-                    onPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text("Rank & Activity Box Opened")),
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const Divider(color: Colors.white12, height: 1),
-
-          // የክፍሎች ዝርዝር
-          Expanded(
-            child: _selectedTopTab == 0
-                ? const Center(
-                    child: Text("No followed hosts live right now.", style: TextStyle(color: Colors.white54)),
-                  )
-                : ListView(
-                    padding: const EdgeInsets.all(16),
-                    children: [
-                      // Banner
-                      Container(
-                        height: 110,
-                        width: double.infinity,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(16),
-                          image: const DecorationImage(
-                            image: NetworkImage(abayFallsUrl),
-                            fit: BoxFit.cover,
-                          ),
-                        ),
-                        child: Container(
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(16),
-                            gradient: const LinearGradient(
-                              colors: [Colors.black87, Colors.transparent],
+                    ),
+                    const SizedBox(width: 18),
+                    GestureDetector(
+                      onTap: () => setState(() => _selectedTopTab = 1),
+                      child: Column(
+                        children: [
+                          Text(
+                            "Party",
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: _selectedTopTab == 1 ? Colors.white : Colors.white60,
                             ),
                           ),
-                          padding: const EdgeInsets.all(14),
-                          child: const Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text("Abay Festival 🎉", style: TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold, fontSize: 18)),
-                              Text("Join top 3D voice rooms now!", style: TextStyle(color: Colors.white70, fontSize: 12)),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      const Text(
-                        "Live Parties 🎧",
-                        style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 12),
-                      GridView.builder(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        itemCount: _rooms.length,
-                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 2,
-                          crossAxisSpacing: 12,
-                          mainAxisSpacing: 12,
-                          childAspectRatio: 0.95,
-                        ),
-                        itemBuilder: (context, index) {
-                          final item = _rooms[index];
-                          return GestureDetector(
-                            onTap: () => widget.onJoinRoom(item["title"]),
-                            child: Container(
-                              padding: const EdgeInsets.all(12),
+                          if (_selectedTopTab == 1)
+                            Container(
+                              margin: const EdgeInsets.only(top: 4),
+
+width: 20,
+                              height: 3,
                               decoration: BoxDecoration(
-                                color: item["color"],
-                                borderRadius: BorderRadius.circular(16),
-
-border: Border.all(color: Colors.white12),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                        decoration: BoxDecoration(
-                                          color: Colors.black45,
-                                          borderRadius: BorderRadius.circular(8),
-                                        ),
-                                        child: Row(
-                                          children: [
-                                            const Icon(Icons.whatshot, color: Colors.orangeAccent, size: 12),
-                                            const SizedBox(width: 4),
-                                            Text("${item['members']}", style: const TextStyle(color: Colors.white70, fontSize: 10)),
-                                          ],
-                                        ),
-                                      ),
-                                      const Icon(Icons.spatial_audio, color: Color(0xFFFFD700), size: 16),
-                                    ],
-                                  ),
-                                  const Spacer(),
-                                  Text(
-                                    item["title"],
-                                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    "Host: ${item['host']}",
-                                    style: const TextStyle(color: Colors.white60, fontSize: 11),
-                                  ),
-                                ],
+                                color: const Color(0xFFFFD700),
+                                borderRadius: BorderRadius.circular(2),
                               ),
                             ),
+                        ],
+                      ),
+                    ),
+                    const Spacer(),
+                    IconButton(
+                      icon: const Icon(Icons.search, color: Colors.white, size: 26),
+                      onPressed: () {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text("Search rooms or users...")),
+                        );
+                      },
+                    ),
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF23233E),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFFFFD700), width: 1.2),
+                      ),
+                      child: IconButton(
+                        padding: EdgeInsets.zero,
+                        icon: const Icon(Icons.grid_view_rounded, color: Color(0xFFFFD700), size: 20),
+                        onPressed: () {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text("Rank & Activity Box Opened")),
                           );
                         },
                       ),
-                    ],
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(color: Colors.white12, height: 1),
+
+              // Rooms List View
+              Expanded(
+                child: _selectedTopTab == 0
+                    ? const Center(
+                        child: Text("No followed hosts live right now.", style: TextStyle(color: Colors.white54)),
+                      )
+                    : ListView(
+                        padding: const EdgeInsets.all(16),
+                        children: [
+                          // Banner
+                          Container(
+                            height: 110,
+                            width: double.infinity,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(16),
+                              image: const DecorationImage(
+                                image: NetworkImage(abayFallsUrl),
+                                fit: BoxFit.cover,
+                              ),
+                            ),
+                            child: Container(
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(16),
+                                gradient: const LinearGradient(
+                                  colors: [Colors.black87, Colors.transparent],
+                                ),
+                              ),
+                              padding: const EdgeInsets.all(14),
+                              child: const Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Text("Abay Festival 🎉", style: TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold, fontSize: 18)),
+                                  Text("Join top 3D voice rooms now!", style: TextStyle(color: Colors.white70, fontSize: 12)),
+                                ],
+                              ),
+
+),
+                          ),
+                          const SizedBox(height: 16),
+                          const Text(
+                            "Live Parties 🎧",
+                            style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 12),
+                          GridView.builder(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            itemCount: _rooms.length,
+                            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 2,
+                              crossAxisSpacing: 12,
+                              mainAxisSpacing: 12,
+                              childAspectRatio: 0.95,
+                            ),
+                            itemBuilder: (context, index) {
+                              final item = _rooms[index];
+                              return GestureDetector(
+                                onTap: () => widget.onJoinRoom(item["title"]),
+                                child: Container(
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: item["color"],
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(color: Colors.white12),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                            decoration: BoxDecoration(
+                                              color: Colors.black45,
+                                              borderRadius: BorderRadius.circular(8),
+                                            ),
+                                            child: Row(
+                                              children: [
+                                                const Icon(Icons.whatshot, color: Colors.orangeAccent, size: 12),
+                                                const SizedBox(width: 4),
+                                                Text("${item['members']}", style: const TextStyle(color: Colors.white70, fontSize: 10)),
+                                              ],
+                                            ),
+                                          ),
+                                          const Icon(Icons.spatial_audio, color: Color(0xFFFFD700), size: 16),
+                                        ],
+                                      ),
+                                      const Spacer(),
+                                      Text(
+                                        item["title"],
+                                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        "Host: ${item['host']}",
+
+style: const TextStyle(color: Colors.white60, fontSize: 11),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                          const SizedBox(height: 80),
+                        ],
+                      ),
+              ),
+            ],
+          ),
+
+          // 3D Floating Mic Button (Bottom Right)
+          Positioned(
+            bottom: 24,
+            right: 18,
+            child: Container(
+              height: 64,
+              width: 64,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: const LinearGradient(
+                  colors: [
+                    Color(0xFFFFE57F),
+                    Color(0xFFFFD700),
+                    Color(0xFFFF8F00),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFFFFD700).withOpacity(0.4),
+                    blurRadius: 16,
+                    spreadRadius: 2,
+                    offset: const Offset(0, 4),
                   ),
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.5),
+                    blurRadius: 8,
+                    offset: const Offset(2, 6),
+                  ),
+                ],
+              ),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(32),
+                  onTap: _handleEnterMyRoom,
+                  child: const Center(
+                    child: Icon(
+                      Icons.mic_rounded,
+                      size: 32,
+                      color: Color(0xFF1E1300),
+                    ),
+                  ),
+                ),
+              ),
+            ),
           ),
         ],
       ),
