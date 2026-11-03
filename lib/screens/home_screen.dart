@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../services/room_service.dart';
+import '../services/user_id_service.dart';
 import 'voice_room_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -25,26 +26,30 @@ class _HomeScreenState extends State<HomeScreen> {
   static const String abayFallsUrl =
       "https://upload.wikimedia.org/wikipedia/commons/thumb/0/05/Blue_Nile_Falls_Ethiopia.jpg/1024px-Blue_Nile_Falls_Ethiopia.jpg";
 
-    final _rooms = [
+  final _rooms = [
     {
+      "id": "room_abay_falls",
       "title": "Abay Falls 3D Lounge 🌊",
       "host": "Kedir Umer",
       "members": 184,
       "color": const Color(0xFF261D45),
     },
     {
+      "id": "room_dessie_vip",
       "title": "Dessie VIP Chill 🎧",
       "host": "Amina",
       "members": 92,
       "color": const Color(0xFF1E2D45),
     },
     {
+      "id": "room_habesha_club",
       "title": "Habesha Night Club 🌙",
       "host": "Yonas",
       "members": 320,
       "color": const Color(0xFF381E45),
     },
     {
+      "id": "room_bole_cafe",
       "title": "Bole Cafe Chit-Chat ☕",
       "host": "Selam",
       "members": 76,
@@ -52,6 +57,7 @@ class _HomeScreenState extends State<HomeScreen> {
     },
   ];
 
+  // የኔን ክፍል ለመክፈት (Host Room)
   Future<void> _handleEnterMyRoom() async {
     showDialog(
       context: context,
@@ -66,17 +72,25 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       final roomService = RoomService();
       final user = FirebaseAuth.instance.currentUser;
-      final hostUid = user?.uid ?? 'guest_host';
+      final hostUid = user?.uid ?? 'guest_host_${DateTime.now().millisecondsSinceEpoch}';
       final hostName = user?.displayName ?? 'Host';
       final roomId = 'room_$hostUid';
       final roomTitle = "$hostName's Lounge";
 
-      await roomService.enterMyRoom(
-        roomId: roomId,
-        roomTitle: roomTitle,
-        hostUid: hostUid,
-        hostName: hostName,
+      // ቋሚ የ 6 ዲጂት ID ከ Firestore ማምጣት (ከ 100001 የሚጀምር)
+      final permanentNumericId = await UserIdService.getOrCreatePermanentId(
+        hostUid,
+        defaultName: hostName,
       );
+
+      try {
+        await roomService.enterMyRoom(
+          roomId: roomId,
+          roomTitle: roomTitle,
+          hostUid: hostUid,
+          hostName: hostName,
+        );
+      } catch (_) {}
 
       if (mounted) {
         Navigator.pop(context);
@@ -87,7 +101,7 @@ class _HomeScreenState extends State<HomeScreen> {
               roomTitle: roomTitle,
               roomId: roomId,
               hostName: hostName,
-              userNumericId: hostUid.hashCode.abs() % 1000000,
+              userNumericId: permanentNumericId,
               userUid: hostUid,
               userName: hostName,
             ),
@@ -99,6 +113,54 @@ class _HomeScreenState extends State<HomeScreen> {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text("Error entering room: $e")),
+        );
+      }
+    }
+  }
+
+  // የሌሎችን ክፍል ስትነካ በቀጥታ በቋሚ ID ወደ ክፍሉ ለመግባት
+  Future<void> _joinExistingRoom(Map<String, dynamic> roomItem) async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(
+          color: Color(0xFFFFD700),
+        ),
+      ),
+    );
+
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      final myUid = user?.uid ?? 'guest_${DateTime.now().millisecondsSinceEpoch}';
+      final myName = user?.displayName ?? 'User';
+
+      final permanentNumericId = await UserIdService.getOrCreatePermanentId(
+        myUid,
+        defaultName: myName,
+      );
+
+if (mounted) {
+        Navigator.pop(context);
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => VoiceRoomScreen(
+              roomTitle: roomItem["title"] as String,
+              roomId: roomItem["id"] as String,
+              hostName: roomItem["host"] as String,
+              userNumericId: permanentNumericId,
+              userUid: myUid,
+              userName: "User $permanentNumericId",
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error: $e")),
         );
       }
     }
@@ -133,8 +195,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         children: [
                           Text(
                             "Party",
-
-style: TextStyle(
+                            style: TextStyle(
                               fontSize: 20,
                               fontWeight: FontWeight.bold,
                               color: _selectedTopTab == 1 ? Colors.white : Colors.white60,
@@ -176,7 +237,8 @@ style: TextStyle(
                         onPressed: () {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(content: Text("Rank & Activity Box Opened")),
-                          );
+
+);
                         },
                       ),
                     ),
@@ -213,8 +275,7 @@ style: TextStyle(
                               child: const Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 mainAxisAlignment: MainAxisAlignment.center,
-
-children: [
+                                children: [
                                   Text("Abay Festival 🎉", style: TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold, fontSize: 18)),
                                   Text("Join top 3D voice rooms now!", style: TextStyle(color: Colors.white70, fontSize: 12)),
                                 ],
@@ -245,12 +306,13 @@ children: [
                               final roomMembers = item["members"] as int;
 
                               return GestureDetector(
-                                onTap: () => widget.onJoinRoom(roomTitle),
+                                onTap: () => _joinExistingRoom(item),
                                 child: Container(
                                   padding: const EdgeInsets.all(12),
                                   decoration: BoxDecoration(
                                     color: roomColor,
-                                    borderRadius: BorderRadius.circular(16),
+
+borderRadius: BorderRadius.circular(16),
                                     border: Border.all(color: Colors.white12),
                                   ),
                                   child: Column(
@@ -275,8 +337,7 @@ children: [
                                           ),
                                           const Icon(Icons.spatial_audio, color: Color(0xFFFFD700), size: 16),
                                         ],
-
-),
+                                      ),
                                       const Spacer(),
                                       Text(
                                         roomTitle,
@@ -328,7 +389,8 @@ children: [
                   BoxShadow(
                     color: Colors.black.withOpacity(0.5),
                     blurRadius: 8,
-                    offset: const Offset(2, 6),
+
+offset: const Offset(2, 6),
                   ),
                 ],
               ),
