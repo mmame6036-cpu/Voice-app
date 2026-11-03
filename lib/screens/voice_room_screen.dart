@@ -57,7 +57,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
 
   int _myCoins = 1000000;
 
-  final List> giftsList = [
+  final giftsList = [
     {"id": 1, "name": "Fragrant Flowers", "price": 100, "asset": "assets/images/lv3.png"},
     {"id": 2, "name": "Ice Cream", "price": 200, "asset": "assets/images/2.png"},
     {"id": 3, "name": "Perfume Bottle", "price": 300, "asset": "assets/images/1.png"},
