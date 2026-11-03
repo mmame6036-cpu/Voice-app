@@ -62,11 +62,11 @@ class _MessagesScreenState extends State<MessagesScreen> {
       context,
       MaterialPageRoute(
         builder: (_) => NoticeContentScreen(
-          title: notice["title"],
-          time: notice["time"],
-          content: notice["details"],
-          color: notice["color"],
-          icon: notice["icon"],
+          title: notice["title"] as String,
+          time: notice["time"] as String,
+          content: notice["details"] as String,
+          color: notice["color"] as Color,
+          icon: notice["icon"] as IconData,
         ),
       ),
     );
@@ -99,7 +99,6 @@ class _MessagesScreenState extends State<MessagesScreen> {
         physics: const BouncingScrollPhysics(),
         children: [
           const SizedBox(height: 16),
-          // Quick Action Badges (Notice, Interaction, Followers)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Row(
@@ -157,8 +156,6 @@ class _MessagesScreenState extends State<MessagesScreen> {
           const SizedBox(height: 18),
           const Divider(height: 1, color: Color(0xFFE8ECEF)),
           const SizedBox(height: 8),
-
-          // Official Channels / System Notices Section
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Text(
@@ -171,7 +168,6 @@ class _MessagesScreenState extends State<MessagesScreen> {
               ),
             ),
           ),
-
           ..._systemNotices.map((notice) {
             final bool isUnread = notice["unread"] as bool;
             return Container(
@@ -223,15 +219,16 @@ class _MessagesScreenState extends State<MessagesScreen> {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(fontSize: 12, color: Colors.black54),
+                ),
 
-),
-                trailing: Column(
+trailing: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Text(
                       notice["time"],
-                      style: const TextStyle(fontSize: 11, color: Colors.black38),
+                      style:
+                          const TextStyle(fontSize: 11, color: Colors.black38),
                     ),
                     const SizedBox(height: 4),
                     const Icon(Icons.arrow_forward_ios,
@@ -313,9 +310,6 @@ class _MessagesScreenState extends State<MessagesScreen> {
   }
 }
 
-// ----------------------------------------------------
-// 1. ዝርዝር የማሳሰቢያ ገጽ (Notice Detail Screen)
-// ----------------------------------------------------
 class NoticeDetailScreen extends StatelessWidget {
   const NoticeDetailScreen({super.key});
 
@@ -346,11 +340,12 @@ class NoticeDetailScreen extends StatelessWidget {
       backgroundColor: const Color(0xFFF7FBFB),
       appBar: AppBar(
         title: const Text("Notices",
-            style: TextStyle(color: Colors.black, fontSize: 17, fontWeight: FontWeight.bold)),
-
-backgroundColor: Colors.white,
+            style: TextStyle(
+                color: Colors.black, fontSize: 17, fontWeight: FontWeight.bold)),
+        backgroundColor: Colors.white,
         elevation: 0.5,
-        leading: IconButton(
+
+leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios, color: Colors.black, size: 18),
           onPressed: () => Navigator.pop(context),
         ),
@@ -363,30 +358,29 @@ backgroundColor: Colors.white,
           return Card(
             margin: const EdgeInsets.only(bottom: 12),
             elevation: 0.5,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             child: Padding(
               padding: const EdgeInsets.all(14),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        item["title"]!,
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                      ),
-                    ],
+                  Text(
+                    item["title"]!,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold, fontSize: 14),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     item["date"]!,
-                    style: const TextStyle(color: Colors.black38, fontSize: 11),
+                    style:
+                        const TextStyle(color: Colors.black38, fontSize: 11),
                   ),
                   const SizedBox(height: 8),
                   Text(
                     item["body"]!,
-                    style: const TextStyle(color: Colors.black87, fontSize: 13, height: 1.3),
+                    style: const TextStyle(
+                        color: Colors.black87, fontSize: 13, height: 1.3),
                   ),
                 ],
               ),
@@ -398,9 +392,6 @@ backgroundColor: Colors.white,
   }
 }
 
-// ----------------------------------------------------
-// 2. የመስተጋብር ዝርዝር ገጽ (Interaction Detail Screen)
-// ----------------------------------------------------
 class InteractionDetailScreen extends StatelessWidget {
   const InteractionDetailScreen({super.key});
 
@@ -434,7 +425,8 @@ class InteractionDetailScreen extends StatelessWidget {
       backgroundColor: const Color(0xFFF7FBFB),
       appBar: AppBar(
         title: const Text("Interactions",
-            style: TextStyle(color: Colors.black, fontSize: 17, fontWeight: FontWeight.bold)),
+            style: TextStyle(
+                color: Colors.black, fontSize: 17, fontWeight: FontWeight.bold)),
         backgroundColor: Colors.white,
         elevation: 0.5,
         leading: IconButton(
@@ -445,21 +437,22 @@ class InteractionDetailScreen extends StatelessWidget {
       body: ListView.separated(
         padding: const EdgeInsets.all(12),
         itemCount: _interactions.length,
-        separatorBuilder: (_, __) => const Divider(height: 1, color: Color(0xFFE8ECEF)),
+        separatorBuilder: (_, __) =>
+            const Divider(height: 1, color: Color(0xFFE8ECEF)),
         itemBuilder: (context, index) {
           final item = _interactions[index];
           return ListTile(
             leading: CircleAvatar(
               backgroundColor: (item["color"] as Color).withOpacity(0.15),
-              child: Icon(item["icon"] as IconData, color: item["color"] as Color, size: 20),
+              child: Icon(item["icon"] as IconData,
+                  color: item["color"] as Color, size: 20),
             ),
             title: RichText(
               text: TextSpan(
                 style: const TextStyle(color: Colors.black87, fontSize: 13),
                 children: [
                   TextSpan(
-
-text: "${item["user"]} ",
+                    text: "${item["user"]} ",
                     style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
                   TextSpan(text: item["action"]),
@@ -477,13 +470,10 @@ text: "${item["user"]} ",
   }
 }
 
-// ----------------------------------------------------
-// 3. የተከታዮች ዝርዝር እና አስተዳደር (Followers List Screen)
-// ----------------------------------------------------
 class FollowersListScreen extends StatefulWidget {
   const FollowersListScreen({super.key});
 
-  @override
+@override
   State<FollowersListScreen> createState() => _FollowersListScreenState();
 }
 
@@ -512,7 +502,8 @@ class _FollowersListScreenState extends State<FollowersListScreen> {
       backgroundColor: const Color(0xFFF7FBFB),
       appBar: AppBar(
         title: const Text("Followers",
-            style: TextStyle(color: Colors.black, fontSize: 17, fontWeight: FontWeight.bold)),
+            style: TextStyle(
+                color: Colors.black, fontSize: 17, fontWeight: FontWeight.bold)),
         backgroundColor: Colors.white,
         elevation: 0.5,
         leading: IconButton(
@@ -530,18 +521,21 @@ class _FollowersListScreenState extends State<FollowersListScreen> {
           return Card(
             elevation: 0.3,
             margin: const EdgeInsets.symmetric(vertical: 4),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             child: ListTile(
               leading: CircleAvatar(
                 backgroundColor: const Color(0xFF261D45),
                 child: Text(
                   person["name"][0],
-                  style: const TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                      color: Color(0xFFFFD700), fontWeight: FontWeight.bold),
                 ),
               ),
               title: Text(
                 person["name"],
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                style:
+                    const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
               ),
               subtitle: Text(
                 person["bio"],
@@ -550,10 +544,15 @@ class _FollowersListScreenState extends State<FollowersListScreen> {
               trailing: ElevatedButton(
                 style: ElevatedButton.styleFrom(
                   elevation: 0,
-                  backgroundColor: isFollowing ? const Color(0xFFE8ECEF) : const Color(0xFF00C9A7),
-                  foregroundColor: isFollowing ? Colors.black87 : Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  backgroundColor: isFollowing
+                      ? const Color(0xFFE8ECEF)
+                      : const Color(0xFF00C9A7),
+                  foregroundColor:
+                      isFollowing ? Colors.black87 : Colors.white,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(18)),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                 ),
                 onPressed: () {
                   setState(() {
@@ -562,7 +561,8 @@ class _FollowersListScreenState extends State<FollowersListScreen> {
                 },
                 child: Text(
                   isFollowing ? "Following" : "Follow Back",
-                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                      fontSize: 11, fontWeight: FontWeight.bold),
                 ),
               ),
             ),
@@ -573,10 +573,6 @@ class _FollowersListScreenState extends State<FollowersListScreen> {
   }
 }
 
-// ----------------------------------------------------
-
-// 4. የሲስተም ኖቲስ ዝርዝር ይዘት ማሳያ (Notice Content Screen)
-// ----------------------------------------------------
 class NoticeContentScreen extends StatelessWidget {
   final String title;
   final String time;
@@ -599,7 +595,9 @@ class NoticeContentScreen extends StatelessWidget {
       backgroundColor: const Color(0xFFF7FBFB),
       appBar: AppBar(
         title: Text(title,
-            style: const TextStyle(color: Colors.black, fontSize: 16, fontWeight: FontWeight.bold)),
+
+style: const TextStyle(
+                color: Colors.black, fontSize: 16, fontWeight: FontWeight.bold)),
         backgroundColor: Colors.white,
         elevation: 0.5,
         leading: IconButton(
@@ -650,7 +648,8 @@ class NoticeContentScreen extends StatelessWidget {
                         const SizedBox(height: 2),
                         Text(
                           time,
-                          style: const TextStyle(fontSize: 12, color: Colors.black38),
+                          style: const TextStyle(
+                              fontSize: 12, color: Colors.black38),
                         ),
                       ],
                     ),
@@ -682,7 +681,8 @@ class NoticeContentScreen extends StatelessWidget {
                   onPressed: () => Navigator.pop(context),
                   child: const Text(
                     "Acknowledge",
-                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                    style: TextStyle(
+                        color: Colors.white, fontWeight: FontWeight.bold),
                   ),
                 ),
               ),
