@@ -25,7 +25,7 @@ class _HomeScreenState extends State<HomeScreen> {
   static const String abayFallsUrl =
       "https://upload.wikimedia.org/wikipedia/commons/thumb/0/05/Blue_Nile_Falls_Ethiopia.jpg/1024px-Blue_Nile_Falls_Ethiopia.jpg";
 
-  final _rooms = [
+  final List> _rooms = [
     {
       "title": "Abay Falls 3D Lounge 🌊",
       "host": "Kedir Umer",
@@ -51,7 +51,8 @@ class _HomeScreenState extends State<HomeScreen> {
       "color": const Color(0xFF1E3C38),
     },
   ];
-   Future<void> _handleEnterMyRoom() async {
+
+  Future<void> _handleEnterMyRoom() async {
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -93,13 +94,16 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         );
       }
-    } catch (_) {
+    } catch (e) {
       if (mounted) {
         Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error entering room: $e")),
+        );
       }
     }
   }
-  
+
   @override
   Widget build(BuildContext context) {
     return SafeArea(
@@ -129,7 +133,8 @@ class _HomeScreenState extends State<HomeScreen> {
                         children: [
                           Text(
                             "Party",
-                            style: TextStyle(
+
+style: TextStyle(
                               fontSize: 20,
                               fontWeight: FontWeight.bold,
                               color: _selectedTopTab == 1 ? Colors.white : Colors.white60,
@@ -139,8 +144,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             Container(
                               margin: const EdgeInsets.only(top: 4),
                               width: 20,
-
-height: 3,
+                              height: 3,
                               decoration: BoxDecoration(
                                 color: const Color(0xFFFFD700),
                                 borderRadius: BorderRadius.circular(2),
@@ -209,7 +213,8 @@ height: 3,
                               child: const Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
+
+children: [
                                   Text("Abay Festival 🎉", style: TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold, fontSize: 18)),
                                   Text("Join top 3D voice rooms now!", style: TextStyle(color: Colors.white70, fontSize: 12)),
                                 ],
@@ -217,8 +222,7 @@ height: 3,
                             ),
                           ),
                           const SizedBox(height: 16),
-
-const Text(
+                          const Text(
                             "Live Parties 🎧",
                             style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
                           ),
@@ -271,7 +275,8 @@ const Text(
                                           ),
                                           const Icon(Icons.spatial_audio, color: Color(0xFFFFD700), size: 16),
                                         ],
-                                      ),
+
+),
                                       const Spacer(),
                                       Text(
                                         roomTitle,
@@ -279,8 +284,7 @@ const Text(
                                         maxLines: 2,
                                         overflow: TextOverflow.ellipsis,
                                       ),
-
-const SizedBox(height: 4),
+                                      const SizedBox(height: 4),
                                       Text(
                                         "Host: $roomHost",
                                         style: const TextStyle(color: Colors.white60, fontSize: 11),
