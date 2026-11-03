@@ -12,7 +12,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
   int _unreadInteractionCount = 5;
   int _unreadFollowerCount = 3;
 
-  final List> _systemNotices = [
+  final _systemNotices = [
     {
       "id": "announcement_1",
       "title": "Official Announcement",
@@ -54,7 +54,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
     );
   }
 
-  void _openNoticeDetail(Map<String, dynamic> notice) {
+  void _openNoticeDetail(dynamic notice) {
     setState(() {
       notice["unread"] = false;
     });
@@ -62,9 +62,9 @@ class _MessagesScreenState extends State<MessagesScreen> {
       context,
       MaterialPageRoute(
         builder: (_) => NoticeContentScreen(
-          title: notice["title"] as String,
-          time: notice["time"] as String,
-          content: notice["details"] as String,
+          title: notice["title"].toString(),
+          time: notice["time"].toString(),
+          content: notice["details"].toString(),
           color: notice["color"] as Color,
           icon: notice["icon"] as IconData,
         ),
@@ -118,9 +118,9 @@ class _MessagesScreenState extends State<MessagesScreen> {
                       ),
                     );
                   },
+                ),
 
-),
-                _quickActionButton(
+_quickActionButton(
                   icon: Icons.favorite,
                   label: "Interaction",
                   color: Colors.pinkAccent,
@@ -207,7 +207,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                   ],
                 ),
                 title: Text(
-                  notice["title"],
+                  notice["title"].toString(),
                   style: TextStyle(
                     fontWeight: isUnread ? FontWeight.bold : FontWeight.w600,
                     fontSize: 14,
@@ -215,7 +215,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                   ),
                 ),
                 subtitle: Text(
-                  notice["subtitle"],
+                  notice["subtitle"].toString(),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(fontSize: 12, color: Colors.black54),
@@ -226,7 +226,7 @@ trailing: Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Text(
-                      notice["time"],
+                      notice["time"].toString(),
                       style:
                           const TextStyle(fontSize: 11, color: Colors.black38),
                     ),
@@ -313,29 +313,29 @@ trailing: Column(
 class NoticeDetailScreen extends StatelessWidget {
   const NoticeDetailScreen({super.key});
 
-  final List> _notices = const [
-    {
-      "title": "System Security Maintenance Completed",
-      "date": "Today 08:30 AM",
-      "body":
-          "Our audio routing servers have been upgraded for low latency Agora audio streaming across all 30-seat rooms.",
-    },
-    {
-      "title": "Community Guidelines Update",
-      "date": "Yesterday 04:15 PM",
-      "body":
-          "Respect fellow broadcasters and guests. Any form of harassment in live audio lounges will result in room locks.",
-    },
-    {
-      "title": "Welcome Gift Package Available",
-      "date": "3 days ago",
-      "body":
-          "Check your wallet to claim the newly registered broadcaster badge and bonus gifts.",
-    },
-  ];
-
   @override
   Widget build(BuildContext context) {
+    final notices = [
+      {
+        "title": "System Security Maintenance Completed",
+        "date": "Today 08:30 AM",
+        "body":
+            "Our audio routing servers have been upgraded for low latency Agora audio streaming across all 30-seat rooms.",
+      },
+      {
+        "title": "Community Guidelines Update",
+        "date": "Yesterday 04:15 PM",
+        "body":
+            "Respect fellow broadcasters and guests. Any form of harassment in live audio lounges will result in room locks.",
+      },
+      {
+        "title": "Welcome Gift Package Available",
+        "date": "3 days ago",
+        "body":
+            "Check your wallet to claim the newly registered broadcaster badge and bonus gifts.",
+      },
+    ];
+
     return Scaffold(
       backgroundColor: const Color(0xFFF7FBFB),
       appBar: AppBar(
@@ -343,18 +343,18 @@ class NoticeDetailScreen extends StatelessWidget {
             style: TextStyle(
                 color: Colors.black, fontSize: 17, fontWeight: FontWeight.bold)),
         backgroundColor: Colors.white,
-        elevation: 0.5,
 
-leading: IconButton(
+elevation: 0.5,
+        leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios, color: Colors.black, size: 18),
           onPressed: () => Navigator.pop(context),
         ),
       ),
       body: ListView.builder(
         padding: const EdgeInsets.all(14),
-        itemCount: _notices.length,
+        itemCount: notices.length,
         itemBuilder: (context, index) {
-          final item = _notices[index];
+          final item = notices[index];
           return Card(
             margin: const EdgeInsets.only(bottom: 12),
             elevation: 0.5,
@@ -395,32 +395,32 @@ leading: IconButton(
 class InteractionDetailScreen extends StatelessWidget {
   const InteractionDetailScreen({super.key});
 
-  final List> _interactions = const [
-    {
-      "user": "Amina",
-      "action": "sent you a Rose gift in Dessie VIP Chill",
-      "time": "15m ago",
-      "icon": Icons.card_giftcard,
-      "color": Colors.pinkAccent,
-    },
-    {
-      "user": "Yonas",
-      "action": "joined your 30-seat voice lounge",
-      "time": "1h ago",
-      "icon": Icons.meeting_room,
-      "color": Colors.blueAccent,
-    },
-    {
-      "user": "Selam",
-      "action": "liked your room audio stream",
-      "time": "3h ago",
-      "icon": Icons.favorite,
-      "color": Colors.redAccent,
-    },
-  ];
-
   @override
   Widget build(BuildContext context) {
+    final interactions = [
+      {
+        "user": "Amina",
+        "action": "sent you a Rose gift in Dessie VIP Chill",
+        "time": "15m ago",
+        "icon": Icons.card_giftcard,
+        "color": Colors.pinkAccent,
+      },
+      {
+        "user": "Yonas",
+        "action": "joined your 30-seat voice lounge",
+        "time": "1h ago",
+        "icon": Icons.meeting_room,
+        "color": Colors.blueAccent,
+      },
+      {
+        "user": "Selam",
+        "action": "liked your room audio stream",
+        "time": "3h ago",
+        "icon": Icons.favorite,
+        "color": Colors.redAccent,
+      },
+    ];
+
     return Scaffold(
       backgroundColor: const Color(0xFFF7FBFB),
       appBar: AppBar(
@@ -436,11 +436,11 @@ class InteractionDetailScreen extends StatelessWidget {
       ),
       body: ListView.separated(
         padding: const EdgeInsets.all(12),
-        itemCount: _interactions.length,
+        itemCount: interactions.length,
         separatorBuilder: (_, __) =>
             const Divider(height: 1, color: Color(0xFFE8ECEF)),
         itemBuilder: (context, index) {
-          final item = _interactions[index];
+          final item = interactions[index];
           return ListTile(
             leading: CircleAvatar(
               backgroundColor: (item["color"] as Color).withOpacity(0.15),
@@ -455,12 +455,12 @@ class InteractionDetailScreen extends StatelessWidget {
                     text: "${item["user"]} ",
                     style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
-                  TextSpan(text: item["action"]),
+                  TextSpan(text: item["action"].toString()),
                 ],
               ),
             ),
             trailing: Text(
-              item["time"],
+              item["time"].toString(),
               style: const TextStyle(color: Colors.black38, fontSize: 11),
             ),
           );
@@ -473,12 +473,12 @@ class InteractionDetailScreen extends StatelessWidget {
 class FollowersListScreen extends StatefulWidget {
   const FollowersListScreen({super.key});
 
-@override
+  @override
   State<FollowersListScreen> createState() => _FollowersListScreenState();
 }
 
 class _FollowersListScreenState extends State<FollowersListScreen> {
-  final List> _followers = [
+  final _followers = [
     {
       "name": "Hamza Voice",
       "bio": "Host Agency Lead • Dessie",
@@ -527,18 +527,18 @@ class _FollowersListScreenState extends State<FollowersListScreen> {
               leading: CircleAvatar(
                 backgroundColor: const Color(0xFF261D45),
                 child: Text(
-                  person["name"][0],
+                  person["name"].toString()[0],
                   style: const TextStyle(
                       color: Color(0xFFFFD700), fontWeight: FontWeight.bold),
                 ),
               ),
               title: Text(
-                person["name"],
+                person["name"].toString(),
                 style:
                     const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
               ),
               subtitle: Text(
-                person["bio"],
+                person["bio"].toString(),
                 style: const TextStyle(fontSize: 12, color: Colors.black54),
               ),
               trailing: ElevatedButton(
@@ -591,12 +591,12 @@ class NoticeContentScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+
+return Scaffold(
       backgroundColor: const Color(0xFFF7FBFB),
       appBar: AppBar(
         title: Text(title,
-
-style: const TextStyle(
+            style: const TextStyle(
                 color: Colors.black, fontSize: 16, fontWeight: FontWeight.bold)),
         backgroundColor: Colors.white,
         elevation: 0.5,
