@@ -55,10 +55,8 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
   late List<bool> _seatMutes;
   bool _isConnecting = true;
 
-  // ለመፈተሻ የተዘጋጀ 1,000,000 ሳንቲም
   int _myCoins = 1000000;
 
-  // አኒሜሽኖች
   late AnimationController _waveController;
   late AnimationController _giftFlyController;
   late Animation<double> _giftFlyProgress;
@@ -67,7 +65,6 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
   int _animTargetSeatIndex = 0;
   bool _isGiftToAll = false;
 
-  // Combo አሰራር (3 ሰከንድ ክብ ቆጣሪ)
   bool _showComboButton = false;
   int _comboCount = 0;
   Timer? _comboTimer;
@@ -431,7 +428,6 @@ void _scrollToBottom() {
     });
   }
 
-  // --- COMBO BUTTON LOGIC (3 ሰከንድ ክብ ቆጣሪ) ---
   void _startComboTimer() {
     _comboTimer?.cancel();
     _comboRingController.reset();
@@ -468,26 +464,14 @@ void _scrollToBottom() {
     _startComboTimer();
   }
 
-  // --- የስጦታ መላኪያ ሳጥን (በቪዲዮው መሰረት) ---
   void _openGiftSheet() {
-    // 1. ወንበር ላይ የተቀመጡ ሰዎችን ዝርዝር ማዘጋጀት
-    final List> activeUsers = [];
-    for (int i = 0; i < _totalSeats; i++) {
-      if (_seats[i] != null) {
-        activeUsers.add({
-          'seatIndex': i,
-          'name': _seats[i]!,
-        });
-      }
-    }
-
-    int? selectedSeatIndex = activeUsers.isNotEmpty ? activeUsers.first['seatIndex'] : null;
+    int? selectedSeatIndex;
     bool isAllSelected = false;
     int selectedMultiplier = 1;
     final List<int> multipliers = [1, 3, 7, 10, 30, 50, 77, 100];
     int selectedGiftId = 1;
 
-    final giftsList = [
+    final List> giftsList = [
       {"id": 1, "name": "Fragrant Flowers", "price": 100, "asset": "assets/images/lv3.png"},
       {"id": 2, "name": "Ice Cream", "price": 200, "asset": "assets/images/2.png"},
       {"id": 3, "name": "Perfume Bottle", "price": 300, "asset": "assets/images/1.png"},
@@ -504,6 +488,20 @@ void _scrollToBottom() {
       builder: (ctx) {
         return StatefulBuilder(
           builder: (context, setSheetState) {
+            final List> currentSeatedUsers = [];
+            for (int i = 0; i < _totalSeats; i++) {
+              if (_seats[i] != null) {
+                currentSeatedUsers.add({
+                  'seatIndex': i,
+                  'name': _seats[i]!,
+                });
+              }
+            }
+
+            if (selectedSeatIndex == null && currentSeatedUsers.isNotEmpty && !isAllSelected) {
+              selectedSeatIndex = currentSeatedUsers.first['seatIndex'] as int;
+            }
+
             final activeGift = giftsList.firstWhere((g) => g['id'] == selectedGiftId);
 
             return Container(
@@ -511,13 +509,12 @@ void _scrollToBottom() {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // 1. የአግድም ተጠቃሚዎች መምረጫ (Horizontal User Selector)
                   SizedBox(
                     height: 60,
                     child: Row(
                       children: [
                         Expanded(
-                          child: activeUsers.isEmpty
+                          child: currentSeatedUsers.isEmpty
                               ? const Center(
                                   child: Text(
                                     "No users seated",
@@ -526,7 +523,7 @@ void _scrollToBottom() {
                                 )
                               : ListView(
                                   scrollDirection: Axis.horizontal,
-                                  children: activeUsers.map((user) {
+                                  children: currentSeatedUsers.map((user) {
                                     final isCurrent = !isAllSelected && selectedSeatIndex == user['seatIndex'];
                                     final seatNum = (user['seatIndex'] as int) + 1;
                                     final userName = user['name'] as String;
@@ -579,8 +576,6 @@ return GestureDetector(
                                   }).toList(),
                                 ),
                         ),
-
-                        // "All" ምርጫ (ለሁሉም)
                         GestureDetector(
                           onTap: () {
                             setSheetState(() {
@@ -625,10 +620,7 @@ width: 2.2,
                       ],
                     ),
                   ),
-
                   const Divider(color: Colors.white12, height: 16),
-
-                  // 2. የስጦታዎች ዝርዝር
                   GridView.builder(
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
@@ -694,10 +686,7 @@ const SizedBox(width: 2),
                       );
                     },
                   ),
-
                   const SizedBox(height: 14),
-
-                  // 3. ሳንቲም፣ የስጦታ ማባዣ (Multiplier) እና Send ቁልፍ
                   Row(
                     children: [
                       Row(
@@ -715,8 +704,6 @@ const SizedBox(width: 2),
                         ],
                       ),
                       const Spacer(),
-
-                      // የስጦታ ማባዣ ቁልፍ (1, 3, 7, 10, 30, 50, 77, 100)
                       PopupMenuButton<int>(
                         color: const Color(0xFF241C48),
                         initialValue: selectedMultiplier,
@@ -756,21 +743,18 @@ const SizedBox(width: 2),
                           ),
                         ),
                       ),
-
                       const SizedBox(width: 10),
-
-                      // Send ቁልፍ
                       ElevatedButton(
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFFFFD700),
                           foregroundColor: Colors.black,
                           padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 10),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-
-),
+                        ),
                         onPressed: () {
                           if (!isAllSelected && selectedSeatIndex == null) {
-                            ScaffoldMessenger.of(context).showSnackBar(
+
+ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(content: Text("Please select a seat or tap 'All'")),
                             );
                             return;
@@ -957,7 +941,6 @@ return Scaffold(
           children: [
             Column(
               children: [
-                // 1. የወንበሮች Grid
                 Expanded(
                   flex: 6,
                   child: Padding(
@@ -1101,8 +1084,6 @@ padding: const EdgeInsets.all(2.5),
                     ),
                   ),
                 ),
-
-                // 2. የውይይት መስኮት (Chat Area)
                 Expanded(
                   flex: 4,
                   child: Container(
@@ -1122,9 +1103,9 @@ padding: const EdgeInsets.all(2.5),
                           padding: const EdgeInsets.symmetric(vertical: 3.0),
                           child: RichText(
                             text: TextSpan(
+                              children: [
 
-children: [
-                                TextSpan(
+TextSpan(
                                   text: item.isSystem ? "📢 ${item.sender}: " : "${item.sender}: ",
                                   style: TextStyle(
                                     color: item.isSystem ? const Color(0xFFFFD700) : const Color(0xFF00E5FF),
@@ -1144,8 +1125,6 @@ children: [
                     ),
                   ),
                 ),
-
-                // 3. የታችኛው የመቆጣጠሪያ ባር
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: const BoxDecoration(
@@ -1197,8 +1176,6 @@ children: [
                 ),
               ],
             ),
-
-            // 4. ወደ ወንበር ወይም ወደ ሁሉም ወንበሮች የሚበር የስጦታ አኒሜሽን
             if (_isShowingGiftAnim)
               AnimatedBuilder(
                 animation: _giftFlyProgress,
@@ -1207,10 +1184,10 @@ children: [
                   final col = _animTargetSeatIndex % crossAxis;
                   final row = _animTargetSeatIndex ~/ crossAxis;
 
-final targetX = _isGiftToAll ? (size.width * 0.5) : ((col + 0.5) * (size.width / crossAxis));
+                  final targetX = _isGiftToAll ? (size.width * 0.5) : ((col + 0.5) * (size.width / crossAxis));
                   final targetY = _isGiftToAll ? (size.height * 0.25) : (60.0 + (row * 65.0));
 
-                  final startX = size.width * 0.85;
+final startX = size.width * 0.85;
                   final startY = size.height * 0.90;
 
                   final currentX = startX + (targetX - startX) * t;
@@ -1238,8 +1215,6 @@ final targetX = _isGiftToAll ? (size.width * 0.5) : ((col + 0.5) * (size.width /
                   );
                 },
               ),
-
-            // 5. ክብ ቆጣሪ ያለው Combo ቁልፍ
             if (_showComboButton)
               Positioned(
                 bottom: 65,
@@ -1249,7 +1224,6 @@ final targetX = _isGiftToAll ? (size.width * 0.5) : ((col + 0.5) * (size.width /
                   child: Stack(
                     alignment: Alignment.center,
                     children: [
-                      // የሚሽከረከረው የ 3 ሰከንድ ክብ ቆጣሪ
                       SizedBox(
                         width: 74,
                         height: 74,
@@ -1265,7 +1239,6 @@ final targetX = _isGiftToAll ? (size.width * 0.5) : ((col + 0.5) * (size.width /
                           },
                         ),
                       ),
-                      // ሮዝ ቀለም ያለው የ Combo ቁልፍ
                       Container(
                         width: 62,
                         height: 62,
@@ -1293,8 +1266,7 @@ final targetX = _isGiftToAll ? (size.width * 0.5) : ((col + 0.5) * (size.width /
                             ),
                             if (_comboCount > 1)
                               Text(
-
-"x$_comboCount",
+                                "x$_comboCount",
                                 style: const TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.w900, fontSize: 13),
                               ),
                           ],
