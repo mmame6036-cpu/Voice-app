@@ -56,6 +56,12 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
   bool _isConnecting = true;
 
   int _myCoins = 1000000;
+  final List> giftsList = [
+    {"id": 1, "name": "Fragrant Flowers", "price": 100, "asset": "assets/images/lv3.png"},
+    {"id": 2, "name": "Ice Cream", "price": 200, "asset": "assets/images/2.png"},
+    {"id": 3, "name": "Perfume Bottle", "price": 300, "asset": "assets/images/1.png"},
+    {"id": 4, "name": "Pink Sports Car", "price": 500, "asset": "assets/images/4.png"},
+  ];
 
   late AnimationController _waveController;
   late AnimationController _giftFlyController;
@@ -471,7 +477,7 @@ void _scrollToBottom() {
     final List<int> multipliers = [1, 3, 7, 10, 30, 50, 77, 100];
     int selectedGiftId = 1;
 
-    final List> giftsList = [
+    final giftsList =[
       {"id": 1, "name": "Fragrant Flowers", "price": 100, "asset": "assets/images/lv3.png"},
       {"id": 2, "name": "Ice Cream", "price": 200, "asset": "assets/images/2.png"},
       {"id": 3, "name": "Perfume Bottle", "price": 300, "asset": "assets/images/1.png"},
