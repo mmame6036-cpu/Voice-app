@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../services/room_service.dart';
+import 'voice_room_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   final int coins;
@@ -78,12 +79,24 @@ class _HomeScreenState extends State<HomeScreen> {
       );
 
       if (mounted) {
-        Navigator.pop(context);
-        widget.onJoinRoom(roomTitle);
+        Navigator.pop(context); // ሎዲንጉን ያጠፋል
+        // በቀጥታ ወደ ድምፅ ክፍሉ ያስገባል
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => VoiceRoomScreen(
+              roomName: roomTitle,
+              hostName: hostName,
+            ),
+          ),
+        );
       }
-    } catch (_) {
+    } catch (e) {
       if (mounted) {
         Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error entering room: $e")),
+        );
       }
     }
   }
