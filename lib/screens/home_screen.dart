@@ -19,7 +19,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  int _selectedTopTab = 1; // 0 = Follow, 1 = Party
+  int _selectedTopTab = 1;
 
   static const String abayFallsUrl =
       "https://upload.wikimedia.org/wikipedia/commons/thumb/0/05/Blue_Nile_Falls_Ethiopia.jpg/1024px-Blue_Nile_Falls_Ethiopia.jpg";
@@ -95,7 +95,6 @@ class _HomeScreenState extends State<HomeScreen> {
         children: [
           Column(
             children: [
-              // Top Header: Follow / Party tabs, Search, Box Icon
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
                 child: Row(
@@ -127,9 +126,9 @@ class _HomeScreenState extends State<HomeScreen> {
                           if (_selectedTopTab == 1)
                             Container(
                               margin: const EdgeInsets.only(top: 4),
+                              width: 20,
 
-width: 20,
-                              height: 3,
+height: 3,
                               decoration: BoxDecoration(
                                 color: const Color(0xFFFFD700),
                                 borderRadius: BorderRadius.circular(2),
@@ -169,8 +168,6 @@ width: 20,
                 ),
               ),
               const Divider(color: Colors.white12, height: 1),
-
-              // Rooms List View
               Expanded(
                 child: _selectedTopTab == 0
                     ? const Center(
@@ -179,7 +176,6 @@ width: 20,
                     : ListView(
                         padding: const EdgeInsets.all(16),
                         children: [
-                          // Banner
                           Container(
                             height: 110,
                             width: double.infinity,
@@ -206,11 +202,11 @@ width: 20,
                                   Text("Join top 3D voice rooms now!", style: TextStyle(color: Colors.white70, fontSize: 12)),
                                 ],
                               ),
-
-),
+                            ),
                           ),
                           const SizedBox(height: 16),
-                          const Text(
+
+const Text(
                             "Live Parties 🎧",
                             style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
                           ),
@@ -227,12 +223,17 @@ width: 20,
                             ),
                             itemBuilder: (context, index) {
                               final item = _rooms[index];
+                              final roomTitle = item["title"] as String;
+                              final roomHost = item["host"] as String;
+                              final roomColor = item["color"] as Color;
+                              final roomMembers = item["members"] as int;
+
                               return GestureDetector(
-                                onTap: () => widget.onJoinRoom(item["title"]),
+                                onTap: () => widget.onJoinRoom(roomTitle),
                                 child: Container(
                                   padding: const EdgeInsets.all(12),
                                   decoration: BoxDecoration(
-                                    color: item["color"],
+                                    color: roomColor,
                                     borderRadius: BorderRadius.circular(16),
                                     border: Border.all(color: Colors.white12),
                                   ),
@@ -252,7 +253,7 @@ width: 20,
                                               children: [
                                                 const Icon(Icons.whatshot, color: Colors.orangeAccent, size: 12),
                                                 const SizedBox(width: 4),
-                                                Text("${item['members']}", style: const TextStyle(color: Colors.white70, fontSize: 10)),
+                                                Text("$roomMembers", style: const TextStyle(color: Colors.white70, fontSize: 10)),
                                               ],
                                             ),
                                           ),
@@ -261,16 +262,16 @@ width: 20,
                                       ),
                                       const Spacer(),
                                       Text(
-                                        item["title"],
+                                        roomTitle,
                                         style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
                                         maxLines: 2,
                                         overflow: TextOverflow.ellipsis,
                                       ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        "Host: ${item['host']}",
 
-style: const TextStyle(color: Colors.white60, fontSize: 11),
+const SizedBox(height: 4),
+                                      Text(
+                                        "Host: $roomHost",
+                                        style: const TextStyle(color: Colors.white60, fontSize: 11),
                                       ),
                                     ],
                                   ),
@@ -284,8 +285,6 @@ style: const TextStyle(color: Colors.white60, fontSize: 11),
               ),
             ],
           ),
-
-          // 3D Floating Mic Button (Bottom Right)
           Positioned(
             bottom: 24,
             right: 18,
