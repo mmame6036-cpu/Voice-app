@@ -57,6 +57,13 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
 
   int _myCoins = 1000000;
 
+  final List> giftsList = [
+    {"id": 1, "name": "Fragrant Flowers", "price": 100, "asset": "assets/images/lv3.png"},
+    {"id": 2, "name": "Ice Cream", "price": 200, "asset": "assets/images/2.png"},
+    {"id": 3, "name": "Perfume Bottle", "price": 300, "asset": "assets/images/1.png"},
+    {"id": 4, "name": "Pink Sports Car", "price": 500, "asset": "assets/images/4.png"},
+  ];
+
   late AnimationController _waveController;
   late AnimationController _giftFlyController;
   late Animation<double> _giftFlyProgress;
@@ -125,7 +132,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
           .doc(widget.roomId)
           .get();
 
-      if (doc.exists && doc.data()!.containsKey('seatGifts')) {
+if (doc.exists && doc.data()!.containsKey('seatGifts')) {
         final List incoming = doc.data()!['seatGifts'];
         if (mounted) {
           setState(() {
@@ -138,7 +145,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
     } catch (_) {}
   }
 
-Future<void> _saveRoomGiftsToFirestore() async {
+  Future<void> _saveRoomGiftsToFirestore() async {
     try {
       await FirebaseFirestore.instance
           .collection('rooms')
@@ -248,7 +255,7 @@ Future<void> _saveRoomGiftsToFirestore() async {
     } catch (_) {}
   }
 
-  Future<String?> _fetchToken({
+Future<String?> _fetchToken({
     required String channelName,
     required int uid,
     required bool isPublisher,
@@ -266,7 +273,7 @@ Future<void> _saveRoomGiftsToFirestore() async {
     return null;
   }
 
-Future<void> _setupAgora() async {
+  Future<void> _setupAgora() async {
     final status = await Permission.microphone.request();
     if (!status.isGranted && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -386,7 +393,7 @@ Future<void> _setupAgora() async {
     _agoraService.setMicrophoneMute(_isMuted);
   }
 
-  void _changeSeatCount(int newCount) {
+void _changeSeatCount(int newCount) {
     setState(() {
       _totalSeats = newCount;
       if (_mySeatIndex != null && _mySeatIndex! >= newCount) {
@@ -416,7 +423,7 @@ Future<void> _setupAgora() async {
     _chatController.clear();
   }
 
-void _scrollToBottom() {
+  void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_chatScrollController.hasClients) {
         _chatScrollController.animateTo(
@@ -464,14 +471,14 @@ void _scrollToBottom() {
     _startComboTimer();
   }
 
-void _openGiftSheet() {
+  void _openGiftSheet() {
     int? selectedSeatIndex;
     bool isAllSelected = false;
     int selectedMultiplier = 1;
     final List<int> multipliers = [1, 3, 7, 10, 30, 50, 77, 100];
     int selectedGiftId = 1;
 
-    final currentSeatedUsers = [];
+    final List> currentSeatedUsers = [];
     for (int i = 0; i < _totalSeats; i++) {
       if (_seats[i] != null) {
         currentSeatedUsers.add({
@@ -480,10 +487,21 @@ void _openGiftSheet() {
         });
       }
     }
-            if (selectedSeatIndex == null && currentSeatedUsers.isNotEmpty && !isAllSelected) {
-              selectedSeatIndex = currentSeatedUsers.first['seatIndex'] as int;
-            }
 
+    if (currentSeatedUsers.isNotEmpty) {
+      selectedSeatIndex = currentSeatedUsers.first['seatIndex'] as int;
+    }
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF140F2D),
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
             final activeGift = giftsList.firstWhere((g) => g['id'] == selectedGiftId);
 
             return Container(
@@ -506,12 +524,13 @@ void _openGiftSheet() {
                               : ListView(
                                   scrollDirection: Axis.horizontal,
                                   children: currentSeatedUsers.map((user) {
-                                    final isCurrent = !isAllSelected && selectedSeatIndex == user['seatIndex'];
+
+final isCurrent = !isAllSelected && selectedSeatIndex == user['seatIndex'];
                                     final seatNum = (user['seatIndex'] as int) + 1;
                                     final userName = user['name'] as String;
                                     final initial = userName.isNotEmpty ? userName[0].toUpperCase() : "U";
 
-return GestureDetector(
+                                    return GestureDetector(
                                       onTap: () {
                                         setSheetState(() {
                                           isAllSelected = false;
@@ -572,14 +591,14 @@ return GestureDetector(
                               children: [
                                 Container(
                                   width: 38,
-                                  height: 38,
+
+height: 38,
                                   decoration: BoxDecoration(
                                     shape: BoxShape.circle,
                                     color: const Color(0xFFFFD700),
                                     border: Border.all(
                                       color: isAllSelected ? Colors.white : Colors.transparent,
-
-width: 2.2,
+                                      width: 2.2,
                                     ),
                                   ),
                                   child: const Center(
@@ -647,15 +666,15 @@ width: 2.2,
                                   fontSize: 10,
                                   fontWeight: FontWeight.bold,
                                 ),
-                                maxLines: 1,
+
+maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
                                   const Icon(Icons.monetization_on, color: Color(0xFFFFD700), size: 10),
-
-const SizedBox(width: 2),
+                                  const SizedBox(width: 2),
                                   Text(
                                     "${item['price']}",
                                     style: const TextStyle(color: Color(0xFFFFD700), fontSize: 10),
@@ -729,14 +748,14 @@ const SizedBox(width: 2),
                       ElevatedButton(
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFFFFD700),
-                          foregroundColor: Colors.black,
+
+foregroundColor: Colors.black,
                           padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 10),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                         ),
                         onPressed: () {
                           if (!isAllSelected && selectedSeatIndex == null) {
-
-ScaffoldMessenger.of(context).showSnackBar(
+                            ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(content: Text("Please select a seat or tap 'All'")),
                             );
                             return;
@@ -864,13 +883,13 @@ ScaffoldMessenger.of(context).showSnackBar(
     super.dispose();
   }
 
-  @override
+@override
   Widget build(BuildContext context) {
     final int crossAxis = _totalSeats <= 12 ? 4 : (_totalSeats <= 20 ? 5 : 6);
     final double seatDimension = _totalSeats > 20 ? 44.0 : 50.0;
     final size = MediaQuery.of(context).size;
 
-return Scaffold(
+    return Scaffold(
       backgroundColor: const Color(0xFF090614),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
@@ -952,12 +971,12 @@ return Scaffold(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Stack(
-                                clipBehavior: Clip.none,
+
+clipBehavior: Clip.none,
                                 alignment: Alignment.center,
                                 children: [
                                   if (isHostSeat && isOccupied)
-
-Positioned(
+                                    Positioned(
                                       top: -15,
                                       child: Image.asset('assets/images/lv3.png', width: 36, errorBuilder: (c, e, s) => const SizedBox.shrink()),
                                     ),
@@ -1012,12 +1031,12 @@ Positioned(
                                         ),
                                       ),
                                   if (isOccupied)
-                                    Positioned(
+
+Positioned(
                                       bottom: -2,
                                       right: -2,
                                       child: Container(
-
-padding: const EdgeInsets.all(2.5),
+                                        padding: const EdgeInsets.all(2.5),
                                         decoration: BoxDecoration(
                                           shape: BoxShape.circle,
                                           color: isMuted ? Colors.redAccent : const Color(0xFF00C9A7),
@@ -1082,12 +1101,12 @@ padding: const EdgeInsets.all(2.5),
                       itemBuilder: (context, index) {
                         final item = _messages[index];
                         return Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 3.0),
+
+padding: const EdgeInsets.symmetric(vertical: 3.0),
                           child: RichText(
                             text: TextSpan(
                               children: [
-
-TextSpan(
+                                TextSpan(
                                   text: item.isSystem ? "📢 ${item.sender}: " : "${item.sender}: ",
                                   style: TextStyle(
                                     color: item.isSystem ? const Color(0xFFFFD700) : const Color(0xFF00E5FF),
@@ -1166,10 +1185,10 @@ TextSpan(
                   final col = _animTargetSeatIndex % crossAxis;
                   final row = _animTargetSeatIndex ~/ crossAxis;
 
-                  final targetX = _isGiftToAll ? (size.width * 0.5) : ((col + 0.5) * (size.width / crossAxis));
+final targetX = _isGiftToAll ? (size.width * 0.5) : ((col + 0.5) * (size.width / crossAxis));
                   final targetY = _isGiftToAll ? (size.height * 0.25) : (60.0 + (row * 65.0));
 
-final startX = size.width * 0.85;
+                  final startX = size.width * 0.85;
                   final startY = size.height * 0.90;
 
                   final currentX = startX + (targetX - startX) * t;
