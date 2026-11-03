@@ -25,7 +25,7 @@ class _HomeScreenState extends State<HomeScreen> {
   static const String abayFallsUrl =
       "https://upload.wikimedia.org/wikipedia/commons/thumb/0/05/Blue_Nile_Falls_Ethiopia.jpg/1024px-Blue_Nile_Falls_Ethiopia.jpg";
 
-  final_rooms = [
+    final _rooms = [
     {
       "title": "Abay Falls 3D Lounge 🌊",
       "host": "Kedir Umer",
