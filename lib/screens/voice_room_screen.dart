@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:http/http.dart' as http;
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import '../services/agora_service.dart';
 
@@ -57,10 +58,10 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
 
   late AnimationController _waveController;
   late AnimationController _giftFlyController;
-  late Animation<double> _giftFlyScale;
-  late Animation<double> _giftFlyOpacity;
+  late Animation<double> _giftFlyProgress;
   bool _isShowingGiftAnim = false;
   String _activeGiftAsset = 'assets/images/lv3.png';
+  int _animTargetSeatIndex = 0;
 
   final Set<int> _speakingSeatIndices = {};
   final List<int> _allowedSeatOptions = [6, 12, 20, 25, 30];
@@ -77,13 +78,8 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
     _seats = List.filled(30, null);
     _seatGifts = List.filled(30, 0);
     _seatMutes = List.filled(30, false);
-    _seats[0] = widget.hostName;
 
-    _messages.add(RoomChatMessage(
-      sender: "System",
-      message: "Welcome to ${widget.roomTitle}! Protect your account and enjoy the party.",
-      isSystem: true,
-    ));
+    // 1 ቁጥር ወንበር በነባሪነት እንዳይቆለፍ ባዶ ሆኖ ይጀምራል (ማንም ሰው ወይም ሆስቱ መቀመጥ ይችላል)
 
     _waveController = AnimationController(
       vsync: this,
@@ -92,18 +88,12 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
 
     _giftFlyController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1400),
+      duration: const Duration(milliseconds: 1200),
     );
 
-    _giftFlyScale = Tween<double>(begin: 0.2, end: 1.4).animate(
-      CurvedAnimation(parent: _giftFlyController, curve: Curves.elasticOut),
-    );
-
-    _giftFlyOpacity = Tween<double>(begin: 1.0, end: 0.0).animate(
-      CurvedAnimation(
-        parent: _giftFlyController,
-        curve: const Interval(0.7, 1.0, curve: Curves.easeOut),
-      ),
+    _giftFlyProgress = CurvedAnimation(
+      parent: _giftFlyController,
+      curve: Curves.easeInOutCubic,
     );
 
     _giftFlyController.addStatusListener((status) {
@@ -116,11 +106,46 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
       }
     });
 
+    _loadRoomGiftsFromFirestore();
     _setupAgora();
     _connectSocket();
   }
 
-  void _connectSocket() {
+  // ወጥተህ ስትገባ ስጦታው እንዳይጠፋ ከ Firestore በቋሚነት ያነባል
+  Future<void> _loadRoomGiftsFromFirestore() async {
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('rooms')
+          .doc(widget.roomId)
+          .get();
+
+      if (doc.exists && doc.data()!.containsKey('seatGifts')) {
+        final List incoming = doc.data()!['seatGifts'];
+        if (mounted) {
+          setState(() {
+            for (int i = 0; i < incoming.length && i < 30; i++) {
+              _seatGifts[i] = (incoming[i] as num).toInt();
+            }
+          });
+        }
+      }
+    } catch (_) {}
+  }
+
+  // ስጦታ ሲላክ በቋሚነት Firestore ላይ ያስቀምጣል
+  Future<void> _saveRoomGiftsToFirestore() async {
+    try {
+      await FirebaseFirestore.instance
+          .collection('rooms')
+          .doc(widget.roomId)
+          .set({
+        'seatGifts': _seatGifts,
+        'lastUpdated': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    } catch (_) {}
+  }
+
+void _connectSocket() {
     try {
       _socket = IO.io(
         _serverUrl,
@@ -141,8 +166,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
       });
 
       _socket!.on('room_state_sync', (data) {
-
-if (!mounted || data == null) return;
+        if (!mounted || data == null) return;
         setState(() {
           if (data['seats'] != null) {
             final List incomingSeats = data['seats'];
@@ -151,12 +175,6 @@ if (!mounted || data == null) return;
               if (_seats[i] == widget.userName) {
                 _mySeatIndex = i;
               }
-            }
-          }
-          if (data['seatGifts'] != null) {
-            final List incomingGifts = data['seatGifts'];
-            for (int i = 0; i < incomingGifts.length && i < 30; i++) {
-              _seatGifts[i] = (incomingGifts[i] as num).toInt();
             }
           }
         });
@@ -181,15 +199,11 @@ if (!mounted || data == null) return;
         final targetIndex = (data['targetSeatIndex'] as num).toInt();
         final sender = data['senderName'] ?? "Someone";
         final giftName = data['giftName'] ?? "Gift";
+        final giftCost = (data['giftCost'] as num?)?.toInt() ?? 0;
         final giftAsset = data['giftAsset'] ?? 'assets/images/lv3.png';
 
         setState(() {
-          if (data['seatGifts'] != null) {
-            final List gifts = data['seatGifts'];
-            for (int i = 0; i < gifts.length && i < 30; i++) {
-              _seatGifts[i] = (gifts[i] as num).toInt();
-            }
-          }
+          _seatGifts[targetIndex] += giftCost;
           _messages.add(RoomChatMessage(
             sender: "System",
             message: "$sender sent $giftName to Seat ${targetIndex + 1}!",
@@ -197,7 +211,8 @@ if (!mounted || data == null) return;
           ));
         });
         _scrollToBottom();
-        _triggerGiftAnimation(giftAsset.toString());
+        _saveRoomGiftsToFirestore();
+        _triggerGiftAnimation(giftAsset.toString(), targetIndex);
       });
 
       _socket!.on('chat_message_received', (data) {
@@ -251,7 +266,8 @@ if (!mounted || data == null) return;
         if (!mounted) return;
         setState(() {
           _speakingSeatIndices.clear();
-          for (var speaker in speakers) {
+
+for (var speaker in speakers) {
             final vol = speaker.volume ?? 0;
             if (vol > 4) {
               if (speaker.uid == 0 || speaker.uid == widget.userNumericId) {
@@ -265,7 +281,7 @@ if (!mounted || data == null) return;
       },
     );
 
-final dynamicToken = await _fetchToken(
+    final dynamicToken = await _fetchToken(
       channelName: widget.roomId,
       uid: widget.userNumericId,
       isPublisher: false,
@@ -285,9 +301,11 @@ final dynamicToken = await _fetchToken(
     }
   }
 
-  void _triggerGiftAnimation(String asset) {
+  // ስጦታው ወደ ተመረጠው ወንበር አቅጣጫ እንዲበር ማድረግ
+  void _triggerGiftAnimation(String asset, int targetSeatIndex) {
     setState(() {
       _activeGiftAsset = asset;
+      _animTargetSeatIndex = targetSeatIndex;
       _isShowingGiftAnim = true;
     });
     _giftFlyController.reset();
@@ -328,6 +346,7 @@ final dynamicToken = await _fetchToken(
     });
   }
 
+  // 1 ቁጥር ወንበርን ጨምሮ ማንኛውም ሰው ባዶ ወንበር ላይ መቀመጥ ይችላል
   void _handleSeatTap(int index) async {
     if (_mySeatIndex == index) {
       setState(() {
@@ -402,7 +421,7 @@ final dynamicToken = await _fetchToken(
     _agoraService.setMicrophoneMute(_isMuted);
   }
 
-  void _changeSeatCount(int newCount) {
+void _changeSeatCount(int newCount) {
     setState(() {
       _totalSeats = newCount;
       if (_mySeatIndex != null && _mySeatIndex! >= newCount) {
@@ -418,8 +437,7 @@ final dynamicToken = await _fetchToken(
     showModalBottomSheet(
       context: context,
       backgroundColor: const Color(0xFF141026),
-
-shape: const RoundedRectangleBorder(
+      shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (ctx) {
@@ -462,7 +480,7 @@ shape: const RoundedRectangleBorder(
                           items: List.generate(_totalSeats, (i) {
                             return DropdownMenuItem<int>(
                               value: i,
-                              child: Text(i == 0 ? "Host (Seat 1)" : "Seat ${i + 1}"),
+                              child: Text("Seat ${i + 1}"),
                             );
                           }),
                           onChanged: (val) {
@@ -494,7 +512,8 @@ shape: const RoundedRectangleBorder(
                         name: "Gold Wings",
                         price: 300,
                         asset: 'assets/images/2.png',
-                        onTap: () => _executeGiftSend(
+
+onTap: () => _executeGiftSend(
                           ctx,
                           selectedSeat,
                           cost: 300,
@@ -505,8 +524,7 @@ shape: const RoundedRectangleBorder(
                       _giftChoiceItem(
                         name: "Tiger VIP",
                         price: 500,
-
-asset: 'assets/images/4.png',
+                        asset: 'assets/images/4.png',
                         onTap: () => _executeGiftSend(
                           ctx,
                           selectedSeat,
@@ -596,7 +614,8 @@ asset: 'assets/images/4.png',
           ));
         });
         _scrollToBottom();
-        _triggerGiftAnimation(asset);
+        _saveRoomGiftsToFirestore();
+        _triggerGiftAnimation(asset, seatIndex);
       }
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -621,8 +640,9 @@ asset: 'assets/images/4.png',
   Widget build(BuildContext context) {
     final int crossAxis = _totalSeats <= 12 ? 4 : (_totalSeats <= 20 ? 5 : 6);
     final double seatDimension = _totalSeats > 20 ? 44.0 : 50.0;
+    final size = MediaQuery.of(context).size;
 
-    return Scaffold(
+return Scaffold(
       backgroundColor: const Color(0xFF090614),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
@@ -637,8 +657,7 @@ asset: 'assets/images/4.png',
             Text(
               _isConnecting
                   ? "Connecting..."
-
-: "ID: ${widget.roomId} • $_totalSeats Seats",
+                  : "ID: ${widget.roomId} • My ID: ${widget.userNumericId}",
               style: TextStyle(
                 fontSize: 11,
                 color: _isConnecting ? const Color(0xFFFFD700) : Colors.white54,
@@ -723,7 +742,7 @@ asset: 'assets/images/4.png',
                         final bool isHostSeat = index == 0;
                         final bool isCrownSeat = index >= 1 && index <= 6;
 
-                        return GestureDetector(
+return GestureDetector(
                           onTap: () => _handleSeatTap(index),
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
@@ -732,8 +751,7 @@ asset: 'assets/images/4.png',
                                 clipBehavior: Clip.none,
                                 alignment: Alignment.center,
                                 children: [
-
-if (isHostSeat)
+                                  if (isHostSeat && isOccupied)
                                     Positioned(
                                       top: -15,
                                       child: Image.asset(
@@ -747,7 +765,7 @@ if (isHostSeat)
                                       ),
                                     ),
 
-                                  if (isCrownSeat)
+                                  if (isCrownSeat && isOccupied)
                                     Positioned(
                                       top: -14,
                                       child: Image.asset(
@@ -788,37 +806,38 @@ if (isHostSeat)
                                         child: Center(
                                           child: Icon(
                                             isOccupied ? Icons.person : Icons.chair,
-                                            color: isCrownSeat
+                                            color: isCrownSeat && isOccupied
                                                 ? const Color(0xFFFFD700)
                                                 : (isOccupied ? Colors.white : Colors.white24),
-                                            size: seatDimension * 0.45,
+
+size: seatDimension * 0.45,
                                           ),
                                         ),
                                       );
                                     },
                                   ),
 
-                                  if (isCrownSeat)
-                                    Positioned.fill(
-                                      child: IgnorePointer(
-
-child: Image.asset(
-                                          'assets/images/4.png',
-                                          fit: BoxFit.contain,
-                                          errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
+                                  if (isOccupied)
+                                    if (isCrownSeat)
+                                      Positioned.fill(
+                                        child: IgnorePointer(
+                                          child: Image.asset(
+                                            'assets/images/4.png',
+                                            fit: BoxFit.contain,
+                                            errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
+                                          ),
+                                        ),
+                                      )
+                                    else if (!isHostSeat)
+                                      Positioned.fill(
+                                        child: IgnorePointer(
+                                          child: Image.asset(
+                                            'assets/images/1.png',
+                                            fit: BoxFit.contain,
+                                            errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
+                                          ),
                                         ),
                                       ),
-                                    )
-                                  else if (isOccupied && !isHostSeat)
-                                    Positioned.fill(
-                                      child: IgnorePointer(
-                                        child: Image.asset(
-                                          'assets/images/1.png',
-                                          fit: BoxFit.contain,
-                                          errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
-                                        ),
-                                      ),
-                                    ),
 
                                   if (isOccupied)
                                     Positioned(
@@ -857,9 +876,10 @@ child: Image.asset(
                               Text(
                                 isOccupied ? occupier : "${index + 1}",
                                 style: TextStyle(
-                                  color: isCrownSeat
-                                  ? const Color(0xFFFFD700)
-                                  : (isOccupied ? Colors.white : Colors.white38),
+                                  color: isOccupied
+                                      ? (isCrownSeat ? const Color(0xFFFFD700) : Colors.white)
+
+: Colors.white38,
                                   fontSize: 9.5,
                                   fontWeight: isOccupied
                                       ? FontWeight.bold
@@ -870,8 +890,7 @@ child: Image.asset(
                               ),
 
                               Container(
-
-margin: const EdgeInsets.only(top: 1.5),
+                                margin: const EdgeInsets.only(top: 1.5),
                                 padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
                                 decoration: BoxDecoration(
                                   color: giftsCount > 0
@@ -936,7 +955,8 @@ margin: const EdgeInsets.only(top: 1.5),
                                   ),
                                 ),
                                 TextSpan(
-                                  text: item.message,
+
+text: item.message,
                                   style: TextStyle(
                                     color: item.isSystem ? Colors.white70 : Colors.white,
                                     fontSize: 12,
@@ -951,7 +971,7 @@ margin: const EdgeInsets.only(top: 1.5),
                   ),
                 ),
 
-Container(
+                Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: const BoxDecoration(
                     color: Color(0xFF141026),
@@ -1005,24 +1025,50 @@ Container(
               ],
             ),
 
+            // ስጦታው ከስር ተነስቶ ወደ ተመረጠው ወንበር አቅጣጫ የሚበርበት አኒሜሽን
             if (_isShowingGiftAnim)
-              Positioned.fill(
-                child: IgnorePointer(
-                  child: Center(
-                    child: FadeTransition(
-                      opacity: _giftFlyOpacity,
-                      child: ScaleTransition(
-                        scale: _giftFlyScale,
+              AnimatedBuilder(
+                animation: _giftFlyProgress,
+                builder: (context, child) {
+                  final t = _giftFlyProgress.value;
+
+                  // የተመረጠው ወንበር በስክሪኑ ላይ ያለበትን የ Grid ረድፍና አምድ ማሰላት
+                  final col = _animTargetSeatIndex % crossAxis;
+                  final row = _animTargetSeatIndex ~/ crossAxis;
+
+                  final targetX = (col + 0.5) * (size.width / crossAxis);
+                  final targetY = 60.0 + (row * 65.0);
+
+                  final startX = size.width * 0.85;
+                  final startY = size.height * 0.90;
+
+                  final currentX = startX + (targetX - startX) * t;
+                  final currentY = startY + (targetY - startY) * t;
+                  final scale = 0.5 + (0.9 * (1.0 - (t - 0.5).abs() * 2));
+                  final opacity = (1.0 - t * 0.4).clamp(0.0, 1.0);
+
+return Positioned(
+                    left: currentX - 35,
+                    top: currentY - 35,
+                    child: Opacity(
+                      opacity: opacity,
+                      child: Transform.scale(
+                        scale: scale.clamp(0.4, 1.4),
                         child: Image.asset(
                           _activeGiftAsset,
-                          width: 140,
-                          height: 140,
+                          width: 70,
+                          height: 70,
                           fit: BoxFit.contain,
+                          errorBuilder: (context, error, stackTrace) => const Icon(
+                            Icons.card_giftcard,
+                            color: Color(0xFFFFD700),
+                            size: 40,
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                ),
+                  );
+                },
               ),
           ],
         ),
