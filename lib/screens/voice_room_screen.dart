@@ -464,40 +464,22 @@ void _scrollToBottom() {
     _startComboTimer();
   }
 
-  void _openGiftSheet() {
+void _openGiftSheet() {
     int? selectedSeatIndex;
     bool isAllSelected = false;
     int selectedMultiplier = 1;
     final List<int> multipliers = [1, 3, 7, 10, 30, 50, 77, 100];
     int selectedGiftId = 1;
 
-    final giftsList = [
-      {"id": 1, "name": "Fragrant Flowers", "price": 100, "asset": "assets/images/lv3.png"},
-      {"id": 2, "name": "Ice Cream", "price": 200, "asset": "assets/images/2.png"},
-      {"id": 3, "name": "Perfume Bottle", "price": 300, "asset": "assets/images/1.png"},
-      {"id": 4, "name": "Pink Sports Car", "price": 500, "asset": "assets/images/4.png"},
-    ];
-
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: const Color(0xFF140F2D),
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (context, setSheetState) {
-            final List> currentSeatedUsers = [];
-            for (int i = 0; i < _totalSeats; i++) {
-              if (_seats[i] != null) {
-                currentSeatedUsers.add({
-                  'seatIndex': i,
-                  'name': _seats[i]!,
-                });
-              }
-            }
-
+    final currentSeatedUsers = [];
+    for (int i = 0; i < _totalSeats; i++) {
+      if (_seats[i] != null) {
+        currentSeatedUsers.add({
+          'seatIndex': i,
+          'name': _seats[i]!,
+        });
+      }
+    }
             if (selectedSeatIndex == null && currentSeatedUsers.isNotEmpty && !isAllSelected) {
               selectedSeatIndex = currentSeatedUsers.first['seatIndex'] as int;
             }
