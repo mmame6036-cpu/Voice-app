@@ -17,7 +17,7 @@ dependencies:
   cloud_firestore: ^4.14.0
   firebase_auth: ^4.17.8
   google_sign_in: ^6.2.1
-  http: ^1.2.1
+  http: ^0.13.6
   socket_io_client: ^2.0.3+1
 
 dev_dependencies:
