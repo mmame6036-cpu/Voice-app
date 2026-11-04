@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import '../services/agora_service.dart';
+import 'wallet_screen.dart';
 
 class RoomChatMessage {
   final String id;
@@ -76,7 +77,8 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
   late List<bool> _seatMutes;
   bool _isConnecting = true;
 
-  int _myCoins = 1000000;
+  int _myCoins = 0;
+  StreamSubscription<DocumentSnapshot>>? _walletSubscription;
 
   final giftsList = [
     {"id": 1, "name": "Fragrant Flowers", "price": 100, "asset": "assets/images/lv3.png"},
@@ -136,9 +138,27 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
       }
     });
 
+    _initWalletSync();
     _loadRoomGiftsFromFirestore();
     _setupAgora();
     _connectSocket();
+  }
+
+void _initWalletSync() {
+    _walletSubscription = FirebaseFirestore.instance
+        .collection('users')
+        .doc(widget.userUid)
+        .snapshots()
+        .listen((snapshot) {
+      if (snapshot.exists && snapshot.data() != null) {
+        final data = snapshot.data()!;
+        if (mounted) {
+          setState(() {
+            _myCoins = (data['coins'] as num?)?.toInt() ?? 0;
+          });
+        }
+      }
+    });
   }
 
   void _addExpiringMessage(RoomChatMessage message, {int seconds = 4}) {
@@ -148,7 +168,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
     });
     _scrollToBottom();
 
-Timer(Duration(seconds: seconds), () {
+    Timer(Duration(seconds: seconds), () {
       if (mounted) {
         setState(() {
           _messages.removeWhere((m) => m.id == message.id);
@@ -263,7 +283,7 @@ Timer(Duration(seconds: seconds), () {
             ? "$sender sent $giftName to All Mics!"
             : "$sender sent $giftName to Seat ${targetIndex + 1}!";
 
-        _addExpiringMessage(
+_addExpiringMessage(
           RoomChatMessage(
             id: "${DateTime.now().microsecondsSinceEpoch}_$sender",
             sender: "System",
@@ -277,7 +297,7 @@ Timer(Duration(seconds: seconds), () {
         _triggerGiftAnimation(giftAsset.toString(), targetIndex, isToAll: isAll);
       });
 
-_socket!.on('chat_message_received', (data) {
+      _socket!.on('chat_message_received', (data) {
         if (!mounted || data == null) return;
         setState(() {
           _messages.add(RoomChatMessage(
@@ -406,13 +426,13 @@ _socket!.on('chat_message_received', (data) {
       return;
     }
 
-    if (_seats[index] == null) {
+if (_seats[index] == null) {
       final status = await Permission.microphone.request();
       if (!status.isGranted) return;
 
       final previousSeat = _mySeatIndex;
 
-setState(() {
+      setState(() {
         if (previousSeat != null) {
           _seats[previousSeat] = null;
           _speakingSeatIndices.remove(previousSeat);
@@ -516,12 +536,19 @@ setState(() {
   }
 
   void _triggerComboBurst() {
-    final reward = 500 + Random().nextInt(1500); // 500 - 2000 Lucky Coins
+    final reward = 500 + Random().nextInt(1500);
     setState(() {
       _lastWonCoins = reward;
       _myCoins += reward;
       _showBurstEffect = true;
     });
+
+    FirebaseFirestore.instance
+        .collection('users')
+        .doc(widget.userUid)
+        .update({
+      'coins': FieldValue.increment(reward),
+    }).catchError((_) {});
 
     _burstAnimController.reset();
     _burstAnimController.forward();
@@ -543,7 +570,6 @@ setState(() {
       _comboCount += 1;
     });
 
-    // Check for Burst Lucky Reward every 10 combo hits
     if (_comboCount % 10 == 0) {
       _triggerComboBurst();
     }
@@ -563,14 +589,14 @@ setState(() {
     _startComboTimer();
   }
 
-  void _openGiftSheet() {
+void _openGiftSheet() {
     int? selectedSeatIndex;
     bool isAllSelected = false;
     int selectedMultiplier = 1;
     final List<int> multipliers = [1, 3, 7, 10, 30, 50, 77, 100];
     int selectedGiftId = 1;
 
-final currentSeatedUsers = [];
+    final currentSeatedUsers = [];
     for (int i = 0; i < _totalSeats; i++) {
       if (_seats[i] != null) {
         currentSeatedUsers.add({
@@ -644,12 +670,12 @@ final currentSeatedUsers = [];
                                                   color: isCurrent ? const Color(0xFFFFD700) : Colors.transparent,
                                                   width: 2.2,
                                                 ),
-                                              ),
+
+),
                                               child: Center(
                                                 child: Text(
                                                   initial,
-
-style: const TextStyle(
+                                                  style: const TextStyle(
                                                     color: Colors.white,
                                                     fontWeight: FontWeight.bold,
                                                     fontSize: 16,
@@ -780,19 +806,52 @@ return GestureDetector(
                   const SizedBox(height: 14),
                   Row(
                     children: [
-                      Row(
-                        children: [
-                          const Icon(Icons.monetization_on, color: Color(0xFFFFD700), size: 18),
-                          const SizedBox(width: 4),
-                          Text(
-                            "$_myCoins",
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 13,
+                      GestureDetector(
+                        onTap: () async {
+                          Navigator.pop(ctx);
+                          await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => WalletScreen(
+                                currentCoins: _myCoins,
+                                userUid: widget.userUid,
+                                userNumericId: widget.userNumericId,
+                                onCoinsRecharged: (newBalance) {
+                                  if (mounted) {
+                                    setState(() {
+                                      _myCoins = newBalance;
+                                    });
+                                  }
+                                },
+                              ),
                             ),
+                          );
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+
+color: Colors.white.withOpacity(0.08),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFFFFD700), width: 1),
                           ),
-                        ],
+                          child: Row(
+                            children: [
+                              const Icon(Icons.monetization_on, color: Color(0xFFFFD700), size: 18),
+                              const SizedBox(width: 4),
+                              Text(
+                                "$_myCoins",
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              const Icon(Icons.add_circle, color: Color(0xFFFFD700), size: 16),
+                            ],
+                          ),
+                        ),
                       ),
                       const Spacer(),
                       PopupMenuButton<int>(
@@ -804,8 +863,7 @@ return GestureDetector(
                                   value: m,
                                   child: Text(
                                     "$m",
-
-style: const TextStyle(
+                                    style: const TextStyle(
                                       color: Colors.white,
                                       fontWeight: FontWeight.bold,
                                     ),
@@ -851,7 +909,7 @@ style: const TextStyle(
                             return;
                           }
 
-                          Navigator.pop(ctx);
+Navigator.pop(ctx);
                           _executeGiftSend(
                             ctx,
                             targetSeat: selectedSeatIndex,
@@ -912,7 +970,14 @@ style: const TextStyle(
       }
     });
 
-_lastSentGiftConfig = {
+    FirebaseFirestore.instance
+        .collection('users')
+        .doc(widget.userUid)
+        .update({
+      'coins': FieldValue.increment(-totalCost),
+    }).catchError((_) {});
+
+    _lastSentGiftConfig = {
       'targetSeat': targetSeat,
       'isAll': isAll,
       'cost': cost,
@@ -965,6 +1030,7 @@ _lastSentGiftConfig = {
 
   @override
   void dispose() {
+    _walletSubscription?.cancel();
     _waveController.dispose();
     _comboRingController.dispose();
     _burstAnimController.dispose();
@@ -986,7 +1052,7 @@ _lastSentGiftConfig = {
     final double seatDimension = _totalSeats > 20 ? 44.0 : 50.0;
     final size = MediaQuery.of(context).size;
 
-    return Scaffold(
+return Scaffold(
       backgroundColor: const Color(0xFF090614),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
@@ -1025,8 +1091,7 @@ _lastSentGiftConfig = {
                       value: count,
                       child: Text("$count Seats Layout",
                           style: TextStyle(color: count == _totalSeats ? const Color(0xFFFFD700) : Colors.white)),
-
-))
+                    ))
                 .toList(),
           ),
           IconButton(
@@ -1073,7 +1138,8 @@ _lastSentGiftConfig = {
                                 alignment: Alignment.center,
                                 children: [
                                   if (isHostSeat && isOccupied)
-                                    Positioned(
+
+Positioned(
                                       top: -15,
                                       child: Image.asset('assets/images/lv3.png', width: 36, errorBuilder: (c, e, s) => const SizedBox.shrink()),
                                     ),
@@ -1099,8 +1165,7 @@ _lastSentGiftConfig = {
                                                     blurRadius: 10 + (wave * 8),
                                                     spreadRadius: 2 + (wave * 3),
                                                   ),
-
-]
+                                                ]
                                               : null,
                                         ),
                                         child: Center(
@@ -1133,7 +1198,8 @@ _lastSentGiftConfig = {
                                       bottom: -2,
                                       right: -2,
                                       child: Container(
-                                        padding: const EdgeInsets.all(2.5),
+
+padding: const EdgeInsets.all(2.5),
                                         decoration: BoxDecoration(
                                           shape: BoxShape.circle,
                                           color: isMuted ? Colors.redAccent : const Color(0xFF00C9A7),
@@ -1161,8 +1227,7 @@ _lastSentGiftConfig = {
                                   color: giftsCount > 0 ? const Color(0xFFFF1493).withOpacity(0.3) : Colors.white.withOpacity(0.06),
                                   borderRadius: BorderRadius.circular(6),
                                 ),
-
-child: Row(
+                                child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     const Text("🎁", style: TextStyle(fontSize: 8)),
@@ -1203,7 +1268,8 @@ child: Row(
                           child: RichText(
                             text: TextSpan(
                               children: [
-                                TextSpan(
+
+TextSpan(
                                   text: item.isSystem ? "📢 ${item.sender}: " : "${item.sender}: ",
                                   style: TextStyle(
                                     color: item.isSystem ? const Color(0xFFFFD700) : const Color(0xFF00E5FF),
@@ -1241,8 +1307,7 @@ child: Row(
                       ),
                       Expanded(
                         child: Container(
-
-padding: const EdgeInsets.symmetric(horizontal: 14),
+                          padding: const EdgeInsets.symmetric(horizontal: 14),
                           decoration: BoxDecoration(
                             color: Colors.white.withOpacity(0.08),
                             borderRadius: BorderRadius.circular(20),
@@ -1276,7 +1341,6 @@ padding: const EdgeInsets.symmetric(horizontal: 14),
               ],
             ),
 
-            // Continuous Independent Flying Gifts
             ..._activeFlyingGifts.map((gift) {
               return AnimatedBuilder(
                 animation: gift.animation,
@@ -1288,7 +1352,7 @@ padding: const EdgeInsets.symmetric(horizontal: 14),
                   final targetX = gift.isAll ? (size.width * 0.5) : ((col + 0.5) * (size.width / crossAxis));
                   final targetY = gift.isAll ? (size.height * 0.25) : (60.0 + (row * 65.0));
 
-                  final startX = size.width * 0.85;
+final startX = size.width * 0.85;
                   final startY = size.height * 0.90;
 
                   final currentX = startX + (targetX - startX) * t;
@@ -1318,7 +1382,6 @@ padding: const EdgeInsets.symmetric(horizontal: 14),
               );
             }),
 
-            // Combo Burst Full-Screen Win Effect
             if (_showBurstEffect)
               Center(
                 child: AnimatedBuilder(
@@ -1328,7 +1391,7 @@ padding: const EdgeInsets.symmetric(horizontal: 14),
                     final scale = 1.0 + (sin(t * pi) * 0.8);
                     final opacity = (1.0 - t).clamp(0.0, 1.0);
 
-return Opacity(
+                    return Opacity(
                       opacity: opacity,
                       child: Transform.scale(
                         scale: scale,
@@ -1370,13 +1433,13 @@ return Opacity(
                 ),
               ),
 
-            // Combo Button
             if (_showComboButton)
               Positioned(
                 bottom: 65,
                 right: 20,
                 child: GestureDetector(
-                  onTap: _onComboTapped,
+
+onTap: _onComboTapped,
                   child: Stack(
                     alignment: Alignment.center,
                     children: [
@@ -1410,8 +1473,7 @@ return Opacity(
                               color: const Color(0xFFFF2A85).withOpacity(0.6),
                               blurRadius: 14,
                               spreadRadius: 2,
-
-),
+                            ),
                           ],
                         ),
                         child: Column(
