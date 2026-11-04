@@ -132,4 +132,14 @@ io.on('connection', (socket) => {
   });
 });
 
-const
+const SERVER_URL = 'https://nile-token-server.onrender.com/ping';
+setInterval(() => {
+  fetch(SERVER_URL)
+    .then(() => console.log('Keep-alive ping sent successfully'))
+    .catch((err) => console.log('Keep-alive ping error:', err.message));
+}, 600000);
+
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => {
+  console.log('Server listening on port ' + PORT);
+});
