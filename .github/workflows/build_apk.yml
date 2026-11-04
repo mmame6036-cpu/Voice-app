@@ -34,7 +34,7 @@ jobs:
           rm -rf android
           flutter create . --platforms=android --org=com.nile --project-name=voiceapp
 
-      - name: Restore Firebase Config & Setup Plugins
+      - name: Restore Firebase Config and Setup Plugins
         run: |
           mkdir -p android/app
           if [ -f /tmp/google-services.json ]; then
@@ -82,7 +82,7 @@ jobs:
 
           echo 'apply plugin: "com.google.gms.google-services"' >> android/app/build.gradle
 
-      - name: Configure Gradle Settings and Permissions
+      - name: Configure Gradle Settings
         run: |
           mkdir -p ~/.gradle
           cat << 'EOF' > ~/.gradle/init.gradle
@@ -123,10 +123,6 @@ jobs:
 
       - name: Build Debug APK
         run: flutter build apk --debug
-
-- name: Print Exact APK SHA Fingerprint
-        run: |
-          keytool -printcert -jarfile build/app/outputs/flutter-apk/app-debug.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
