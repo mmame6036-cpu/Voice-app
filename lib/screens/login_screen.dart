@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:firebase_auth/firebase_auth.dart';
 import '../services/user_service.dart';
 import 'Profile_setup_screen.dart';
@@ -19,9 +18,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
   bool _isLoading = false;
   String _loadingMessage = "";
-
-  // Render Server URL
-  static const String _serverBaseUrl = "https://nile-token-server.onrender.com";
 
   Future<void> _handleUserRouting(User user) async {
     final existingUser = await _userService.getUser(user.uid);
@@ -49,41 +45,22 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  // --- Direct Server-Side Custom Token Authentication ---
-  Future<void> _loginWithServer(String identifier) async {
+  // ፈጣን የእንግዳ መግቢያ (Quick Guest Entry - ቀጥታ በ Firebase Auth ይገባል)
+  Future<void> _handleGuestLogin() async {
     setState(() {
       _isLoading = true;
-      _loadingMessage = "Connecting to NILE server...";
+      _loadingMessage = "ወደ አፑ በመግባት ላይ...";
     });
 
     try {
-      final response = await http.post(
-        Uri.parse("$_serverBaseUrl/auth/custom-token"),
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode({"identifier": identifier}),
-      ).timeout(const Duration(seconds: 25));
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        if (data["success"] == true && data["token"] != null) {
-          final String customToken = data["token"];
-
-          // Authenticate with Firebase directly using Custom Token
-          final UserCredential cred = await _auth.signInWithCustomToken(customToken);
-
-          if (cred.user != null && mounted) {
-            await _handleUserRouting(cred.user!);
-          }
-        } else {
-          throw Exception("Server failed to generate token");
-        }
-      } else {
-        throw Exception("Server returned code ${response.statusCode}");
+      final UserCredential cred = await _auth.signInAnonymously();
+      if (cred.user != null && mounted) {
+        await _handleUserRouting(cred.user!);
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Login error: $e")),
+          SnackBar(content: Text("የመግቢያ ስህተት፦ $e")),
         );
       }
     } finally {
@@ -93,12 +70,7 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  // Quick Guest Login
-  Future<void> _handleGuestLogin() async {
-    final guestId = "guest_${DateTime.now().millisecondsSinceEpoch}";
-    await _loginWithServer(guestId);
-  }
-
+  // በስልክ ቁጥር መግቢያ
   void _handlePhoneSheet() {
     final phoneController = TextEditingController();
     bool isSubmitting = false;
@@ -124,8 +96,7 @@ class _LoginScreenState extends State<LoginScreen> {
             children: [
               Center(
                 child: Container(
-
-width: 40,
+                  width: 40,
                   height: 4,
                   decoration: BoxDecoration(
                     color: Colors.white24,
@@ -137,7 +108,7 @@ width: 40,
               const Text(
                 "Phone Login",
                 style: TextStyle(
-                  color: Colors.white,
+                  color: Color(0xFFFFD700),
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
                 ),
@@ -153,7 +124,8 @@ width: 40,
                   prefixText: "+251 ",
                   prefixStyle: const TextStyle(color: Colors.white),
                   hintStyle: const TextStyle(color: Colors.white38),
-                  filled: true,
+
+filled: true,
                   fillColor: Colors.white.withOpacity(0.08),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(14),
@@ -179,14 +151,14 @@ width: 40,
                           final rawNumber = phoneController.text.trim();
                           if (rawNumber.length < 9) {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text("Please enter a valid phone number")),
+                              const SnackBar(content: Text("እባክዎ ትክክለኛ ስልክ ቁጥር ያስገቡ")),
                             );
                             return;
                           }
 
                           setSheetState(() => isSubmitting = true);
                           Navigator.pop(ctx);
-                          await _loginWithServer("251$rawNumber");
+                          await _handleGuestLogin();
                         },
                   child: isSubmitting
                       ? const SizedBox(
@@ -223,18 +195,17 @@ width: 40,
               const Text(
                 "NILE",
                 style: TextStyle(
-                  color: Colors.white,
+                  color: Color(0xFFFFD700),
                   fontSize: 28,
                   fontWeight: FontWeight.bold,
-
-letterSpacing: 2.0,
+                  letterSpacing: 2.0,
                 ),
               ),
               const SizedBox(height: 6),
               const Text(
                 "Live Voice Lounge",
                 style: TextStyle(
-                  color: Colors.white54,
+                  color: Color(0xFFE6C280),
                   fontSize: 13,
                   fontWeight: FontWeight.w400,
                 ),
@@ -247,16 +218,17 @@ letterSpacing: 2.0,
                     const SizedBox(height: 14),
                     Text(
                       _loadingMessage,
-                      style: const TextStyle(color: Colors.white70, fontSize: 13),
+                      style: const TextStyle(color: Color(0xFFFFD700), fontSize: 13),
                     ),
                     const SizedBox(height: 30),
                   ],
                 ),
               _actionButton(
-                icon: const Icon(Icons.phone_android, size: 20, color: Colors.white),
+                icon: const Icon(Icons.phone_android, size: 20, color: Color(0xFFFFD700)),
                 text: "Continue with Phone",
                 bgColor: const Color(0xFF1E2235),
-                textColor: Colors.white,
+
+textColor: const Color(0xFFFFD700),
                 onTap: _isLoading ? () {} : _handlePhoneSheet,
               ),
               const SizedBox(height: 14),
