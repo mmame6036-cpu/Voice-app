@@ -7,6 +7,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:http/http.dart' as http;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
+import 'package:audioplayers/audioplayers.dart';
 import '../services/agora_service.dart';
 import 'wallet_screen.dart';
 
@@ -68,6 +69,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
     with TickerProviderStateMixin {
   final AgoraService _agoraService = AgoraService();
   IO.Socket? _socket;
+  final AudioPlayer _audioPlayer = AudioPlayer();
 
   bool _isMuted = false;
   int? _mySeatIndex;
@@ -88,7 +90,6 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
   ];
 
   late AnimationController _waveController;
-
   final List<FlyingGiftItem> _activeFlyingGifts = [];
 
   bool _showComboButton = false;
@@ -97,9 +98,12 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
   late AnimationController _comboRingController;
   Map<String, dynamic>? _lastSentGiftConfig;
 
-  bool _showBurstEffect = false;
-  int _lastWonCoins = 0;
-  late AnimationController _burstAnimController;
+  bool _showFloatingBanner = false;
+  Timer? _bannerTimer;
+  int _currentWonRebate = 0;
+
+  bool _showX100Badge = false;
+  late AnimationController _x100BadgeController;
 
   final Set<int> _speakingSeatIndices = {};
   final List<int> _allowedSeatOptions = [6, 12, 20, 25, 30];
@@ -127,24 +131,24 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
       duration: const Duration(seconds: 3),
     );
 
-    _burstAnimController = AnimationController(
+    _x100BadgeController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1400),
+      duration: const Duration(milliseconds: 1600),
     );
 
-    _burstAnimController.addStatusListener((status) {
+    _x100BadgeController.addStatusListener((status) {
       if (status == AnimationStatus.completed && mounted) {
-        setState(() => _showBurstEffect = false);
+        setState(() => _showX100Badge = false);
       }
     });
 
-    _initWalletSync();
+_initWalletSync();
     _loadRoomGiftsFromFirestore();
     _setupAgora();
     _connectSocket();
   }
 
-void _initWalletSync() {
+  void _initWalletSync() {
     _walletSubscription = FirebaseFirestore.instance
         .collection('users')
         .doc(widget.userUid)
@@ -159,6 +163,13 @@ void _initWalletSync() {
         }
       }
     });
+  }
+
+  void _playCoinSound() {
+    try {
+      _audioPlayer.stop();
+      _audioPlayer.play(AssetSource('sounds/five-win.mp3'), mode: PlayerMode.lowLatency);
+    } catch (_) {}
   }
 
   void _addExpiringMessage(RoomChatMessage message, {int seconds = 4}) {
@@ -267,7 +278,7 @@ void _initWalletSync() {
         final giftAsset = data['giftAsset'] ?? 'assets/images/lv3.png';
         final targetIndex = (data['targetSeatIndex'] as num?)?.toInt() ?? 0;
 
-        setState(() {
+setState(() {
           if (isAll) {
             for (int i = 0; i < _totalSeats; i++) {
               if (_seats[i] != null) {
@@ -283,7 +294,7 @@ void _initWalletSync() {
             ? "$sender sent $giftName to All Mics!"
             : "$sender sent $giftName to Seat ${targetIndex + 1}!";
 
-_addExpiringMessage(
+        _addExpiringMessage(
           RoomChatMessage(
             id: "${DateTime.now().microsecondsSinceEpoch}_$sender",
             sender: "System",
@@ -409,7 +420,7 @@ _addExpiringMessage(
     });
   }
 
-  void _handleSeatTap(int index) async {
+void _handleSeatTap(int index) async {
     if (_mySeatIndex == index) {
       setState(() {
         _seats[index] = null;
@@ -426,7 +437,7 @@ _addExpiringMessage(
       return;
     }
 
-if (_seats[index] == null) {
+    if (_seats[index] == null) {
       final status = await Permission.microphone.request();
       if (!status.isGranted) return;
 
@@ -530,38 +541,49 @@ if (_seats[index] == null) {
         setState(() {
           _showComboButton = false;
           _comboCount = 0;
+          _showFloatingBanner = false;
         });
       }
     });
   }
 
-  void _triggerComboBurst() {
-    final reward = 500 + Random().nextInt(1500);
+  void _triggerMilestoneReward(int giftCost) {
+    int rewardMultiplier = 2;
+    if (_comboCount >= 100) {
+      rewardMultiplier = 20;
+    } else if (_comboCount >= 60) {
+      rewardMultiplier = 8;
+    } else if (_comboCount >= 30) {
+      rewardMultiplier = 4;
+    }
+
+    final rebate = giftCost * rewardMultiplier;
+
     setState(() {
-      _lastWonCoins = reward;
-      _myCoins += reward;
-      _showBurstEffect = true;
+      _currentWonRebate = rebate;
+      _myCoins += rebate;
+      _showFloatingBanner = true;
     });
+
+    _playCoinSound();
 
     FirebaseFirestore.instance
         .collection('users')
         .doc(widget.userUid)
         .update({
-      'coins': FieldValue.increment(reward),
+      'coins': FieldValue.increment(rebate),
     }).catchError((_) {});
 
-    _burstAnimController.reset();
-    _burstAnimController.forward();
+    if (_comboCount >= 100) {
+      setState(() => _showX100Badge = true);
+      _x100BadgeController.reset();
+      _x100BadgeController.forward();
+    }
 
-    _addExpiringMessage(
-      RoomChatMessage(
-        id: "burst_${DateTime.now().microsecondsSinceEpoch}",
-        sender: "Lucky Box",
-        message: "🎉 Combo Burst! You won 🪙 $reward coins!",
-        isSystem: true,
-      ),
-      seconds: 5,
-    );
+_bannerTimer?.cancel();
+    _bannerTimer = Timer(const Duration(seconds: 4), () {
+      if (mounted) setState(() => _showFloatingBanner = false);
+    });
   }
 
   void _onComboTapped() {
@@ -570,16 +592,18 @@ if (_seats[index] == null) {
       _comboCount += 1;
     });
 
+    final config = _lastSentGiftConfig!;
+    final giftCost = config['cost'] as int;
+
     if (_comboCount % 10 == 0) {
-      _triggerComboBurst();
+      _triggerMilestoneReward(giftCost);
     }
 
-    final config = _lastSentGiftConfig!;
     _executeGiftSend(
       null,
       targetSeat: config['targetSeat'],
       isAll: config['isAll'],
-      cost: config['cost'],
+      cost: giftCost,
       multiplier: config['multiplier'],
       name: config['name'],
       asset: config['asset'],
@@ -589,7 +613,7 @@ if (_seats[index] == null) {
     _startComboTimer();
   }
 
-void _openGiftSheet() {
+  void _openGiftSheet() {
     int? selectedSeatIndex;
     bool isAllSelected = false;
     int selectedMultiplier = 1;
@@ -660,7 +684,8 @@ void _openGiftSheet() {
                                           children: [
                                             Container(
                                               width: 38,
-                                              height: 38,
+
+height: 38,
                                               decoration: BoxDecoration(
                                                 shape: BoxShape.circle,
                                                 gradient: const LinearGradient(
@@ -670,8 +695,7 @@ void _openGiftSheet() {
                                                   color: isCurrent ? const Color(0xFFFFD700) : Colors.transparent,
                                                   width: 2.2,
                                                 ),
-
-),
+                                              ),
                                               child: Center(
                                                 child: Text(
                                                   initial,
@@ -730,7 +754,8 @@ void _openGiftSheet() {
                                   ),
                                 ),
                                 const SizedBox(height: 2),
-                                const Text("All Mics", style: TextStyle(color: Color(0xFFFFD700), fontSize: 9.5)),
+
+const Text("All Mics", style: TextStyle(color: Color(0xFFFFD700), fontSize: 9.5)),
                               ],
                             ),
                           ),
@@ -753,7 +778,7 @@ void _openGiftSheet() {
                       final item = giftsList[index];
                       final isSelected = item['id'] == selectedGiftId;
 
-return GestureDetector(
+                      return GestureDetector(
                         onTap: () => setSheetState(() => selectedGiftId = item['id'] as int),
                         child: Container(
                           padding: const EdgeInsets.all(6),
@@ -809,7 +834,8 @@ return GestureDetector(
                       GestureDetector(
                         onTap: () async {
                           Navigator.pop(ctx);
-                          await Navigator.push(
+
+await Navigator.push(
                             context,
                             MaterialPageRoute(
                               builder: (context) => WalletScreen(
@@ -830,8 +856,7 @@ return GestureDetector(
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(
-
-color: Colors.white.withOpacity(0.08),
+                            color: Colors.white.withOpacity(0.08),
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(color: const Color(0xFFFFD700), width: 1),
                           ),
@@ -885,7 +910,8 @@ color: Colors.white.withOpacity(0.08),
                                   color: Colors.white,
                                   fontWeight: FontWeight.bold,
                                   fontSize: 13,
-                                ),
+
+),
                               ),
                               const SizedBox(width: 4),
                               const Icon(Icons.arrow_drop_up, color: Colors.white70, size: 18),
@@ -909,7 +935,7 @@ color: Colors.white.withOpacity(0.08),
                             return;
                           }
 
-Navigator.pop(ctx);
+                          Navigator.pop(ctx);
                           _executeGiftSend(
                             ctx,
                             targetSeat: selectedSeatIndex,
@@ -1013,7 +1039,7 @@ Navigator.pop(ctx);
           ? "${widget.userName} sent $name x$multiplier to All Mics!"
           : "${widget.userName} sent $name x$multiplier to Seat ${targetSeat! + 1}!";
 
-      _addExpiringMessage(
+_addExpiringMessage(
         RoomChatMessage(
           id: "${DateTime.now().microsecondsSinceEpoch}_${widget.userName}",
           sender: "System",
@@ -1033,8 +1059,10 @@ Navigator.pop(ctx);
     _walletSubscription?.cancel();
     _waveController.dispose();
     _comboRingController.dispose();
-    _burstAnimController.dispose();
+    _x100BadgeController.dispose();
     _comboTimer?.cancel();
+    _bannerTimer?.cancel();
+    _audioPlayer.dispose();
     for (var g in _activeFlyingGifts) {
       g.controller.dispose();
     }
@@ -1052,7 +1080,7 @@ Navigator.pop(ctx);
     final double seatDimension = _totalSeats > 20 ? 44.0 : 50.0;
     final size = MediaQuery.of(context).size;
 
-return Scaffold(
+    return Scaffold(
       backgroundColor: const Color(0xFF090614),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
@@ -1116,7 +1144,8 @@ return Scaffold(
                         crossAxisCount: crossAxis,
                         mainAxisSpacing: 10,
                         crossAxisSpacing: 6,
-                        childAspectRatio: 0.68,
+
+childAspectRatio: 0.68,
                       ),
                       itemBuilder: (context, index) {
                         final occupier = _seats[index];
@@ -1138,8 +1167,7 @@ return Scaffold(
                                 alignment: Alignment.center,
                                 children: [
                                   if (isHostSeat && isOccupied)
-
-Positioned(
+                                    Positioned(
                                       top: -15,
                                       child: Image.asset('assets/images/lv3.png', width: 36, errorBuilder: (c, e, s) => const SizedBox.shrink()),
                                     ),
@@ -1181,7 +1209,8 @@ Positioned(
                                     },
                                   ),
                                   if (isOccupied)
-                                    if (isCrownSeat)
+
+if (isCrownSeat)
                                       Positioned.fill(
                                         child: IgnorePointer(
                                           child: Image.asset('assets/images/4.png', fit: BoxFit.contain, errorBuilder: (c, e, s) => const SizedBox.shrink()),
@@ -1198,8 +1227,7 @@ Positioned(
                                       bottom: -2,
                                       right: -2,
                                       child: Container(
-
-padding: const EdgeInsets.all(2.5),
+                                        padding: const EdgeInsets.all(2.5),
                                         decoration: BoxDecoration(
                                           shape: BoxShape.circle,
                                           color: isMuted ? Colors.redAccent : const Color(0xFF00C9A7),
@@ -1246,7 +1274,8 @@ padding: const EdgeInsets.all(2.5),
                         );
                       },
                     ),
-                  ),
+
+),
                 ),
                 Expanded(
                   flex: 4,
@@ -1268,8 +1297,7 @@ padding: const EdgeInsets.all(2.5),
                           child: RichText(
                             text: TextSpan(
                               children: [
-
-TextSpan(
+                                TextSpan(
                                   text: item.isSystem ? "📢 ${item.sender}: " : "${item.sender}: ",
                                   style: TextStyle(
                                     color: item.isSystem ? const Color(0xFFFFD700) : const Color(0xFF00E5FF),
@@ -1322,7 +1350,8 @@ TextSpan(
                               border: InputBorder.none,
                               isDense: true,
                               contentPadding: EdgeInsets.symmetric(vertical: 10),
-                            ),
+
+),
                             onSubmitted: (_) => _sendMessage(),
                           ),
                         ),
@@ -1352,7 +1381,7 @@ TextSpan(
                   final targetX = gift.isAll ? (size.width * 0.5) : ((col + 0.5) * (size.width / crossAxis));
                   final targetY = gift.isAll ? (size.height * 0.25) : (60.0 + (row * 65.0));
 
-final startX = size.width * 0.85;
+                  final startX = size.width * 0.85;
                   final startY = size.height * 0.90;
 
                   final currentX = startX + (targetX - startX) * t;
@@ -1382,47 +1411,149 @@ final startX = size.width * 0.85;
               );
             }),
 
-            if (_showBurstEffect)
+            // Floating Rebate Banner (Just like in the video)
+            if (_showFloatingBanner && _lastSentGiftConfig != null)
+              Positioned(
+                bottom: 120,
+                left: 16,
+                right: 90,
+                child: TweenAnimationBuilder<double>(
+                  tween: Tween(begin: 0.0, end: 1.0),
+                  duration: const Duration(milliseconds: 350),
+                  curve: Curves.easeOutBack,
+                  builder: (context, value, child) {
+                    return Transform.scale(
+                      scale: value,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFF38006B), Color(0xFF8E00A8), Color(0xFFFFD700)],
+                            stops: [0.0, 0.7, 1.0],
+                          ),
+                          borderRadius: BorderRadius.circular(24),
+                          border: Border.all(color: const Color(0xFFFFD700), width: 1.5),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFFFF2A85).withOpacity(0.5),
+                              blurRadius: 10,
+
+offset: const Offset(0, 3),
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 32,
+                              height: 32,
+                              decoration: const BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Color(0xFFFFD700),
+                              ),
+                              child: Center(
+                                child: Text(
+                                  widget.userName.isNotEmpty ? widget.userName[0].toUpperCase() : "U",
+                                  style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 14),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    widget.userName,
+                                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  Text(
+                                    "Combo x$_comboCount Hits!",
+                                    style: const TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold, fontSize: 10),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFF1493),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                "+$_currentWonRebate",
+                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 12),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+
+            // x100 Giant Medal Badge (Burst center effect from video)
+            if (_showX100Badge)
               Center(
                 child: AnimatedBuilder(
-                  animation: _burstAnimController,
+                  animation: _x100BadgeController,
                   builder: (context, child) {
-                    final t = _burstAnimController.value;
-                    final scale = 1.0 + (sin(t * pi) * 0.8);
-                    final opacity = (1.0 - t).clamp(0.0, 1.0);
+                    final t = _x100BadgeController.value;
+                    final scale = (sin(t * pi) * 1.2).clamp(0.0, 1.3);
+                    final opacity = (1.0 - t * 0.4).clamp(0.0, 1.0);
 
                     return Opacity(
                       opacity: opacity,
                       child: Transform.scale(
                         scale: scale,
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 18),
+                          width: 220,
+                          height: 220,
                           decoration: BoxDecoration(
+                            shape: BoxShape.circle,
                             gradient: const RadialGradient(
-                              colors: [Color(0xFFFFD700), Color(0xFFFF1493), Colors.transparent],
-                              stops: [0.3, 0.7, 1.0],
-                            ),
-                            borderRadius: BorderRadius.circular(30),
+                              colors: [Color(0xFF00E5FF), Color(0xFF2979FF), Color(0xFF1A237E)],
+
+),
+                            border: Border.all(color: const Color(0xFFFFD700), width: 6),
                             boxShadow: [
                               BoxShadow(
-                                color: const Color(0xFFFFD700).withOpacity(0.8),
-                                blurRadius: 30,
-                                spreadRadius: 10,
+                                color: const Color(0xFF00E5FF).withOpacity(0.9),
+                                blurRadius: 40,
+                                spreadRadius: 15,
                               ),
                             ],
                           ),
                           child: Column(
-                            mainAxisSize: MainAxisSize.min,
+                            mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              const Text("💥 LUCKY BURST! 💥", style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 22)),
-                              const SizedBox(height: 6),
-                              Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Icon(Icons.monetization_on, color: Color(0xFFFFD700), size: 28),
-                                  const SizedBox(width: 6),
-                                  Text("+$_lastWonCoins", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 26)),
-                                ],
+                              const Icon(Icons.star, color: Color(0xFFFFD700), size: 36),
+                              const Text(
+                                "x100",
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 48,
+                                  letterSpacing: 2,
+                                  shadows: [
+                                    Shadow(color: Colors.black, blurRadius: 10, offset: Offset(2, 2)),
+                                  ],
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFFD700),
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                                child: const Text(
+                                  "MEGA WINNER",
+                                  style: TextStyle(color: Colors.black, fontWeight: FontWeight.w900, fontSize: 11),
+                                ),
                               ),
                             ],
                           ),
@@ -1433,13 +1564,13 @@ final startX = size.width * 0.85;
                 ),
               ),
 
+            // Combo Round Button
             if (_showComboButton)
               Positioned(
                 bottom: 65,
                 right: 20,
                 child: GestureDetector(
-
-onTap: _onComboTapped,
+                  onTap: _onComboTapped,
                   child: Stack(
                     alignment: Alignment.center,
                     children: [
@@ -1471,7 +1602,8 @@ onTap: _onComboTapped,
                           boxShadow: [
                             BoxShadow(
                               color: const Color(0xFFFF2A85).withOpacity(0.6),
-                              blurRadius: 14,
+
+blurRadius: 14,
                               spreadRadius: 2,
                             ),
                           ],
