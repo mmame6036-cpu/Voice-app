@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -9,14 +10,34 @@ import 'package:socket_io_client/socket_io_client.dart' as IO;
 import '../services/agora_service.dart';
 
 class RoomChatMessage {
+  final String id;
   final String sender;
   final String message;
   final bool isSystem;
 
   RoomChatMessage({
+    required this.id,
     required this.sender,
     required this.message,
     this.isSystem = false,
+  });
+}
+
+class FlyingGiftItem {
+  final String id;
+  final String asset;
+  final int targetSeatIndex;
+  final bool isAll;
+  final AnimationController controller;
+  final Animation<double> animation;
+
+  FlyingGiftItem({
+    required this.id,
+    required this.asset,
+    required this.targetSeatIndex,
+    required this.isAll,
+    required this.controller,
+    required this.animation,
   });
 }
 
@@ -65,18 +86,18 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
   ];
 
   late AnimationController _waveController;
-  late AnimationController _giftFlyController;
-  late Animation<double> _giftFlyProgress;
-  bool _isShowingGiftAnim = false;
-  String _activeGiftAsset = 'assets/images/lv3.png';
-  int _animTargetSeatIndex = 0;
-  bool _isGiftToAll = false;
+
+  final List<FlyingGiftItem> _activeFlyingGifts = [];
 
   bool _showComboButton = false;
   int _comboCount = 0;
   Timer? _comboTimer;
   late AnimationController _comboRingController;
   Map<String, dynamic>? _lastSentGiftConfig;
+
+  bool _showBurstEffect = false;
+  int _lastWonCoins = 0;
+  late AnimationController _burstAnimController;
 
   final Set<int> _speakingSeatIndices = {};
   final List<int> _allowedSeatOptions = [6, 12, 20, 25, 30];
@@ -99,30 +120,41 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
       duration: const Duration(milliseconds: 700),
     )..repeat(reverse: true);
 
-    _giftFlyController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1100),
-    );
-
-    _giftFlyProgress = CurvedAnimation(
-      parent: _giftFlyController,
-      curve: Curves.easeInOutCubic,
-    );
-
-    _giftFlyController.addStatusListener((status) {
-      if (status == AnimationStatus.completed && mounted) {
-        setState(() => _isShowingGiftAnim = false);
-      }
-    });
-
     _comboRingController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 3),
     );
 
+    _burstAnimController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    );
+
+    _burstAnimController.addStatusListener((status) {
+      if (status == AnimationStatus.completed && mounted) {
+        setState(() => _showBurstEffect = false);
+      }
+    });
+
     _loadRoomGiftsFromFirestore();
     _setupAgora();
     _connectSocket();
+  }
+
+  void _addExpiringMessage(RoomChatMessage message, {int seconds = 4}) {
+    if (!mounted) return;
+    setState(() {
+      _messages.add(message);
+    });
+    _scrollToBottom();
+
+Timer(Duration(seconds: seconds), () {
+      if (mounted) {
+        setState(() {
+          _messages.removeWhere((m) => m.id == message.id);
+        });
+      }
+    });
   }
 
   Future<void> _loadRoomGiftsFromFirestore() async {
@@ -132,7 +164,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
           .doc(widget.roomId)
           .get();
 
-if (doc.exists && doc.data()!.containsKey('seatGifts')) {
+      if (doc.exists && doc.data()!.containsKey('seatGifts')) {
         final List incoming = doc.data()!['seatGifts'];
         if (mounted) {
           setState(() {
@@ -163,7 +195,7 @@ if (doc.exists && doc.data()!.containsKey('seatGifts')) {
         _serverUrl,
         IO.OptionBuilder()
             .setTransports(['websocket'])
-            .disableAutoConnect()
+            .enableAutoConnect()
             .build(),
       );
 
@@ -213,6 +245,7 @@ if (doc.exists && doc.data()!.containsKey('seatGifts')) {
         final giftName = data['giftName'] ?? "Gift";
         final giftCost = (data['giftCost'] as num?)?.toInt() ?? 0;
         final giftAsset = data['giftAsset'] ?? 'assets/images/lv3.png';
+        final targetIndex = (data['targetSeatIndex'] as num?)?.toInt() ?? 0;
 
         setState(() {
           if (isAll) {
@@ -221,30 +254,34 @@ if (doc.exists && doc.data()!.containsKey('seatGifts')) {
                 _seatGifts[i] += giftCost;
               }
             }
-            _messages.add(RoomChatMessage(
-              sender: "System",
-              message: "$sender sent $giftName to All Mics!",
-              isSystem: true,
-            ));
           } else {
-            final targetIndex = (data['targetSeatIndex'] as num).toInt();
             _seatGifts[targetIndex] += giftCost;
-            _messages.add(RoomChatMessage(
-              sender: "System",
-              message: "$sender sent $giftName to Seat ${targetIndex + 1}!",
-              isSystem: true,
-            ));
           }
         });
-        _scrollToBottom();
+
+        final msgText = isAll
+            ? "$sender sent $giftName to All Mics!"
+            : "$sender sent $giftName to Seat ${targetIndex + 1}!";
+
+        _addExpiringMessage(
+          RoomChatMessage(
+            id: "${DateTime.now().microsecondsSinceEpoch}_$sender",
+            sender: "System",
+            message: msgText,
+            isSystem: true,
+          ),
+          seconds: 4,
+        );
+
         _saveRoomGiftsToFirestore();
-        _triggerGiftAnimation(giftAsset.toString(), data['targetSeatIndex'] ?? 0, isToAll: isAll);
+        _triggerGiftAnimation(giftAsset.toString(), targetIndex, isToAll: isAll);
       });
 
-      _socket!.on('chat_message_received', (data) {
+_socket!.on('chat_message_received', (data) {
         if (!mounted || data == null) return;
         setState(() {
           _messages.add(RoomChatMessage(
+            id: "${DateTime.now().microsecondsSinceEpoch}",
             sender: data['sender'] ?? 'User',
             message: data['message'] ?? '',
             isSystem: data['isSystem'] ?? false,
@@ -255,7 +292,7 @@ if (doc.exists && doc.data()!.containsKey('seatGifts')) {
     } catch (_) {}
   }
 
-Future<String?> _fetchToken({
+  Future<String?> _fetchToken({
     required String channelName,
     required int uid,
     required bool isPublisher,
@@ -319,14 +356,37 @@ Future<String?> _fetchToken({
   }
 
   void _triggerGiftAnimation(String asset, int targetSeatIndex, {bool isToAll = false}) {
+    final controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1100),
+    );
+
+    final animation = CurvedAnimation(
+      parent: controller,
+      curve: Curves.easeInOutCubic,
+    );
+
+    final giftItem = FlyingGiftItem(
+      id: "${DateTime.now().microsecondsSinceEpoch}_$targetSeatIndex",
+      asset: asset,
+      targetSeatIndex: targetSeatIndex,
+      isAll: isToAll,
+      controller: controller,
+      animation: animation,
+    );
+
     setState(() {
-      _activeGiftAsset = asset;
-      _animTargetSeatIndex = targetSeatIndex;
-      _isGiftToAll = isToAll;
-      _isShowingGiftAnim = true;
+      _activeFlyingGifts.add(giftItem);
     });
-    _giftFlyController.reset();
-    _giftFlyController.forward();
+
+    controller.forward().then((_) {
+      if (mounted) {
+        setState(() {
+          _activeFlyingGifts.removeWhere((g) => g.id == giftItem.id);
+        });
+        controller.dispose();
+      }
+    });
   }
 
   void _handleSeatTap(int index) async {
@@ -351,7 +411,8 @@ Future<String?> _fetchToken({
       if (!status.isGranted) return;
 
       final previousSeat = _mySeatIndex;
-      setState(() {
+
+setState(() {
         if (previousSeat != null) {
           _seats[previousSeat] = null;
           _speakingSeatIndices.remove(previousSeat);
@@ -393,7 +454,7 @@ Future<String?> _fetchToken({
     _agoraService.setMicrophoneMute(_isMuted);
   }
 
-void _changeSeatCount(int newCount) {
+  void _changeSeatCount(int newCount) {
     setState(() {
       _totalSeats = newCount;
       if (_mySeatIndex != null && _mySeatIndex! >= newCount) {
@@ -416,7 +477,11 @@ void _changeSeatCount(int newCount) {
       });
     } else {
       setState(() {
-        _messages.add(RoomChatMessage(sender: widget.userName, message: text));
+        _messages.add(RoomChatMessage(
+          id: "${DateTime.now().microsecondsSinceEpoch}",
+          sender: widget.userName,
+          message: text,
+        ));
       });
       _scrollToBottom();
     }
@@ -450,11 +515,38 @@ void _changeSeatCount(int newCount) {
     });
   }
 
+  void _triggerComboBurst() {
+    final reward = 500 + Random().nextInt(1500); // 500 - 2000 Lucky Coins
+    setState(() {
+      _lastWonCoins = reward;
+      _myCoins += reward;
+      _showBurstEffect = true;
+    });
+
+    _burstAnimController.reset();
+    _burstAnimController.forward();
+
+    _addExpiringMessage(
+      RoomChatMessage(
+        id: "burst_${DateTime.now().microsecondsSinceEpoch}",
+        sender: "Lucky Box",
+        message: "🎉 Combo Burst! You won 🪙 $reward coins!",
+        isSystem: true,
+      ),
+      seconds: 5,
+    );
+  }
+
   void _onComboTapped() {
     if (_lastSentGiftConfig == null) return;
     setState(() {
       _comboCount += 1;
     });
+
+    // Check for Burst Lucky Reward every 10 combo hits
+    if (_comboCount % 10 == 0) {
+      _triggerComboBurst();
+    }
 
     final config = _lastSentGiftConfig!;
     _executeGiftSend(
@@ -478,7 +570,7 @@ void _changeSeatCount(int newCount) {
     final List<int> multipliers = [1, 3, 7, 10, 30, 50, 77, 100];
     int selectedGiftId = 1;
 
-    final currentSeatedUsers = [];
+final currentSeatedUsers = [];
     for (int i = 0; i < _totalSeats; i++) {
       if (_seats[i] != null) {
         currentSeatedUsers.add({
@@ -524,8 +616,7 @@ void _changeSeatCount(int newCount) {
                               : ListView(
                                   scrollDirection: Axis.horizontal,
                                   children: currentSeatedUsers.map((user) {
-
-final isCurrent = !isAllSelected && selectedSeatIndex == user['seatIndex'];
+                                    final isCurrent = !isAllSelected && selectedSeatIndex == user['seatIndex'];
                                     final seatNum = (user['seatIndex'] as int) + 1;
                                     final userName = user['name'] as String;
                                     final initial = userName.isNotEmpty ? userName[0].toUpperCase() : "U";
@@ -557,7 +648,8 @@ final isCurrent = !isAllSelected && selectedSeatIndex == user['seatIndex'];
                                               child: Center(
                                                 child: Text(
                                                   initial,
-                                                  style: const TextStyle(
+
+style: const TextStyle(
                                                     color: Colors.white,
                                                     fontWeight: FontWeight.bold,
                                                     fontSize: 16,
@@ -591,8 +683,7 @@ final isCurrent = !isAllSelected && selectedSeatIndex == user['seatIndex'];
                               children: [
                                 Container(
                                   width: 38,
-
-height: 38,
+                                  height: 38,
                                   decoration: BoxDecoration(
                                     shape: BoxShape.circle,
                                     color: const Color(0xFFFFD700),
@@ -636,7 +727,7 @@ height: 38,
                       final item = giftsList[index];
                       final isSelected = item['id'] == selectedGiftId;
 
-                      return GestureDetector(
+return GestureDetector(
                         onTap: () => setSheetState(() => selectedGiftId = item['id'] as int),
                         child: Container(
                           padding: const EdgeInsets.all(6),
@@ -666,8 +757,7 @@ height: 38,
                                   fontSize: 10,
                                   fontWeight: FontWeight.bold,
                                 ),
-
-maxLines: 1,
+                                maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
                               Row(
@@ -714,7 +804,8 @@ maxLines: 1,
                                   value: m,
                                   child: Text(
                                     "$m",
-                                    style: const TextStyle(
+
+style: const TextStyle(
                                       color: Colors.white,
                                       fontWeight: FontWeight.bold,
                                     ),
@@ -748,8 +839,7 @@ maxLines: 1,
                       ElevatedButton(
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFFFFD700),
-
-foregroundColor: Colors.black,
+                          foregroundColor: Colors.black,
                           padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 10),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                         ),
@@ -822,7 +912,7 @@ foregroundColor: Colors.black,
       }
     });
 
-    _lastSentGiftConfig = {
+_lastSentGiftConfig = {
       'targetSeat': targetSeat,
       'isAll': isAll,
       'cost': cost,
@@ -849,21 +939,25 @@ foregroundColor: Colors.black,
           for (int i = 0; i < _totalSeats; i++) {
             if (_seats[i] != null) _seatGifts[i] += totalCost;
           }
-          _messages.add(RoomChatMessage(
-            sender: "System",
-            message: "${widget.userName} sent $name x$multiplier to All Mics!",
-            isSystem: true,
-          ));
         } else {
           _seatGifts[targetSeat!] += totalCost;
-          _messages.add(RoomChatMessage(
-            sender: "System",
-            message: "${widget.userName} sent $name x$multiplier to Seat ${targetSeat + 1}!",
-            isSystem: true,
-          ));
         }
       });
-      _scrollToBottom();
+
+      final msgText = isAll
+          ? "${widget.userName} sent $name x$multiplier to All Mics!"
+          : "${widget.userName} sent $name x$multiplier to Seat ${targetSeat! + 1}!";
+
+      _addExpiringMessage(
+        RoomChatMessage(
+          id: "${DateTime.now().microsecondsSinceEpoch}_${widget.userName}",
+          sender: "System",
+          message: msgText,
+          isSystem: true,
+        ),
+        seconds: 4,
+      );
+
       _saveRoomGiftsToFirestore();
       _triggerGiftAnimation(asset, targetSeat ?? 0, isToAll: isAll);
     }
@@ -872,9 +966,12 @@ foregroundColor: Colors.black,
   @override
   void dispose() {
     _waveController.dispose();
-    _giftFlyController.dispose();
     _comboRingController.dispose();
+    _burstAnimController.dispose();
     _comboTimer?.cancel();
+    for (var g in _activeFlyingGifts) {
+      g.controller.dispose();
+    }
     _socket?.disconnect();
     _socket?.dispose();
     _agoraService.leaveRoom();
@@ -883,7 +980,7 @@ foregroundColor: Colors.black,
     super.dispose();
   }
 
-@override
+  @override
   Widget build(BuildContext context) {
     final int crossAxis = _totalSeats <= 12 ? 4 : (_totalSeats <= 20 ? 5 : 6);
     final double seatDimension = _totalSeats > 20 ? 44.0 : 50.0;
@@ -928,7 +1025,8 @@ foregroundColor: Colors.black,
                       value: count,
                       child: Text("$count Seats Layout",
                           style: TextStyle(color: count == _totalSeats ? const Color(0xFFFFD700) : Colors.white)),
-                    ))
+
+))
                 .toList(),
           ),
           IconButton(
@@ -971,8 +1069,7 @@ foregroundColor: Colors.black,
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Stack(
-
-clipBehavior: Clip.none,
+                                clipBehavior: Clip.none,
                                 alignment: Alignment.center,
                                 children: [
                                   if (isHostSeat && isOccupied)
@@ -1002,7 +1099,8 @@ clipBehavior: Clip.none,
                                                     blurRadius: 10 + (wave * 8),
                                                     spreadRadius: 2 + (wave * 3),
                                                   ),
-                                                ]
+
+]
                                               : null,
                                         ),
                                         child: Center(
@@ -1031,8 +1129,7 @@ clipBehavior: Clip.none,
                                         ),
                                       ),
                                   if (isOccupied)
-
-Positioned(
+                                    Positioned(
                                       bottom: -2,
                                       right: -2,
                                       child: Container(
@@ -1064,7 +1161,8 @@ Positioned(
                                   color: giftsCount > 0 ? const Color(0xFFFF1493).withOpacity(0.3) : Colors.white.withOpacity(0.06),
                                   borderRadius: BorderRadius.circular(6),
                                 ),
-                                child: Row(
+
+child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     const Text("🎁", style: TextStyle(fontSize: 8)),
@@ -1101,8 +1199,7 @@ Positioned(
                       itemBuilder: (context, index) {
                         final item = _messages[index];
                         return Padding(
-
-padding: const EdgeInsets.symmetric(vertical: 3.0),
+                          padding: const EdgeInsets.symmetric(vertical: 3.0),
                           child: RichText(
                             text: TextSpan(
                               children: [
@@ -1144,7 +1241,8 @@ padding: const EdgeInsets.symmetric(vertical: 3.0),
                       ),
                       Expanded(
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 14),
+
+padding: const EdgeInsets.symmetric(horizontal: 14),
                           decoration: BoxDecoration(
                             color: Colors.white.withOpacity(0.08),
                             borderRadius: BorderRadius.circular(20),
@@ -1177,23 +1275,25 @@ padding: const EdgeInsets.symmetric(vertical: 3.0),
                 ),
               ],
             ),
-            if (_isShowingGiftAnim)
-              AnimatedBuilder(
-                animation: _giftFlyProgress,
-                builder: (context, child) {
-                  final t = _giftFlyProgress.value;
-                  final col = _animTargetSeatIndex % crossAxis;
-                  final row = _animTargetSeatIndex ~/ crossAxis;
 
-final targetX = _isGiftToAll ? (size.width * 0.5) : ((col + 0.5) * (size.width / crossAxis));
-                  final targetY = _isGiftToAll ? (size.height * 0.25) : (60.0 + (row * 65.0));
+            // Continuous Independent Flying Gifts
+            ..._activeFlyingGifts.map((gift) {
+              return AnimatedBuilder(
+                animation: gift.animation,
+                builder: (context, child) {
+                  final t = gift.animation.value;
+                  final col = gift.targetSeatIndex % crossAxis;
+                  final row = gift.targetSeatIndex ~/ crossAxis;
+
+                  final targetX = gift.isAll ? (size.width * 0.5) : ((col + 0.5) * (size.width / crossAxis));
+                  final targetY = gift.isAll ? (size.height * 0.25) : (60.0 + (row * 65.0));
 
                   final startX = size.width * 0.85;
                   final startY = size.height * 0.90;
 
                   final currentX = startX + (targetX - startX) * t;
                   final currentY = startY + (targetY - startY) * t;
-                  final scale = _isGiftToAll
+                  final scale = gift.isAll
                       ? (0.6 + 1.2 * (1.0 - (t - 0.5).abs() * 2))
                       : (0.5 + 0.9 * (1.0 - (t - 0.5).abs() * 2));
 
@@ -1201,11 +1301,11 @@ final targetX = _isGiftToAll ? (size.width * 0.5) : ((col + 0.5) * (size.width /
                     left: currentX - 40,
                     top: currentY - 40,
                     child: Opacity(
-                      opacity: (1.0 - t * 0.3).clamp(0.0, 1.0),
+                      opacity: (1.0 - t * 0.2).clamp(0.0, 1.0),
                       child: Transform.scale(
                         scale: scale.clamp(0.4, 2.0),
                         child: Image.asset(
-                          _activeGiftAsset,
+                          gift.asset,
                           width: 80,
                           height: 80,
                           fit: BoxFit.contain,
@@ -1215,7 +1315,62 @@ final targetX = _isGiftToAll ? (size.width * 0.5) : ((col + 0.5) * (size.width /
                     ),
                   );
                 },
+              );
+            }),
+
+            // Combo Burst Full-Screen Win Effect
+            if (_showBurstEffect)
+              Center(
+                child: AnimatedBuilder(
+                  animation: _burstAnimController,
+                  builder: (context, child) {
+                    final t = _burstAnimController.value;
+                    final scale = 1.0 + (sin(t * pi) * 0.8);
+                    final opacity = (1.0 - t).clamp(0.0, 1.0);
+
+return Opacity(
+                      opacity: opacity,
+                      child: Transform.scale(
+                        scale: scale,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 18),
+                          decoration: BoxDecoration(
+                            gradient: const RadialGradient(
+                              colors: [Color(0xFFFFD700), Color(0xFFFF1493), Colors.transparent],
+                              stops: [0.3, 0.7, 1.0],
+                            ),
+                            borderRadius: BorderRadius.circular(30),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFFFFD700).withOpacity(0.8),
+                                blurRadius: 30,
+                                spreadRadius: 10,
+                              ),
+                            ],
+                          ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Text("💥 LUCKY BURST! 💥", style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 22)),
+                              const SizedBox(height: 6),
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.monetization_on, color: Color(0xFFFFD700), size: 28),
+                                  const SizedBox(width: 6),
+                                  Text("+$_lastWonCoins", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 26)),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
               ),
+
+            // Combo Button
             if (_showComboButton)
               Positioned(
                 bottom: 65,
@@ -1255,7 +1410,8 @@ final targetX = _isGiftToAll ? (size.width * 0.5) : ((col + 0.5) * (size.width /
                               color: const Color(0xFFFF2A85).withOpacity(0.6),
                               blurRadius: 14,
                               spreadRadius: 2,
-                            ),
+
+),
                           ],
                         ),
                         child: Column(
