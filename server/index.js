@@ -22,7 +22,12 @@ const APP_CERTIFICATE = 'f612162b922c4dc4857cf5ab274c0108';
 app.get('/ping', (req, res) => {
   res.status(200).send('pong');
 });
-
+app.post('/auth/custom-token', (req, res) => {
+  res.status(200).json({
+    success: true,
+    token: "mock_guest_token_" + Date.now()
+  });
+});
 app.get('/rtcToken', (req, res) => {
   const channelName = req.query.channelName;
   const uid = parseInt(req.query.uid, 10);
