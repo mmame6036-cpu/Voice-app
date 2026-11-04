@@ -80,8 +80,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
   bool _isConnecting = true;
 
   int _myCoins = 0;
-  StreamSubscription<DocumentSnapshot>>? _walletSubscription;
-
+  StreamSubscription? _walletSubscription;
   final giftsList = [
     {"id": 1, "name": "Fragrant Flowers", "price": 100, "asset": "assets/images/lv3.png"},
     {"id": 2, "name": "Ice Cream", "price": 200, "asset": "assets/images/2.png"},
