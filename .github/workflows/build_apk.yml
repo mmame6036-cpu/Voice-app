@@ -48,19 +48,37 @@ jobs:
             exit 1
           fi
 
-          cat << 'EOF' > android/build.gradle.tmp
+          cat << 'EOF' > android/build.gradle
           buildscript {
               repositories {
                   google()
                   mavenCentral()
               }
               dependencies {
+                  classpath "com.android.tools.build:gradle:7.3.0"
                   classpath "com.google.gms:google-services:4.4.1"
               }
           }
+
+          allprojects {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+
+          rootProject.buildDir = '../build'
+          subprojects {
+              project.buildDir = "${rootProject.buildDir}/${project.name}"
+          }
+          subprojects {
+              project.evaluationDependsOn(':app')
+          }
+
+          tasks.register("clean", Delete) {
+              delete rootProject.buildDir
+          }
           EOF
-          cat android/build.gradle >> android/build.gradle.tmp
-          mv android/build.gradle.tmp android/build.gradle
 
           echo 'apply plugin: "com.google.gms.google-services"' >> android/app/build.gradle
 
@@ -69,6 +87,16 @@ jobs:
           mkdir -p ~/.gradle
           cat << 'EOF' > ~/.gradle/init.gradle
           allprojects {
+              buildscript {
+                  repositories {
+                      google()
+                      mavenCentral()
+                  }
+              }
+              repositories {
+                  google()
+                  mavenCentral()
+              }
               afterEvaluate { project ->
                   if (project.hasProperty("android")) {
                       android {
@@ -96,7 +124,7 @@ jobs:
       - name: Build Debug APK
         run: flutter build apk --debug
 
-      - name: Print Exact APK SHA Fingerprint
+- name: Print Exact APK SHA Fingerprint
         run: |
           keytool -printcert -jarfile build/app/outputs/flutter-apk/app-debug.apk
 
