@@ -26,14 +26,13 @@ class _WalletScreenState extends State<WalletScreen> {
   int _selectedPackageIdx = 0;
   late TextEditingController _userIdController;
   String _selectedCountry = "Ethiopia";
-  String _selectedMethod = "binance"; // "binance" or "telebirr"
+  String _selectedMethod = "binance";
   bool _isSeller = false;
   bool _isLoadingRole = true;
 
   final String _serverUrl = "https://nile-token-server.onrender.com";
 
-  // Standard Binance USDT Packages
-  final List> _binancePackages = [
+  static const _binancePackages = [
     {"coins": 70000, "price": "\$10", "usd": 10},
     {"coins": 210000, "price": "\$30", "usd": 30},
     {"coins": 350000, "price": "\$50", "usd": 50},
@@ -42,8 +41,7 @@ class _WalletScreenState extends State<WalletScreen> {
     {"coins": 3500000, "price": "\$500", "usd": 500},
   ];
 
-  // Coin Seller Telebirr Wholesale Packages
-  final List> _telebirrSellerPackages = [
+  static const _telebirrSellerPackages = [
     {"coins": 700000, "price": "1,000 ETB", "birr": 1000},
     {"coins": 2100000, "price": "3,000 ETB", "birr": 3000},
     {"coins": 3500000, "price": "5,000 ETB", "birr": 5000},
@@ -217,13 +215,15 @@ const SizedBox(height: 8),
                 color: const Color(0xFF005BAA).withOpacity(0.1),
                 borderRadius: BorderRadius.circular(6),
               ),
-              child: const Text("Authorized Coin Seller Portal",
-                  style: TextStyle(color: Color(0xFF005BAA), fontSize: 11, fontWeight: FontWeight.bold)),
+              child: const Text(
+                "Authorized Coin Seller Portal",
+                style: TextStyle(color: Color(0xFF005BAA), fontSize: 11, fontWeight: FontWeight.bold),
+              ),
             ),
             const SizedBox(height: 10),
-            Text("Seller Account ID: ${_userIdController.text}", style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.bold)),
 
-const SizedBox(height: 6),
+Text("Seller Account ID: ${_userIdController.text}", style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 6),
             Text("Wholesale Volume: 🪙 $coinsToAdd Coins", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
             const SizedBox(height: 4),
             Text("Total Settlement: $priceStr", style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 16)),
@@ -316,12 +316,12 @@ const SizedBox(height: 6),
                 padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
+
+children: [
                     const Text(
                       "User ID",
                       style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black87),
-
-),
+                    ),
                     const SizedBox(height: 8),
                     Container(
                       height: 48,
@@ -396,11 +396,11 @@ const SizedBox(height: 6),
                     if (_isSeller)
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                        decoration: BoxDecoration(
+
+decoration: BoxDecoration(
                           color: const Color(0xFFE3F2FD),
                           borderRadius: BorderRadius.circular(10),
-
-border: Border.all(color: const Color(0xFF90CAF9)),
+                          border: Border.all(color: const Color(0xFF90CAF9)),
                         ),
                         child: const Row(
                           children: [
@@ -451,7 +451,6 @@ border: Border.all(color: const Color(0xFF90CAF9)),
                     const SizedBox(height: 10),
                     Row(
                       children: [
-                        // Binance Method Button (Available to all)
                         Expanded(
                           child: GestureDetector(
                             onTap: () => setState(() {
@@ -476,10 +475,10 @@ border: Border.all(color: const Color(0xFF90CAF9)),
                                     height: 22,
                                     decoration: const BoxDecoration(
                                       color: Color(0xFFF3BA2F),
-                                      shape: BoxShape.circle,
-                                    ),
 
-child: const Center(
+shape: BoxShape.circle,
+                                    ),
+                                    child: const Center(
                                       child: Text(
                                         "B",
                                         style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 12),
@@ -498,7 +497,6 @@ child: const Center(
                         ),
                         if (_isSeller) ...[
                           const SizedBox(width: 10),
-                          // Telebirr Method Button (Available ONLY to Sellers)
                           Expanded(
                             child: GestureDetector(
                               onTap: () => setState(() {
