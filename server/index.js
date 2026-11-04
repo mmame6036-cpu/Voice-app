@@ -5,6 +5,7 @@ const cors = require('cors');
 const { RtcTokenBuilder, RtcRole } = require('agora-token');
 const { initializeApp, cert, getApps } = require('firebase-admin/app');
 const { getAuth } = require('firebase-admin/auth');
+const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const fs = require('fs');
 const path = require('path');
 
@@ -99,6 +100,52 @@ app.get('/health', (req, res) => {
   res.send('Server is running smoothly with Socket.io real-time engine');
 });
 
+// --- COIN SELLER TELEBIRR WEBHOOK ---
+app.post('/api/payment/telebirr-seller-webhook', async (req, res) => {
+  try {
+    const { sellerNumericId, amountBirr, telebirrTxnId } = req.body;
+
+    if (!sellerNumericId || !amountBirr) {
+      return res.status(400).json({ error: 'sellerNumericId and amountBirr are required' });
+    }
+
+    const firestore = getFirestore();
+    const usersRef = firestore.collection('users');
+    const sellerQuery = await usersRef.where('numericId', '==', parseInt(sellerNumericId, 10)).limit(1).get();
+
+    if (sellerQuery.empty) {
+      return res.status(404).json({ error: 'Seller account not found' });
+    }
+
+    const sellerDoc = sellerQuery.docs[0];
+    const sellerData = sellerDoc.data();
+
+    // Only accounts marked as seller are allowed
+    if (sellerData.role !== 'seller') {
+      return res.status(403).json({ error: 'Unauthorized: Only designated Coin Sellers can recharge via Telebirr' });
+    }
+
+    // Rate: 1 ETB = 700 Coins (Adjustable)
+    const coinsToAdd = Math.floor(amountBirr * 700);
+
+await sellerDoc.ref.update({
+      coins: FieldValue.increment(coinsToAdd),
+      lastRechargeMethod: 'Telebirr',
+      lastTxnId: telebirrTxnId || 'N/A',
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    return res.json({
+      success: true,
+      message: Recharged ${coinsToAdd} coins for seller ${sellerNumericId},
+      newCoinsAdded: coinsToAdd
+    });
+  } catch (error) {
+    console.error('Telebirr Seller Webhook Error:', error);
+    return res.status(500).json({ error: 'Internal server error processing Telebirr payment' });
+  }
+});
+
 // ==========================================
 // --- SOCKET.IO REAL-TIME LOGIC ---
 // ==========================================
@@ -140,7 +187,7 @@ io.on('connection', (socket) => {
   socket.on('seat_action', ({ roomId, seatIndex, userName, isLeaving }) => {
     if (!activeRooms[roomId]) return;
 
-if (isLeaving) {
+    if (isLeaving) {
       if (activeRooms[roomId].seats[seatIndex] === userName) {
         activeRooms[roomId].seats[seatIndex] = null;
       }
