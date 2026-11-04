@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/material.dart';
-import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:http/http.dart' as http;
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -141,13 +140,13 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
       }
     });
 
-_initWalletSync();
+    _initWalletSync();
     _loadRoomGiftsFromFirestore();
     _setupAgora();
     _connectSocket();
   }
 
-  void _initWalletSync() {
+void _initWalletSync() {
     _walletSubscription = FirebaseFirestore.instance
         .collection('users')
         .doc(widget.userUid)
@@ -248,6 +247,7 @@ _initWalletSync();
               _seats[i] = incomingSeats[i] as String?;
               if (_seats[i] == widget.userName) {
                 _mySeatIndex = i;
+                _agoraService.switchRole(isSpeaker: true);
               }
             }
           }
@@ -256,12 +256,27 @@ _initWalletSync();
 
       _socket!.on('seat_state_updated', (data) {
         if (!mounted || data == null) return;
+        final int index = (data['seatIndex'] as num).toInt();
+        final String? user = data['userName'] as String?;
+
         setState(() {
-          final List incomingSeats = data['seats'];
-          for (int i = 0; i < incomingSeats.length && i < 30; i++) {
-            _seats[i] = incomingSeats[i] as String?;
+          if (data['seats'] != null) {
+            final List incomingSeats = data['seats'];
+            for (int i = 0; i < incomingSeats.length && i < 30; i++) {
+              _seats[i] = incomingSeats[i] as String?;
+            }
+          } else {
+            _seats[index] = user;
           }
-          if (_mySeatIndex != null && _seats[_mySeatIndex!] != widget.userName) {
+
+          if (user == null) {
+            _speakingSeatIndices.remove(index);
+          }
+
+          if (user == widget.userName) {
+            _mySeatIndex = index;
+            _agoraService.switchRole(isSpeaker: true);
+          } else if (_mySeatIndex == index && user != widget.userName) {
             _mySeatIndex = null;
             _agoraService.switchRole(isSpeaker: false);
           }
@@ -269,7 +284,8 @@ _initWalletSync();
       });
 
       _socket!.on('gift_broadcast', (data) {
-        if (!mounted || data == null) return;
+
+if (!mounted || data == null) return;
         final isAll = data['isAll'] ?? false;
         final sender = data['senderName'] ?? "Someone";
         final giftName = data['giftName'] ?? "Gift";
@@ -277,7 +293,7 @@ _initWalletSync();
         final giftAsset = data['giftAsset'] ?? 'assets/images/lv3.png';
         final targetIndex = (data['targetSeatIndex'] as num?)?.toInt() ?? 0;
 
-setState(() {
+        setState(() {
           if (isAll) {
             for (int i = 0; i < _totalSeats; i++) {
               if (_seats[i] != null) {
@@ -288,6 +304,9 @@ setState(() {
             _seatGifts[targetIndex] += giftCost;
           }
         });
+
+        // ስጦታው ሲደርስ ወዲያውኑ ድምፅ ያሰማል
+        _playCoinSound();
 
         final msgText = isAll
             ? "$sender sent $giftName to All Mics!"
@@ -396,7 +415,7 @@ setState(() {
       curve: Curves.easeInOutCubic,
     );
 
-    final giftItem = FlyingGiftItem(
+final giftItem = FlyingGiftItem(
       id: "${DateTime.now().microsecondsSinceEpoch}_$targetSeatIndex",
       asset: asset,
       targetSeatIndex: targetSeatIndex,
@@ -419,58 +438,33 @@ setState(() {
     });
   }
 
-void _handleSeatTap(int index) async {
+  void _handleSeatTap(int index) async {
     if (_mySeatIndex == index) {
-      setState(() {
-        _seats[index] = null;
-        _mySeatIndex = null;
-        _speakingSeatIndices.remove(index);
-      });
       _socket?.emit('seat_action', {
         'roomId': widget.roomId,
         'seatIndex': index,
         'userName': widget.userName,
         'isLeaving': true,
       });
-      await _agoraService.switchRole(isSpeaker: false);
       return;
     }
 
-    if (_seats[index] == null) {
-      final status = await Permission.microphone.request();
-      if (!status.isGranted) return;
-
-      final previousSeat = _mySeatIndex;
-
-      setState(() {
-        if (previousSeat != null) {
-          _seats[previousSeat] = null;
-          _speakingSeatIndices.remove(previousSeat);
-        }
-        _seats[index] = widget.userName;
-        _mySeatIndex = index;
-        _isMuted = false;
-        _seatMutes[index] = false;
-      });
-
-      if (previousSeat != null) {
-        _socket?.emit('seat_action', {
-          'roomId': widget.roomId,
-          'seatIndex': previousSeat,
-          'userName': widget.userName,
-          'isLeaving': true,
-        });
-      }
-
-      _socket?.emit('seat_action', {
-        'roomId': widget.roomId,
-        'seatIndex': index,
-        'userName': widget.userName,
-        'isLeaving': false,
-      });
-
-      await _agoraService.switchRole(isSpeaker: true);
+    if (_seats[index] != null && _seats[index] != widget.userName) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("ይህ ወንበር ተይዟል")),
+      );
+      return;
     }
+
+    final status = await Permission.microphone.request();
+    if (!status.isGranted) return;
+
+    _socket?.emit('seat_action', {
+      'roomId': widget.roomId,
+      'seatIndex': index,
+      'userName': widget.userName,
+      'isLeaving': false,
+    });
   }
 
   void _toggleMute() {
@@ -488,9 +482,7 @@ void _handleSeatTap(int index) async {
     setState(() {
       _totalSeats = newCount;
       if (_mySeatIndex != null && _mySeatIndex! >= newCount) {
-        _seats[_mySeatIndex!] = null;
-        _mySeatIndex = null;
-        _agoraService.switchRole(isSpeaker: false);
+        _handleSeatTap(_mySeatIndex!);
       }
     });
   }
@@ -505,15 +497,6 @@ void _handleSeatTap(int index) async {
         'sender': widget.userName,
         'message': text,
       });
-    } else {
-      setState(() {
-        _messages.add(RoomChatMessage(
-          id: "${DateTime.now().microsecondsSinceEpoch}",
-          sender: widget.userName,
-          message: text,
-        ));
-      });
-      _scrollToBottom();
     }
     _chatController.clear();
   }
@@ -564,8 +547,6 @@ void _handleSeatTap(int index) async {
       _showFloatingBanner = true;
     });
 
-    _playCoinSound();
-
     FirebaseFirestore.instance
         .collection('users')
         .doc(widget.userUid)
@@ -579,7 +560,7 @@ void _handleSeatTap(int index) async {
       _x100BadgeController.forward();
     }
 
-_bannerTimer?.cancel();
+    _bannerTimer?.cancel();
     _bannerTimer = Timer(const Duration(seconds: 4), () {
       if (mounted) setState(() => _showFloatingBanner = false);
     });
@@ -598,7 +579,7 @@ _bannerTimer?.cancel();
       _triggerMilestoneReward(giftCost);
     }
 
-    _executeGiftSend(
+_executeGiftSend(
       null,
       targetSeat: config['targetSeat'],
       isAll: config['isAll'],
@@ -683,15 +664,15 @@ _bannerTimer?.cancel();
                                           children: [
                                             Container(
                                               width: 38,
-
-height: 38,
+                                              height: 38,
                                               decoration: BoxDecoration(
                                                 shape: BoxShape.circle,
                                                 gradient: const LinearGradient(
                                                   colors: [Color(0xFFE91E63), Color(0xFF9C27B0)],
                                                 ),
                                                 border: Border.all(
-                                                  color: isCurrent ? const Color(0xFFFFD700) : Colors.transparent,
+
+color: isCurrent ? const Color(0xFFFFD700) : Colors.transparent,
                                                   width: 2.2,
                                                 ),
                                               ),
@@ -753,8 +734,7 @@ height: 38,
                                   ),
                                 ),
                                 const SizedBox(height: 2),
-
-const Text("All Mics", style: TextStyle(color: Color(0xFFFFD700), fontSize: 9.5)),
+                                const Text("All Mics", style: TextStyle(color: Color(0xFFFFD700), fontSize: 9.5)),
                               ],
                             ),
                           ),
@@ -766,7 +746,8 @@ const Text("All Mics", style: TextStyle(color: Color(0xFFFFD700), fontSize: 9.5)
                   GridView.builder(
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
-                    itemCount: giftsList.length,
+
+itemCount: giftsList.length,
                     gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                       crossAxisCount: 4,
                       crossAxisSpacing: 10,
@@ -833,8 +814,7 @@ const Text("All Mics", style: TextStyle(color: Color(0xFFFFD700), fontSize: 9.5)
                       GestureDetector(
                         onTap: () async {
                           Navigator.pop(ctx);
-
-await Navigator.push(
+                          await Navigator.push(
                             context,
                             MaterialPageRoute(
                               builder: (context) => WalletScreen(
@@ -843,7 +823,8 @@ await Navigator.push(
                                 userNumericId: widget.userNumericId,
                                 onCoinsRecharged: (newBalance) {
                                   if (mounted) {
-                                    setState(() {
+
+setState(() {
                                       _myCoins = newBalance;
                                     });
                                   }
@@ -909,8 +890,7 @@ await Navigator.push(
                                   color: Colors.white,
                                   fontWeight: FontWeight.bold,
                                   fontSize: 13,
-
-),
+                                ),
                               ),
                               const SizedBox(width: 4),
                               const Icon(Icons.arrow_drop_up, color: Colors.white70, size: 18),
@@ -921,7 +901,8 @@ await Navigator.push(
                       const SizedBox(width: 10),
                       ElevatedButton(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFFFD700),
+
+backgroundColor: const Color(0xFFFFD700),
                           foregroundColor: Colors.black,
                           padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 10),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -1023,33 +1004,6 @@ await Navigator.push(
         'giftCost': totalCost,
         'giftAsset': asset,
       });
-    } else {
-      setState(() {
-        if (isAll) {
-          for (int i = 0; i < _totalSeats; i++) {
-            if (_seats[i] != null) _seatGifts[i] += totalCost;
-          }
-        } else {
-          _seatGifts[targetSeat!] += totalCost;
-        }
-      });
-
-      final msgText = isAll
-          ? "${widget.userName} sent $name x$multiplier to All Mics!"
-          : "${widget.userName} sent $name x$multiplier to Seat ${targetSeat! + 1}!";
-
-_addExpiringMessage(
-        RoomChatMessage(
-          id: "${DateTime.now().microsecondsSinceEpoch}_${widget.userName}",
-          sender: "System",
-          message: msgText,
-          isSystem: true,
-        ),
-        seconds: 4,
-      );
-
-      _saveRoomGiftsToFirestore();
-      _triggerGiftAnimation(asset, targetSeat ?? 0, isToAll: isAll);
     }
   }
 
@@ -1079,7 +1033,7 @@ _addExpiringMessage(
     final double seatDimension = _totalSeats > 20 ? 44.0 : 50.0;
     final size = MediaQuery.of(context).size;
 
-    return Scaffold(
+return Scaffold(
       backgroundColor: const Color(0xFF090614),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
@@ -1143,8 +1097,7 @@ _addExpiringMessage(
                         crossAxisCount: crossAxis,
                         mainAxisSpacing: 10,
                         crossAxisSpacing: 6,
-
-childAspectRatio: 0.68,
+                        childAspectRatio: 0.68,
                       ),
                       itemBuilder: (context, index) {
                         final occupier = _seats[index];
@@ -1166,7 +1119,8 @@ childAspectRatio: 0.68,
                                 alignment: Alignment.center,
                                 children: [
                                   if (isHostSeat && isOccupied)
-                                    Positioned(
+
+Positioned(
                                       top: -15,
                                       child: Image.asset('assets/images/lv3.png', width: 36, errorBuilder: (c, e, s) => const SizedBox.shrink()),
                                     ),
@@ -1208,8 +1162,7 @@ childAspectRatio: 0.68,
                                     },
                                   ),
                                   if (isOccupied)
-
-if (isCrownSeat)
+                                    if (isCrownSeat)
                                       Positioned.fill(
                                         child: IgnorePointer(
                                           child: Image.asset('assets/images/4.png', fit: BoxFit.contain, errorBuilder: (c, e, s) => const SizedBox.shrink()),
@@ -1226,7 +1179,8 @@ if (isCrownSeat)
                                       bottom: -2,
                                       right: -2,
                                       child: Container(
-                                        padding: const EdgeInsets.all(2.5),
+
+padding: const EdgeInsets.all(2.5),
                                         decoration: BoxDecoration(
                                           shape: BoxShape.circle,
                                           color: isMuted ? Colors.redAccent : const Color(0xFF00C9A7),
@@ -1273,8 +1227,7 @@ if (isCrownSeat)
                         );
                       },
                     ),
-
-),
+                  ),
                 ),
                 Expanded(
                   flex: 4,
@@ -1296,7 +1249,8 @@ if (isCrownSeat)
                           child: RichText(
                             text: TextSpan(
                               children: [
-                                TextSpan(
+
+TextSpan(
                                   text: item.isSystem ? "📢 ${item.sender}: " : "${item.sender}: ",
                                   style: TextStyle(
                                     color: item.isSystem ? const Color(0xFFFFD700) : const Color(0xFF00E5FF),
@@ -1349,8 +1303,7 @@ if (isCrownSeat)
                               border: InputBorder.none,
                               isDense: true,
                               contentPadding: EdgeInsets.symmetric(vertical: 10),
-
-),
+                            ),
                             onSubmitted: (_) => _sendMessage(),
                           ),
                         ),
@@ -1380,7 +1333,7 @@ if (isCrownSeat)
                   final targetX = gift.isAll ? (size.width * 0.5) : ((col + 0.5) * (size.width / crossAxis));
                   final targetY = gift.isAll ? (size.height * 0.25) : (60.0 + (row * 65.0));
 
-                  final startX = size.width * 0.85;
+final startX = size.width * 0.85;
                   final startY = size.height * 0.90;
 
                   final currentX = startX + (targetX - startX) * t;
@@ -1410,7 +1363,6 @@ if (isCrownSeat)
               );
             }),
 
-            // Floating Rebate Banner (Just like in the video)
             if (_showFloatingBanner && _lastSentGiftConfig != null)
               Positioned(
                 bottom: 120,
@@ -1436,8 +1388,7 @@ if (isCrownSeat)
                             BoxShadow(
                               color: const Color(0xFFFF2A85).withOpacity(0.5),
                               blurRadius: 10,
-
-offset: const Offset(0, 3),
+                              offset: const Offset(0, 3),
                             ),
                           ],
                         ),
@@ -1463,7 +1414,8 @@ offset: const Offset(0, 3),
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Text(
+
+Text(
                                     widget.userName,
                                     style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
                                     maxLines: 1,
@@ -1495,7 +1447,6 @@ offset: const Offset(0, 3),
                 ),
               ),
 
-            // x100 Giant Medal Badge (Burst center effect from video)
             if (_showX100Badge)
               Center(
                 child: AnimatedBuilder(
@@ -1516,8 +1467,7 @@ offset: const Offset(0, 3),
                             shape: BoxShape.circle,
                             gradient: const RadialGradient(
                               colors: [Color(0xFF00E5FF), Color(0xFF2979FF), Color(0xFF1A237E)],
-
-),
+                            ),
                             border: Border.all(color: const Color(0xFFFFD700), width: 6),
                             boxShadow: [
                               BoxShadow(
@@ -1543,7 +1493,8 @@ offset: const Offset(0, 3),
                                   ],
                                 ),
                               ),
-                              Container(
+
+Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 3),
                                 decoration: BoxDecoration(
                                   color: const Color(0xFFFFD700),
@@ -1563,7 +1514,6 @@ offset: const Offset(0, 3),
                 ),
               ),
 
-            // Combo Round Button
             if (_showComboButton)
               Positioned(
                 bottom: 65,
@@ -1601,8 +1551,7 @@ offset: const Offset(0, 3),
                           boxShadow: [
                             BoxShadow(
                               color: const Color(0xFFFF2A85).withOpacity(0.6),
-
-blurRadius: 14,
+                              blurRadius: 14,
                               spreadRadius: 2,
                             ),
                           ],
