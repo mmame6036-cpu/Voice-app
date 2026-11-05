@@ -602,10 +602,10 @@ void _onComboTapped() {
   }
 
   void _openGiftSheet() {
-    final List> seatedUsers = [];
+    final seatedList = [];
     for (int i = 0; i < _totalSeats; i++) {
       if (_seats[i] != null) {
-        seatedUsers.add({
+        seatedList.add({
           'seatIndex': i,
           'uid': _seats[i]!,
           'name': _seats[i]!,
@@ -620,7 +620,7 @@ void _onComboTapped() {
       isScrollControlled: true,
       builder: (ctx) => GiftDialog(
         roomId: widget.roomId,
-        activeUsers: seatedUsers,
+        activeUsers: seatedList,
         userCoins: _myCoins,
         onCoinsUpdated: (newCoins) {
           setState(() {
@@ -1021,8 +1021,6 @@ style: TextStyle(color: item.isSystem ? Colors.white70 : Colors.white, fontSize:
               ],
             ),
 
-            // Continuous 5s Rocket Banner
-
             // Combo Overlay with Central 5x Burst
             FloatingGiftComboOverlay(
               giftStream: _comboEventController.stream,
@@ -1043,13 +1041,12 @@ style: TextStyle(color: item.isSystem ? Colors.white70 : Colors.white, fontSize:
                   final startY = size.height * 0.90;
 
                   final currentX = startX + (targetX - startX) * t;
-
-final currentY = startY + (targetY - startY) * t;
+                  final currentY = startY + (targetY - startY) * t;
                   final scale = gift.isAll
                       ? (0.6 + 1.2 * (1.0 - (t - 0.5).abs() * 2))
                       : (0.5 + 0.9 * (1.0 - (t - 0.5).abs() * 2));
 
-                  return Positioned(
+return Positioned(
                     left: currentX - 40,
                     top: currentY - 40,
                     child: Opacity(
@@ -1124,13 +1121,13 @@ final currentY = startY + (targetY - startY) * t;
                                   Text(
                                     widget.userName,
                                     style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
-
-maxLines: 1,
+                                    maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                   Text(
                                     "Combo x$_comboCount Hits!",
-                                    style: const TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold, fontSize: 10),
+
+style: const TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold, fontSize: 10),
                                   ),
                                 ],
                               ),
@@ -1204,12 +1201,12 @@ maxLines: 1,
                                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 3),
                                 decoration: BoxDecoration(
                                   color: const Color(0xFFFFD700),
-
-borderRadius: BorderRadius.circular(14),
+                                  borderRadius: BorderRadius.circular(14),
                                 ),
                                 child: const Text(
                                   "MEGA WINNER",
-                                  style: TextStyle(color: Colors.black, fontWeight: FontWeight.w900, fontSize: 11),
+
+style: TextStyle(color: Colors.black, fontWeight: FontWeight.w900, fontSize: 11),
                                 ),
                               ),
                             ],
