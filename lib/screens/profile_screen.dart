@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
-// እውነተኛ ገጾች ማያያዣዎች
 import 'store_screen.dart';
 import 'invitation_screen.dart';
 import 'backpack_screen.dart';
@@ -30,12 +31,9 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  // ቋሚ መለያ ቁጥር
-  final String _userId = "1000";
-  String _userName = "User Name";
+  final User? _currentUser = FirebaseAuth.instance.currentUser;
   late int _coins;
 
-  // ቀለማት፡ ወርቃማ እና ኤመራልድ አረንጓዴ
   static const Color goldColor = Color(0xFFFFD700);
   static const Color emeraldColor = Color(0xFF00E676);
 
@@ -50,12 +48,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
     widget.onCoinsUpdated?.call(newAmount);
   }
 
-  void _copyId() {
-    Clipboard.setData(ClipboardData(text: _userId));
+  void _copyId(String displayId) {
+    Clipboard.setData(ClipboardData(text: displayId));
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text("ID 1000 Copied to clipboard"),
-        duration: Duration(seconds: 1),
+      SnackBar(
+        content: Text("ID $displayId copied to clipboard"),
+        duration: const Duration(seconds: 1),
       ),
     );
   }
@@ -71,6 +69,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final String uid = _currentUser?.uid ?? "";
+
     return Scaffold(
       backgroundColor: const Color(0xFF0F0E17),
       appBar: AppBar(
@@ -84,208 +84,226 @@ class _ProfileScreenState extends State<ProfileScreen> {
           IconButton(
             icon: const Icon(Icons.settings_outlined, color: Colors.white70),
             onPressed: () {
-              Navigator.push(context, MaterialPageRoute(builder: (_) => SettingsScreen()));
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen()));
             },
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        child: Column(
-          children: [
-            // 1. የፕሮፋይል ራስጌ (ምንም ውጫዊ ምስል የሌለው ንጹህ አቀማመጥ + ቋሚ ID 1000)
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: const Color(0xFF1E1B2E),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.white10),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 60,
-                    height: 60,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.06),
-                      shape: BoxShape.circle,
-                      border: Border.all(color: emeraldColor, width: 1.5),
-                    ),
-                    child: const Center(
-                      child: Icon(Icons.person, color: Colors.white38, size: 36),
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          _userName,
-                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+      body: StreamBuilder<DocumentSnapshot>(
+        stream: uid.isNotEmpty
+            ? FirebaseFirestore.instance.collection('users').doc(uid).snapshots()
+            : null,
+        builder: (context, snapshot) {
+          final userData = (snapshot.hasData && snapshot.data!.exists)
+              ? snapshot.data!.data() as Map<String, dynamic>
+              : <String, dynamic>{};
+
+          final String displayName = userData['name'] ??
+              userData['nickname'] ??
+              _currentUser?.displayName ??
+              "NILE Guest";
+
+          final String displayId = userData['numericId']?.toString() ??
+              (uid.length >= 6 ? uid.substring(0, 6).toUpperCase() : (uid.isEmpty ? "100000" : uid));
+
+          final int firestoreCoins = userData['coins'] ?? _coins;
+          final int userLevel = userData['level'] ?? 0;
+
+          return SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            child: Column(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1E1B2E),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.white10),
 
 ),
-                        const SizedBox(height: 6),
-                        GestureDetector(
-                          onTap: _copyId,
-                          child: Row(
-                            children: [
-                              Text(
-                                "ID: $_userId",
-                                style: const TextStyle(fontSize: 13, color: Colors.white70, fontWeight: FontWeight.w600),
-                              ),
-                              const SizedBox(width: 6),
-                              const Icon(Icons.copy, size: 13, color: emeraldColor),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        GestureDetector(
-                          onTap: () {
-                            Navigator.push(context, MaterialPageRoute(builder: (_) => const LevelScreen()));
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: goldColor.withOpacity(0.15),
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(color: goldColor.withOpacity(0.5)),
-                            ),
-                            child: const Text(
-                              "Lv.0 >",
-                              style: TextStyle(color: goldColor, fontSize: 10, fontWeight: FontWeight.bold),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 12),
-
-            // 2. የዋሌት እና ሳንቲም ባነር
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF2E2210), Color(0xFF1E1B2E)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: goldColor.withOpacity(0.3)),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Row(
+                  child: Row(
                     children: [
-                      const Icon(Icons.monetization_on, color: goldColor, size: 28),
-                      const SizedBox(width: 8),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text("Coins Balance", style: TextStyle(color: Colors.white54, fontSize: 11)),
-                          Text(
-                            "🪙 $_coins",
-                            style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
-                          ),
-                        ],
+                      Container(
+                        width: 60,
+                        height: 60,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.06),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: emeraldColor, width: 1.5),
+                        ),
+                        child: const Center(
+                          child: Icon(Icons.person, color: Colors.white38, size: 36),
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              displayName,
+                              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                            ),
+                            const SizedBox(height: 6),
+                            GestureDetector(
+                              onTap: () => _copyId(displayId),
+                              child: Row(
+                                children: [
+                                  Text(
+                                    "ID: $displayId",
+                                    style: const TextStyle(fontSize: 13, color: Colors.white70, fontWeight: FontWeight.w600),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  const Icon(Icons.copy, size: 13, color: emeraldColor),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            GestureDetector(
+                              onTap: () {
+                                Navigator.push(context, MaterialPageRoute(builder: (_) => const LevelScreen()));
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: goldColor.withOpacity(0.15),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: goldColor.withOpacity(0.5)),
+                                ),
+                                child: Text(
+                                  "Lv.$userLevel >",
+                                  style: const TextStyle(color: goldColor, fontSize: 10, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: goldColor,
-                      foregroundColor: Colors.black,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      elevation: 0,
+                ),
+
+                const SizedBox(height: 12),
+
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF2E2210), Color(0xFF1E1B2E)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
                     ),
-                    onPressed: () {
-                      Navigator.push(context, MaterialPageRoute(builder: (_) => const CoinSellerScreen()));
-                    },
-                    child: const Text("Recharge", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: goldColor.withOpacity(0.3)),
                   ),
-                ],
-              ),
-            ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
 
-const SizedBox(height: 16),
-
-            // 3. Entertainment & Assets (Store, Backpack, Invitation, Lucky Island)
-            _buildSectionCard(
-              "Entertainment & Assets",
-              [
-                _buildGridItem(Icons.storefront, "Store", goldColor, () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => StoreScreen(
-                        userCoins: _coins,
-                        onCoinsDeducted: _updateCoins,
+Row(
+                        children: [
+                          const Icon(Icons.monetization_on, color: goldColor, size: 28),
+                          const SizedBox(width: 8),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text("Coins Balance", style: TextStyle(color: Colors.white54, fontSize: 11)),
+                              Text(
+                                "🪙 $firestoreCoins",
+                                style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
-                    ),
-                  );
-                }),
-                _buildGridItem(Icons.backpack_outlined, "Backpack", goldColor, () {
-                  Navigator.push(context, MaterialPageRoute(builder: (_) => const BackpackScreen()));
-                }),
-                _buildGridItem(Icons.mail_outline, "Invitation", emeraldColor, () {
-                  Navigator.push(context, MaterialPageRoute(builder: (_) => const InvitationScreen()));
-                }),
-                _buildGridItem(Icons.sailing, "Lucky Island", emeraldColor, _openLuckyIsland),
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: goldColor,
+                          foregroundColor: Colors.black,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          elevation: 0,
+                        ),
+                        onPressed: () {
+                          Navigator.push(context, MaterialPageRoute(builder: (_) => const CoinSellerScreen()));
+                        },
+                        child: const Text("Recharge", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+
+                _buildSectionCard(
+                  "Entertainment & Assets",
+                  [
+                    _buildGridItem(Icons.storefront, "Store", goldColor, () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => StoreScreen(
+                            userCoins: firestoreCoins,
+                            onCoinsDeducted: _updateCoins,
+                          ),
+                        ),
+                      );
+                    }),
+                    _buildGridItem(Icons.backpack_outlined, "Backpack", goldColor, () {
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => const BackpackScreen()));
+                    }),
+                    _buildGridItem(Icons.mail_outline, "Invitation", emeraldColor, () {
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => const InvitationScreen()));
+                    }),
+                    _buildGridItem(Icons.sailing, "Lucky Island", emeraldColor, _openLuckyIsland),
+                  ],
+                ),
+
+                const SizedBox(height: 14),
+
+                _buildSectionCard(
+                  "Growth & Honor",
+                  [
+                    _buildGridItem(Icons.military_tech_outlined, "Level", goldColor, () {
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => const LevelScreen()));
+                    }),
+                    _buildGridItem(Icons.assignment_outlined, "Task Center", goldColor, () {
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => const TaskScreen()));
+                    }),
+                    _buildGridItem(Icons.shield_outlined, "Badges", emeraldColor, () {
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => const BadgeScreen()));
+                    }),
+                    _buildGridItem(Icons.headset_mic_outlined, "Support", emeraldColor, () {
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => const SupportScreen()));
+                    }),
+                  ],
+                ),
+
+                const SizedBox(height: 14),
+
+_buildSectionCard(
+                  "Creator & Business",
+                  [
+                    _buildGridItem(Icons.mic_none, "Host Center", goldColor, () {
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => const HostCenterScreen()));
+                    }),
+                    _buildGridItem(Icons.domain, "Agency", goldColor, () {
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => const AgencyScreen()));
+                    }),
+                    _buildGridItem(Icons.point_of_sale, "Coin Seller", emeraldColor, () {
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => const CoinSellerScreen()));
+                    }),
+                    _buildGridItem(Icons.settings_suggest_outlined, "Settings", emeraldColor, () {
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen()));
+                    }),
+                  ],
+                ),
+
+                const SizedBox(height: 24),
               ],
             ),
-
-            const SizedBox(height: 14),
-
-            // 4. Growth & Honor (Level, Task, Badge, Support)
-            _buildSectionCard(
-              "Growth & Honor",
-              [
-                _buildGridItem(Icons.military_tech_outlined, "Level", goldColor, () {
-                  Navigator.push(context, MaterialPageRoute(builder: (_) => const LevelScreen()));
-                }),
-                _buildGridItem(Icons.assignment_outlined, "Task Center", goldColor, () {
-                  Navigator.push(context, MaterialPageRoute(builder: (_) => const TaskScreen()));
-                }),
-                _buildGridItem(Icons.shield_outlined, "Badges", emeraldColor, () {
-                  Navigator.push(context, MaterialPageRoute(builder: (_) => const BadgeScreen()));
-                }),
-                _buildGridItem(Icons.headset_mic_outlined, "Support", emeraldColor, () {
-                  Navigator.push(context, MaterialPageRoute(builder: (_) => const SupportScreen()));
-                }),
-              ],
-            ),
-
-            const SizedBox(height: 14),
-
-            // 5. Creator & Business (Host Center, Agency, Coin Seller, Settings)
-            _buildSectionCard(
-              "Creator & Business",
-              [
-                _buildGridItem(Icons.mic_none, "Host Center", goldColor, () {
-                  Navigator.push(context, MaterialPageRoute(builder: (_) => const HostCenterScreen()));
-                }),
-                _buildGridItem(Icons.domain, "Agency", goldColor, () {
-                  Navigator.push(context, MaterialPageRoute(builder: (_) => const AgencyScreen()));
-                }),
-                _buildGridItem(Icons.point_of_sale, "Coin Seller", emeraldColor, () {
-                  Navigator.push(context, MaterialPageRoute(builder: (_) => const CoinSellerScreen()));
-                }),
-                _buildGridItem(Icons.settings_suggest_outlined, "Settings", emeraldColor, () {
-                  Navigator.push(context, MaterialPageRoute(builder: (_) => SettingsScreen()));
-                }),
-              ],
-            ),
-
-            const SizedBox(height: 24),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
@@ -302,8 +320,7 @@ const SizedBox(height: 16),
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-
-padding: const EdgeInsets.only(left: 6, bottom: 12),
+            padding: const EdgeInsets.only(left: 6, bottom: 12),
             child: Text(
               title,
               style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white54),
