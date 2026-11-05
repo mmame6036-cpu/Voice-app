@@ -20,7 +20,7 @@ class GiftItem {
 
 class GiftDialog extends StatefulWidget {
   final String roomId;
-  final List> activeUsers; // Up to 30 seated room members
+  final List> activeUsers;
   final int userCoins;
   final Function(int newCoins)? onCoinsUpdated;
 
@@ -50,7 +50,6 @@ class _GiftDialogState extends State<GiftDialog> {
   static const Color darkBg = Color(0xFF171524);
   static const Color cardBg = Color(0xFF1E1B2E);
 
-  // Gifts list including Lollipop and uploaded badge assets
   final List<GiftItem> _gifts = const [
     GiftItem(
       id: "lollipop",
@@ -98,7 +97,6 @@ class _GiftDialogState extends State<GiftDialog> {
     }
   }
 
-  // Toggle selection for all seats (up to 30 members)
   void _toggleSelectAll() {
     setState(() {
       if (_isAllSelected) {
@@ -117,7 +115,6 @@ class _GiftDialogState extends State<GiftDialog> {
     });
   }
 
-  // Toggle single user selection
   void _toggleUser(String uid) {
     setState(() {
       if (_selectedUserIds.contains(uid)) {
@@ -147,7 +144,7 @@ class _GiftDialogState extends State<GiftDialog> {
       return;
     }
 
-final totalCost = _calculateTotalPrice;
+    final totalCost = _calculateTotalPrice;
     if (_coins < totalCost) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Insufficient coins balance!")),
@@ -157,7 +154,7 @@ final totalCost = _calculateTotalPrice;
 
     setState(() => _isSending = true);
 
-    try {
+try {
       final selectedGift = _gifts[_selectedGiftIndex];
       final senderRef = FirebaseFirestore.instance.collection('users').doc(_currentUser!.uid);
       final roomRef = FirebaseFirestore.instance.collection('rooms').doc(widget.roomId);
@@ -170,10 +167,8 @@ final totalCost = _calculateTotalPrice;
           throw Exception("Insufficient balance.");
         }
 
-        // Deduct coins from sender
         transaction.update(senderRef, {'coins': FieldValue.increment(-totalCost)});
 
-        // Send value to each selected recipient
         final pointsPerRecipient = selectedGift.price;
         for (final recipientId in _selectedUserIds) {
           final recipientRef = FirebaseFirestore.instance.collection('users').doc(recipientId);
@@ -182,7 +177,6 @@ final totalCost = _calculateTotalPrice;
           });
         }
 
-        // Log gift event in room
         final eventRef = roomRef.collection('events').doc();
         transaction.set(eventRef, {
           'type': 'gift',
@@ -231,7 +225,6 @@ final totalCost = _calculateTotalPrice;
       ),
       child: Column(
         children: [
-          // Seats & Recipient Bar (Supports all 30 seats)
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: const BoxDecoration(
@@ -252,8 +245,7 @@ final totalCost = _calculateTotalPrice;
                       "All",
                       style: TextStyle(
                         color: _isAllSelected ? Colors.black : Colors.white,
-
-fontWeight: FontWeight.bold,
+                        fontWeight: FontWeight.bold,
                         fontSize: 12,
                       ),
                     ),
@@ -266,7 +258,8 @@ fontWeight: FontWeight.bold,
                     child: ListView.builder(
                       scrollDirection: Axis.horizontal,
                       itemCount: widget.activeUsers.length,
-                      itemBuilder: (context, index) {
+
+itemBuilder: (context, index) {
                         final user = widget.activeUsers[index];
                         final uid = (user['uid'] ?? "") as String;
                         final isSelected = _selectedUserIds.contains(uid);
@@ -317,8 +310,6 @@ fontWeight: FontWeight.bold,
               ],
             ),
           ),
-
-          // Gift Grid
           Expanded(
             child: GridView.builder(
               padding: const EdgeInsets.all(12),
@@ -335,8 +326,7 @@ fontWeight: FontWeight.bold,
 
                 return GestureDetector(
                   onTap: () => setState(() => _selectedGiftIndex = index),
-
-child: Container(
+                  child: Container(
                     decoration: BoxDecoration(
                       color: isSelected ? goldColor.withOpacity(0.15) : cardBg,
                       borderRadius: BorderRadius.circular(12),
@@ -347,7 +337,8 @@ child: Container(
                     ),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
+
+children: [
                         if (gift.imageAsset != null)
                           ClipRRect(
                             borderRadius: BorderRadius.circular(6),
@@ -378,8 +369,6 @@ child: Container(
               },
             ),
           ),
-
-          // Bottom Bar
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: const BoxDecoration(
@@ -425,8 +414,7 @@ child: Container(
                   child: _isSending
                       ? const SizedBox(
                           width: 16,
-
-height: 16,
+                          height: 16,
                           child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
                         )
                       : const Text("Send", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
