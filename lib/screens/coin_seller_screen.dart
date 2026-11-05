@@ -31,11 +31,11 @@ class _CoinSellerScreenState extends State<CoinSellerScreen>
   static const Color darkBg = Color(0xFF0D0A1C);
   static const Color cardBg = Color(0xFF171524);
 
-    final List> _rechargePackages = [
-    {"coins": 1980000, "price": "\$200 / 24,000 ETB", "tag": "Standard"},
-    {"coins": 9900000, "price": "\$1,000 / 120,000 ETB", "tag": "Standard"},
-    {"coins": 14850000, "price": "\$1,500 / 180,000 ETB", "tag": "Popular"},
-    {"coins": 30000000, "price": "\$3,000 / 360,000 ETB", "tag": "VIP Merchant"},
+    final _rechargePackages = [
+    {"coins": "1,980,000", "price": "\$200", "tag": "Standard"},
+    {"coins": "9,900,000", "price": "\$1,000", "tag": "Standard"},
+    {"coins": "14,850,000", "price": "\$1,500", "tag": "Popular"},
+    {"coins": "30,000,000", "price": "\$3,000", "tag": "VIP Merchant"},
   ];
 
   @override
