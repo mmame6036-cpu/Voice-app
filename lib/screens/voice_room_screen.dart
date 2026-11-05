@@ -1023,7 +1023,7 @@ style: TextStyle(color: item.isSystem ? Colors.white70 : Colors.white, fontSize:
             ),
 
             // Continuous 5s Rocket Banner
-            const ContinuousRocketBanner(isRunning: true),
+            ContinuousRocketBanner(isRunning: true),
 
             // Combo Overlay with Central 5x Burst
             FloatingGiftComboOverlay(
