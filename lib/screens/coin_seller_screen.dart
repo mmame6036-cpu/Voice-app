@@ -31,7 +31,7 @@ class _CoinSellerScreenState extends State<CoinSellerScreen>
   static const Color darkBg = Color(0xFF0D0A1C);
   static const Color cardBg = Color(0xFF171524);
 
-  final List> _rechargePackages = [
+    final List> _rechargePackages = [
     {"coins": 1980000, "price": "\$200 / 24,000 ETB", "tag": "Standard"},
     {"coins": 9900000, "price": "\$1,000 / 120,000 ETB", "tag": "Standard"},
     {"coins": 14850000, "price": "\$1,500 / 180,000 ETB", "tag": "Popular"},
@@ -733,7 +733,7 @@ Text("Binance Pay", style: TextStyle(color: goldColor, fontSize: 12, fontWeight:
                     children: [
                       Text("${pkg['coins']} Coins", style: const TextStyle(color: goldColor, fontWeight: FontWeight.bold, fontSize: 12)),
                       const SizedBox(height: 4),
-                      Text(pkg['price'], style: TextStyle(color: goldColor.withOpacity(0.7), fontSize: 10)),
+                      Text(pkg['price'].toString(), style: TextStyle(color: goldColor.withOpacity(0.7), fontSize: 10)),
                     ],
                   ),
                 ),
