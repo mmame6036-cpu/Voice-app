@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'services/auth_service.dart';
-import 'screens/auth_screen.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'screens/login_screen.dart';
 import 'screens/main_navigation.dart';
 
 void main() async {
@@ -70,7 +70,6 @@ class AuthWrapper extends StatefulWidget {
 }
 
 class _AuthWrapperState extends State<AuthWrapper> {
-  final AuthService _authService = AuthService();
   bool _isLoading = true;
   bool _isLoggedIn = false;
 
@@ -81,7 +80,7 @@ class _AuthWrapperState extends State<AuthWrapper> {
   }
 
   Future<void> _checkStatus() async {
-    final user = _authService.currentUser;
+    final user = FirebaseAuth.instance.currentUser;
     if (mounted) {
       setState(() {
         _isLoggedIn = user != null;
@@ -107,12 +106,6 @@ class _AuthWrapperState extends State<AuthWrapper> {
       return const MainNavigationScreen();
     }
 
-    return AuthScreen(
-      onLoginSuccess: () {
-        setState(() {
-          _isLoggedIn = true;
-        });
-      },
-    );
+    return const LoginScreen();
   }
 }
