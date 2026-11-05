@@ -1,4 +1,3 @@
-KEDER:
 import 'package:flutter/material.dart';
 
 class StoreItem {
@@ -18,7 +17,12 @@ class StoreItem {
 }
 
 class StoreScreen extends StatefulWidget {
-  const StoreScreen({super.key});
+  final int userCoins;
+
+  const StoreScreen({
+    super.key,
+    this.userCoins = 0,
+  });
 
   @override
   State<StoreScreen> createState() => _StoreScreenState();
@@ -59,6 +63,24 @@ class _StoreScreenState extends State<StoreScreen> {
         title: const Text('Store', style: TextStyle(color: Colors.white)),
         backgroundColor: const Color(0xFF1E1B2E),
         elevation: 0,
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 16),
+            child: Row(
+              children: [
+                const Icon(Icons.monetization_on, color: Color(0xFFFFD700), size: 18),
+                const SizedBox(width: 4),
+                Text(
+                  '${widget.userCoins}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
       body: Column(
         children: [
@@ -96,7 +118,8 @@ class _StoreScreenState extends State<StoreScreen> {
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 2,
                 childAspectRatio: 1.1,
-                crossAxisSpacing: 10,
+
+crossAxisSpacing: 10,
                 mainAxisSpacing: 10,
               ),
               itemCount: _filteredItems.length,
@@ -110,8 +133,7 @@ class _StoreScreenState extends State<StoreScreen> {
                   ),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
-
-children: [
+                    children: [
                       Text(item.icon, style: const TextStyle(fontSize: 36)),
                       const SizedBox(height: 8),
                       Text(
