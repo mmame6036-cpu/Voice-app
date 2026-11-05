@@ -19,8 +19,6 @@ dependencies:
   google_sign_in: ^6.2.1
   http: ^0.13.6
   socket_io_client: ^2.0.3+1
-  audioplayers: ^6.0.0
-  video_player: ^2.8.2
 
 dev_dependencies:
   flutter_test:
@@ -30,6 +28,4 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
-    - assets/
-    - assets/animation/
     - assets/images/
