@@ -20,7 +20,7 @@ class GiftItem {
 
 class GiftDialog extends StatefulWidget {
   final String roomId;
-  final List> activeUsers;
+  final dynamic activeUsers;
   final int userCoins;
   final Function(int newCoins)? onCoinsUpdated;
 
@@ -85,12 +85,20 @@ class _GiftDialogState extends State<GiftDialog> {
     GiftItem(id: "rocket", name: "Rocket", icon: "🚀", price: 5000),
   ];
 
+  List get _userList {
+    if (widget.activeUsers is List) {
+      return widget.activeUsers as List;
+    }
+    return [];
+  }
+
   @override
   void initState() {
     super.initState();
     _coins = widget.userCoins;
-    if (widget.activeUsers.isNotEmpty) {
-      final firstUid = widget.activeUsers.first['uid'] as String?;
+    if (_userList.isNotEmpty) {
+      final firstUser = _userList.first;
+      final firstUid = firstUser['uid']?.toString();
       if (firstUid != null && firstUid.isNotEmpty) {
         _selectedUserIds.add(firstUid);
       }
@@ -104,8 +112,8 @@ class _GiftDialogState extends State<GiftDialog> {
         _isAllSelected = false;
       } else {
         _selectedUserIds.clear();
-        for (final user in widget.activeUsers) {
-          final uid = user['uid'] as String?;
+        for (final user in _userList) {
+          final uid = user['uid']?.toString();
           if (uid != null && uid.isNotEmpty) {
             _selectedUserIds.add(uid);
           }
@@ -122,7 +130,7 @@ class _GiftDialogState extends State<GiftDialog> {
         _isAllSelected = false;
       } else {
         _selectedUserIds.add(uid);
-        if (_selectedUserIds.length == widget.activeUsers.length && widget.activeUsers.isNotEmpty) {
+        if (_selectedUserIds.length == _userList.length && _userList.isNotEmpty) {
           _isAllSelected = true;
         }
       }
@@ -144,7 +152,7 @@ class _GiftDialogState extends State<GiftDialog> {
       return;
     }
 
-    final totalCost = _calculateTotalPrice;
+final totalCost = _calculateTotalPrice;
     if (_coins < totalCost) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Insufficient coins balance!")),
@@ -154,7 +162,7 @@ class _GiftDialogState extends State<GiftDialog> {
 
     setState(() => _isSending = true);
 
-try {
+    try {
       final selectedGift = _gifts[_selectedGiftIndex];
       final senderRef = FirebaseFirestore.instance.collection('users').doc(_currentUser!.uid);
       final roomRef = FirebaseFirestore.instance.collection('rooms').doc(widget.roomId);
@@ -197,7 +205,7 @@ try {
       if (mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Sent ${selectedGift.name} to ${_selectedUserIds.length} users!")),
+          SnackBar(content: Text("Sent ${selectedGift.name} to${_selectedUserIds.length} users!")),
         );
       }
     } catch (e) {
@@ -251,16 +259,16 @@ try {
                     ),
                   ),
                 ),
-                const SizedBox(width: 8),
+
+const SizedBox(width: 8),
                 Expanded(
                   child: SizedBox(
                     height: 42,
                     child: ListView.builder(
                       scrollDirection: Axis.horizontal,
-                      itemCount: widget.activeUsers.length,
-
-itemBuilder: (context, index) {
-                        final user = widget.activeUsers[index];
+                      itemCount: _userList.length,
+                      itemBuilder: (context, index) {
+                        final user = _userList[index];
                         final uid = (user['uid'] ?? "") as String;
                         final isSelected = _selectedUserIds.contains(uid);
                         final seatNumber = user['seatIndex'] != null ? "${user['seatIndex'] + 1}" : "${index + 1}";
@@ -330,15 +338,15 @@ itemBuilder: (context, index) {
                     decoration: BoxDecoration(
                       color: isSelected ? goldColor.withOpacity(0.15) : cardBg,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
+
+border: Border.all(
                         color: isSelected ? goldColor : Colors.transparent,
                         width: 1.5,
                       ),
                     ),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
-
-children: [
+                      children: [
                         if (gift.imageAsset != null)
                           ClipRRect(
                             borderRadius: BorderRadius.circular(6),
