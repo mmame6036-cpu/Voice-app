@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class StoreScreen extends StatefulWidget {
   final int userCoins;
@@ -15,26 +17,33 @@ class StoreScreen extends StatefulWidget {
 }
 
 class _StoreScreenState extends State<StoreScreen> {
+  final User? _currentUser = FirebaseAuth.instance.currentUser;
   int _selectedCategoryIndex = 0;
   late int _coins;
+  bool _isPurchasing = false;
 
   static const Color goldColor = Color(0xFFFFD700);
   static const Color emeraldColor = Color(0xFF00E676);
+  static const Color darkBg = Color(0xFF0F0E17);
+  static const Color cardBg = Color(0xFF1E1B2E);
 
-  final List _categories = [
-    {"name": "Avatar Frame", "icon": Icons.account_circle_outlined, "color": Colors.amber},
-    {"name": "Entry Effect", "icon": Icons.auto_awesome, "color": Colors.purpleAccent},
-    {"name": "Chat Bubble", "icon": Icons.chat_bubble_outline, "color": Colors.blueAccent},
-    {"name": "Profile Card", "icon": Icons.badge_outlined, "color": Colors.teal},
+  final List> _categories = const [
+    {"name": "Avatar Frame", "type": "frame", "icon": Icons.account_circle_outlined},
+    {"name": "Entry Effect", "type": "ride", "icon": Icons.auto_awesome},
+    {"name": "Chat Bubble", "type": "bubble", "icon": Icons.chat_bubble_outline},
+    {"name": "Profile Card", "type": "card", "icon": Icons.badge_outlined},
   ];
 
-  final List _items = [
-    {"name": "Gold Dragon", "icon": "🐉", "price": 1000, "days": "30 Days"},
-    {"name": "Neon Crown", "icon": "👑", "price": 800, "days": "30 Days"},
-    {"name": "Cyber Wings", "icon": "🪽", "price": 1500, "days": "30 Days"},
-    {"name": "Supercar Red", "icon": "🏎️", "price": 3000, "days": "30 Days"},
-    {"name": "Golden Pegasus", "icon": "🦄", "price": 5000, "days": "30 Days"},
-    {"name": "Cyber Yacht", "icon": "🛥️", "price": 4000, "days": "30 Days"},
+  final List> _allItems = const [
+    {"id": "frame_dragon", "type": "frame", "name": "Gold Dragon", "icon": "🐉", "price": 1000, "days": 30},
+    {"id": "frame_crown", "type": "frame", "name": "Neon Crown", "icon": "👑", "price": 800, "days": 30},
+    {"id": "ride_wings", "type": "ride", "name": "Cyber Wings", "icon": "🪽", "price": 1500, "days": 30},
+    {"id": "ride_supercar", "type": "ride", "name": "Supercar Red", "icon": "🏎️", "price": 3000, "days": 30},
+    {"id": "ride_pegasus", "type": "ride", "name": "Golden Pegasus", "icon": "🦄", "price": 5000, "days": 30},
+    {"id": "ride_yacht", "type": "ride", "name": "Cyber Yacht", "icon": "🛥️", "price": 4000, "days": 30},
+    {"id": "bubble_fire", "type": "bubble", "name": "Flame Bubble", "icon": "🔥", "price": 1200, "days": 30},
+    {"id": "bubble_gold", "type": "bubble", "name": "Royal Gold", "icon": "✨", "price": 1800, "days": 30},
+    {"id": "card_nile", "type": "card", "name": "NILE Knight", "icon": "🛡️", "price": 2500, "days": 30},
   ];
 
   @override
@@ -43,8 +52,24 @@ class _StoreScreenState extends State<StoreScreen> {
     _coins = widget.userCoins;
   }
 
-  void _buyItem(Map<String, dynamic> item) {
-    final price = item["price"] as int;
+  List> get _filteredItems {
+    final selectedType = _categories[_selectedCategoryIndex]["type"] as String;
+    return _allItems.where((item) => item["type"] == selectedType).toList();
+  }
+
+  Future<void> _handlePurchase(Map<String, dynamic> item) async {
+    if (_currentUser == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please sign in to make a purchase.")),
+      );
+      return;
+    }
+
+    final int price = item["price"] as int;
+    final String itemId = item["id"] as String;
+    final String itemName = item["name"] as String;
+    final int validityDays = item["days"] as int;
+
     if (_coins < price) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Insufficient coins to purchase!")),
@@ -52,38 +77,112 @@ class _StoreScreenState extends State<StoreScreen> {
       return;
     }
 
+    setState(() => _isPurchasing = true);
+
+    try {
+      final userRef = FirebaseFirestore.instance.collection('users').doc(_currentUser!.uid);
+      final backpackRef = FirebaseFirestore.instance
+          .collection('users')
+          .doc(_currentUser!.uid)
+          .collection('backpack')
+          .doc(itemId);
+
+      await FirebaseFirestore.instance.runTransaction((transaction) async {
+        final userDoc = await transaction.get(userRef);
+        final currentCoins = (userDoc.data() as Map<String, dynamic>)['coins'] ?? 0;
+
+        if (currentCoins < price) {
+          throw Exception("Insufficient coins.");
+        }
+
+        final now = DateTime.now();
+        final expirationDate = now.add(Duration(days: validityDays));
+
+        transaction.update(userRef, {'coins': FieldValue.increment(-price)});
+
+transaction.set(backpackRef, {
+          'itemId': itemId,
+          'name': itemName,
+          'type': item['type'],
+          'icon': item['icon'],
+          'isEquipped': false,
+          'purchasedAt': FieldValue.serverTimestamp(),
+          'expiresAt': Timestamp.fromDate(expirationDate),
+        });
+      });
+
+      setState(() => _coins -= price);
+      widget.onCoinsDeducted?.call(_coins);
+
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Successfully purchased $itemName!")),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Purchase failed: $e")),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isPurchasing = false);
+      }
+    }
+  }
+
+  void _showConfirmDialog(Map<String, dynamic> item) {
+    final int price = item["price"] as int;
+    final int days = item["days"] as int;
+    final String name = item["name"] as String;
+
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1E1B2E),
-        title: Text("Buy ${item['name']}?", style: const TextStyle(color: Colors.white)),
-        content: Text("Cost: 🪙$price for ${item['days']}.", style: const TextStyle(color: Colors.white70)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text("Cancel", style: TextStyle(color: Colors.white60)),
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: cardBg,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Text(
+            "Buy $name?",
+            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
           ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: goldColor),
-            onPressed: () {
-              setState(() => _coins -= price);
-              widget.onCoinsDeducted?.call(_coins);
-              Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text("Successfully bought ${item['name']}!")),
-              );
-            },
-            child: const Text("Confirm", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+          content: Text(
+            "Cost: $price Coins for $days Days validity.",
+            style: const TextStyle(color: Colors.white70, fontSize: 13),
           ),
-        ],
+          actions: [
+            TextButton(
+              onPressed: _isPurchasing ? null : () => Navigator.pop(ctx),
+              child: const Text("Cancel", style: TextStyle(color: Colors.white60)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: goldColor,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              onPressed: _isPurchasing ? null : () => _handlePurchase(item),
+              child: _isPurchasing
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
+                    )
+                  : const Text("Confirm", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final String uid = _currentUser?.uid ?? "";
+
     return Scaffold(
-      backgroundColor: const Color(0xFF0F0E17),
+      backgroundColor: darkBg,
       appBar: AppBar(
         backgroundColor: const Color(0xFF171524),
         elevation: 0,
@@ -91,25 +190,43 @@ class _StoreScreenState extends State<StoreScreen> {
           icon: const Icon(Icons.arrow_back_ios, color: Colors.white, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text("VIP Mall & Store", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        title: const Text(
+          "VIP Mall & Store",
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 17),
+        ),
+        centerTitle: true,
         actions: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              children: [
-                const Icon(Icons.monetization_on, color: goldColor, size: 18),
-                const SizedBox(width: 4),
-                Text("$_coins", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-              ],
-            ),
-          ),
+          StreamBuilder<DocumentSnapshot>(
+            stream: uid.isNotEmpty
+                ? FirebaseFirestore.instance.collection('users').doc(uid).snapshots()
+                : null,
+            builder: (context, snapshot) {
+              if (snapshot.hasData && snapshot.data!.exists) {
+                final data = snapshot.data!.data() as Map<String, dynamic>;
+                _coins = data['coins'] ?? _coins;
+              }
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  children: [
 
-],
+const Icon(Icons.monetization_on, color: goldColor, size: 18),
+                    const SizedBox(width: 4),
+                    Text(
+                      "$_coins",
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ],
       ),
       body: Column(
         children: [
           Container(
-            height: 60,
+            height: 56,
             padding: const EdgeInsets.symmetric(vertical: 8),
             child: ListView.builder(
               scrollDirection: Axis.horizontal,
@@ -122,9 +239,9 @@ class _StoreScreenState extends State<StoreScreen> {
                   onTap: () => setState(() => _selectedCategoryIndex = index),
                   child: Container(
                     margin: const EdgeInsets.only(right: 10),
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                     decoration: BoxDecoration(
-                      color: isSelected ? emeraldColor.withOpacity(0.2) : const Color(0xFF1E1B2E),
+                      color: isSelected ? emeraldColor.withOpacity(0.2) : cardBg,
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(
                         color: isSelected ? emeraldColor : Colors.white12,
@@ -132,7 +249,7 @@ class _StoreScreenState extends State<StoreScreen> {
                     ),
                     child: Row(
                       children: [
-                        Icon(cat["icon"] as IconData, color: isSelected ? emeraldColor : Colors.white54, size: 18),
+                        Icon(cat["icon"] as IconData, color: isSelected ? emeraldColor : Colors.white54, size: 16),
                         const SizedBox(width: 6),
                         Text(
                           cat["name"] as String,
@@ -150,53 +267,64 @@ class _StoreScreenState extends State<StoreScreen> {
             ),
           ),
           Expanded(
-            child: GridView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: _items.length,
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                mainAxisSpacing: 14,
-                crossAxisSpacing: 14,
-                childAspectRatio: 0.85,
-              ),
-              itemBuilder: (context, idx) {
-                final itm = _items[idx];
-                return Container(
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1E1B2E),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.white12),
-                  ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(itm["icon"] as String, style: const TextStyle(fontSize: 48)),
-                      const SizedBox(height: 8),
-                      Text(
-                        itm["name"] as String,
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
-                      ),
-                      Text(
-                        itm["days"] as String,
-                        style: const TextStyle(color: Colors.white54, fontSize: 11),
-                      ),
-                      const SizedBox(height: 8),
-                      ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: goldColor,
-                          foregroundColor: Colors.black,
-                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            child: _filteredItems.isEmpty
+                ? const Center(
+                    child: Text(
+                      "No items available in this category yet.",
+                      style: TextStyle(color: Colors.white38, fontSize: 13),
+                    ),
+                  )
+                : GridView.builder(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: _filteredItems.length,
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2,
+                      mainAxisSpacing: 14,
+                      crossAxisSpacing: 14,
+                      childAspectRatio: 0.85,
+                    ),
+                    itemBuilder: (context, idx) {
+                      final itm = _filteredItems[idx];
+                      return Container(
+                        decoration: BoxDecoration(
+                          color: cardBg,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: Colors.white12),
+                        ),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(itm["icon"] as String, style: const TextStyle(fontSize: 44)),
+                            const SizedBox(height: 8),
+                            Text(
 
-),
-                        onPressed: () => _buyItem(itm),
-                        child: Text("🪙 ${itm['price']}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
-                      ),
-                    ],
+itm["name"] as String,
+                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              "${itm['days']} Days",
+                              style: const TextStyle(color: Colors.white54, fontSize: 11),
+                            ),
+                            const SizedBox(height: 10),
+                            ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: goldColor,
+                                foregroundColor: Colors.black,
+                                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                              ),
+                              onPressed: () => _showConfirmDialog(itm),
+                              child: Text(
+                                "🪙 ${itm['price']}",
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
                   ),
-                );
-              },
-            ),
           ),
         ],
       ),
