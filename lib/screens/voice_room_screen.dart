@@ -8,6 +8,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'package:audioplayers/audioplayers.dart';
 import '../services/agora_service.dart';
+import '../widgets/continuous_rocket_banner.dart';
+import '../widgets/gift_dialog.dart';
+import '../widgets/floating_gift_combo.dart';
 import 'wallet_screen.dart';
 
 class RoomChatMessage {
@@ -69,6 +72,8 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
   final AgoraService _agoraService = AgoraService();
   IO.Socket? _socket;
   final AudioPlayer _audioPlayer = AudioPlayer();
+  final StreamController<GiftSendEvent> _comboEventController =
+      StreamController<GiftSendEvent>.broadcast();
 
   bool _isMuted = false;
   int? _mySeatIndex;
@@ -80,12 +85,6 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
 
   int _myCoins = 0;
   StreamSubscription? _walletSubscription;
-  final giftsList = [
-    {"id": 1, "name": "Fragrant Flowers", "price": 100, "asset": "assets/images/lv3.png"},
-    {"id": 2, "name": "Ice Cream", "price": 200, "asset": "assets/images/2.png"},
-    {"id": 3, "name": "Perfume Bottle", "price": 300, "asset": "assets/images/1.png"},
-    {"id": 4, "name": "Pink Sports Car", "price": 500, "asset": "assets/images/4.png"},
-  ];
 
   late AnimationController _waveController;
   final List<FlyingGiftItem> _activeFlyingGifts = [];
@@ -166,7 +165,10 @@ void _initWalletSync() {
   void _playCoinSound() {
     try {
       _audioPlayer.stop();
-      _audioPlayer.play(AssetSource('sounds/five-win.mp3'), mode: PlayerMode.lowLatency);
+      _audioPlayer.play(
+        AssetSource('sounds/five-win.mp3'),
+        mode: PlayerMode.lowLatency,
+      );
     } catch (_) {}
   }
 
@@ -283,15 +285,15 @@ void _initWalletSync() {
         });
       });
 
-      _socket!.on('gift_broadcast', (data) {
-
-if (!mounted || data == null) return;
+_socket!.on('gift_broadcast', (data) {
+        if (!mounted || data == null) return;
         final isAll = data['isAll'] ?? false;
         final sender = data['senderName'] ?? "Someone";
         final giftName = data['giftName'] ?? "Gift";
         final giftCost = (data['giftCost'] as num?)?.toInt() ?? 0;
-        final giftAsset = data['giftAsset'] ?? 'assets/images/lv3.png';
+        final giftAsset = data['giftAsset'] ?? 'assets/images/wikimediaimages-candy-2201920.jpg';
         final targetIndex = (data['targetSeatIndex'] as num?)?.toInt() ?? 0;
+        final combo = (data['comboCount'] as num?)?.toInt() ?? 1;
 
         setState(() {
           if (isAll) {
@@ -305,7 +307,6 @@ if (!mounted || data == null) return;
           }
         });
 
-        // ስጦታው ሲደርስ ወዲያውኑ ድምፅ ያሰማል
         _playCoinSound();
 
         final msgText = isAll
@@ -321,6 +322,14 @@ if (!mounted || data == null) return;
           ),
           seconds: 4,
         );
+
+        _comboEventController.add(GiftSendEvent(
+          senderName: sender,
+          targetName: isAll ? "All Mics" : "Seat ${targetIndex + 1}",
+          giftName: giftName,
+          giftIcon: "🎁",
+          comboCount: combo,
+        ));
 
         _saveRoomGiftsToFirestore();
         _triggerGiftAnimation(giftAsset.toString(), targetIndex, isToAll: isAll);
@@ -404,7 +413,7 @@ if (!mounted || data == null) return;
     if (mounted) setState(() => _isConnecting = false);
   }
 
-  void _triggerGiftAnimation(String asset, int targetSeatIndex, {bool isToAll = false}) {
+void _triggerGiftAnimation(String asset, int targetSeatIndex, {bool isToAll = false}) {
     final controller = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1100),
@@ -415,7 +424,7 @@ if (!mounted || data == null) return;
       curve: Curves.easeInOutCubic,
     );
 
-final giftItem = FlyingGiftItem(
+    final giftItem = FlyingGiftItem(
       id: "${DateTime.now().microsecondsSinceEpoch}_$targetSeatIndex",
       asset: asset,
       targetSeatIndex: targetSeatIndex,
@@ -451,7 +460,7 @@ final giftItem = FlyingGiftItem(
 
     if (_seats[index] != null && _seats[index] != widget.userName) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("ይህ ወንበር ተይዟል")),
+        const SnackBar(content: Text("Seat occupied")),
       );
       return;
     }
@@ -566,7 +575,7 @@ final giftItem = FlyingGiftItem(
     });
   }
 
-  void _onComboTapped() {
+void _onComboTapped() {
     if (_lastSentGiftConfig == null) return;
     setState(() {
       _comboCount += 1;
@@ -579,7 +588,7 @@ final giftItem = FlyingGiftItem(
       _triggerMilestoneReward(giftCost);
     }
 
-_executeGiftSend(
+    _executeGiftSend(
       null,
       targetSeat: config['targetSeat'],
       isAll: config['isAll'],
@@ -594,348 +603,42 @@ _executeGiftSend(
   }
 
   void _openGiftSheet() {
-    int? selectedSeatIndex;
-    bool isAllSelected = false;
-    int selectedMultiplier = 1;
-    final List<int> multipliers = [1, 3, 7, 10, 30, 50, 77, 100];
-    int selectedGiftId = 1;
-
-    final currentSeatedUsers = [];
+    final List> seatedUsers = [];
     for (int i = 0; i < _totalSeats; i++) {
       if (_seats[i] != null) {
-        currentSeatedUsers.add({
+        seatedUsers.add({
           'seatIndex': i,
+          'uid': _seats[i]!,
           'name': _seats[i]!,
+          'avatar': '',
         });
       }
     }
 
-    if (currentSeatedUsers.isNotEmpty) {
-      selectedSeatIndex = currentSeatedUsers.first['seatIndex'] as int;
-    }
-
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF140F2D),
+      backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      builder: (ctx) => GiftDialog(
+        roomId: widget.roomId,
+        activeUsers: seatedUsers,
+        userCoins: _myCoins,
+        onCoinsUpdated: (newCoins) {
+          setState(() {
+            _myCoins = newCoins;
+            _comboCount += 1;
+            _showComboButton = true;
+          });
+          _startComboTimer();
+          _comboEventController.add(GiftSendEvent(
+            senderName: widget.userName,
+            targetName: "Room Members",
+            giftName: "Lollipop",
+            giftIcon: "🍭",
+            comboCount: _comboCount,
+          ));
+        },
       ),
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (context, setSheetState) {
-            final activeGift = giftsList.firstWhere((g) => g['id'] == selectedGiftId);
-
-            return Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  SizedBox(
-                    height: 60,
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: currentSeatedUsers.isEmpty
-                              ? const Center(
-                                  child: Text(
-                                    "No users seated",
-                                    style: TextStyle(color: Colors.white54, fontSize: 12),
-                                  ),
-                                )
-                              : ListView(
-                                  scrollDirection: Axis.horizontal,
-                                  children: currentSeatedUsers.map((user) {
-                                    final isCurrent = !isAllSelected && selectedSeatIndex == user['seatIndex'];
-                                    final seatNum = (user['seatIndex'] as int) + 1;
-                                    final userName = user['name'] as String;
-                                    final initial = userName.isNotEmpty ? userName[0].toUpperCase() : "U";
-
-                                    return GestureDetector(
-                                      onTap: () {
-                                        setSheetState(() {
-                                          isAllSelected = false;
-                                          selectedSeatIndex = user['seatIndex'] as int;
-                                        });
-                                      },
-                                      child: Container(
-                                        margin: const EdgeInsets.only(right: 12),
-                                        child: Column(
-                                          children: [
-                                            Container(
-                                              width: 38,
-                                              height: 38,
-                                              decoration: BoxDecoration(
-                                                shape: BoxShape.circle,
-                                                gradient: const LinearGradient(
-                                                  colors: [Color(0xFFE91E63), Color(0xFF9C27B0)],
-                                                ),
-                                                border: Border.all(
-
-color: isCurrent ? const Color(0xFFFFD700) : Colors.transparent,
-                                                  width: 2.2,
-                                                ),
-                                              ),
-                                              child: Center(
-                                                child: Text(
-                                                  initial,
-                                                  style: const TextStyle(
-                                                    color: Colors.white,
-                                                    fontWeight: FontWeight.bold,
-                                                    fontSize: 16,
-                                                  ),
-                                                ),
-                                              ),
-                                            ),
-                                            const SizedBox(height: 2),
-                                            Text(
-                                              "No.$seatNum",
-                                              style: const TextStyle(color: Colors.white60, fontSize: 10),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    );
-                                  }).toList(),
-                                ),
-                        ),
-                        GestureDetector(
-                          onTap: () {
-                            setSheetState(() {
-                              isAllSelected = true;
-                              selectedSeatIndex = null;
-                            });
-                          },
-                          child: Container(
-                            width: 44,
-                            margin: const EdgeInsets.only(left: 6),
-                            child: Column(
-                              children: [
-                                Container(
-                                  width: 38,
-                                  height: 38,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: const Color(0xFFFFD700),
-                                    border: Border.all(
-                                      color: isAllSelected ? Colors.white : Colors.transparent,
-                                      width: 2.2,
-                                    ),
-                                  ),
-                                  child: const Center(
-                                    child: Text(
-                                      "All",
-                                      style: TextStyle(
-                                        color: Colors.black,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 14,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(height: 2),
-                                const Text("All Mics", style: TextStyle(color: Color(0xFFFFD700), fontSize: 9.5)),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const Divider(color: Colors.white12, height: 16),
-                  GridView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-
-itemCount: giftsList.length,
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 4,
-                      crossAxisSpacing: 10,
-                      mainAxisSpacing: 10,
-                      childAspectRatio: 0.82,
-                    ),
-                    itemBuilder: (context, index) {
-                      final item = giftsList[index];
-                      final isSelected = item['id'] == selectedGiftId;
-
-                      return GestureDetector(
-                        onTap: () => setSheetState(() => selectedGiftId = item['id'] as int),
-                        child: Container(
-                          padding: const EdgeInsets.all(6),
-                          decoration: BoxDecoration(
-                            color: isSelected ? const Color(0xFF28204D) : Colors.white.withOpacity(0.04),
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(
-                              color: isSelected ? const Color(0xFFFFD700) : Colors.transparent,
-                              width: 1.5,
-                            ),
-                          ),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Image.asset(
-                                item['asset'] as String,
-                                height: 42,
-                                fit: BoxFit.contain,
-                                errorBuilder: (c, e, s) =>
-                                    const Icon(Icons.card_giftcard, color: Color(0xFFFFD700), size: 30),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                item['name'] as String,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  const Icon(Icons.monetization_on, color: Color(0xFFFFD700), size: 10),
-                                  const SizedBox(width: 2),
-                                  Text(
-                                    "${item['price']}",
-                                    style: const TextStyle(color: Color(0xFFFFD700), fontSize: 10),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 14),
-                  Row(
-                    children: [
-                      GestureDetector(
-                        onTap: () async {
-                          Navigator.pop(ctx);
-                          await Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => WalletScreen(
-                                currentCoins: _myCoins,
-                                userUid: widget.userUid,
-                                userNumericId: widget.userNumericId,
-                                onCoinsRecharged: (newBalance) {
-                                  if (mounted) {
-
-setState(() {
-                                      _myCoins = newBalance;
-                                    });
-                                  }
-                                },
-                              ),
-                            ),
-                          );
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.08),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: const Color(0xFFFFD700), width: 1),
-                          ),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.monetization_on, color: Color(0xFFFFD700), size: 18),
-                              const SizedBox(width: 4),
-                              Text(
-                                "$_myCoins",
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 13,
-                                ),
-                              ),
-                              const SizedBox(width: 4),
-                              const Icon(Icons.add_circle, color: Color(0xFFFFD700), size: 16),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const Spacer(),
-                      PopupMenuButton<int>(
-                        color: const Color(0xFF241C48),
-                        initialValue: selectedMultiplier,
-                        onSelected: (val) => setSheetState(() => selectedMultiplier = val),
-                        itemBuilder: (context) => multipliers
-                            .map((m) => PopupMenuItem<int>(
-                                  value: m,
-                                  child: Text(
-                                    "$m",
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ))
-                            .toList(),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.08),
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: Colors.white24),
-                          ),
-                          child: Row(
-                            children: [
-                              Text(
-                                "$selectedMultiplier",
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 13,
-                                ),
-                              ),
-                              const SizedBox(width: 4),
-                              const Icon(Icons.arrow_drop_up, color: Colors.white70, size: 18),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-
-backgroundColor: const Color(0xFFFFD700),
-                          foregroundColor: Colors.black,
-                          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 10),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                        ),
-                        onPressed: () {
-                          if (!isAllSelected && selectedSeatIndex == null) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text("Please select a seat or tap 'All'")),
-                            );
-                            return;
-                          }
-
-                          Navigator.pop(ctx);
-                          _executeGiftSend(
-                            ctx,
-                            targetSeat: selectedSeatIndex,
-                            isAll: isAllSelected,
-                            cost: activeGift['price'] as int,
-                            multiplier: selectedMultiplier,
-                            name: activeGift['name'] as String,
-                            asset: activeGift['asset'] as String,
-                          );
-                        },
-                        child: const Text("Send", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
     );
   }
 
@@ -994,6 +697,14 @@ backgroundColor: const Color(0xFFFFD700),
 
     _startComboTimer();
 
+    _comboEventController.add(GiftSendEvent(
+      senderName: widget.userName,
+      targetName: isAll ? "All Mics" : "Seat ${(targetSeat ?? 0) + 1}",
+      giftName: name,
+      giftIcon: "🎁",
+      comboCount: _comboCount,
+    ));
+
     if (_socket != null && _socket!.connected) {
       _socket!.emit('send_gift', {
         'roomId': widget.roomId,
@@ -1003,12 +714,14 @@ backgroundColor: const Color(0xFFFFD700),
         'giftName': "$name x$multiplier",
         'giftCost': totalCost,
         'giftAsset': asset,
+        'comboCount': _comboCount,
       });
     }
   }
 
   @override
   void dispose() {
+    _comboEventController.close();
     _walletSubscription?.cancel();
     _waveController.dispose();
     _comboRingController.dispose();
@@ -1027,13 +740,13 @@ backgroundColor: const Color(0xFFFFD700),
     super.dispose();
   }
 
-  @override
+@override
   Widget build(BuildContext context) {
     final int crossAxis = _totalSeats <= 12 ? 4 : (_totalSeats <= 20 ? 5 : 6);
     final double seatDimension = _totalSeats > 20 ? 44.0 : 50.0;
     final size = MediaQuery.of(context).size;
 
-return Scaffold(
+    return Scaffold(
       backgroundColor: const Color(0xFF090614),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
@@ -1115,19 +828,19 @@ return Scaffold(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Stack(
-                                clipBehavior: Clip.none,
+
+clipBehavior: Clip.none,
                                 alignment: Alignment.center,
                                 children: [
                                   if (isHostSeat && isOccupied)
-
-Positioned(
+                                    Positioned(
                                       top: -15,
-                                      child: Image.asset('assets/images/lv3.png', width: 36, errorBuilder: (c, e, s) => const SizedBox.shrink()),
+                                      child: Image.asset('assets/images/wikimediaimages-candy-2201920.jpg', width: 36, errorBuilder: (c, e, s) => const SizedBox.shrink()),
                                     ),
                                   if (isCrownSeat && isOccupied)
                                     Positioned(
                                       top: -14,
-                                      child: Image.asset('assets/images/2.png', width: 28, errorBuilder: (c, e, s) => const SizedBox.shrink()),
+                                      child: Image.asset('assets/images/weekly_lovers_heart_value.webp', width: 28, errorBuilder: (c, e, s) => const SizedBox.shrink()),
                                     ),
                                   AnimatedBuilder(
                                     animation: _waveController,
@@ -1162,25 +875,11 @@ Positioned(
                                     },
                                   ),
                                   if (isOccupied)
-                                    if (isCrownSeat)
-                                      Positioned.fill(
-                                        child: IgnorePointer(
-                                          child: Image.asset('assets/images/4.png', fit: BoxFit.contain, errorBuilder: (c, e, s) => const SizedBox.shrink()),
-                                        ),
-                                      )
-                                    else if (!isHostSeat)
-                                      Positioned.fill(
-                                        child: IgnorePointer(
-                                          child: Image.asset('assets/images/1.png', fit: BoxFit.contain, errorBuilder: (c, e, s) => const SizedBox.shrink()),
-                                        ),
-                                      ),
-                                  if (isOccupied)
                                     Positioned(
                                       bottom: -2,
                                       right: -2,
                                       child: Container(
-
-padding: const EdgeInsets.all(2.5),
+                                        padding: const EdgeInsets.all(2.5),
                                         decoration: BoxDecoration(
                                           shape: BoxShape.circle,
                                           color: isMuted ? Colors.redAccent : const Color(0xFF00C9A7),
@@ -1189,7 +888,8 @@ padding: const EdgeInsets.all(2.5),
                                       ),
                                     ),
                                 ],
-                              ),
+
+),
                               const SizedBox(height: 4),
                               Text(
                                 isOccupied ? occupier : "${index + 1}",
@@ -1249,8 +949,7 @@ padding: const EdgeInsets.all(2.5),
                           child: RichText(
                             text: TextSpan(
                               children: [
-
-TextSpan(
+                                TextSpan(
                                   text: item.isSystem ? "📢 ${item.sender}: " : "${item.sender}: ",
                                   style: TextStyle(
                                     color: item.isSystem ? const Color(0xFFFFD700) : const Color(0xFF00E5FF),
@@ -1260,7 +959,8 @@ TextSpan(
                                 ),
                                 TextSpan(
                                   text: item.message,
-                                  style: TextStyle(color: item.isSystem ? Colors.white70 : Colors.white, fontSize: 12),
+
+style: TextStyle(color: item.isSystem ? Colors.white70 : Colors.white, fontSize: 12),
                                 ),
                               ],
                             ),
@@ -1322,6 +1022,14 @@ TextSpan(
               ],
             ),
 
+            // Continuous 5s Rocket Banner
+            const ContinuousRocketBanner(isRunning: true),
+
+            // Combo Overlay with Central 5x Burst
+            FloatingGiftComboOverlay(
+              giftStream: _comboEventController.stream,
+            ),
+
             ..._activeFlyingGifts.map((gift) {
               return AnimatedBuilder(
                 animation: gift.animation,
@@ -1333,11 +1041,12 @@ TextSpan(
                   final targetX = gift.isAll ? (size.width * 0.5) : ((col + 0.5) * (size.width / crossAxis));
                   final targetY = gift.isAll ? (size.height * 0.25) : (60.0 + (row * 65.0));
 
-final startX = size.width * 0.85;
+                  final startX = size.width * 0.85;
                   final startY = size.height * 0.90;
 
                   final currentX = startX + (targetX - startX) * t;
-                  final currentY = startY + (targetY - startY) * t;
+
+final currentY = startY + (targetY - startY) * t;
                   final scale = gift.isAll
                       ? (0.6 + 1.2 * (1.0 - (t - 0.5).abs() * 2))
                       : (0.5 + 0.9 * (1.0 - (t - 0.5).abs() * 2));
@@ -1414,11 +1123,11 @@ final startX = size.width * 0.85;
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-
-Text(
+                                  Text(
                                     widget.userName,
                                     style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
-                                    maxLines: 1,
+
+maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                   Text(
@@ -1493,12 +1202,12 @@ Text(
                                   ],
                                 ),
                               ),
-
-Container(
+                              Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 3),
                                 decoration: BoxDecoration(
                                   color: const Color(0xFFFFD700),
-                                  borderRadius: BorderRadius.circular(14),
+
+borderRadius: BorderRadius.circular(14),
                                 ),
                                 child: const Text(
                                   "MEGA WINNER",
