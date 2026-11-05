@@ -8,7 +8,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'package:audioplayers/audioplayers.dart';
 import '../services/agora_service.dart';
-import '../widgets/continuous_rocket_banner.dart';
 import '../widgets/gift_dialog.dart';
 import '../widgets/floating_gift_combo.dart';
 import 'wallet_screen.dart';
@@ -1023,7 +1022,6 @@ style: TextStyle(color: item.isSystem ? Colors.white70 : Colors.white, fontSize:
             ),
 
             // Continuous 5s Rocket Banner
-            ContinuousRocketBanner(isRunning: true),
 
             // Combo Overlay with Central 5x Burst
             FloatingGiftComboOverlay(
