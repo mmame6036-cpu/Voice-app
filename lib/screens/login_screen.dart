@@ -45,7 +45,7 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  // ፈጣን የእንግዳ መግቢያ (Quick Guest Entry - ቀጥታ በ Firebase Auth ይገባል)
+  // ፈጣን የእንግዳ መግቢያ (ቀጥታ በ Firebase Anonymous ይገባል)
   Future<void> _handleGuestLogin() async {
     setState(() {
       _isLoading = true;
@@ -282,7 +282,6 @@ textColor: const Color(0xFFFFD700),
               style: TextStyle(
                 color: textColor,
                 fontSize: 14,
-                fontWeight: FontWeight.bold,
               ),
             ),
           ],
