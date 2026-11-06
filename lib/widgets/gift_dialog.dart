@@ -7,14 +7,28 @@ class GiftItem {
   final String name;
   final String icon;
   final int price;
-  final String? imageAsset;
+  final String imageAsset;
 
   const GiftItem({
     required this.id,
     required this.name,
     required this.icon,
     required this.price,
-    this.imageAsset,
+    required this.imageAsset,
+  });
+}
+
+class GiftSendResult {
+  final GiftItem gift;
+  final List<int> targetSeatIndices;
+  final bool isAll;
+  final int totalCost;
+
+  GiftSendResult({
+    required this.gift,
+    required this.targetSeatIndices,
+    required this.isAll,
+    required this.totalCost,
   });
 }
 
@@ -41,7 +55,7 @@ class _GiftDialogState extends State<GiftDialog> {
   late int _coins;
   bool _isSending = false;
 
-  final Set<String> _selectedUserIds = {};
+  final Set<int> _selectedSeatIndices = {};
   bool _isAllSelected = false;
 
   int _selectedGiftIndex = 0;
@@ -79,10 +93,34 @@ class _GiftDialogState extends State<GiftDialog> {
       price: 100,
       imageAsset: "assets/images/wealth_03.webp",
     ),
-    GiftItem(id: "rose", name: "Rose", icon: "🌹", price: 10),
-    GiftItem(id: "perfume", name: "Perfume", icon: "🧴", price: 200),
-    GiftItem(id: "diamond", name: "Diamond", icon: "💎", price: 1000),
-    GiftItem(id: "rocket", name: "Rocket", icon: "🚀", price: 5000),
+    GiftItem(
+      id: "rose",
+      name: "Rose",
+      icon: "🌹",
+      price: 10,
+      imageAsset: "assets/images/wikimediaimages-candy-2201920.jpg",
+    ),
+    GiftItem(
+      id: "perfume",
+      name: "Perfume",
+      icon: "🧴",
+      price: 200,
+      imageAsset: "assets/images/charm_07.webp",
+    ),
+    GiftItem(
+      id: "diamond",
+      name: "Diamond",
+      icon: "💎",
+      price: 1000,
+      imageAsset: "assets/images/wealth_03.webp",
+    ),
+    GiftItem(
+      id: "rocket",
+      name: "Rocket",
+      icon: "🚀",
+      price: 5000,
+      imageAsset: "assets/images/weekly_lovers_heart_value.webp",
+    ),
   ];
 
   List get _userList {
@@ -96,11 +134,11 @@ class _GiftDialogState extends State<GiftDialog> {
   void initState() {
     super.initState();
     _coins = widget.userCoins;
-    if (_userList.isNotEmpty) {
-      final firstUser = _userList.first;
-      final firstUid = firstUser['uid']?.toString();
-      if (firstUid != null && firstUid.isNotEmpty) {
-        _selectedUserIds.add(firstUid);
+    for (final u in _userList) {
+      final sIdx = u['seatIndex'] as int?;
+      if (sIdx != null) {
+        _selectedSeatIndices.add(sIdx);
+        break;
       }
     }
   }
@@ -108,14 +146,14 @@ class _GiftDialogState extends State<GiftDialog> {
   void _toggleSelectAll() {
     setState(() {
       if (_isAllSelected) {
-        _selectedUserIds.clear();
+        _selectedSeatIndices.clear();
         _isAllSelected = false;
       } else {
-        _selectedUserIds.clear();
+        _selectedSeatIndices.clear();
         for (final user in _userList) {
-          final uid = user['uid']?.toString();
-          if (uid != null && uid.isNotEmpty) {
-            _selectedUserIds.add(uid);
+          final sIdx = user['seatIndex'] as int?;
+          if (sIdx != null) {
+            _selectedSeatIndices.add(sIdx);
           }
         }
         _isAllSelected = true;
@@ -123,36 +161,36 @@ class _GiftDialogState extends State<GiftDialog> {
     });
   }
 
-  void _toggleUser(String uid) {
+  void _toggleSeat(int seatIndex) {
     setState(() {
-      if (_selectedUserIds.contains(uid)) {
-        _selectedUserIds.remove(uid);
+      if (_selectedSeatIndices.contains(seatIndex)) {
+        _selectedSeatIndices.remove(seatIndex);
         _isAllSelected = false;
       } else {
-        _selectedUserIds.add(uid);
-        if (_selectedUserIds.length == _userList.length && _userList.isNotEmpty) {
+        _selectedSeatIndices.add(seatIndex);
+        if (_selectedSeatIndices.length == _userList.length && _userList.isNotEmpty) {
           _isAllSelected = true;
         }
       }
     });
   }
 
-  int get _calculateTotalPrice {
-    if (_selectedUserIds.isEmpty) return 0;
+int get _calculateTotalPrice {
+    if (_selectedSeatIndices.isEmpty) return 0;
     final unitPrice = _gifts[_selectedGiftIndex].price;
-    return unitPrice * _selectedUserIds.length;
+    return unitPrice * _selectedSeatIndices.length;
   }
 
   Future<void> _sendGift() async {
     if (_currentUser == null) return;
-    if (_selectedUserIds.isEmpty) {
+    if (_selectedSeatIndices.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Please select at least one recipient.")),
+        const SnackBar(content: Text("Please select at least one seat or All")),
       );
       return;
     }
 
-final totalCost = _calculateTotalPrice;
+    final totalCost = _calculateTotalPrice;
     if (_coins < totalCost) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Insufficient coins balance!")),
@@ -167,22 +205,26 @@ final totalCost = _calculateTotalPrice;
       final senderRef = FirebaseFirestore.instance.collection('users').doc(_currentUser!.uid);
       final roomRef = FirebaseFirestore.instance.collection('rooms').doc(widget.roomId);
 
-      // Deduct coins from sender safely
       await senderRef.set({
         'coins': FieldValue.increment(-totalCost),
       }, SetOptions(merge: true));
 
-      // Add diamonds to all selected recipients safely
       final pointsPerRecipient = selectedGift.price;
-      for (final recipientId in _selectedUserIds) {
-        if (recipientId.isNotEmpty) {
-          await FirebaseFirestore.instance.collection('users').doc(recipientId).set({
-            'diamonds': FieldValue.increment(pointsPerRecipient),
-          }, SetOptions(merge: true));
+      for (final sIndex in _selectedSeatIndices) {
+        final occupant = _userList.firstWhere(
+          (u) => u['seatIndex'] == sIndex,
+          orElse: () => null,
+        );
+        if (occupant != null) {
+          final uid = occupant['uid']?.toString() ?? "";
+          if (uid.isNotEmpty) {
+            await FirebaseFirestore.instance.collection('users').doc(uid).set({
+              'diamonds': FieldValue.increment(pointsPerRecipient),
+            }, SetOptions(merge: true));
+          }
         }
       }
 
-      // Log gift event in room history
       await roomRef.collection('events').add({
         'type': 'gift',
         'senderId': _currentUser!.uid,
@@ -190,7 +232,7 @@ final totalCost = _calculateTotalPrice;
         'giftName': selectedGift.name,
         'giftIcon': selectedGift.icon,
         'imageAsset': selectedGift.imageAsset,
-        'recipients': _selectedUserIds.toList(),
+        'seats': _selectedSeatIndices.toList(),
         'totalCost': totalCost,
         'createdAt': FieldValue.serverTimestamp(),
       });
@@ -199,9 +241,14 @@ final totalCost = _calculateTotalPrice;
       widget.onCoinsUpdated?.call(_coins);
 
       if (mounted) {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Sent ${selectedGift.name} to ${_selectedUserIds.length} users!")),
+        Navigator.pop(
+          context,
+          GiftSendResult(
+            gift: selectedGift,
+            targetSeatIndices: _selectedSeatIndices.toList(),
+            isAll: _isAllSelected,
+            totalCost: totalCost,
+          ),
         );
       }
     } catch (e) {
@@ -222,15 +269,16 @@ final totalCost = _calculateTotalPrice;
     final totalCost = _calculateTotalPrice;
 
     return Container(
-      height: 480,
+      height: 490,
       decoration: const BoxDecoration(
         color: darkBg,
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       child: Column(
         children: [
+          // 30 Seats horizontal ribbon with "All" button
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: const BoxDecoration(
               border: Border(bottom: BorderSide(color: Colors.white10)),
             ),
@@ -239,18 +287,19 @@ final totalCost = _calculateTotalPrice;
                 GestureDetector(
                   onTap: _toggleSelectAll,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     decoration: BoxDecoration(
                       color: _isAllSelected ? goldColor : cardBg,
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(color: _isAllSelected ? goldColor : Colors.white24),
-                    ),
+
+),
                     child: Text(
-                      "All",
+                      "All Mics",
                       style: TextStyle(
                         color: _isAllSelected ? Colors.black : Colors.white,
                         fontWeight: FontWeight.bold,
-                        fontSize: 12,
+                        fontSize: 11,
                       ),
                     ),
                   ),
@@ -258,50 +307,71 @@ final totalCost = _calculateTotalPrice;
                 const SizedBox(width: 8),
                 Expanded(
                   child: SizedBox(
-                    height: 42,
+                    height: 52,
                     child: ListView.builder(
                       scrollDirection: Axis.horizontal,
-
-itemCount: _userList.length,
+                      itemCount: 30, // 30 Seats ordered
                       itemBuilder: (context, index) {
-                        final user = _userList[index];
-                        final uid = (user['uid'] ?? "") as String;
-                        final isSelected = _selectedUserIds.contains(uid);
-                        final seatNumber = user['seatIndex'] != null ? "${user['seatIndex'] + 1}" : "${index + 1}";
+                        final seatIndex = index;
+                        final seatNum = seatIndex + 1;
+                        final occupant = _userList.firstWhere(
+                          (u) => u['seatIndex'] == seatIndex,
+                          orElse: () => null,
+                        );
+
+                        final isOccupied = occupant != null;
+                        final isSelected = _selectedSeatIndices.contains(seatIndex);
 
                         return GestureDetector(
-                          onTap: () => _toggleUser(uid),
+                          onTap: isOccupied ? () => _toggleSeat(seatIndex) : null,
                           child: Container(
                             margin: const EdgeInsets.only(right: 8),
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                             decoration: BoxDecoration(
-                              color: isSelected ? goldColor.withOpacity(0.2) : cardBg,
-                              borderRadius: BorderRadius.circular(20),
+                              color: isSelected
+                                  ? goldColor.withOpacity(0.2)
+                                  : (isOccupied ? cardBg : Colors.white.withOpacity(0.03)),
+                              borderRadius: BorderRadius.circular(16),
                               border: Border.all(
-                                color: isSelected ? goldColor : Colors.white12,
+                                color: isSelected
+                                    ? goldColor
+                                    : (isOccupied ? Colors.white24 : Colors.transparent),
                                 width: isSelected ? 1.5 : 1.0,
                               ),
                             ),
-                            child: Row(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                CircleAvatar(
-                                  radius: 12,
-                                  backgroundColor: Colors.white24,
-                                  backgroundImage: user['avatar'] != null && user['avatar'] != ""
-                                      ? NetworkImage(user['avatar'])
-                                      : null,
-                                  child: (user['avatar'] == null || user['avatar'] == "")
-                                      ? Text(seatNumber, style: const TextStyle(fontSize: 10, color: Colors.white))
-                                      : null,
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.person,
+                                      size: 14,
+                                      color: isSelected
+                                          ? goldColor
+                                          : (isOccupied ? Colors.white : Colors.white24),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      "Seat $seatNum",
+                                      style: TextStyle(
+                                        color: isSelected ? goldColor : Colors.white70,
+                                        fontSize: 10,
+                                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                                const SizedBox(width: 6),
                                 Text(
-                                  user['name'] ?? 'Seat $seatNumber',
+                                  isOccupied ? (occupant['name'] ?? "User") : "Empty",
                                   style: TextStyle(
-                                    color: isSelected ? goldColor : Colors.white70,
-                                    fontSize: 11,
-                                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                                  ),
+                                    color: isOccupied ? Colors.white54 : Colors.white24,
+                                    fontSize: 8.5,
+
+),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ],
                             ),
@@ -314,6 +384,8 @@ itemCount: _userList.length,
               ],
             ),
           ),
+
+          // Gift Grid
           Expanded(
             child: GridView.builder(
               padding: const EdgeInsets.all(12),
@@ -339,28 +411,28 @@ itemCount: _userList.length,
                         width: 1.5,
                       ),
                     ),
-
-child: Column(
+                    child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        if (gift.imageAsset != null)
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(6),
-                            child: Image.asset(
-                              gift.imageAsset!,
-                              width: 34,
-                              height: 34,
-                              fit: BoxFit.cover,
-                              errorBuilder: (ctx, err, stack) =>
-                                  Text(gift.icon, style: const TextStyle(fontSize: 28)),
-                            ),
-                          )
-                        else
-                          Text(gift.icon, style: const TextStyle(fontSize: 28)),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(6),
+                          child: Image.asset(
+                            gift.imageAsset,
+                            width: 36,
+                            height: 36,
+                            fit: BoxFit.cover,
+                            errorBuilder: (ctx, err, stack) =>
+                                Text(gift.icon, style: const TextStyle(fontSize: 28)),
+                          ),
+                        ),
                         const SizedBox(height: 4),
                         Text(
                           gift.name,
-                          style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                         Text(
                           "🪙 ${gift.price}",
@@ -373,6 +445,8 @@ child: Column(
               },
             ),
           ),
+
+          // Bottom Send bar
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: const BoxDecoration(
@@ -387,21 +461,30 @@ child: Column(
                     const SizedBox(width: 4),
                     Text(
                       "$_coins",
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                      ),
                     ),
                   ],
                 ),
                 const Spacer(),
                 Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
+
+crossAxisAlignment: CrossAxisAlignment.end,
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
                       "Total: 🪙 $totalCost",
-                      style: const TextStyle(color: goldColor, fontWeight: FontWeight.bold, fontSize: 13),
+                      style: const TextStyle(
+                        color: goldColor,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                      ),
                     ),
                     Text(
-                      "${_selectedUserIds.length} selected",
+                      "${_selectedSeatIndices.length} seats",
                       style: const TextStyle(color: Colors.white54, fontSize: 10),
                     ),
                   ],
