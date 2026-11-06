@@ -167,36 +167,32 @@ final totalCost = _calculateTotalPrice;
       final senderRef = FirebaseFirestore.instance.collection('users').doc(_currentUser!.uid);
       final roomRef = FirebaseFirestore.instance.collection('rooms').doc(widget.roomId);
 
-      await FirebaseFirestore.instance.runTransaction((transaction) async {
-        final senderDoc = await transaction.get(senderRef);
-        final currentBalance = (senderDoc.data() as Map<String, dynamic>?)?['coins'] ?? 0;
+      // Deduct coins from sender safely
+      await senderRef.set({
+        'coins': FieldValue.increment(-totalCost),
+      }, SetOptions(merge: true));
 
-        if (currentBalance < totalCost) {
-          throw Exception("Insufficient balance.");
-        }
-
-        transaction.update(senderRef, {'coins': FieldValue.increment(-totalCost)});
-
-        final pointsPerRecipient = selectedGift.price;
-        for (final recipientId in _selectedUserIds) {
-          final recipientRef = FirebaseFirestore.instance.collection('users').doc(recipientId);
-          transaction.update(recipientRef, {
+      // Add diamonds to all selected recipients safely
+      final pointsPerRecipient = selectedGift.price;
+      for (final recipientId in _selectedUserIds) {
+        if (recipientId.isNotEmpty) {
+          await FirebaseFirestore.instance.collection('users').doc(recipientId).set({
             'diamonds': FieldValue.increment(pointsPerRecipient),
-          });
+          }, SetOptions(merge: true));
         }
+      }
 
-        final eventRef = roomRef.collection('events').doc();
-        transaction.set(eventRef, {
-          'type': 'gift',
-          'senderId': _currentUser!.uid,
-          'giftId': selectedGift.id,
-          'giftName': selectedGift.name,
-          'giftIcon': selectedGift.icon,
-          'imageAsset': selectedGift.imageAsset,
-          'recipients': _selectedUserIds.toList(),
-          'totalCost': totalCost,
-          'createdAt': FieldValue.serverTimestamp(),
-        });
+      // Log gift event in room history
+      await roomRef.collection('events').add({
+        'type': 'gift',
+        'senderId': _currentUser!.uid,
+        'giftId': selectedGift.id,
+        'giftName': selectedGift.name,
+        'giftIcon': selectedGift.icon,
+        'imageAsset': selectedGift.imageAsset,
+        'recipients': _selectedUserIds.toList(),
+        'totalCost': totalCost,
+        'createdAt': FieldValue.serverTimestamp(),
       });
 
       setState(() => _coins -= totalCost);
@@ -205,13 +201,13 @@ final totalCost = _calculateTotalPrice;
       if (mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Sent ${selectedGift.name} to${_selectedUserIds.length} users!")),
+          SnackBar(content: Text("Sent ${selectedGift.name} to ${_selectedUserIds.length} users!")),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Transaction failed: $e")),
+          SnackBar(content: Text("Sending failed: $e")),
         );
       }
     } finally {
@@ -259,14 +255,14 @@ final totalCost = _calculateTotalPrice;
                     ),
                   ),
                 ),
-
-const SizedBox(width: 8),
+                const SizedBox(width: 8),
                 Expanded(
                   child: SizedBox(
                     height: 42,
                     child: ListView.builder(
                       scrollDirection: Axis.horizontal,
-                      itemCount: _userList.length,
+
+itemCount: _userList.length,
                       itemBuilder: (context, index) {
                         final user = _userList[index];
                         final uid = (user['uid'] ?? "") as String;
@@ -338,13 +334,13 @@ const SizedBox(width: 8),
                     decoration: BoxDecoration(
                       color: isSelected ? goldColor.withOpacity(0.15) : cardBg,
                       borderRadius: BorderRadius.circular(12),
-
-border: Border.all(
+                      border: Border.all(
                         color: isSelected ? goldColor : Colors.transparent,
                         width: 1.5,
                       ),
                     ),
-                    child: Column(
+
+child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         if (gift.imageAsset != null)
