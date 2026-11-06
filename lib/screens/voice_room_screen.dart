@@ -110,6 +110,10 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
 
   final String _serverUrl = "https://nile-token-server.onrender.com";
 
+  // 5-second rotating rocket banner state
+  int _currentRocketLevel = 1;
+  Timer? _rocketBannerTimer;
+
   @override
   void initState() {
     super.initState();
@@ -138,13 +142,25 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
       }
     });
 
+    _startRocketBannerRotation();
     _initWalletSync();
     _loadRoomGiftsFromFirestore();
     _setupAgora();
     _connectSocket();
   }
 
-void _initWalletSync() {
+void _startRocketBannerRotation() {
+    _rocketBannerTimer?.cancel();
+    _rocketBannerTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
+      if (mounted) {
+        setState(() {
+          _currentRocketLevel = (_currentRocketLevel % 5) + 1;
+        });
+      }
+    });
+  }
+
+  void _initWalletSync() {
     _walletSubscription = FirebaseFirestore.instance
         .collection('users')
         .doc(widget.userUid)
@@ -275,7 +291,8 @@ void _initWalletSync() {
           }
 
           if (user == widget.userName) {
-            _mySeatIndex = index;
+
+_mySeatIndex = index;
             _agoraService.switchRole(isSpeaker: true);
           } else if (_mySeatIndex == index && user != widget.userName) {
             _mySeatIndex = null;
@@ -284,25 +301,37 @@ void _initWalletSync() {
         });
       });
 
-_socket!.on('gift_broadcast', (data) {
+      _socket!.on('gift_broadcast', (data) {
         if (!mounted || data == null) return;
         final isAll = data['isAll'] ?? false;
         final sender = data['senderName'] ?? "Someone";
         final giftName = data['giftName'] ?? "Gift";
         final giftCost = (data['giftCost'] as num?)?.toInt() ?? 0;
         final giftAsset = data['giftAsset'] ?? 'assets/images/wikimediaimages-candy-2201920.jpg';
-        final targetIndex = (data['targetSeatIndex'] as num?)?.toInt() ?? 0;
         final combo = (data['comboCount'] as num?)?.toInt() ?? 1;
+
+        final List targets = (data['targetSeats'] as List?) ?? [];
+        final targetIndex = (data['targetSeatIndex'] as num?)?.toInt() ?? 0;
 
         setState(() {
           if (isAll) {
             for (int i = 0; i < _totalSeats; i++) {
               if (_seats[i] != null) {
                 _seatGifts[i] += giftCost;
+                _triggerGiftAnimation(giftAsset.toString(), i, isToAll: true);
+              }
+            }
+          } else if (targets.isNotEmpty) {
+            for (var t in targets) {
+              final idx = (t as num).toInt();
+              if (idx >= 0 && idx < 30) {
+                _seatGifts[idx] += giftCost;
+                _triggerGiftAnimation(giftAsset.toString(), idx);
               }
             }
           } else {
             _seatGifts[targetIndex] += giftCost;
+            _triggerGiftAnimation(giftAsset.toString(), targetIndex);
           }
         });
 
@@ -310,7 +339,7 @@ _socket!.on('gift_broadcast', (data) {
 
         final msgText = isAll
             ? "$sender sent $giftName to All Mics!"
-            : "$sender sent $giftName to Seat ${targetIndex + 1}!";
+            : "$sender sent $giftName!";
 
         _addExpiringMessage(
           RoomChatMessage(
@@ -324,14 +353,13 @@ _socket!.on('gift_broadcast', (data) {
 
         _comboEventController.add(GiftSendEvent(
           senderName: sender,
-          targetName: isAll ? "All Mics" : "Seat ${targetIndex + 1}",
+          targetName: isAll ? "All Mics" : "Room",
           giftName: giftName,
           giftIcon: "🎁",
           comboCount: combo,
         ));
 
         _saveRoomGiftsToFirestore();
-        _triggerGiftAnimation(giftAsset.toString(), targetIndex, isToAll: isAll);
       });
 
       _socket!.on('chat_message_received', (data) {
@@ -379,7 +407,8 @@ _socket!.on('gift_broadcast', (data) {
       onUserJoined: (uid) {},
       onUserOffline: (uid) {},
       onVolumeChanged: (speakers) {
-        if (!mounted) return;
+
+if (!mounted) return;
         setState(() {
           _speakingSeatIndices.clear();
           for (var speaker in speakers) {
@@ -412,7 +441,7 @@ _socket!.on('gift_broadcast', (data) {
     if (mounted) setState(() => _isConnecting = false);
   }
 
-void _triggerGiftAnimation(String asset, int targetSeatIndex, {bool isToAll = false}) {
+  void _triggerGiftAnimation(String asset, int targetSeatIndex, {bool isToAll = false}) {
     final controller = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1100),
@@ -424,7 +453,7 @@ void _triggerGiftAnimation(String asset, int targetSeatIndex, {bool isToAll = fa
     );
 
     final giftItem = FlyingGiftItem(
-      id: "${DateTime.now().microsecondsSinceEpoch}_$targetSeatIndex",
+      id: "${DateTime.now().microsecondsSinceEpoch}_${Random().nextInt(9999)}_$targetSeatIndex",
       asset: asset,
       targetSeatIndex: targetSeatIndex,
       isAll: isToAll,
@@ -537,7 +566,7 @@ void _triggerGiftAnimation(String asset, int targetSeatIndex, {bool isToAll = fa
     });
   }
 
-  void _triggerMilestoneReward(int giftCost) {
+void _triggerMilestoneReward(int giftCost) {
     int rewardMultiplier = 2;
     if (_comboCount >= 100) {
       rewardMultiplier = 20;
@@ -574,7 +603,7 @@ void _triggerGiftAnimation(String asset, int targetSeatIndex, {bool isToAll = fa
     });
   }
 
-void _onComboTapped() {
+  void _onComboTapped() {
     if (_lastSentGiftConfig == null) return;
     setState(() {
       _comboCount += 1;
@@ -587,12 +616,10 @@ void _onComboTapped() {
       _triggerMilestoneReward(giftCost);
     }
 
-    _executeGiftSend(
-      null,
-      targetSeat: config['targetSeat'],
+    _executeMultiSeatSend(
+      targetSeats: List<int>.from(config['targetSeats']),
       isAll: config['isAll'],
       cost: giftCost,
-      multiplier: config['multiplier'],
       name: config['name'],
       asset: config['asset'],
       fromCombo: true,
@@ -601,7 +628,7 @@ void _onComboTapped() {
     _startComboTimer();
   }
 
-  void _openGiftSheet() {
+  void _openGiftSheet() async {
     final seatedList = [];
     for (int i = 0; i < _totalSeats; i++) {
       if (_seats[i] != null) {
@@ -614,7 +641,7 @@ void _onComboTapped() {
       }
     }
 
-    showModalBottomSheet(
+    final result = await showModalBottomSheet<GiftSendResult>(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
@@ -625,71 +652,64 @@ void _onComboTapped() {
         onCoinsUpdated: (newCoins) {
           setState(() {
             _myCoins = newCoins;
-            _comboCount += 1;
-            _showComboButton = true;
           });
-          _startComboTimer();
-          _comboEventController.add(GiftSendEvent(
-            senderName: widget.userName,
-            targetName: "Room Members",
-            giftName: "Lollipop",
-            giftIcon: "🍭",
-            comboCount: _comboCount,
-          ));
         },
       ),
     );
+
+    if (result != null) {
+      _executeMultiSeatSend(
+        targetSeats: result.targetSeatIndices,
+        isAll: result.isAll,
+        cost: result.gift.price,
+        name: result.gift.name,
+        asset: result.gift.imageAsset,
+        fromCombo: false,
+      );
+    }
   }
 
-  void _executeGiftSend(
-    BuildContext? ctx, {
-    required int? targetSeat,
+  void _executeMultiSeatSend({
+    required List<int> targetSeats,
     required bool isAll,
     required int cost,
-    required int multiplier,
     required String name,
     required String asset,
     bool fromCombo = false,
   }) {
-    int activeSeatsCount = 0;
-    if (isAll) {
-      for (var s in _seats) {
-        if (s != null) activeSeatsCount++;
-      }
-      if (activeSeatsCount == 0) activeSeatsCount = 1;
-    }
-
-    final totalCost = isAll ? (cost * multiplier * activeSeatsCount) : (cost * multiplier);
-
-    if (_myCoins < totalCost) {
-      if (ctx != null) {
-        ScaffoldMessenger.of(ctx).showSnackBar(
-          const SnackBar(content: Text("Insufficient coins balance!")),
-        );
-      }
-      return;
-    }
+    if (targetSeats.isEmpty && !isAll) return;
 
     setState(() {
-      _myCoins -= totalCost;
       if (!fromCombo) {
         _comboCount = 1;
         _showComboButton = true;
       }
+
+      // Fly to each seat and add seat gift counter
+      if (isAll) {
+        for (int i = 0; i < _totalSeats; i++) {
+          if (_seats[i] != null) {
+            _seatGifts[i] += cost;
+            _triggerGiftAnimation(asset, i, isToAll: true);
+          }
+        }
+      } else {
+        for (final seatIdx in targetSeats) {
+          if (seatIdx >= 0 && seatIdx < 30) {
+            _seatGifts[seatIdx] += cost;
+            _triggerGiftAnimation(asset, seatIdx);
+          }
+        }
+      }
     });
 
-    FirebaseFirestore.instance
-        .collection('users')
-        .doc(widget.userUid)
-        .update({
-      'coins': FieldValue.increment(-totalCost),
-    }).catchError((_) {});
+    _playCoinSound();
+    _saveRoomGiftsToFirestore();
 
     _lastSentGiftConfig = {
-      'targetSeat': targetSeat,
+      'targetSeats': targetSeats,
       'isAll': isAll,
       'cost': cost,
-      'multiplier': multiplier,
       'name': name,
       'asset': asset,
     };
@@ -698,20 +718,20 @@ void _onComboTapped() {
 
     _comboEventController.add(GiftSendEvent(
       senderName: widget.userName,
-      targetName: isAll ? "All Mics" : "Seat ${(targetSeat ?? 0) + 1}",
+      targetName: isAll ? "All Mics" : "${targetSeats.length} Seats",
       giftName: name,
       giftIcon: "🎁",
       comboCount: _comboCount,
     ));
 
-    if (_socket != null && _socket!.connected) {
+if (_socket != null && _socket!.connected) {
       _socket!.emit('send_gift', {
         'roomId': widget.roomId,
         'senderName': widget.userName,
-        'targetSeatIndex': targetSeat ?? 0,
+        'targetSeats': targetSeats,
         'isAll': isAll,
-        'giftName': "$name x$multiplier",
-        'giftCost': totalCost,
+        'giftName': name,
+        'giftCost': cost,
         'giftAsset': asset,
         'comboCount': _comboCount,
       });
@@ -720,6 +740,7 @@ void _onComboTapped() {
 
   @override
   void dispose() {
+    _rocketBannerTimer?.cancel();
     _comboEventController.close();
     _walletSubscription?.cancel();
     _waveController.dispose();
@@ -739,7 +760,7 @@ void _onComboTapped() {
     super.dispose();
   }
 
-@override
+  @override
   Widget build(BuildContext context) {
     final int crossAxis = _totalSeats <= 12 ? 4 : (_totalSeats <= 20 ? 5 : 6);
     final double seatDimension = _totalSeats > 20 ? 44.0 : 50.0;
@@ -808,7 +829,8 @@ void _onComboTapped() {
                       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                         crossAxisCount: crossAxis,
                         mainAxisSpacing: 10,
-                        crossAxisSpacing: 6,
+
+crossAxisSpacing: 6,
                         childAspectRatio: 0.68,
                       ),
                       itemBuilder: (context, index) {
@@ -827,8 +849,7 @@ void _onComboTapped() {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Stack(
-
-clipBehavior: Clip.none,
+                                clipBehavior: Clip.none,
                                 alignment: Alignment.center,
                                 children: [
                                   if (isHostSeat && isOccupied)
@@ -871,7 +892,8 @@ clipBehavior: Clip.none,
                                           ),
                                         ),
                                       );
-                                    },
+
+},
                                   ),
                                   if (isOccupied)
                                     Positioned(
@@ -887,8 +909,7 @@ clipBehavior: Clip.none,
                                       ),
                                     ),
                                 ],
-
-),
+                              ),
                               const SizedBox(height: 4),
                               Text(
                                 isOccupied ? occupier : "${index + 1}",
@@ -942,7 +963,8 @@ clipBehavior: Clip.none,
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                       itemCount: _messages.length,
                       itemBuilder: (context, index) {
-                        final item = _messages[index];
+
+final item = _messages[index];
                         return Padding(
                           padding: const EdgeInsets.symmetric(vertical: 3.0),
                           child: RichText(
@@ -958,8 +980,7 @@ clipBehavior: Clip.none,
                                 ),
                                 TextSpan(
                                   text: item.message,
-
-style: TextStyle(color: item.isSystem ? Colors.white70 : Colors.white, fontSize: 12),
+                                  style: TextStyle(color: item.isSystem ? Colors.white70 : Colors.white, fontSize: 12),
                                 ),
                               ],
                             ),
@@ -1021,11 +1042,76 @@ style: TextStyle(color: item.isSystem ? Colors.white70 : Colors.white, fontSize:
               ],
             ),
 
+            // Continuous 5-Second Rotating Rocket Banner
+
+Positioned(
+              top: 10,
+              left: 20,
+              right: 20,
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 600),
+                transitionBuilder: (child, anim) => SlideTransition(
+                  position: Tween<Offset>(
+                    begin: const Offset(1.0, 0.0),
+                    end: Offset.zero,
+                  ).animate(anim),
+                  child: child,
+                ),
+                child: Container(
+                  key: ValueKey<int>(_currentRocketLevel),
+                  height: 48,
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF8A2387), Color(0xFFE94057), Color(0xFFF27121)],
+                    ),
+                    borderRadius: BorderRadius.circular(24),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.orangeAccent.withOpacity(0.4),
+                        blurRadius: 10,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
+                    border: Border.all(color: const Color(0xFFFFD700), width: 1.2),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.rocket_launch, color: Color(0xFFFFD700), size: 26),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          "Super Rocket Level $_currentRocketLevel Active! 🚀",
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.black38,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          "LV.$_currentRocketLevel",
+                          style: const TextStyle(color: Color(0xFFFFD700), fontSize: 10, fontWeight: FontWeight.w900),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
             // Combo Overlay with Central 5x Burst
             FloatingGiftComboOverlay(
               giftStream: _comboEventController.stream,
             ),
 
+            // Flying Gifts Layer
             ..._activeFlyingGifts.map((gift) {
               return AnimatedBuilder(
                 animation: gift.animation,
