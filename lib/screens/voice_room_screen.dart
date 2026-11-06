@@ -9,7 +9,6 @@ import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'package:audioplayers/audioplayers.dart';
 import '../services/agora_service.dart';
 import '../widgets/gift_dialog.dart';
-import '../widgets/floating_gift_combo.dart';
 import 'wallet_screen.dart';
 
 class RoomChatMessage {
@@ -71,8 +70,6 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
   final AgoraService _agoraService = AgoraService();
   IO.Socket? _socket;
   final AudioPlayer _audioPlayer = AudioPlayer();
-  final StreamController<GiftSendEvent> _comboEventController =
-      StreamController<GiftSendEvent>.broadcast();
 
   bool _isMuted = false;
   int? _mySeatIndex;
@@ -113,6 +110,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
   // 5-second rotating rocket banner state
   int _currentRocketLevel = 1;
   Timer? _rocketBannerTimer;
+  bool _isPlayingSound = false;
 
   @override
   void initState() {
@@ -133,7 +131,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
 
     _x100BadgeController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1600),
+      duration: const Duration(milliseconds: 1400),
     );
 
     _x100BadgeController.addStatusListener((status) {
@@ -177,14 +175,21 @@ void _startRocketBannerRotation() {
     });
   }
 
-  void _playCoinSound() {
+  void _playCoinSound() async {
+    if (_isPlayingSound) return;
     try {
-      _audioPlayer.stop();
-      _audioPlayer.play(
+      _isPlayingSound = true;
+      await _audioPlayer.stop();
+      await _audioPlayer.play(
         AssetSource('sounds/five-win.mp3'),
         mode: PlayerMode.lowLatency,
       );
-    } catch (_) {}
+      Future.delayed(const Duration(milliseconds: 400), () {
+        _isPlayingSound = false;
+      });
+    } catch (_) {
+      _isPlayingSound = false;
+    }
   }
 
   void _addExpiringMessage(RoomChatMessage message, {int seconds = 4}) {
@@ -290,9 +295,8 @@ void _startRocketBannerRotation() {
             _speakingSeatIndices.remove(index);
           }
 
-          if (user == widget.userName) {
-
-_mySeatIndex = index;
+if (user == widget.userName) {
+            _mySeatIndex = index;
             _agoraService.switchRole(isSpeaker: true);
           } else if (_mySeatIndex == index && user != widget.userName) {
             _mySeatIndex = null;
@@ -308,7 +312,6 @@ _mySeatIndex = index;
         final giftName = data['giftName'] ?? "Gift";
         final giftCost = (data['giftCost'] as num?)?.toInt() ?? 0;
         final giftAsset = data['giftAsset'] ?? 'assets/images/wikimediaimages-candy-2201920.jpg';
-        final combo = (data['comboCount'] as num?)?.toInt() ?? 1;
 
         final List targets = (data['targetSeats'] as List?) ?? [];
         final targetIndex = (data['targetSeatIndex'] as num?)?.toInt() ?? 0;
@@ -350,14 +353,6 @@ _mySeatIndex = index;
           ),
           seconds: 4,
         );
-
-        _comboEventController.add(GiftSendEvent(
-          senderName: sender,
-          targetName: isAll ? "All Mics" : "Room",
-          giftName: giftName,
-          giftIcon: "🎁",
-          comboCount: combo,
-        ));
 
         _saveRoomGiftsToFirestore();
       });
@@ -407,8 +402,7 @@ _mySeatIndex = index;
       onUserJoined: (uid) {},
       onUserOffline: (uid) {},
       onVolumeChanged: (speakers) {
-
-if (!mounted) return;
+        if (!mounted) return;
         setState(() {
           _speakingSeatIndices.clear();
           for (var speaker in speakers) {
@@ -425,7 +419,7 @@ if (!mounted) return;
       },
     );
 
-    final dynamicToken = await _fetchToken(
+final dynamicToken = await _fetchToken(
       channelName: widget.roomId,
       uid: widget.userNumericId,
       isPublisher: false,
@@ -444,7 +438,7 @@ if (!mounted) return;
   void _triggerGiftAnimation(String asset, int targetSeatIndex, {bool isToAll = false}) {
     final controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1100),
+      duration: const Duration(milliseconds: 950),
     );
 
     final animation = CurvedAnimation(
@@ -566,7 +560,7 @@ if (!mounted) return;
     });
   }
 
-void _triggerMilestoneReward(int giftCost) {
+  void _triggerMilestoneReward(int giftCost) {
     int rewardMultiplier = 2;
     if (_comboCount >= 100) {
       rewardMultiplier = 20;
@@ -584,7 +578,7 @@ void _triggerMilestoneReward(int giftCost) {
       _showFloatingBanner = true;
     });
 
-    FirebaseFirestore.instance
+FirebaseFirestore.instance
         .collection('users')
         .doc(widget.userUid)
         .update({
@@ -661,8 +655,8 @@ void _triggerMilestoneReward(int giftCost) {
       _executeMultiSeatSend(
         targetSeats: result.targetSeatIndices,
         isAll: result.isAll,
-        cost: result.gift.price,
-        name: result.gift.name,
+        cost: result.gift.price * result.multiplier,
+        name: "${result.gift.name} x${result.multiplier}",
         asset: result.gift.imageAsset,
         fromCombo: false,
       );
@@ -716,15 +710,7 @@ void _triggerMilestoneReward(int giftCost) {
 
     _startComboTimer();
 
-    _comboEventController.add(GiftSendEvent(
-      senderName: widget.userName,
-      targetName: isAll ? "All Mics" : "${targetSeats.length} Seats",
-      giftName: name,
-      giftIcon: "🎁",
-      comboCount: _comboCount,
-    ));
-
-if (_socket != null && _socket!.connected) {
+    if (_socket != null && _socket!.connected) {
       _socket!.emit('send_gift', {
         'roomId': widget.roomId,
         'senderName': widget.userName,
@@ -741,7 +727,6 @@ if (_socket != null && _socket!.connected) {
   @override
   void dispose() {
     _rocketBannerTimer?.cancel();
-    _comboEventController.close();
     _walletSubscription?.cancel();
     _waveController.dispose();
     _comboRingController.dispose();
@@ -760,7 +745,7 @@ if (_socket != null && _socket!.connected) {
     super.dispose();
   }
 
-  @override
+@override
   Widget build(BuildContext context) {
     final int crossAxis = _totalSeats <= 12 ? 4 : (_totalSeats <= 20 ? 5 : 6);
     final double seatDimension = _totalSeats > 20 ? 44.0 : 50.0;
@@ -829,8 +814,7 @@ if (_socket != null && _socket!.connected) {
                       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                         crossAxisCount: crossAxis,
                         mainAxisSpacing: 10,
-
-crossAxisSpacing: 6,
+                        crossAxisSpacing: 6,
                         childAspectRatio: 0.68,
                       ),
                       itemBuilder: (context, index) {
@@ -849,7 +833,8 @@ crossAxisSpacing: 6,
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Stack(
-                                clipBehavior: Clip.none,
+
+clipBehavior: Clip.none,
                                 alignment: Alignment.center,
                                 children: [
                                   if (isHostSeat && isOccupied)
@@ -892,8 +877,7 @@ crossAxisSpacing: 6,
                                           ),
                                         ),
                                       );
-
-},
+                                    },
                                   ),
                                   if (isOccupied)
                                     Positioned(
@@ -909,7 +893,8 @@ crossAxisSpacing: 6,
                                       ),
                                     ),
                                 ],
-                              ),
+
+),
                               const SizedBox(height: 4),
                               Text(
                                 isOccupied ? occupier : "${index + 1}",
@@ -963,8 +948,7 @@ crossAxisSpacing: 6,
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                       itemCount: _messages.length,
                       itemBuilder: (context, index) {
-
-final item = _messages[index];
+                        final item = _messages[index];
                         return Padding(
                           padding: const EdgeInsets.symmetric(vertical: 3.0),
                           child: RichText(
@@ -980,7 +964,8 @@ final item = _messages[index];
                                 ),
                                 TextSpan(
                                   text: item.message,
-                                  style: TextStyle(color: item.isSystem ? Colors.white70 : Colors.white, fontSize: 12),
+
+style: TextStyle(color: item.isSystem ? Colors.white70 : Colors.white, fontSize: 12),
                                 ),
                               ],
                             ),
@@ -1043,8 +1028,7 @@ final item = _messages[index];
             ),
 
             // Continuous 5-Second Rotating Rocket Banner
-
-Positioned(
+            Positioned(
               top: 10,
               left: 20,
               right: 20,
@@ -1064,7 +1048,8 @@ Positioned(
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(
                       colors: [Color(0xFF8A2387), Color(0xFFE94057), Color(0xFFF27121)],
-                    ),
+
+),
                     borderRadius: BorderRadius.circular(24),
                     boxShadow: [
                       BoxShadow(
@@ -1106,11 +1091,6 @@ Positioned(
               ),
             ),
 
-            // Combo Overlay with Central 5x Burst
-            FloatingGiftComboOverlay(
-              giftStream: _comboEventController.stream,
-            ),
-
             // Flying Gifts Layer
             ..._activeFlyingGifts.map((gift) {
               return AnimatedBuilder(
@@ -1132,7 +1112,7 @@ Positioned(
                       ? (0.6 + 1.2 * (1.0 - (t - 0.5).abs() * 2))
                       : (0.5 + 0.9 * (1.0 - (t - 0.5).abs() * 2));
 
-return Positioned(
+                  return Positioned(
                     left: currentX - 40,
                     top: currentY - 40,
                     child: Opacity(
@@ -1153,13 +1133,15 @@ return Positioned(
               );
             }),
 
+            // Floating banner
             if (_showFloatingBanner && _lastSentGiftConfig != null)
               Positioned(
                 bottom: 120,
                 left: 16,
                 right: 90,
                 child: TweenAnimationBuilder<double>(
-                  tween: Tween(begin: 0.0, end: 1.0),
+
+tween: Tween(begin: 0.0, end: 1.0),
                   duration: const Duration(milliseconds: 350),
                   curve: Curves.easeOutBack,
                   builder: (context, value, child) {
@@ -1212,8 +1194,7 @@ return Positioned(
                                   ),
                                   Text(
                                     "Combo x$_comboCount Hits!",
-
-style: const TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold, fontSize: 10),
+                                    style: const TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold, fontSize: 10),
                                   ),
                                 ],
                               ),
@@ -1237,13 +1218,14 @@ style: const TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold, fo
                 ),
               ),
 
+// x100 Big Jackpot Burst
             if (_showX100Badge)
               Center(
                 child: AnimatedBuilder(
                   animation: _x100BadgeController,
                   builder: (context, child) {
                     final t = _x100BadgeController.value;
-                    final scale = (sin(t * pi) * 1.2).clamp(0.0, 1.3);
+                    final scale = (sin(t * pi) * 1.25).clamp(0.0, 1.3);
                     final opacity = (1.0 - t * 0.4).clamp(0.0, 1.0);
 
                     return Opacity(
@@ -1291,8 +1273,7 @@ style: const TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold, fo
                                 ),
                                 child: const Text(
                                   "MEGA WINNER",
-
-style: TextStyle(color: Colors.black, fontWeight: FontWeight.w900, fontSize: 11),
+                                  style: TextStyle(color: Colors.black, fontWeight: FontWeight.w900, fontSize: 11),
                                 ),
                               ),
                             ],
@@ -1304,6 +1285,7 @@ style: TextStyle(color: Colors.black, fontWeight: FontWeight.w900, fontSize: 11)
                 ),
               ),
 
+            // Floating Combo Button
             if (_showComboButton)
               Positioned(
                 bottom: 65,
@@ -1320,7 +1302,8 @@ style: TextStyle(color: Colors.black, fontWeight: FontWeight.w900, fontSize: 11)
                           animation: _comboRingController,
                           builder: (context, child) {
                             return CircularProgressIndicator(
-                              value: 1.0 - _comboRingController.value,
+
+value: 1.0 - _comboRingController.value,
                               strokeWidth: 3.5,
                               color: const Color(0xFFFFD700),
                               backgroundColor: Colors.white24,
