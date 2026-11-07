@@ -46,7 +46,7 @@ class _StoreScreenState extends State<StoreScreen> {
   static const Color cardBg = Color(0xFF1E1B2E);
   static const Color darkBg = Color(0xFF0F0E17);
 
-  final List> _categories = const [
+  static const _categories = const [
     {"id": "frame", "name": "Avatar Frame", "icon": Icons.account_circle_outlined},
     {"id": "entry", "name": "Entry Effect", "icon": Icons.auto_awesome},
     {"id": "bubble", "name": "Chat Bubble", "icon": Icons.chat_bubble_outline},
@@ -110,7 +110,7 @@ try {
     }
   }
 
-  List<StoreItem> get _filteredItems {
+  List get _filteredItems {
     final activeCatId = _categories[_selectedCategoryIndex]["id"];
     return _allStoreItems.where((item) => item.category == activeCatId).toList();
   }
