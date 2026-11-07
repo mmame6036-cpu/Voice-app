@@ -22,7 +22,8 @@ class StoreItem {
     required this.days,
     required this.effectColor,
   });
-  
+}
+
 class StoreScreen extends StatefulWidget {
   final int userCoins;
   final int userNumericId;
@@ -34,6 +35,7 @@ class StoreScreen extends StatefulWidget {
     this.userNumericId = 0,
     this.onCoinsDeducted,
   });
+
   @override
   State<StoreScreen> createState() => _StoreScreenState();
 }
@@ -97,7 +99,6 @@ class _StoreScreenState extends State<StoreScreen> {
     super.dispose();
   }
 
-  // 1. ቅጽበታዊ የሳንቲምና የእቃዎች ማመሳሰያ (Real-time Stream)
   void _listenToUserRealtimeData() {
     if (_currentUser == null) {
       if (mounted) setState(() => _isLoading = false);
@@ -146,7 +147,6 @@ class _StoreScreenState extends State<StoreScreen> {
     return _equippedItems[category] == itemId;
   }
 
-  // 2. ደህንነቱ የተጠበቀ ማጥለቅና ማውለቅ (Safe Equip/Unequip with FieldValue.delete)
   Future<void> _toggleEquip(StoreItem item) async {
     if (_currentUser == null) return;
     final cat = item.category;
@@ -180,7 +180,6 @@ class _StoreScreenState extends State<StoreScreen> {
     }
   }
 
-  // 3. ደህንነቱ የተጠበቀ ግዢ በ Dot-Notation
   Future<void> _buyItem(StoreItem item) async {
     if (_coins < item.price) {
       _showInsufficientCoinsDialog();
@@ -204,10 +203,10 @@ class _StoreScreenState extends State<StoreScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text("Validity: ${item.days} Days VIP Access", style: const TextStyle(color: Colors.white70, fontSize: 13)),
-
-const SizedBox(height: 6),
+            const SizedBox(height: 6),
             Text("Price: 🪙 ${item.price} Coins", style: const TextStyle(color: goldColor, fontWeight: FontWeight.bold, fontSize: 14)),
-          ],
+
+],
         ),
         actions: [
           TextButton(
@@ -256,7 +255,6 @@ const SizedBox(height: 6),
     }
   }
 
-  // 4. ሳንቲም ሲያልቅ በቀጥታ ወደ WalletScreen መውሰጃ መስኮት
   void _showInsufficientCoinsDialog() {
     showDialog(
       context: context,
@@ -306,15 +304,14 @@ const SizedBox(height: 6),
 
   void _showItemPreview(StoreItem item) {
     showModalBottomSheet(
-
-context: context,
+      context: context,
       backgroundColor: cardBg,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (ctx) {
         final owned = _isItemOwned(item.id);
         final equipped = _isItemEquipped(item.category, item.id);
 
-        return Padding(
+return Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -396,8 +393,7 @@ context: context,
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text("VIP Mall & Store", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 17)),
-
-actions: [
+        actions: [
           GestureDetector(
             onTap: () {
               Navigator.push(
@@ -406,7 +402,8 @@ actions: [
                   builder: (c) => WalletScreen(
                     currentCoins: _coins,
                     userNumericId: widget.userNumericId,
-                    userUid: _currentUser?.uid ?? "user_guest_id",
+
+userUid: _currentUser?.uid ?? "user_guest_id",
                     onCoinsRecharged: (newBalance) {
                       setState(() => _coins = newBalance);
                     },
@@ -481,14 +478,14 @@ actions: [
                   ),
                 ),
                 Expanded(
-
-child: GridView.builder(
+                  child: GridView.builder(
                     padding: const EdgeInsets.all(12),
                     itemCount: _filteredItems.length,
                     gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                       crossAxisCount: 2,
                       mainAxisSpacing: 12,
-                      crossAxisSpacing: 12,
+
+crossAxisSpacing: 12,
                       childAspectRatio: 0.80,
                     ),
                     itemBuilder: (context, idx) {
@@ -551,12 +548,12 @@ child: GridView.builder(
                                               style: ElevatedButton.styleFrom(
                                                 backgroundColor: equipped ? Colors.redAccent : emeraldColor,
                                                 padding: EdgeInsets.zero,
-
-shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                                               ),
                                               onPressed: () => _toggleEquip(itm),
                                               child: Text(
-                                                equipped ? "In Use" : "Equip",
+
+equipped ? "In Use" : "Equip",
                                                 style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 11),
                                               ),
                                             )
