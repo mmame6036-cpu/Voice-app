@@ -2,15 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/story_model.dart';
+import '../screens/story_viewer_screen.dart';
 
 class StoryTrayWidget extends StatelessWidget {
   final VoidCallback onAddStoryTap;
-  final Function(UserStoryGroup storyGroup) onStoryGroupTap;
+  final Function(UserStoryGroup storyGroup)? onStoryGroupTap;
 
   const StoryTrayWidget({
     super.key,
     required this.onAddStoryTap,
-    required this.onStoryGroupTap,
+    this.onStoryGroupTap,
   });
 
   @override
@@ -27,7 +28,6 @@ class StoryTrayWidget extends StatelessWidget {
             .where('expiresAt', isGreaterThan: Timestamp.fromDate(now))
             .snapshots(),
         builder: (context, snapshot) {
-          // ስቶሪዎችን በሰው በሰው (userId) መቧደን
           final Map<String, List<StoryItem>> groupedStories = {};
 
           if (snapshot.hasData) {
@@ -56,15 +56,15 @@ class StoryTrayWidget extends StatelessWidget {
             scrollDirection: Axis.horizontal,
             physics: const BouncingScrollPhysics(),
             padding: const EdgeInsets.symmetric(horizontal: 12),
-            itemCount: storyGroups.length + 1, // 1 ለራስህ + አዝራር
+            itemCount: storyGroups.length + 1,
             itemBuilder: (context, index) {
-              // የመጀመሪያው አዝራር የራስህ ስቶሪ መጨመሪያ ነው
               if (index == 0) {
                 return _buildAddStoryButton(currentUser);
               }
 
-              final group = storyGroups[index - 1];
-              return _buildUserStoryItem(group);
+              final groupIndex = index - 1;
+              final group = storyGroups[groupIndex];
+              return _buildUserStoryItem(context, group, storyGroups, groupIndex);
             },
           );
         },
@@ -108,7 +108,8 @@ class StoryTrayWidget extends StatelessWidget {
                       color: Color(0xFFFFD700),
                     ),
                     child: const Icon(Icons.add, size: 14, color: Colors.black),
-                  ),
+
+),
                 ),
               ],
             ),
@@ -123,9 +124,28 @@ class StoryTrayWidget extends StatelessWidget {
     );
   }
 
-Widget _buildUserStoryItem(UserStoryGroup group) {
+  Widget _buildUserStoryItem(
+    BuildContext context,
+    UserStoryGroup group,
+    List<UserStoryGroup> allGroups,
+    int groupIndex,
+  ) {
     return GestureDetector(
-      onTap: () => onStoryGroupTap(group),
+      onTap: () {
+        if (onStoryGroupTap != null) {
+          onStoryGroupTap!(group);
+        } else {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (ctx) => StoryViewerScreen(
+                storyGroups: allGroups,
+                initialGroupIndex: groupIndex,
+              ),
+            ),
+          );
+        }
+      },
       child: Container(
         margin: const EdgeInsets.only(right: 12),
         child: Column(
