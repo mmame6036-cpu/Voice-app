@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../services/room_service.dart';
 import '../services/user_id_service.dart';
+import '../widgets/story_tray_widget.dart';
+import 'story_upload_screen.dart';
 import 'voice_room_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -57,7 +59,6 @@ class _HomeScreenState extends State<HomeScreen> {
     },
   ];
 
-  // የኔን ክፍል ለመክፈት (Host Room)
   Future<void> _handleEnterMyRoom() async {
     showDialog(
       context: context,
@@ -77,7 +78,6 @@ class _HomeScreenState extends State<HomeScreen> {
       final roomId = 'room_$hostUid';
       final roomTitle = "$hostName's Lounge";
 
-      // ቋሚ የ 6 ዲጂት ID ከ Firestore ማምጣት (ከ 100001 የሚጀምር)
       final permanentNumericId = await UserIdService.getOrCreatePermanentId(
         hostUid,
         defaultName: hostName,
@@ -118,7 +118,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // የሌሎችን ክፍል ስትነካ በቀጥታ በቋሚ ID ወደ ክፍሉ ለመግባት
   Future<void> _joinExistingRoom(Map<String, dynamic> roomItem) async {
     showDialog(
       context: context,
@@ -140,8 +139,9 @@ class _HomeScreenState extends State<HomeScreen> {
         defaultName: myName,
       );
 
-if (mounted) {
-        Navigator.pop(context);
+      if (mounted) {
+
+Navigator.pop(context);
         Navigator.push(
           context,
           MaterialPageRoute(
@@ -237,8 +237,7 @@ if (mounted) {
                         onPressed: () {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(content: Text("Rank & Activity Box Opened")),
-
-);
+                          );
                         },
                       ),
                     ),
@@ -246,6 +245,22 @@ if (mounted) {
                 ),
               ),
               const Divider(color: Colors.white12, height: 1),
+
+// 1. Story Tray Widget እዚህ ረድፍ ላይ ተቀምጧል
+              StoryTrayWidget(
+                onAddStoryTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const StoryUploadScreen(),
+                    ),
+                  );
+                },
+              ),
+
+              const Divider(color: Colors.white10, height: 1),
+
+              // 2. ከስቶሪው በታች የክፍሎች ዝርዝር ይቀጥላል
               Expanded(
                 child: _selectedTopTab == 0
                     ? const Center(
@@ -306,13 +321,13 @@ if (mounted) {
                               final roomMembers = item["members"] as int;
 
                               return GestureDetector(
-                                onTap: () => _joinExistingRoom(item),
+
+onTap: () => _joinExistingRoom(item),
                                 child: Container(
                                   padding: const EdgeInsets.all(12),
                                   decoration: BoxDecoration(
                                     color: roomColor,
-
-borderRadius: BorderRadius.circular(16),
+                                    borderRadius: BorderRadius.circular(16),
                                     border: Border.all(color: Colors.white12),
                                   ),
                                   child: Column(
@@ -382,15 +397,15 @@ borderRadius: BorderRadius.circular(16),
                 boxShadow: [
                   BoxShadow(
                     color: const Color(0xFFFFD700).withOpacity(0.4),
-                    blurRadius: 16,
+
+blurRadius: 16,
                     spreadRadius: 2,
                     offset: const Offset(0, 4),
                   ),
                   BoxShadow(
                     color: Colors.black.withOpacity(0.5),
                     blurRadius: 8,
-
-offset: const Offset(2, 6),
+                    offset: const Offset(2, 6),
                   ),
                 ],
               ),
