@@ -270,7 +270,7 @@ _entryMarqueeController = AnimationController(
     try {
       final player = AudioPlayer();
       await player.setVolume(1.0);
-      await player.play(AssetSource('sounds/five-win.mp3'));
+      await player.play(AssetSource('sounds/five_win.mp3'));
       player.onPlayerComplete.listen((_) {
         player.dispose();
       });
