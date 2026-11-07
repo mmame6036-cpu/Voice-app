@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'wallet_screen.dart';
 
 class StoreItem {
   final String id;
@@ -24,11 +26,13 @@ class StoreItem {
 
 class StoreScreen extends StatefulWidget {
   final int userCoins;
+  final int userNumericId;
   final Function(int)? onCoinsDeducted;
 
   const StoreScreen({
     super.key,
     required this.userCoins,
+    required this.userNumericId,
     this.onCoinsDeducted,
   });
 
@@ -40,13 +44,14 @@ class _StoreScreenState extends State<StoreScreen> {
   final User? _currentUser = FirebaseAuth.instance.currentUser;
   int _selectedCategoryIndex = 0;
   late int _coins;
+  StreamSubscription? _userSubscription;
 
   static const Color goldColor = Color(0xFFFFD700);
   static const Color emeraldColor = Color(0xFF00E676);
   static const Color cardBg = Color(0xFF1E1B2E);
   static const Color darkBg = Color(0xFF0F0E17);
 
-  static const _categories = const [
+  static const _categories = [
     {"id": "frame", "name": "Avatar Frame", "icon": Icons.account_circle_outlined},
     {"id": "entry", "name": "Entry Effect", "icon": Icons.auto_awesome},
     {"id": "bubble", "name": "Chat Bubble", "icon": Icons.chat_bubble_outline},
@@ -85,39 +90,56 @@ class _StoreScreenState extends State<StoreScreen> {
   void initState() {
     super.initState();
     _coins = widget.userCoins;
-    _fetchUserInventory();
+    _listenToUserRealtimeData();
   }
 
-  Future<void> _fetchUserInventory() async {
+@override
+  void dispose() {
+    _userSubscription?.cancel();
+    super.dispose();
+  }
+
+  // 1. ቅጽበታዊ የሳንቲምና የእቃዎች ማመሳሰያ (Real-time Stream)
+  void _listenToUserRealtimeData() {
     if (_currentUser == null) {
       if (mounted) setState(() => _isLoading = false);
       return;
     }
 
-try {
-      final doc = await FirebaseFirestore.instance.collection('users').doc(_currentUser!.uid).get();
-      if (doc.exists && mounted) {
-        final data = doc.data() ?? {};
+    _userSubscription = FirebaseFirestore.instance
+        .collection('users')
+        .doc(_currentUser!.uid)
+        .snapshots()
+        .listen((snapshot) {
+      if (snapshot.exists && snapshot.data() != null && mounted) {
+        final data = snapshot.data()!;
         setState(() {
           _coins = (data['coins'] as num?)?.toInt() ?? _coins;
           _ownedItems = Map<String, dynamic>.from(data['inventory'] ?? {});
           _equippedItems = Map<String, dynamic>.from(data['equipped'] ?? {});
           _isLoading = false;
         });
+        widget.onCoinsDeducted?.call(_coins);
       }
-    } catch (_) {
+    }, onError: (_) {
       if (mounted) setState(() => _isLoading = false);
-    }
+    });
   }
 
-  List get _filteredItems {
+  List<StoreItem> get _filteredItems {
     final activeCatId = _categories[_selectedCategoryIndex]["id"];
     return _allStoreItems.where((item) => item.category == activeCatId).toList();
   }
 
   bool _isItemOwned(String itemId) {
     if (!_ownedItems.containsKey(itemId)) return false;
-    final expiresAt = (_ownedItems[itemId] as Timestamp?)?.toDate();
+    final dynamic rawExpiry = _ownedItems[itemId];
+    DateTime? expiresAt;
+    if (rawExpiry is Timestamp) {
+      expiresAt = rawExpiry.toDate();
+    } else if (rawExpiry is int) {
+      expiresAt = DateTime.fromMillisecondsSinceEpoch(rawExpiry);
+    }
     if (expiresAt == null) return false;
     return expiresAt.isAfter(DateTime.now());
   }
@@ -126,43 +148,44 @@ try {
     return _equippedItems[category] == itemId;
   }
 
+  // 2. ደህንነቱ የተጠበቀ ማጥለቅና ማውለቅ (Safe Equip/Unequip with FieldValue.delete)
   Future<void> _toggleEquip(StoreItem item) async {
     if (_currentUser == null) return;
     final cat = item.category;
     final currentlyEquipped = _equippedItems[cat] == item.id;
-    final newId = currentlyEquipped ? null : item.id;
-
-    setState(() {
-      if (newId == null) {
-        _equippedItems.remove(cat);
-      } else {
-        _equippedItems[cat] = newId;
-      }
-    });
 
     try {
-      await FirebaseFirestore.instance.collection('users').doc(_currentUser!.uid).set({
-        'equipped': {
-          cat: newId,
-        }
-      }, SetOptions(merge: true));
+      if (currentlyEquipped) {
+        await FirebaseFirestore.instance.collection('users').doc(_currentUser!.uid).update({
+          'equipped.$cat': FieldValue.delete(),
+        });
+      } else {
+        await FirebaseFirestore.instance.collection('users').doc(_currentUser!.uid).update({
+          'equipped.$cat': item.id,
+        });
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(currentlyEquipped ? "Unequipped ${item.name}" : "Equipped ${item.name}!"),
+            backgroundColor: currentlyEquipped ? Colors.white24 : emeraldColor,
+            content: Text(
+              currentlyEquipped ? "Unequipped ${item.name}" : "Equipped ${item.name}!",
+              style: TextStyle(color: currentlyEquipped ? Colors.white : Colors.black, fontWeight: FontWeight.bold),
+            ),
             duration: const Duration(seconds: 2),
           ),
         );
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint("Toggle equip error: $e");
+    }
   }
 
+  // 3. ደህንነቱ የተጠበቀ ግዢ በ Dot-Notation
   Future<void> _buyItem(StoreItem item) async {
     if (_coins < item.price) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Insufficient coins to purchase!")),
-      );
+      _showInsufficientCoinsDialog();
       return;
     }
 
@@ -170,7 +193,7 @@ try {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: cardBg,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: const BorderSide(color: Colors.white12)),
         title: Row(
           children: [
             Text(item.icon, style: const TextStyle(fontSize: 26)),
@@ -182,8 +205,9 @@ try {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text("Validity: ${item.days} Days", style: const TextStyle(color: Colors.white70, fontSize: 13)),
-            const SizedBox(height: 6),
+            Text("Validity: ${item.days} Days VIP Access", style: const TextStyle(color: Colors.white70, fontSize: 13)),
+
+const SizedBox(height: 6),
             Text("Price: 🪙 ${item.price} Coins", style: const TextStyle(color: goldColor, fontWeight: FontWeight.bold, fontSize: 14)),
           ],
         ),
@@ -198,7 +222,7 @@ try {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
             ),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text("Confirm", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+            child: const Text("Confirm Buy", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -208,38 +232,84 @@ try {
 
     final expirationDate = DateTime.now().add(Duration(days: item.days));
 
-    setState(() {
-      _coins -= item.price;
-      _ownedItems[item.id] = Timestamp.fromDate(expirationDate);
-      _equippedItems[item.category] = item.id;
-    });
-
-widget.onCoinsDeducted?.call(_coins);
-
     if (_currentUser != null) {
       try {
-        await FirebaseFirestore.instance.collection('users').doc(_currentUser!.uid).set({
+        await FirebaseFirestore.instance.collection('users').doc(_currentUser!.uid).update({
           'coins': FieldValue.increment(-item.price),
-          'inventory': {
-            item.id: Timestamp.fromDate(expirationDate),
-          },
-          'equipped': {
-            item.category: item.id,
-          }
-        }, SetOptions(merge: true));
-      } catch (_) {}
-    }
+          'inventory.${item.id}': Timestamp.fromDate(expirationDate),
+          'equipped.${item.category}': item.id,
+        });
 
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Unlocked and Equipped ${item.name} for ${item.days} days!")),
-      );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              backgroundColor: emeraldColor,
+              content: Text("Unlocked and Equipped ${item.name} for ${item.days} days!", style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text("Purchase error: $e"), backgroundColor: Colors.redAccent),
+          );
+        }
+      }
     }
+  }
+
+  // 4. ሳንቲም ሲያልቅ በቀጥታ ወደ WalletScreen መውሰጃ መስኮት
+  void _showInsufficientCoinsDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: cardBg,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: const BorderSide(color: Colors.redAccent, width: 1.2)),
+        title: const Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Colors.redAccent, size: 24),
+            SizedBox(width: 8),
+            Text("Insufficient Coins", style: TextStyle(color: Colors.white, fontSize: 16)),
+          ],
+        ),
+        content: const Text(
+          "You don't have enough coins to purchase this item. Would you like to recharge via Binance Pay?",
+          style: TextStyle(color: Colors.white70, fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Cancel", style: TextStyle(color: Colors.white54)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: goldColor, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+            onPressed: () {
+              Navigator.pop(ctx);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (c) => WalletScreen(
+                    currentCoins: _coins,
+                    userNumericId: widget.userNumericId,
+                    userUid: _currentUser?.uid ?? "user_guest_id",
+                    onCoinsRecharged: (newBalance) {
+                      setState(() => _coins = newBalance);
+                    },
+                  ),
+                ),
+              );
+            },
+            child: const Text("Recharge Now", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
   }
 
   void _showItemPreview(StoreItem item) {
     showModalBottomSheet(
-      context: context,
+
+context: context,
       backgroundColor: cardBg,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (ctx) {
@@ -316,7 +386,7 @@ widget.onCoinsDeducted?.call(_coins);
     );
   }
 
-@override
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: darkBg,
@@ -328,15 +398,41 @@ widget.onCoinsDeducted?.call(_coins);
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text("VIP Mall & Store", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 17)),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              children: [
-                const Icon(Icons.monetization_on, color: goldColor, size: 20),
-                const SizedBox(width: 4),
-                Text("$_coins", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
-              ],
+
+actions: [
+          GestureDetector(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (c) => WalletScreen(
+                    currentCoins: _coins,
+                    userNumericId: widget.userNumericId,
+                    userUid: _currentUser?.uid ?? "user_guest_id",
+                    onCoinsRecharged: (newBalance) {
+                      setState(() => _coins = newBalance);
+                    },
+                  ),
+                ),
+              );
+            },
+            child: Container(
+              margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: goldColor, width: 1),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.monetization_on, color: goldColor, size: 16),
+                  const SizedBox(width: 4),
+                  Text("$_coins", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                  const SizedBox(width: 4),
+                  const Icon(Icons.add_circle, color: goldColor, size: 14),
+                ],
+              ),
             ),
           ),
         ],
@@ -387,7 +483,8 @@ widget.onCoinsDeducted?.call(_coins);
                   ),
                 ),
                 Expanded(
-                  child: GridView.builder(
+
+child: GridView.builder(
                     padding: const EdgeInsets.all(12),
                     itemCount: _filteredItems.length,
                     gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -401,7 +498,7 @@ widget.onCoinsDeducted?.call(_coins);
                       final owned = _isItemOwned(itm.id);
                       final equipped = _isItemEquipped(itm.category, itm.id);
 
-return GestureDetector(
+                      return GestureDetector(
                         onTap: () => _showItemPreview(itm),
                         child: Container(
                           decoration: BoxDecoration(
@@ -456,7 +553,8 @@ return GestureDetector(
                                               style: ElevatedButton.styleFrom(
                                                 backgroundColor: equipped ? Colors.redAccent : emeraldColor,
                                                 padding: EdgeInsets.zero,
-                                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+
+shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                                               ),
                                               onPressed: () => _toggleEquip(itm),
                                               child: Text(
@@ -465,8 +563,7 @@ return GestureDetector(
                                               ),
                                             )
                                           : ElevatedButton(
-
-style: ElevatedButton.styleFrom(
+                                              style: ElevatedButton.styleFrom(
                                                 backgroundColor: goldColor,
                                                 padding: EdgeInsets.zero,
                                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
