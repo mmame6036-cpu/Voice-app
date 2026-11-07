@@ -31,7 +31,7 @@ class _WalletScreenState extends State<WalletScreen> {
   final String _serverUrl = "https://nile-token-server.onrender.com";
 
   // ይፋዊ የ Binance Pay የሳንቲም ፓኬጆች
-  static const List> _binancePackages = [
+  static const _binancePackages = [
     {"coins": 35000, "price": "\$5", "usd": 5, "bonus": "+0%"},
     {"coins": 70000, "price": "\$10", "usd": 10, "bonus": "+5%"},
     {"coins": 210000, "price": "\$30", "usd": 30, "bonus": "+8%"},
