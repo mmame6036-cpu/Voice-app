@@ -2,26 +2,25 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
-class AgencyManagementScreen extends StatefulWidget {
+class AgencyScreen extends StatefulWidget {
   final int userNumericId;
 
-  const AgencyManagementScreen({
+  const AgencyScreen({
     super.key,
-    required this.userNumericId,
+    this.userNumericId = 0,
   });
 
   @override
-  State<AgencyManagementScreen> createState() => _AgencyManagementScreenState();
+  State<AgencyScreen> createState() => _AgencyScreenState();
 }
 
-class _AgencyManagementScreenState extends State<AgencyManagementScreen> with SingleTickerProviderStateMixin {
+class _AgencyScreenState extends State<AgencyScreen> with SingleTickerProviderStateMixin {
   final User? _currentUser = FirebaseAuth.instance.currentUser;
   late TabController _tabController;
   final TextEditingController _hostIdController = TextEditingController();
   final TextEditingController _binancePayController = TextEditingController();
   bool _isLoading = false;
 
-  // የኮሚሽን ተመን፡ 15% የኤጀንሲ ድርሻ
   static const double _agencyCommissionRate = 0.15;
   static const int _diamondsPerUsd = 1000;
 
@@ -39,7 +38,6 @@ class _AgencyManagementScreenState extends State<AgencyManagementScreen> with Si
     super.dispose();
   }
 
-  // አዲስ ሆስት በ User ID መጋበዣና ማገናኛ
   Future<void> _addHostToAgency(String agencyId) async {
     final enteredId = int.tryParse(_hostIdController.text.trim());
     if (enteredId == null) {
@@ -80,14 +78,12 @@ class _AgencyManagementScreenState extends State<AgencyManagementScreen> with Si
 
       final batch = FirebaseFirestore.instance.batch();
 
-      // 1. ሆስቱን ከኤጀንሲው ጋር ማገናኘት
       batch.update(targetUserDoc.reference, {
         'agencyId': agencyId,
         'isHost': true,
         'joinedAgencyAt': FieldValue.serverTimestamp(),
       });
 
-      // 2. በኤጀንሲው ስር የሆስቶች ቁጥር መጨመር
       final agencyRef = FirebaseFirestore.instance.collection('agencies').doc(agencyId);
       batch.update(agencyRef, {
         'totalHosts': FieldValue.increment(1),
@@ -119,11 +115,11 @@ class _AgencyManagementScreenState extends State<AgencyManagementScreen> with Si
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF1E1638),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: const BorderSide(color: Color(0xFF00E5FF), width: 1)),
-
-title: const Row(
+        title: const Row(
           children: [
             Icon(Icons.person_add_alt_1, color: Color(0xFF00E5FF), size: 22),
-            SizedBox(width: 8),
+
+SizedBox(width: 8),
             Text("Recruit New Host", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
           ],
         ),
@@ -172,7 +168,6 @@ title: const Row(
     );
   }
 
-  // የኤጀንሲ ኮሚሽን ወጪ ማዘዣ
   void _showAgencyPayoutDialog(String agencyId, double availableCommissionUsd) {
     showDialog(
       context: context,
@@ -206,10 +201,10 @@ title: const Row(
                 style: const TextStyle(color: Colors.white, fontSize: 14),
                 decoration: const InputDecoration(
                   hintText: "Enter Binance Pay ID",
-
-hintStyle: TextStyle(color: Colors.white24, fontSize: 13),
+                  hintStyle: TextStyle(color: Colors.white24, fontSize: 13),
                   border: InputBorder.none,
-                ),
+
+),
               ),
             ),
           ],
@@ -283,7 +278,6 @@ hintStyle: TextStyle(color: Colors.white24, fontSize: 13),
           );
         }
 
-        // ኤጀንሲ ከሌለው ኤጀንሲ የመፍጠሪያ መስኮት ያሳያል
         if (snapshot.data!.docs.isEmpty) {
           return _buildCreateAgencyPrompt();
         }
@@ -308,10 +302,10 @@ hintStyle: TextStyle(color: Colors.white24, fontSize: 13),
             centerTitle: true,
             actions: [
               IconButton(
-
-icon: const Icon(Icons.person_add_alt_1, color: Color(0xFF00E5FF)),
+                icon: const Icon(Icons.person_add_alt_1, color: Color(0xFF00E5FF)),
                 onPressed: () => _showAddHostDialog(agencyId),
-              ),
+
+),
             ],
             bottom: TabBar(
               controller: _tabController,
@@ -336,7 +330,6 @@ icon: const Icon(Icons.person_add_alt_1, color: Color(0xFF00E5FF)),
     );
   }
 
-  // 1. የሆስቶች ዝርዝር
   Widget _buildHostsListTab(String agencyId) {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
@@ -405,10 +398,10 @@ icon: const Icon(Icons.person_add_alt_1, color: Color(0xFF00E5FF)),
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
-
-const SizedBox(height: 3),
+                        const SizedBox(height: 3),
                         Text("ID: $numericId", style: const TextStyle(color: Colors.white54, fontSize: 11.5)),
-                      ],
+
+],
                     ),
                   ),
                   Column(
@@ -434,7 +427,6 @@ const SizedBox(height: 3),
     );
   }
 
-  // 2. የስታትስቲክስና ኮሚሽን ገጽ
   Widget _buildStatsTab(String agencyId, Map<String, dynamic> data, double commissionUsd) {
     final int totalHosts = (data['totalHosts'] as num?)?.toInt() ?? 0;
 
@@ -499,9 +491,10 @@ const SizedBox(height: 3),
     );
   }
 
-Widget _buildMetricCard(String label, String value, IconData icon, Color accent) {
+  Widget _buildMetricCard(String label, String value, IconData icon, Color accent) {
     return Container(
-      padding: const EdgeInsets.all(14),
+
+padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: const Color(0xFF1E1638),
         borderRadius: BorderRadius.circular(14),
@@ -520,7 +513,6 @@ Widget _buildMetricCard(String label, String value, IconData icon, Color accent)
     );
   }
 
-  // ኤጀንሲ እስካሁን ላልፈጠረ ሰው መፍጠሪያ ገጽ
   Widget _buildCreateAgencyPrompt() {
     final nameController = TextEditingController();
 
