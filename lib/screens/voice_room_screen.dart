@@ -268,11 +268,12 @@ _entryMarqueeController = AnimationController(
   // የሳንቲም ድምፅ ማጫወቻ
   void _playCoinSound() async {
     try {
-      await _audioPlayer.stop();
-      await _audioPlayer.play(
-        AssetSource('sounds/five-win.mp3'),
-        volume: 1.0,
-      );
+      final player = AudioPlayer();
+      await player.setVolume(1.0);
+      await player.play(AssetSource('sounds/five-win.mp3'));
+      player.onPlayerComplete.listen((_) {
+        player.dispose();
+      });
     } catch (e) {
       debugPrint("Audio Error: $e");
     }
@@ -694,7 +695,9 @@ controller.forward().then((_) {
     final config = _lastSentGiftConfig!;
     final giftCost = config['cost'] as int;
 
-if (_comboCount % 10 == 0) {
+    _playCoinSound();
+
+    if (_comboCount % 5 == 0) {
       _triggerMilestoneReward(giftCost);
     }
 
