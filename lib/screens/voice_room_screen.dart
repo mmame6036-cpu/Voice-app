@@ -91,12 +91,19 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
   late AnimationController _comboRingController;
   Map<String, dynamic>? _lastSentGiftConfig;
 
+  // Global Win Banner
   bool _showFloatingBanner = false;
   Timer? _bannerTimer;
   int _currentWonRebate = 0;
+  String _currentWinnerName = "";
 
   bool _showX100Badge = false;
   late AnimationController _x100BadgeController;
+
+  // User Entry Marquee Banner
+  String? _entryBannerText;
+  late AnimationController _entryMarqueeController;
+  late Animation<Offset> _entryMarqueeAnimation;
 
   final Set<int> _speakingSeatIndices = {};
   final List<int> _allowedSeatOptions = [6, 12, 20, 25, 30];
@@ -139,6 +146,25 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
       }
     });
 
+// Entry Marquee Controller Setup
+    _entryMarqueeController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 3200),
+    );
+    _entryMarqueeAnimation = Tween<Offset>(
+      begin: const Offset(1.3, 0.0),
+      end: const Offset(-1.3, 0.0),
+    ).animate(CurvedAnimation(
+      parent: _entryMarqueeController,
+      curve: Curves.easeInOut,
+    ));
+
+    _entryMarqueeController.addStatusListener((status) {
+      if (status == AnimationStatus.completed && mounted) {
+        setState(() => _entryBannerText = null);
+      }
+    });
+
     _startRocketBannerRotation();
     _initWalletSync();
     _loadRoomGiftsFromFirestore();
@@ -146,7 +172,16 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
     _connectSocket();
   }
 
-void _startRocketBannerRotation() {
+  void _triggerEntryNotice(String name) {
+    if (!mounted) return;
+    setState(() {
+      _entryBannerText = "🎉 $name joined the party room!";
+    });
+    _entryMarqueeController.reset();
+    _entryMarqueeController.forward();
+  }
+
+  void _startRocketBannerRotation() {
     _rocketBannerTimer?.cancel();
     _rocketBannerTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
       if (mounted) {
@@ -175,20 +210,13 @@ void _startRocketBannerRotation() {
   }
 
   void _playCoinSound() async {
-    if (_isPlayingSound) return;
     try {
-      _isPlayingSound = true;
       await _audioPlayer.stop();
       await _audioPlayer.play(
         AssetSource('sounds/five-win.mp3'),
         mode: PlayerMode.lowLatency,
       );
-      Future.delayed(const Duration(milliseconds: 400), () {
-        _isPlayingSound = false;
-      });
-    } catch (_) {
-      _isPlayingSound = false;
-    }
+    } catch (_) {}
   }
 
   void _addChatMessage(RoomChatMessage message) {
@@ -262,7 +290,13 @@ void _startRocketBannerRotation() {
         });
       });
 
-      _socket!.on('room_state_sync', (data) {
+      _socket!.on('user_joined_room', (data) {
+        if (!mounted || data == null) return;
+        final joinedName = data['userName'] ?? "New User";
+        _triggerEntryNotice(joinedName);
+      });
+
+_socket!.on('room_state_sync', (data) {
         if (!mounted || data == null) return;
         setState(() {
           if (data['seats'] != null) {
@@ -293,7 +327,7 @@ void _startRocketBannerRotation() {
             _seats[index] = user;
           }
 
-if (user == null) {
+          if (user == null) {
             _speakingSeatIndices.remove(index);
           }
 
@@ -354,7 +388,33 @@ if (user == null) {
         _saveRoomGiftsToFirestore();
       });
 
-      _socket!.on('chat_message_received', (data) {
+      // Coin Win broadcast for all users in room
+      _socket!.on('coin_win_broadcast', (data) {
+        if (!mounted || data == null) return;
+        final winner = data['winnerName'] ?? "A player";
+        final amount = (data['amount'] as num?)?.toInt() ?? 0;
+        final combo = (data['comboCount'] as num?)?.toInt() ?? 0;
+
+        setState(() {
+          _currentWinnerName = winner;
+          _currentWonRebate = amount;
+          _showFloatingBanner = true;
+          if (combo >= 100) {
+            _showX100Badge = true;
+            _x100BadgeController.reset();
+            _x100BadgeController.forward();
+          }
+        });
+
+        _playCoinSound();
+
+        _bannerTimer?.cancel();
+        _bannerTimer = Timer(const Duration(seconds: 4), () {
+          if (mounted) setState(() => _showFloatingBanner = false);
+        });
+      });
+
+_socket!.on('chat_message_received', (data) {
         if (!mounted || data == null) return;
         _addChatMessage(RoomChatMessage(
           id: "${DateTime.now().microsecondsSinceEpoch}",
@@ -413,7 +473,7 @@ if (user == null) {
       },
     );
 
-final dynamicToken = await _fetchToken(
+    final dynamicToken = await _fetchToken(
       channelName: widget.roomId,
       uid: widget.userNumericId,
       isPublisher: false,
@@ -492,7 +552,7 @@ final dynamicToken = await _fetchToken(
     });
   }
 
-  void _toggleMute() {
+void _toggleMute() {
     setState(() {
       _isMuted = !_isMuted;
       if (_mySeatIndex != null) {
@@ -536,7 +596,6 @@ final dynamicToken = await _fetchToken(
         setState(() {
           _showComboButton = false;
           _comboCount = 0;
-          _showFloatingBanner = false;
         });
       }
     });
@@ -555,10 +614,13 @@ final dynamicToken = await _fetchToken(
     final rebate = giftCost * rewardMultiplier;
 
     setState(() {
+      _currentWinnerName = widget.userName;
       _currentWonRebate = rebate;
       _myCoins += rebate;
       _showFloatingBanner = true;
     });
+
+    _playCoinSound();
 
     FirebaseFirestore.instance
         .collection('users')
@@ -573,7 +635,17 @@ final dynamicToken = await _fetchToken(
       _x100BadgeController.forward();
     }
 
-_bannerTimer?.cancel();
+    // Broadcast win to all users in room
+    if (_socket != null && _socket!.connected) {
+      _socket!.emit('broadcast_win', {
+        'roomId': widget.roomId,
+        'winnerName': widget.userName,
+        'amount': rebate,
+        'comboCount': _comboCount,
+      });
+    }
+
+    _bannerTimer?.cancel();
     _bannerTimer = Timer(const Duration(seconds: 4), () {
       if (mounted) setState(() => _showFloatingBanner = false);
     });
@@ -645,7 +717,7 @@ _bannerTimer?.cancel();
     }
   }
 
-  void _executeMultiSeatSend({
+void _executeMultiSeatSend({
     required List<int> targetSeats,
     required bool isAll,
     required int cost,
@@ -712,6 +784,7 @@ _bannerTimer?.cancel();
     _waveController.dispose();
     _comboRingController.dispose();
     _x100BadgeController.dispose();
+    _entryMarqueeController.dispose();
     _comboTimer?.cancel();
     _bannerTimer?.cancel();
     _audioPlayer.dispose();
@@ -732,7 +805,7 @@ _bannerTimer?.cancel();
     final double seatDimension = _totalSeats > 20 ? 44.0 : 50.0;
     final size = MediaQuery.of(context).size;
 
-return Scaffold(
+    return Scaffold(
       backgroundColor: const Color(0xFF090614),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
@@ -768,7 +841,8 @@ return Scaffold(
             onSelected: _changeSeatCount,
             itemBuilder: (context) => _allowedSeatOptions
                 .map((count) => PopupMenuItem<int>(
-                      value: count,
+
+value: count,
                       child: Text("$count Seats Layout",
                           style: TextStyle(color: count == _totalSeats ? const Color(0xFFFFD700) : Colors.white)),
                     ))
@@ -818,8 +892,7 @@ return Scaffold(
                                 alignment: Alignment.center,
                                 children: [
                                   if (isHostSeat && isOccupied)
-
-Positioned(
+                                    Positioned(
                                       top: -15,
                                       child: Image.asset('assets/images/wikimediaimages-candy-2201920.jpg', width: 36, errorBuilder: (c, e, s) => const SizedBox.shrink()),
                                     ),
@@ -842,7 +915,8 @@ Positioned(
                                               ? [
                                                   BoxShadow(
                                                     color: const Color(0xFF00E5FF).withOpacity(0.5 + (wave * 0.4)),
-                                                    blurRadius: 10 + (wave * 8),
+
+blurRadius: 10 + (wave * 8),
                                                     spreadRadius: 2 + (wave * 3),
                                                   ),
                                                 ]
@@ -879,8 +953,7 @@ Positioned(
                               Text(
                                 isOccupied ? occupier : "${index + 1}",
                                 style: TextStyle(
-
-color: isOccupied ? (isCrownSeat ? const Color(0xFFFFD700) : Colors.white) : Colors.white38,
+                                  color: isOccupied ? (isCrownSeat ? const Color(0xFFFFD700) : Colors.white) : Colors.white38,
                                   fontSize: 9.5,
                                   fontWeight: isOccupied ? FontWeight.bold : FontWeight.normal,
                                 ),
@@ -905,7 +978,8 @@ color: isOccupied ? (isCrownSeat ? const Color(0xFFFFD700) : Colors.white) : Col
                                           fontSize: 8.5,
                                           fontWeight: FontWeight.bold,
                                         )),
-                                  ],
+
+],
                                 ),
                               ),
                             ],
@@ -916,74 +990,125 @@ color: isOccupied ? (isCrownSeat ? const Color(0xFFFFD700) : Colors.white) : Col
                   ),
                 ),
 
+                // Rocket Banner Positioned at the Bottom above Chat
                 Container(
-                  height: 135,
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(horizontal: 14),
-                  alignment: Alignment.bottomLeft,
-                  child: FractionallySizedBox(
-                    widthFactor: 0.70,
-                    child: ShaderMask(
-                      shaderCallback: (Rect bounds) {
-                        return const LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [Colors.transparent, Colors.black],
-                          stops: [0.0, 0.25],
-                        ).createShader(bounds);
-                      },
-                      blendMode: BlendMode.dstIn,
-                      child: ListView.builder(
-                        controller: _chatScrollController,
-                        physics: const BouncingScrollPhysics(),
-                        padding: const EdgeInsets.only(bottom: 4),
-                        itemCount: _messages.length,
-                        itemBuilder: (context, index) {
-                          final item = _messages[index];
-                          return Align(
-                            alignment: Alignment.centerLeft,
-                            child: Container(
-                              margin: const EdgeInsets.symmetric(vertical: 2.0),
-                              padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 3.0),
-                              decoration: BoxDecoration(
-                                color: item.isSystem
-                                    ? const Color(0xFFFFD700).withOpacity(0.12)
-                                    : Colors.black.withOpacity(0.35),
-                                borderRadius: BorderRadius.circular(12),
-
-),
-                              child: RichText(
-                                text: TextSpan(
-                                  children: [
-                                    if (item.isSystem)
-                                      const WidgetSpan(
-                                        child: Padding(
-                                          padding: EdgeInsets.only(right: 4.0),
-                                          child: Icon(Icons.campaign, color: Color(0xFFFFD700), size: 13),
-                                        ),
-                                      ),
-                                    TextSpan(
-                                      text: item.isSystem ? "${item.sender}: " : "${item.sender}: ",
-                                      style: TextStyle(
-                                        color: item.isSystem ? const Color(0xFFFFD700) : const Color(0xFF00E5FF),
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 11,
-                                      ),
-                                    ),
-                                    TextSpan(
-                                      text: item.message,
-                                      style: TextStyle(
-                                        color: item.isSystem ? Colors.white : Colors.white70,
-                                        fontSize: 11,
-                                      ),
-                                    ),
-                                  ],
-                                ),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 600),
+                    transitionBuilder: (child, anim) => SlideTransition(
+                      position: Tween<Offset>(
+                        begin: const Offset(0.0, 0.4),
+                        end: Offset.zero,
+                      ).animate(anim),
+                      child: child,
+                    ),
+                    child: Container(
+                      key: ValueKey<int>(_currentRocketLevel),
+                      height: 38,
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF8A2387), Color(0xFFE94057), Color(0xFFF27121)],
+                        ),
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.orangeAccent.withOpacity(0.35),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                        border: Border.all(color: const Color(0xFFFFD700), width: 1.0),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.rocket_launch, color: Color(0xFFFFD700), size: 20),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              "Super Rocket LV.$_currentRocketLevel Active! 🚀",
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
                               ),
                             ),
-                          );
-                        },
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.black38,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              "LV.$_currentRocketLevel",
+                              style: const TextStyle(color: Color(0xFFFFD700), fontSize: 9.5, fontWeight: FontWeight.w900),
+                            ),
+                          ),
+                        ],
                       ),
+                    ),
+                  ),
+                ),
+
+                // Chat Area with Adjusted Height and Proper Scroll
+                Container(
+                  height: 150,
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                  alignment: Alignment.bottomLeft,
+                  child: FractionallySizedBox(
+                    widthFactor: 0.78,
+                    child: ListView.builder(
+                      controller: _chatScrollController,
+                      physics: const BouncingScrollPhysics(),
+                      padding: const EdgeInsets.only(bottom: 4),
+
+itemCount: _messages.length,
+                      itemBuilder: (context, index) {
+                        final item = _messages[index];
+                        return Align(
+                          alignment: Alignment.centerLeft,
+                          child: Container(
+                            margin: const EdgeInsets.symmetric(vertical: 2.0),
+                            padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 3.5),
+                            decoration: BoxDecoration(
+                              color: item.isSystem
+                                  ? const Color(0xFFFFD700).withOpacity(0.15)
+                                  : Colors.black.withOpacity(0.45),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: RichText(
+                              text: TextSpan(
+                                children: [
+                                  if (item.isSystem)
+                                    const WidgetSpan(
+                                      child: Padding(
+                                        padding: EdgeInsets.only(right: 4.0),
+                                        child: Icon(Icons.campaign, color: Color(0xFFFFD700), size: 13),
+                                      ),
+                                    ),
+                                  TextSpan(
+                                    text: "${item.sender}: ",
+                                    style: TextStyle(
+                                      color: item.isSystem ? const Color(0xFFFFD700) : const Color(0xFF00E5FF),
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 11.5,
+                                    ),
+                                  ),
+                                  TextSpan(
+                                    text: item.message,
+                                    style: TextStyle(
+                                      color: item.isSystem ? Colors.white : Colors.white70,
+                                      fontSize: 11.5,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+                      },
                     ),
                   ),
                 ),
@@ -1014,7 +1139,8 @@ color: isOccupied ? (isCrownSeat ? const Color(0xFFFFD700) : Colors.white) : Col
                           ),
                           child: TextField(
                             controller: _chatController,
-                            style: const TextStyle(color: Colors.white, fontSize: 13),
+
+style: const TextStyle(color: Colors.white, fontSize: 13),
                             decoration: const InputDecoration(
                               hintText: "Say something...",
                               hintStyle: TextStyle(color: Colors.white38),
@@ -1027,8 +1153,7 @@ color: isOccupied ? (isCrownSeat ? const Color(0xFFFFD700) : Colors.white) : Col
                         ),
                       ),
                       IconButton(
-
-icon: const Icon(Icons.send_rounded, color: Color(0xFFFFD700), size: 22),
+                        icon: const Icon(Icons.send_rounded, color: Color(0xFFFFD700), size: 22),
                         onPressed: _sendMessage,
                       ),
                       IconButton(
@@ -1041,67 +1166,42 @@ icon: const Icon(Icons.send_rounded, color: Color(0xFFFFD700), size: 22),
               ],
             ),
 
-            Positioned(
-              top: 10,
-              left: 20,
-              right: 20,
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 600),
-                transitionBuilder: (child, anim) => SlideTransition(
-                  position: Tween<Offset>(
-                    begin: const Offset(1.0, 0.0),
-                    end: Offset.zero,
-                  ).animate(anim),
-                  child: child,
-                ),
-                child: Container(
-                  key: ValueKey<int>(_currentRocketLevel),
-                  height: 48,
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF8A2387), Color(0xFFE94057), Color(0xFFF27121)],
-                    ),
-                    borderRadius: BorderRadius.circular(24),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.orangeAccent.withOpacity(0.4),
-                        blurRadius: 10,
-                        offset: const Offset(0, 3),
-                      ),
-                    ],
-                    border: Border.all(color: const Color(0xFFFFD700), width: 1.2),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.rocket_launch, color: Color(0xFFFFD700), size: 26),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          "Super Rocket Level $_currentRocketLevel Active! 🚀",
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
+            // User Entry Notice (Marquee from Right to Left)
+            if (_entryBannerText != null)
+              Positioned(
+                bottom: 60,
+                left: 0,
+                right: 0,
+                child: SlideTransition(
+                  position: _entryMarqueeAnimation,
+                  child: Center(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFFFF8F00), Color(0xFFFF2A85)],
+                        ),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: const Color(0xFFFFD700), width: 1.2),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.5),
+                            blurRadius: 8,
                           ),
+                        ],
+                      ),
+                      child: Text(
+                        _entryBannerText!,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: Colors.black38,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Text(
-                          "LV.$_currentRocketLevel",
-                          style: const TextStyle(color: Color(0xFFFFD700), fontSize: 10, fontWeight: FontWeight.w900),
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
                 ),
               ),
-            ),
 
             ..._activeFlyingGifts.map((gift) {
               return AnimatedBuilder(
@@ -1115,7 +1215,7 @@ icon: const Icon(Icons.send_rounded, color: Color(0xFFFFD700), size: 22),
                   final col = gift.targetSeatIndex % crossAxis;
                   final row = gift.targetSeatIndex ~/ crossAxis;
                   final colWidth = (size.width - 20.0) / crossAxis;
-                  
+
                   final targetX = 10.0 + (col + 0.5) * colWidth;
                   final targetY = 15.0 + (row * (seatDimension + 34.0)) + (seatDimension * 0.5);
 
@@ -1124,13 +1224,14 @@ icon: const Icon(Icons.send_rounded, color: Color(0xFFFFD700), size: 22),
 
                   final scale = 1.4 - (0.85 * t);
 
-return Positioned(
+                  return Positioned(
                     left: currentX - 35,
                     top: currentY - 35,
                     child: Opacity(
                       opacity: (1.0 - (t * 0.25)).clamp(0.0, 1.0),
                       child: Transform.scale(
-                        scale: scale.clamp(0.4, 1.8),
+
+scale: scale.clamp(0.4, 1.8),
                         child: Image.asset(
                           gift.asset,
                           width: 70,
@@ -1149,7 +1250,8 @@ return Positioned(
               );
             }),
 
-            if (_showFloatingBanner && _lastSentGiftConfig != null)
+            // Floating Win Banner Visible to All
+            if (_showFloatingBanner)
               Positioned(
                 bottom: 120,
                 left: 16,
@@ -1182,7 +1284,7 @@ return Positioned(
                               ),
                               child: Center(
                                 child: Text(
-                                  widget.userName.isNotEmpty ? widget.userName[0].toUpperCase() : "U",
+                                  _currentWinnerName.isNotEmpty ? _currentWinnerName[0].toUpperCase() : "U",
                                   style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 14),
                                 ),
                               ),
@@ -1194,22 +1296,22 @@ return Positioned(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Text(
-                                    widget.userName,
+                                    _currentWinnerName,
                                     style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                   Text(
-                                    "Combo x$_comboCount Hits!",
+                                    "Huge Coin Win! 🎉",
                                     style: const TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold, fontSize: 10),
                                   ),
-
-],
+                                ],
                               ),
                             ),
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                              decoration: BoxDecoration(
+
+decoration: BoxDecoration(
                                 color: const Color(0xFFFF1493),
                                 borderRadius: BorderRadius.circular(12),
                               ),
@@ -1292,8 +1394,9 @@ return Positioned(
                 ),
               ),
 
-if (_showComboButton)
-              Positioned(
+            if (_showComboButton)
+
+Positioned(
                 bottom: 65,
                 right: 20,
                 child: GestureDetector(
