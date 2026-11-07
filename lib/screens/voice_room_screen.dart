@@ -81,6 +81,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
 
   int _myCoins = 0;
   StreamSubscription? _walletSubscription;
+  StreamSubscription? _roomLiveSubscription;
 
   late AnimationController _waveController;
   final List<CenterFlyingGift> _activeFlyingGifts = [];
@@ -116,7 +117,6 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
 
   int _currentRocketLevel = 1;
   Timer? _rocketBannerTimer;
-  bool _isPlayingSound = false;
 
   @override
   void initState() {
@@ -146,8 +146,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
       }
     });
 
-// Entry Marquee Controller Setup
-    _entryMarqueeController = AnimationController(
+_entryMarqueeController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 3200),
     );
@@ -167,7 +166,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
 
     _startRocketBannerRotation();
     _initWalletSync();
-    _loadRoomGiftsFromFirestore();
+    _initRoomRealtimeSync();
     _setupAgora();
     _connectSocket();
   }
@@ -209,21 +208,81 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
     });
   }
 
+  // ወንበር ላይ ቢቀመጡም ባይቀመጡም የክፍሉ እንቅስቃሴ እና ሳንቲም ማሸነፍ ለሁሉም እኩል እንዲታይ
+  void _initRoomRealtimeSync() {
+    _roomLiveSubscription = FirebaseFirestore.instance
+        .collection('rooms')
+        .doc(widget.roomId)
+        .snapshots()
+        .listen((snapshot) {
+      if (!snapshot.exists  snapshot.data() == null  !mounted) return;
+      final data = snapshot.data()!;
+
+      // 1. የስጦታዎች ቁጥር
+      if (data.containsKey('seatGifts')) {
+        final List incoming = data['seatGifts'];
+        setState(() {
+          for (int i = 0; i < incoming.length && i < 30; i++) {
+            _seatGifts[i] = (incoming[i] as num).toInt();
+          }
+        });
+      }
+
+      // 2. አንድ ሰው ሳንቲም ሲያሸንፍ ለሁሉም እንዲታይ
+      if (data.containsKey('latestWin')) {
+        final winData = data['latestWin'] as Map<String, dynamic>?;
+        if (winData != null) {
+          final timestamp = (winData['time'] as num?)?.toInt() ?? 0;
+          final nowMs = DateTime.now().millisecondsSinceEpoch;
+          // በቅርብ 4 ሰከንድ ውስጥ የሆነ ከሆነ
+          if (nowMs - timestamp < 4000) {
+            final winner = winData['winnerName'] ?? "Player";
+            final rebate = (winData['amount'] as num?)?.toInt() ?? 0;
+            final combo = (winData['comboCount'] as num?)?.toInt() ?? 0;
+
+            if (_currentWinnerName != winner || _currentWonRebate != rebate) {
+              setState(() {
+                _currentWinnerName = winner;
+                _currentWonRebate = rebate;
+                _showFloatingBanner = true;
+                if (combo >= 100) {
+                  _showX100Badge = true;
+                  _x100BadgeController.reset();
+                  _x100BadgeController.forward();
+                }
+              });
+
+              _playCoinSound();
+
+              _bannerTimer?.cancel();
+              _bannerTimer = Timer(const Duration(seconds: 4), () {
+                if (mounted) setState(() => _showFloatingBanner = false);
+              });
+            }
+          }
+        }
+      }
+    });
+  }
+
+  // የሳንቲም ድምፅ ማጫወቻ
   void _playCoinSound() async {
     try {
       await _audioPlayer.stop();
       await _audioPlayer.play(
         AssetSource('sounds/five-win.mp3'),
-        mode: PlayerMode.lowLatency,
+        volume: 1.0,
       );
-    } catch (_) {}
+    } catch (e) {
+      debugPrint("Audio Error: $e");
+    }
   }
 
-  void _addChatMessage(RoomChatMessage message) {
+void _addChatMessage(RoomChatMessage message) {
     if (!mounted) return;
     setState(() {
       _messages.add(message);
-      if (_messages.length > 80) {
+      if (_messages.length > 100) {
         _messages.removeAt(0);
       }
     });
@@ -231,31 +290,11 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
       if (_chatScrollController.hasClients) {
         _chatScrollController.animateTo(
           _chatScrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 180),
+          duration: const Duration(milliseconds: 200),
           curve: Curves.easeOut,
         );
       }
     });
-  }
-
-  Future<void> _loadRoomGiftsFromFirestore() async {
-    try {
-      final doc = await FirebaseFirestore.instance
-          .collection('rooms')
-          .doc(widget.roomId)
-          .get();
-
-      if (doc.exists && doc.data()!.containsKey('seatGifts')) {
-        final List incoming = doc.data()!['seatGifts'];
-        if (mounted) {
-          setState(() {
-            for (int i = 0; i < incoming.length && i < 30; i++) {
-              _seatGifts[i] = (incoming[i] as num).toInt();
-            }
-          });
-        }
-      }
-    } catch (_) {}
   }
 
   Future<void> _saveRoomGiftsToFirestore() async {
@@ -296,7 +335,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
         _triggerEntryNotice(joinedName);
       });
 
-_socket!.on('room_state_sync', (data) {
+      _socket!.on('room_state_sync', (data) {
         if (!mounted || data == null) return;
         setState(() {
           if (data['seats'] != null) {
@@ -358,7 +397,8 @@ _socket!.on('room_state_sync', (data) {
               if (_seats[i] != null) {
                 _seatGifts[i] += giftCost;
                 _triggerCenterGiftAnimation(giftAsset.toString(), i, isToAll: true);
-              }
+
+}
             }
           } else if (targets.isNotEmpty) {
             for (var t in targets) {
@@ -388,37 +428,15 @@ _socket!.on('room_state_sync', (data) {
         _saveRoomGiftsToFirestore();
       });
 
-      // Coin Win broadcast for all users in room
-      _socket!.on('coin_win_broadcast', (data) {
+      _socket!.on('chat_message_received', (data) {
         if (!mounted || data == null) return;
-        final winner = data['winnerName'] ?? "A player";
-        final amount = (data['amount'] as num?)?.toInt() ?? 0;
-        final combo = (data['comboCount'] as num?)?.toInt() ?? 0;
+        final sender = data['sender'] ?? 'User';
+        // የራሳችን ከሆነ ቀድመን ስክሪን ላይ ጨምረነዋል እንዳይደገም
+        if (sender == widget.userName) return;
 
-        setState(() {
-          _currentWinnerName = winner;
-          _currentWonRebate = amount;
-          _showFloatingBanner = true;
-          if (combo >= 100) {
-            _showX100Badge = true;
-            _x100BadgeController.reset();
-            _x100BadgeController.forward();
-          }
-        });
-
-        _playCoinSound();
-
-        _bannerTimer?.cancel();
-        _bannerTimer = Timer(const Duration(seconds: 4), () {
-          if (mounted) setState(() => _showFloatingBanner = false);
-        });
-      });
-
-_socket!.on('chat_message_received', (data) {
-        if (!mounted || data == null) return;
         _addChatMessage(RoomChatMessage(
           id: "${DateTime.now().microsecondsSinceEpoch}",
-          sender: data['sender'] ?? 'User',
+          sender: sender,
           message: data['message'] ?? '',
           isSystem: data['isSystem'] ?? false,
         ));
@@ -513,7 +531,7 @@ _socket!.on('chat_message_received', (data) {
       _activeFlyingGifts.add(giftItem);
     });
 
-    controller.forward().then((_) {
+controller.forward().then((_) {
       if (mounted) {
         setState(() {
           _activeFlyingGifts.removeWhere((g) => g.id == giftItem.id);
@@ -552,7 +570,7 @@ _socket!.on('chat_message_received', (data) {
     });
   }
 
-void _toggleMute() {
+  void _toggleMute() {
     setState(() {
       _isMuted = !_isMuted;
       if (_mySeatIndex != null) {
@@ -572,10 +590,20 @@ void _toggleMute() {
     });
   }
 
+  // ጽሁፍ ወዲያውኑ ስክሪን ላይ እንዲታይ እና ለሌሎች እንዲላክ
   void _sendMessage() {
     final text = _chatController.text.trim();
     if (text.isEmpty) return;
 
+    // 1. ወዲያውኑ የራሴ ስክሪን ላይ ያሳየዋል
+    _addChatMessage(RoomChatMessage(
+      id: "${DateTime.now().microsecondsSinceEpoch}",
+      sender: widget.userName,
+      message: text,
+      isSystem: false,
+    ));
+
+    // 2. ለሌሎች ሰዎች ይልከዋል
     if (_socket != null && _socket!.connected) {
       _socket!.emit('send_chat', {
         'roomId': widget.roomId,
@@ -583,6 +611,7 @@ void _toggleMute() {
         'message': text,
       });
     }
+
     _chatController.clear();
   }
 
@@ -601,6 +630,7 @@ void _toggleMute() {
     });
   }
 
+  // ሳንቲም ሲያሸንፍ በክፍሉ ውስጥ ላሉ ሰዎች በሙሉ እንዲታይ
   void _triggerMilestoneReward(int giftCost) {
     int rewardMultiplier = 2;
     if (_comboCount >= 100) {
@@ -622,6 +652,7 @@ void _toggleMute() {
 
     _playCoinSound();
 
+    // የተጠቃሚውን ሳንቲም ማሳደግ
     FirebaseFirestore.instance
         .collection('users')
         .doc(widget.userUid)
@@ -629,20 +660,23 @@ void _toggleMute() {
       'coins': FieldValue.increment(rebate),
     }).catchError((_) {});
 
+    // ለክፍሉ አጠቃላይ ሰወች በሙሉ እንዲደርሳቸው Firestore ላይ ማስተላለፍ
+    FirebaseFirestore.instance
+        .collection('rooms')
+        .doc(widget.roomId)
+        .set({
+      'latestWin': {
+        'winnerName': widget.userName,
+        'amount': rebate,
+        'comboCount': _comboCount,
+        'time': DateTime.now().millisecondsSinceEpoch,
+      }
+    }, SetOptions(merge: true)).catchError((_) {});
+
     if (_comboCount >= 100) {
       setState(() => _showX100Badge = true);
       _x100BadgeController.reset();
       _x100BadgeController.forward();
-    }
-
-    // Broadcast win to all users in room
-    if (_socket != null && _socket!.connected) {
-      _socket!.emit('broadcast_win', {
-        'roomId': widget.roomId,
-        'winnerName': widget.userName,
-        'amount': rebate,
-        'comboCount': _comboCount,
-      });
     }
 
     _bannerTimer?.cancel();
@@ -660,7 +694,7 @@ void _toggleMute() {
     final config = _lastSentGiftConfig!;
     final giftCost = config['cost'] as int;
 
-    if (_comboCount % 10 == 0) {
+if (_comboCount % 10 == 0) {
       _triggerMilestoneReward(giftCost);
     }
 
@@ -717,7 +751,7 @@ void _toggleMute() {
     }
   }
 
-void _executeMultiSeatSend({
+  void _executeMultiSeatSend({
     required List<int> targetSeats,
     required bool isAll,
     required int cost,
@@ -781,6 +815,7 @@ void _executeMultiSeatSend({
   void dispose() {
     _rocketBannerTimer?.cancel();
     _walletSubscription?.cancel();
+    _roomLiveSubscription?.cancel();
     _waveController.dispose();
     _comboRingController.dispose();
     _x100BadgeController.dispose();
@@ -810,7 +845,8 @@ void _executeMultiSeatSend({
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: Column(
+
+title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(widget.roomTitle, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
@@ -841,8 +877,7 @@ void _executeMultiSeatSend({
             onSelected: _changeSeatCount,
             itemBuilder: (context) => _allowedSeatOptions
                 .map((count) => PopupMenuItem<int>(
-
-value: count,
+                      value: count,
                       child: Text("$count Seats Layout",
                           style: TextStyle(color: count == _totalSeats ? const Color(0xFFFFD700) : Colors.white)),
                     ))
@@ -895,7 +930,8 @@ value: count,
                                     Positioned(
                                       top: -15,
                                       child: Image.asset('assets/images/wikimediaimages-candy-2201920.jpg', width: 36, errorBuilder: (c, e, s) => const SizedBox.shrink()),
-                                    ),
+
+),
                                   if (isCrownSeat && isOccupied)
                                     Positioned(
                                       top: -14,
@@ -915,8 +951,7 @@ value: count,
                                               ? [
                                                   BoxShadow(
                                                     color: const Color(0xFF00E5FF).withOpacity(0.5 + (wave * 0.4)),
-
-blurRadius: 10 + (wave * 8),
+                                                    blurRadius: 10 + (wave * 8),
                                                     spreadRadius: 2 + (wave * 3),
                                                   ),
                                                 ]
@@ -956,7 +991,8 @@ blurRadius: 10 + (wave * 8),
                                   color: isOccupied ? (isCrownSeat ? const Color(0xFFFFD700) : Colors.white) : Colors.white38,
                                   fontSize: 9.5,
                                   fontWeight: isOccupied ? FontWeight.bold : FontWeight.normal,
-                                ),
+
+),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -978,8 +1014,7 @@ blurRadius: 10 + (wave * 8),
                                           fontSize: 8.5,
                                           fontWeight: FontWeight.bold,
                                         )),
-
-],
+                                  ],
                                 ),
                               ),
                             ],
@@ -990,7 +1025,7 @@ blurRadius: 10 + (wave * 8),
                   ),
                 ),
 
-                // Rocket Banner Positioned at the Bottom above Chat
+                // ሮኬት ከታች ከቻቱ በላይ ተቀምጧል
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
                   child: AnimatedSwitcher(
@@ -1004,13 +1039,13 @@ blurRadius: 10 + (wave * 8),
                     ),
                     child: Container(
                       key: ValueKey<int>(_currentRocketLevel),
-                      height: 38,
+                      height: 36,
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
                       decoration: BoxDecoration(
                         gradient: const LinearGradient(
                           colors: [Color(0xFF8A2387), Color(0xFFE94057), Color(0xFFF27121)],
                         ),
-                        borderRadius: BorderRadius.circular(20),
+                        borderRadius: BorderRadius.circular(18),
                         boxShadow: [
                           BoxShadow(
                             color: Colors.orangeAccent.withOpacity(0.35),
@@ -1022,7 +1057,7 @@ blurRadius: 10 + (wave * 8),
                       ),
                       child: Row(
                         children: [
-                          const Icon(Icons.rocket_launch, color: Color(0xFFFFD700), size: 20),
+                          const Icon(Icons.rocket_launch, color: Color(0xFFFFD700), size: 18),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
@@ -1033,9 +1068,10 @@ blurRadius: 10 + (wave * 8),
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
-                          ),
+
+),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
                             decoration: BoxDecoration(
                               color: Colors.black38,
                               borderRadius: BorderRadius.circular(8),
@@ -1051,32 +1087,33 @@ blurRadius: 10 + (wave * 8),
                   ),
                 ),
 
-                // Chat Area with Adjusted Height and Proper Scroll
-                Container(
-                  height: 150,
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-                  alignment: Alignment.bottomLeft,
-                  child: FractionallySizedBox(
-                    widthFactor: 0.78,
+                // የቻት ማሳያ ክፍል
+                Expanded(
+                  flex: 3,
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
                     child: ListView.builder(
                       controller: _chatScrollController,
                       physics: const BouncingScrollPhysics(),
-                      padding: const EdgeInsets.only(bottom: 4),
-
-itemCount: _messages.length,
+                      padding: const EdgeInsets.only(bottom: 6),
+                      itemCount: _messages.length,
                       itemBuilder: (context, index) {
                         final item = _messages[index];
                         return Align(
                           alignment: Alignment.centerLeft,
                           child: Container(
-                            margin: const EdgeInsets.symmetric(vertical: 2.0),
-                            padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 3.5),
+                            margin: const EdgeInsets.symmetric(vertical: 2.5),
+                            padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 5.0),
                             decoration: BoxDecoration(
                               color: item.isSystem
-                                  ? const Color(0xFFFFD700).withOpacity(0.15)
-                                  : Colors.black.withOpacity(0.45),
+                                  ? const Color(0xFFFFD700).withOpacity(0.18)
+                                  : Colors.black.withOpacity(0.55),
                               borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: item.isSystem ? const Color(0xFFFFD700).withOpacity(0.3) : Colors.white10,
+                                width: 0.8,
+                              ),
                             ),
                             child: RichText(
                               text: TextSpan(
@@ -1093,14 +1130,14 @@ itemCount: _messages.length,
                                     style: TextStyle(
                                       color: item.isSystem ? const Color(0xFFFFD700) : const Color(0xFF00E5FF),
                                       fontWeight: FontWeight.bold,
-                                      fontSize: 11.5,
+                                      fontSize: 12,
                                     ),
                                   ),
                                   TextSpan(
                                     text: item.message,
                                     style: TextStyle(
-                                      color: item.isSystem ? Colors.white : Colors.white70,
-                                      fontSize: 11.5,
+                                      color: item.isSystem ? Colors.white : Colors.white,
+                                      fontSize: 12,
                                     ),
                                   ),
                                 ],
@@ -1113,6 +1150,7 @@ itemCount: _messages.length,
                   ),
                 ),
 
+// ከስር መጻፊያ ክፍል
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: const BoxDecoration(
@@ -1139,8 +1177,7 @@ itemCount: _messages.length,
                           ),
                           child: TextField(
                             controller: _chatController,
-
-style: const TextStyle(color: Colors.white, fontSize: 13),
+                            style: const TextStyle(color: Colors.white, fontSize: 13),
                             decoration: const InputDecoration(
                               hintText: "Say something...",
                               hintStyle: TextStyle(color: Colors.white38),
@@ -1166,10 +1203,10 @@ style: const TextStyle(color: Colors.white, fontSize: 13),
               ],
             ),
 
-            // User Entry Notice (Marquee from Right to Left)
+            // አዲስ ሰው ሲገባ ከቀኝ ወደ ግራ የሚያልፍ ማስታወቂያ
             if (_entryBannerText != null)
               Positioned(
-                bottom: 60,
+                bottom: 75,
                 left: 0,
                 right: 0,
                 child: SlideTransition(
@@ -1203,7 +1240,7 @@ style: const TextStyle(color: Colors.white, fontSize: 13),
                 ),
               ),
 
-            ..._activeFlyingGifts.map((gift) {
+..._activeFlyingGifts.map((gift) {
               return AnimatedBuilder(
                 animation: gift.controller,
                 builder: (context, child) {
@@ -1230,8 +1267,7 @@ style: const TextStyle(color: Colors.white, fontSize: 13),
                     child: Opacity(
                       opacity: (1.0 - (t * 0.25)).clamp(0.0, 1.0),
                       child: Transform.scale(
-
-scale: scale.clamp(0.4, 1.8),
+                        scale: scale.clamp(0.4, 1.8),
                         child: Image.asset(
                           gift.asset,
                           width: 70,
@@ -1250,10 +1286,10 @@ scale: scale.clamp(0.4, 1.8),
               );
             }),
 
-            // Floating Win Banner Visible to All
+            // ለሁሉም ሰው በጋራ የሚታይ የሳንቲም ማሸነፊያ ባነር
             if (_showFloatingBanner)
               Positioned(
-                bottom: 120,
+                bottom: 125,
                 left: 16,
                 right: 90,
                 child: TweenAnimationBuilder<double>(
@@ -1290,7 +1326,8 @@ scale: scale.clamp(0.4, 1.8),
                               ),
                             ),
                             const SizedBox(width: 8),
-                            Expanded(
+
+Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 mainAxisSize: MainAxisSize.min,
@@ -1301,17 +1338,16 @@ scale: scale.clamp(0.4, 1.8),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                   ),
-                                  Text(
+                                  const Text(
                                     "Huge Coin Win! 🎉",
-                                    style: const TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold, fontSize: 10),
+                                    style: TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold, fontSize: 10),
                                   ),
                                 ],
                               ),
                             ),
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-
-decoration: BoxDecoration(
+                              decoration: BoxDecoration(
                                 color: const Color(0xFFFF1493),
                                 borderRadius: BorderRadius.circular(12),
                               ),
@@ -1369,7 +1405,8 @@ decoration: BoxDecoration(
                                   fontWeight: FontWeight.w900,
                                   fontSize: 48,
                                   letterSpacing: 2,
-                                  shadows: [
+
+shadows: [
                                     Shadow(color: Colors.black, blurRadius: 10, offset: Offset(2, 2)),
                                   ],
                                 ),
@@ -1395,8 +1432,7 @@ decoration: BoxDecoration(
               ),
 
             if (_showComboButton)
-
-Positioned(
+              Positioned(
                 bottom: 65,
                 right: 20,
                 child: GestureDetector(
