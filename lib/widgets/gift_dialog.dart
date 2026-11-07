@@ -65,8 +65,8 @@ class _GiftDialogState extends State<GiftDialog> {
   int _selectedGiftIndex = 0;
 
   static const Color goldColor = Color(0xFFFFD700);
-  static const Color darkBg = Color(0xFF140F2D);
-  static const Color cardBg = Color(0xFF221A45);
+  static const Color darkBg = Color(0xFF130F26);
+  static const Color cardBg = Color(0xFF1E1738);
 
   final List<GiftItem> _gifts = const [
     GiftItem(
@@ -98,17 +98,17 @@ class _GiftDialogState extends State<GiftDialog> {
       imageAsset: "assets/images/wealth_03.webp",
     ),
     GiftItem(
-      id: "lollipop",
-      name: "Lollipop",
-      icon: "🍭",
-      price: 10,
+      id: "crystal_blue_rose",
+      name: "Crystal Rose",
+      icon: "🌹",
+      price: 999,
       imageAsset: "assets/images/wikimediaimages-candy-2201920.jpg",
     ),
     GiftItem(
       id: "diamond",
-      name: "Diamond Ring",
+      name: "Royal Diamond",
       icon: "💎",
-      price: 1000,
+      price: 1500,
       imageAsset: "assets/images/weekly_lovers_heart_value.webp",
     ),
     GiftItem(
@@ -209,12 +209,10 @@ void _toggleSeat(int seatIndex) {
       final senderRef = FirebaseFirestore.instance.collection('users').doc(_currentUser!.uid);
       final roomRef = FirebaseFirestore.instance.collection('rooms').doc(widget.roomId);
 
-      // Deduct coins from sender safely
       senderRef.set({
         'coins': FieldValue.increment(-totalCost),
       }, SetOptions(merge: true)).catchError((_) {});
 
-      // Add diamonds to occupants in background
       final pointsPerRecipient = selectedGift.price * _selectedMultiplier;
       for (final sIndex in _selectedSeatIndices) {
         final occupant = _userList.firstWhere(
@@ -231,7 +229,6 @@ void _toggleSeat(int seatIndex) {
         }
       }
 
-      // Log room event in background
       roomRef.collection('events').add({
         'type': 'gift',
         'senderId': _currentUser!.uid,
@@ -278,108 +275,91 @@ void _toggleSeat(int seatIndex) {
     final totalCost = _calculateTotalPrice;
 
     return Container(
-      height: 480,
+      height: 440,
       decoration: const BoxDecoration(
         color: darkBg,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       child: Column(
         children: [
-          // Top seated users & All selector
+          // እጅግ በጣም የጠበበና እስከ 20+ ሰው የሚያስተናግድ የወንበር መምረጫ
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: const BoxDecoration(
 
-decoration: const BoxDecoration(
-              border: Border(bottom: BorderSide(color: Colors.white10)),
+border: Border(bottom: BorderSide(color: Colors.white10)),
             ),
             child: Row(
               children: [
-                Expanded(
-                  child: _userList.isEmpty
-                      ? const Center(
-                          child: Text(
-                            "No users seated",
-                            style: TextStyle(color: Colors.white54, fontSize: 11),
-                          ),
-                        )
-                      : SizedBox(
-                          height: 52,
-                          child: ListView.builder(
-                            scrollDirection: Axis.horizontal,
-                            itemCount: _userList.length,
-                            itemBuilder: (context, index) {
-                              final user = _userList[index];
-                              final seatIdx = user['seatIndex'] as int? ?? index;
-                              final seatNum = seatIdx + 1;
-                              final name = (user['name'] ?? "User") as String;
-                              final isSelected = _selectedSeatIndices.contains(seatIdx);
-                              final initial = name.isNotEmpty ? name[0].toUpperCase() : "U";
-
-                              return GestureDetector(
-                                onTap: () => _toggleSeat(seatIdx),
-                                child: Container(
-                                  margin: const EdgeInsets.only(right: 12),
-                                  child: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Container(
-                                        width: 36,
-                                        height: 36,
-                                        decoration: BoxDecoration(
-                                          shape: BoxShape.circle,
-                                          gradient: const LinearGradient(
-                                            colors: [Color(0xFFE91E63), Color(0xFF9C27B0)],
-                                          ),
-                                          border: Border.all(
-                                            color: isSelected ? goldColor : Colors.transparent,
-                                            width: 2.2,
-                                          ),
-                                        ),
-                                        child: Center(
-                                          child: Text(
-                                            initial,
-                                            style: const TextStyle(
-                                              color: Colors.white,
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 15,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        "No.$seatNum",
-                                        style: TextStyle(
-                                          color: isSelected ? goldColor : Colors.white60,
-                                          fontSize: 9.5,
-                                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              );
-
-},
-                          ),
-                        ),
-                ),
                 GestureDetector(
                   onTap: _toggleSelectAll,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
                     decoration: BoxDecoration(
                       color: _isAllSelected ? goldColor : cardBg,
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: BorderRadius.circular(12),
                       border: Border.all(color: _isAllSelected ? goldColor : Colors.white24),
                     ),
                     child: Text(
-                      "All Mics",
+                      "All",
                       style: TextStyle(
                         color: _isAllSelected ? Colors.black : Colors.white,
                         fontWeight: FontWeight.bold,
-                        fontSize: 11,
+                        fontSize: 10.5,
                       ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: SizedBox(
+                    height: 42,
+                    child: ListView.builder(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: 30, // 30 ወንበሮች በጠባብ ዲዛይን
+                      itemBuilder: (context, index) {
+                        final seatIdx = index;
+                        final seatNum = seatIdx + 1;
+                        final occupant = _userList.firstWhere(
+                          (u) => u['seatIndex'] == seatIdx,
+                          orElse: () => null,
+                        );
+
+                        final isOccupied = occupant != null;
+                        final isSelected = _selectedSeatIndices.contains(seatIdx);
+
+                        return GestureDetector(
+                          onTap: isOccupied ? () => _toggleSeat(seatIdx) : null,
+                          child: Container(
+                            width: 32,
+                            margin: const EdgeInsets.only(right: 5),
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: isSelected
+                                  ? goldColor.withOpacity(0.25)
+                                  : (isOccupied ? cardBg : Colors.white.withOpacity(0.04)),
+                              border: Border.all(
+                                color: isSelected
+                                    ? goldColor
+                                    : (isOccupied ? Colors.white24 : Colors.transparent),
+                                width: isSelected ? 1.5 : 0.8,
+                              ),
+                            ),
+                            child: Center(
+                              child: Text(
+                                "$seatNum",
+                                style: TextStyle(
+                                  color: isSelected
+                                      ? goldColor
+                                      : (isOccupied ? Colors.white : Colors.white24),
+                                  fontSize: 10,
+                                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      },
                     ),
                   ),
                 ),
@@ -390,13 +370,14 @@ decoration: const BoxDecoration(
           // Gift Grid
           Expanded(
             child: GridView.builder(
-              padding: const EdgeInsets.all(10),
+              padding: const EdgeInsets.all(8),
               itemCount: _gifts.length,
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 4,
-                mainAxisSpacing: 8,
-                crossAxisSpacing: 8,
-                childAspectRatio: 0.84,
+
+mainAxisSpacing: 6,
+                crossAxisSpacing: 6,
+                childAspectRatio: 0.85,
               ),
               itemBuilder: (context, index) {
                 final gift = _gifts[index];
@@ -406,11 +387,11 @@ decoration: const BoxDecoration(
                   onTap: () => setState(() => _selectedGiftIndex = index),
                   child: Container(
                     decoration: BoxDecoration(
-                      color: isSelected ? goldColor.withOpacity(0.18) : cardBg,
-                      borderRadius: BorderRadius.circular(12),
+                      color: isSelected ? goldColor.withOpacity(0.16) : cardBg,
+                      borderRadius: BorderRadius.circular(10),
                       border: Border.all(
                         color: isSelected ? goldColor : Colors.transparent,
-                        width: 1.5,
+                        width: 1.4,
                       ),
                     ),
                     child: Column(
@@ -420,19 +401,19 @@ decoration: const BoxDecoration(
                           borderRadius: BorderRadius.circular(6),
                           child: Image.asset(
                             gift.imageAsset,
-                            width: 38,
-                            height: 38,
+                            width: 34,
+                            height: 34,
                             fit: BoxFit.cover,
                             errorBuilder: (ctx, err, stack) =>
-                                Text(gift.icon, style: const TextStyle(fontSize: 28)),
+                                Text(gift.icon, style: const TextStyle(fontSize: 26)),
                           ),
                         ),
-                        const SizedBox(height: 3),
+                        const SizedBox(height: 2),
                         Text(
                           gift.name,
                           style: const TextStyle(
                             color: Colors.white,
-                            fontSize: 10,
+                            fontSize: 9.5,
                             fontWeight: FontWeight.bold,
                           ),
                           maxLines: 1,
@@ -440,7 +421,7 @@ decoration: const BoxDecoration(
                         ),
                         Text(
                           "🪙 ${gift.price}",
-                          style: const TextStyle(color: goldColor, fontSize: 10, fontWeight: FontWeight.bold),
+                          style: const TextStyle(color: goldColor, fontSize: 9.5, fontWeight: FontWeight.bold),
                         ),
                       ],
                     ),
@@ -450,30 +431,28 @@ decoration: const BoxDecoration(
             ),
           ),
 
-          // Bottom Action Bar
+          // Bottom Bar
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: const BoxDecoration(
               color: cardBg,
-
-border: Border(top: BorderSide(color: Colors.white10)),
+              border: Border(top: BorderSide(color: Colors.white10)),
             ),
             child: Row(
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.monetization_on, color: goldColor, size: 18),
+                    const Icon(Icons.monetization_on, color: goldColor, size: 16),
                     const SizedBox(width: 4),
                     Text(
                       "$_coins",
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
                     ),
                   ],
                 ),
                 const Spacer(),
-                // Multiplier dropdown
                 PopupMenuButton<int>(
-                  color: const Color(0xFF2E2458),
+                  color: const Color(0xFF281E48),
                   initialValue: _selectedMultiplier,
                   onSelected: (val) => setState(() => _selectedMultiplier = val),
                   itemBuilder: (context) => _multipliers
@@ -486,41 +465,42 @@ border: Border(top: BorderSide(color: Colors.white10)),
                           ))
                       .toList(),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                    decoration: BoxDecoration(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+
+decoration: BoxDecoration(
                       color: Colors.white.withOpacity(0.08),
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius: BorderRadius.circular(12),
                       border: Border.all(color: Colors.white24),
                     ),
                     child: Row(
                       children: [
                         Text(
                           "x$_selectedMultiplier",
-                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
                         ),
-                        const Icon(Icons.arrow_drop_up, color: Colors.white70, size: 16),
+                        const Icon(Icons.arrow_drop_up, color: Colors.white70, size: 14),
                       ],
                     ),
                   ),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 8),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: goldColor,
                     foregroundColor: Colors.black,
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 9),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                   ),
                   onPressed: _isSending ? null : _sendGift,
                   child: _isSending
                       ? const SizedBox(
-                          width: 16,
-                          height: 16,
+                          width: 14,
+                          height: 14,
                           child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
                         )
                       : Text(
                           "Send (🪙$totalCost)",
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
                         ),
                 ),
               ],
