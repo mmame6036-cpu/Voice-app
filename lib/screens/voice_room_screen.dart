@@ -31,8 +31,7 @@ class CenterFlyingGift {
   final int targetSeatIndex;
   final bool isAll;
   final AnimationController controller;
-  final Animation<double> burstAnimation; // 0.0 -> 1.0 (ከመሃል የመፈንዳት አኒሜሽን)
-  final Animation<double> flightAnimation; // ከመሃል ወደ ወንበር የመብረር አኒሜሽን
+  final Animation<double> flightAnimation;
 
   CenterFlyingGift({
     required this.id,
@@ -40,7 +39,6 @@ class CenterFlyingGift {
     required this.targetSeatIndex,
     required this.isAll,
     required this.controller,
-    required this.burstAnimation,
     required this.flightAnimation,
   });
 }
@@ -193,7 +191,6 @@ void _startRocketBannerRotation() {
     }
   }
 
-  // መልእክቶች ሳይጠፉ በስላስላሳ አኒሜሽን ወደ ላይ የሚገፉበት ፈንክሽን
   void _addChatMessage(RoomChatMessage message) {
     if (!mounted) return;
     setState(() {
@@ -286,7 +283,7 @@ void _startRocketBannerRotation() {
         final int index = (data['seatIndex'] as num).toInt();
         final String? user = data['userName'] as String?;
 
-setState(() {
+        setState(() {
           if (data['seats'] != null) {
             final List incomingSeats = data['seats'];
             for (int i = 0; i < incomingSeats.length && i < 30; i++) {
@@ -296,7 +293,7 @@ setState(() {
             _seats[index] = user;
           }
 
-          if (user == null) {
+if (user == null) {
             _speakingSeatIndices.remove(index);
           }
 
@@ -399,8 +396,7 @@ setState(() {
       onUserJoined: (uid) {},
       onUserOffline: (uid) {},
       onVolumeChanged: (speakers) {
-
-if (!mounted) return;
+        if (!mounted) return;
         setState(() {
           _speakingSeatIndices.clear();
           for (var speaker in speakers) {
@@ -417,7 +413,7 @@ if (!mounted) return;
       },
     );
 
-    final dynamicToken = await _fetchToken(
+final dynamicToken = await _fetchToken(
       channelName: widget.roomId,
       uid: widget.userNumericId,
       isPublisher: false,
@@ -433,23 +429,15 @@ if (!mounted) return;
     if (mounted) setState(() => _isConnecting = false);
   }
 
-  // ከመሃል ሴንተር ተነስቶ በደማቁ ፈንድቶ ወደ ወንበሮቹ የሚበር ትክክለኛ አሰራር
   void _triggerCenterGiftAnimation(String asset, int targetSeatIndex, {bool isToAll = false}) {
     final controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1200),
+      duration: const Duration(milliseconds: 1000),
     );
 
-    // በመጀመሪያው 35% ጊዜ ውስጥ በመሃል ሴንተር ላይ በኃይል ብቅ ይላል
-    final burstAnimation = CurvedAnimation(
+    final animation = CurvedAnimation(
       parent: controller,
-      curve: const Interval(0.0, 0.35, curve: Curves.easeOutBack),
-    );
-
-    // ከ 35% በኋላ ወደ ወንበሩ በከፍተኛ ፍጥነት ይበራል
-    final flightAnimation = CurvedAnimation(
-      parent: controller,
-      curve: const Interval(0.35, 1.0, curve: Curves.easeInOutCubic),
+      curve: Curves.fastOutSlowIn,
     );
 
     final giftItem = CenterFlyingGift(
@@ -458,8 +446,7 @@ if (!mounted) return;
       targetSeatIndex: targetSeatIndex,
       isAll: isToAll,
       controller: controller,
-      burstAnimation: burstAnimation,
-      flightAnimation: flightAnimation,
+      flightAnimation: animation,
     );
 
     setState(() {
@@ -555,7 +542,7 @@ if (!mounted) return;
     });
   }
 
-void _triggerMilestoneReward(int giftCost) {
+  void _triggerMilestoneReward(int giftCost) {
     int rewardMultiplier = 2;
     if (_comboCount >= 100) {
       rewardMultiplier = 20;
@@ -586,7 +573,7 @@ void _triggerMilestoneReward(int giftCost) {
       _x100BadgeController.forward();
     }
 
-    _bannerTimer?.cancel();
+_bannerTimer?.cancel();
     _bannerTimer = Timer(const Duration(seconds: 4), () {
       if (mounted) setState(() => _showFloatingBanner = false);
     });
@@ -718,7 +705,7 @@ void _triggerMilestoneReward(int giftCost) {
     }
   }
 
-@override
+  @override
   void dispose() {
     _rocketBannerTimer?.cancel();
     _walletSubscription?.cancel();
@@ -745,7 +732,7 @@ void _triggerMilestoneReward(int giftCost) {
     final double seatDimension = _totalSeats > 20 ? 44.0 : 50.0;
     final size = MediaQuery.of(context).size;
 
-    return Scaffold(
+return Scaffold(
       backgroundColor: const Color(0xFF090614),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
@@ -821,7 +808,7 @@ void _triggerMilestoneReward(int giftCost) {
                         final bool isHostSeat = index == 0;
                         final bool isCrownSeat = index >= 1 && index <= 6;
 
-return GestureDetector(
+                        return GestureDetector(
                           onTap: () => _handleSeatTap(index),
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
@@ -831,7 +818,8 @@ return GestureDetector(
                                 alignment: Alignment.center,
                                 children: [
                                   if (isHostSeat && isOccupied)
-                                    Positioned(
+
+Positioned(
                                       top: -15,
                                       child: Image.asset('assets/images/wikimediaimages-candy-2201920.jpg', width: 36, errorBuilder: (c, e, s) => const SizedBox.shrink()),
                                     ),
@@ -881,8 +869,7 @@ return GestureDetector(
                                         decoration: BoxDecoration(
                                           shape: BoxShape.circle,
                                           color: isMuted ? Colors.redAccent : const Color(0xFF00C9A7),
-
-),
+                                        ),
                                         child: Icon(isMuted ? Icons.mic_off : Icons.mic, size: 11, color: Colors.black),
                                       ),
                                     ),
@@ -892,7 +879,8 @@ return GestureDetector(
                               Text(
                                 isOccupied ? occupier : "${index + 1}",
                                 style: TextStyle(
-                                  color: isOccupied ? (isCrownSeat ? const Color(0xFFFFD700) : Colors.white) : Colors.white38,
+
+color: isOccupied ? (isCrownSeat ? const Color(0xFFFFD700) : Colors.white) : Colors.white38,
                                   fontSize: 9.5,
                                   fontWeight: isOccupied ? FontWeight.bold : FontWeight.normal,
                                 ),
@@ -928,7 +916,6 @@ return GestureDetector(
                   ),
                 ),
 
-                // በግራ በኩል የተጠቀለለ እና እጅግ በጣም የጠበበ የቻት ክፍል
                 Container(
                   height: 135,
                   width: double.infinity,
@@ -955,8 +942,7 @@ return GestureDetector(
                           final item = _messages[index];
                           return Align(
                             alignment: Alignment.centerLeft,
-
-child: Container(
+                            child: Container(
                               margin: const EdgeInsets.symmetric(vertical: 2.0),
                               padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 3.0),
                               decoration: BoxDecoration(
@@ -964,7 +950,8 @@ child: Container(
                                     ? const Color(0xFFFFD700).withOpacity(0.12)
                                     : Colors.black.withOpacity(0.35),
                                 borderRadius: BorderRadius.circular(12),
-                              ),
+
+),
                               child: RichText(
                                 text: TextSpan(
                                   children: [
@@ -1001,7 +988,6 @@ child: Container(
                   ),
                 ),
 
-                // Bottom Input Bar
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: const BoxDecoration(
@@ -1029,8 +1015,7 @@ child: Container(
                           child: TextField(
                             controller: _chatController,
                             style: const TextStyle(color: Colors.white, fontSize: 13),
-
-decoration: const InputDecoration(
+                            decoration: const InputDecoration(
                               hintText: "Say something...",
                               hintStyle: TextStyle(color: Colors.white38),
                               border: InputBorder.none,
@@ -1042,7 +1027,8 @@ decoration: const InputDecoration(
                         ),
                       ),
                       IconButton(
-                        icon: const Icon(Icons.send_rounded, color: Color(0xFFFFD700), size: 22),
+
+icon: const Icon(Icons.send_rounded, color: Color(0xFFFFD700), size: 22),
                         onPressed: _sendMessage,
                       ),
                       IconButton(
@@ -1055,7 +1041,6 @@ decoration: const InputDecoration(
               ],
             ),
 
-            // Continuous 5-Second Rotating Rocket Banner
             Positioned(
               top: 10,
               left: 20,
@@ -1118,45 +1103,44 @@ decoration: const InputDecoration(
               ),
             ),
 
-            // ከመሃል ሴንተር ተነስቶ በደማቁ ፈንድቶ ወደ ወንበር የሚበር የስጦታ Layer
-
-..._activeFlyingGifts.map((gift) {
+            ..._activeFlyingGifts.map((gift) {
               return AnimatedBuilder(
                 animation: gift.controller,
                 builder: (context, child) {
-                  final burstVal = gift.burstAnimation.value;
-                  final flightVal = gift.flightAnimation.value;
+                  final t = gift.flightAnimation.value;
 
-                  // የመሃል ሴንተር መገኛ
                   final centerX = size.width * 0.5;
                   final centerY = size.height * 0.45;
 
-                  // የታለመው ወንበር መገኛ
                   final col = gift.targetSeatIndex % crossAxis;
                   final row = gift.targetSeatIndex ~/ crossAxis;
-                  final targetX = gift.isAll ? (size.width * 0.5) : ((col + 0.5) * (size.width / crossAxis));
-                  final targetY = gift.isAll ? (size.height * 0.22) : (55.0 + (row * 65.0));
+                  final colWidth = (size.width - 20.0) / crossAxis;
+                  
+                  final targetX = 10.0 + (col + 0.5) * colWidth;
+                  final targetY = 15.0 + (row * (seatDimension + 34.0)) + (seatDimension * 0.5);
 
-                  // ከመሃል ወደ ወንበር የሚጓዝበት ርቀት
-                  final currentX = centerX + (targetX - centerX) * flightVal;
-                  final currentY = centerY + (targetY - centerY) * flightVal;
+                  final currentX = centerX + (targetX - centerX) * t;
+                  final currentY = centerY + (targetY - centerY) * t;
 
-                  // ከመሃል ሲፈነዳ ትልቅ ሆኖ ወደ ወንበሩ ሲጠጋ ልኩን የሚያስተካክል ስኬል
-                  final scale = (burstVal * 1.6) - (flightVal * 0.85);
+                  final scale = 1.4 - (0.85 * t);
 
-                  return Positioned(
-                    left: currentX - 45,
-                    top: currentY - 45,
+return Positioned(
+                    left: currentX - 35,
+                    top: currentY - 35,
                     child: Opacity(
-                      opacity: (1.0 - (flightVal * 0.15)).clamp(0.0, 1.0),
+                      opacity: (1.0 - (t * 0.25)).clamp(0.0, 1.0),
                       child: Transform.scale(
-                        scale: scale.clamp(0.4, 2.2),
+                        scale: scale.clamp(0.4, 1.8),
                         child: Image.asset(
                           gift.asset,
-                          width: 90,
-                          height: 90,
+                          width: 70,
+                          height: 70,
                           fit: BoxFit.contain,
-                          errorBuilder: (c, e, s) => const Icon(Icons.card_giftcard, color: Color(0xFFFFD700), size: 55),
+                          errorBuilder: (c, e, s) => const Icon(
+                            Icons.card_giftcard,
+                            color: Color(0xFFFFD700),
+                            size: 45,
+                          ),
                         ),
                       ),
                     ),
@@ -1165,7 +1149,6 @@ decoration: const InputDecoration(
               );
             }),
 
-            // Floating banner
             if (_showFloatingBanner && _lastSentGiftConfig != null)
               Positioned(
                 bottom: 120,
@@ -1201,8 +1184,7 @@ decoration: const InputDecoration(
                                 child: Text(
                                   widget.userName.isNotEmpty ? widget.userName[0].toUpperCase() : "U",
                                   style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 14),
-
-),
+                                ),
                               ),
                             ),
                             const SizedBox(width: 8),
@@ -1221,7 +1203,8 @@ decoration: const InputDecoration(
                                     "Combo x$_comboCount Hits!",
                                     style: const TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold, fontSize: 10),
                                   ),
-                                ],
+
+],
                               ),
                             ),
                             Container(
@@ -1243,7 +1226,6 @@ decoration: const InputDecoration(
                 ),
               ),
 
-            // x100 Big Jackpot Burst
             if (_showX100Badge)
               Center(
                 child: AnimatedBuilder(
@@ -1282,8 +1264,7 @@ decoration: const InputDecoration(
                                 "x100",
                                 style: TextStyle(
                                   color: Colors.white,
-
-fontWeight: FontWeight.w900,
+                                  fontWeight: FontWeight.w900,
                                   fontSize: 48,
                                   letterSpacing: 2,
                                   shadows: [
@@ -1311,8 +1292,7 @@ fontWeight: FontWeight.w900,
                 ),
               ),
 
-            // Floating Combo Button
-            if (_showComboButton)
+if (_showComboButton)
               Positioned(
                 bottom: 65,
                 right: 20,
