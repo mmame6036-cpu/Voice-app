@@ -22,8 +22,7 @@ class StoreItem {
     required this.days,
     required this.effectColor,
   });
-}
-
+  
 class StoreScreen extends StatefulWidget {
   final int userCoins;
   final int userNumericId;
@@ -32,10 +31,9 @@ class StoreScreen extends StatefulWidget {
   const StoreScreen({
     super.key,
     required this.userCoins,
-    required this.userNumericId,
+    this.userNumericId = 0,
     this.onCoinsDeducted,
   });
-
   @override
   State<StoreScreen> createState() => _StoreScreenState();
 }
