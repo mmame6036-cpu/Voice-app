@@ -25,21 +25,23 @@ class RoomChatMessage {
   });
 }
 
-class FlyingGiftItem {
+class CenterFlyingGift {
   final String id;
   final String asset;
   final int targetSeatIndex;
   final bool isAll;
   final AnimationController controller;
-  final Animation<double> animation;
+  final Animation<double> burstAnimation; // 0.0 -> 1.0 (ከመሃል የመፈንዳት አኒሜሽን)
+  final Animation<double> flightAnimation; // ከመሃል ወደ ወንበር የመብረር አኒሜሽን
 
-  FlyingGiftItem({
+  CenterFlyingGift({
     required this.id,
     required this.asset,
     required this.targetSeatIndex,
     required this.isAll,
     required this.controller,
-    required this.animation,
+    required this.burstAnimation,
+    required this.flightAnimation,
   });
 }
 
@@ -83,7 +85,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
   StreamSubscription? _walletSubscription;
 
   late AnimationController _waveController;
-  final List<FlyingGiftItem> _activeFlyingGifts = [];
+  final List<CenterFlyingGift> _activeFlyingGifts = [];
 
   bool _showComboButton = false;
   int _comboCount = 0;
@@ -107,7 +109,6 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
 
   final String _serverUrl = "https://nile-token-server.onrender.com";
 
-  // 5-second rotating rocket banner state
   int _currentRocketLevel = 1;
   Timer? _rocketBannerTimer;
   bool _isPlayingSound = false;
@@ -192,18 +193,22 @@ void _startRocketBannerRotation() {
     }
   }
 
-  void _addExpiringMessage(RoomChatMessage message, {int seconds = 4}) {
+  // መልእክቶች ሳይጠፉ በስላስላሳ አኒሜሽን ወደ ላይ የሚገፉበት ፈንክሽን
+  void _addChatMessage(RoomChatMessage message) {
     if (!mounted) return;
     setState(() {
       _messages.add(message);
+      if (_messages.length > 80) {
+        _messages.removeAt(0);
+      }
     });
-    _scrollToBottom();
-
-    Timer(Duration(seconds: seconds), () {
-      if (mounted) {
-        setState(() {
-          _messages.removeWhere((m) => m.id == message.id);
-        });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_chatScrollController.hasClients) {
+        _chatScrollController.animateTo(
+          _chatScrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
+        );
       }
     });
   }
@@ -281,7 +286,7 @@ void _startRocketBannerRotation() {
         final int index = (data['seatIndex'] as num).toInt();
         final String? user = data['userName'] as String?;
 
-        setState(() {
+setState(() {
           if (data['seats'] != null) {
             final List incomingSeats = data['seats'];
             for (int i = 0; i < incomingSeats.length && i < 30; i++) {
@@ -295,7 +300,7 @@ void _startRocketBannerRotation() {
             _speakingSeatIndices.remove(index);
           }
 
-if (user == widget.userName) {
+          if (user == widget.userName) {
             _mySeatIndex = index;
             _agoraService.switchRole(isSpeaker: true);
           } else if (_mySeatIndex == index && user != widget.userName) {
@@ -321,7 +326,7 @@ if (user == widget.userName) {
             for (int i = 0; i < _totalSeats; i++) {
               if (_seats[i] != null) {
                 _seatGifts[i] += giftCost;
-                _triggerGiftAnimation(giftAsset.toString(), i, isToAll: true);
+                _triggerCenterGiftAnimation(giftAsset.toString(), i, isToAll: true);
               }
             }
           } else if (targets.isNotEmpty) {
@@ -329,29 +334,24 @@ if (user == widget.userName) {
               final idx = (t as num).toInt();
               if (idx >= 0 && idx < 30) {
                 _seatGifts[idx] += giftCost;
-                _triggerGiftAnimation(giftAsset.toString(), idx);
+                _triggerCenterGiftAnimation(giftAsset.toString(), idx);
               }
             }
           } else {
             _seatGifts[targetIndex] += giftCost;
-            _triggerGiftAnimation(giftAsset.toString(), targetIndex);
+            _triggerCenterGiftAnimation(giftAsset.toString(), targetIndex);
           }
         });
 
         _playCoinSound();
 
-        final msgText = isAll
-            ? "$sender sent $giftName to All Mics!"
-            : "$sender sent $giftName!";
-
-        _addExpiringMessage(
+        _addChatMessage(
           RoomChatMessage(
             id: "${DateTime.now().microsecondsSinceEpoch}_$sender",
             sender: "System",
-            message: msgText,
+            message: isAll ? "$sender sent $giftName to All Mics!" : "$sender sent $giftName!",
             isSystem: true,
           ),
-          seconds: 4,
         );
 
         _saveRoomGiftsToFirestore();
@@ -359,15 +359,12 @@ if (user == widget.userName) {
 
       _socket!.on('chat_message_received', (data) {
         if (!mounted || data == null) return;
-        setState(() {
-          _messages.add(RoomChatMessage(
-            id: "${DateTime.now().microsecondsSinceEpoch}",
-            sender: data['sender'] ?? 'User',
-            message: data['message'] ?? '',
-            isSystem: data['isSystem'] ?? false,
-          ));
-        });
-        _scrollToBottom();
+        _addChatMessage(RoomChatMessage(
+          id: "${DateTime.now().microsecondsSinceEpoch}",
+          sender: data['sender'] ?? 'User',
+          message: data['message'] ?? '',
+          isSystem: data['isSystem'] ?? false,
+        ));
       });
     } catch (_) {}
   }
@@ -402,7 +399,8 @@ if (user == widget.userName) {
       onUserJoined: (uid) {},
       onUserOffline: (uid) {},
       onVolumeChanged: (speakers) {
-        if (!mounted) return;
+
+if (!mounted) return;
         setState(() {
           _speakingSeatIndices.clear();
           for (var speaker in speakers) {
@@ -419,7 +417,7 @@ if (user == widget.userName) {
       },
     );
 
-final dynamicToken = await _fetchToken(
+    final dynamicToken = await _fetchToken(
       channelName: widget.roomId,
       uid: widget.userNumericId,
       isPublisher: false,
@@ -435,24 +433,33 @@ final dynamicToken = await _fetchToken(
     if (mounted) setState(() => _isConnecting = false);
   }
 
-  void _triggerGiftAnimation(String asset, int targetSeatIndex, {bool isToAll = false}) {
+  // ከመሃል ሴንተር ተነስቶ በደማቁ ፈንድቶ ወደ ወንበሮቹ የሚበር ትክክለኛ አሰራር
+  void _triggerCenterGiftAnimation(String asset, int targetSeatIndex, {bool isToAll = false}) {
     final controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 950),
+      duration: const Duration(milliseconds: 1200),
     );
 
-    final animation = CurvedAnimation(
+    // በመጀመሪያው 35% ጊዜ ውስጥ በመሃል ሴንተር ላይ በኃይል ብቅ ይላል
+    final burstAnimation = CurvedAnimation(
       parent: controller,
-      curve: Curves.easeInOutCubic,
+      curve: const Interval(0.0, 0.35, curve: Curves.easeOutBack),
     );
 
-    final giftItem = FlyingGiftItem(
+    // ከ 35% በኋላ ወደ ወንበሩ በከፍተኛ ፍጥነት ይበራል
+    final flightAnimation = CurvedAnimation(
+      parent: controller,
+      curve: const Interval(0.35, 1.0, curve: Curves.easeInOutCubic),
+    );
+
+    final giftItem = CenterFlyingGift(
       id: "${DateTime.now().microsecondsSinceEpoch}_${Random().nextInt(9999)}_$targetSeatIndex",
       asset: asset,
       targetSeatIndex: targetSeatIndex,
       isAll: isToAll,
       controller: controller,
-      animation: animation,
+      burstAnimation: burstAnimation,
+      flightAnimation: flightAnimation,
     );
 
     setState(() {
@@ -532,18 +539,6 @@ final dynamicToken = await _fetchToken(
     _chatController.clear();
   }
 
-  void _scrollToBottom() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_chatScrollController.hasClients) {
-        _chatScrollController.animateTo(
-          _chatScrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 250),
-          curve: Curves.easeOut,
-        );
-      }
-    });
-  }
-
   void _startComboTimer() {
     _comboTimer?.cancel();
     _comboRingController.reset();
@@ -560,7 +555,7 @@ final dynamicToken = await _fetchToken(
     });
   }
 
-  void _triggerMilestoneReward(int giftCost) {
+void _triggerMilestoneReward(int giftCost) {
     int rewardMultiplier = 2;
     if (_comboCount >= 100) {
       rewardMultiplier = 20;
@@ -578,7 +573,7 @@ final dynamicToken = await _fetchToken(
       _showFloatingBanner = true;
     });
 
-FirebaseFirestore.instance
+    FirebaseFirestore.instance
         .collection('users')
         .doc(widget.userUid)
         .update({
@@ -679,19 +674,18 @@ FirebaseFirestore.instance
         _showComboButton = true;
       }
 
-      // Fly to each seat and add seat gift counter
       if (isAll) {
         for (int i = 0; i < _totalSeats; i++) {
           if (_seats[i] != null) {
             _seatGifts[i] += cost;
-            _triggerGiftAnimation(asset, i, isToAll: true);
+            _triggerCenterGiftAnimation(asset, i, isToAll: true);
           }
         }
       } else {
         for (final seatIdx in targetSeats) {
           if (seatIdx >= 0 && seatIdx < 30) {
             _seatGifts[seatIdx] += cost;
-            _triggerGiftAnimation(asset, seatIdx);
+            _triggerCenterGiftAnimation(asset, seatIdx);
           }
         }
       }
@@ -724,7 +718,7 @@ FirebaseFirestore.instance
     }
   }
 
-  @override
+@override
   void dispose() {
     _rocketBannerTimer?.cancel();
     _walletSubscription?.cancel();
@@ -745,7 +739,7 @@ FirebaseFirestore.instance
     super.dispose();
   }
 
-@override
+  @override
   Widget build(BuildContext context) {
     final int crossAxis = _totalSeats <= 12 ? 4 : (_totalSeats <= 20 ? 5 : 6);
     final double seatDimension = _totalSeats > 20 ? 44.0 : 50.0;
@@ -827,14 +821,13 @@ FirebaseFirestore.instance
                         final bool isHostSeat = index == 0;
                         final bool isCrownSeat = index >= 1 && index <= 6;
 
-                        return GestureDetector(
+return GestureDetector(
                           onTap: () => _handleSeatTap(index),
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Stack(
-
-clipBehavior: Clip.none,
+                                clipBehavior: Clip.none,
                                 alignment: Alignment.center,
                                 children: [
                                   if (isHostSeat && isOccupied)
@@ -888,13 +881,13 @@ clipBehavior: Clip.none,
                                         decoration: BoxDecoration(
                                           shape: BoxShape.circle,
                                           color: isMuted ? Colors.redAccent : const Color(0xFF00C9A7),
-                                        ),
+
+),
                                         child: Icon(isMuted ? Icons.mic_off : Icons.mic, size: 11, color: Colors.black),
                                       ),
                                     ),
                                 ],
-
-),
+                              ),
                               const SizedBox(height: 4),
                               Text(
                                 isOccupied ? occupier : "${index + 1}",
@@ -934,47 +927,81 @@ clipBehavior: Clip.none,
                     ),
                   ),
                 ),
-                Expanded(
-                  flex: 4,
-                  child: Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.25),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Colors.white10),
-                    ),
-                    child: ListView.builder(
-                      controller: _chatScrollController,
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                      itemCount: _messages.length,
-                      itemBuilder: (context, index) {
-                        final item = _messages[index];
-                        return Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 3.0),
-                          child: RichText(
-                            text: TextSpan(
-                              children: [
-                                TextSpan(
-                                  text: item.isSystem ? "📢 ${item.sender}: " : "${item.sender}: ",
-                                  style: TextStyle(
-                                    color: item.isSystem ? const Color(0xFFFFD700) : const Color(0xFF00E5FF),
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                                TextSpan(
-                                  text: item.message,
 
-style: TextStyle(color: item.isSystem ? Colors.white70 : Colors.white, fontSize: 12),
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
+                // በግራ በኩል የተጠቀለለ እና እጅግ በጣም የጠበበ የቻት ክፍል
+                Container(
+                  height: 135,
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  alignment: Alignment.bottomLeft,
+                  child: FractionallySizedBox(
+                    widthFactor: 0.70,
+                    child: ShaderMask(
+                      shaderCallback: (Rect bounds) {
+                        return const LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [Colors.transparent, Colors.black],
+                          stops: [0.0, 0.25],
+                        ).createShader(bounds);
                       },
+                      blendMode: BlendMode.dstIn,
+                      child: ListView.builder(
+                        controller: _chatScrollController,
+                        physics: const BouncingScrollPhysics(),
+                        padding: const EdgeInsets.only(bottom: 4),
+                        itemCount: _messages.length,
+                        itemBuilder: (context, index) {
+                          final item = _messages[index];
+                          return Align(
+                            alignment: Alignment.centerLeft,
+
+child: Container(
+                              margin: const EdgeInsets.symmetric(vertical: 2.0),
+                              padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 3.0),
+                              decoration: BoxDecoration(
+                                color: item.isSystem
+                                    ? const Color(0xFFFFD700).withOpacity(0.12)
+                                    : Colors.black.withOpacity(0.35),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: RichText(
+                                text: TextSpan(
+                                  children: [
+                                    if (item.isSystem)
+                                      const WidgetSpan(
+                                        child: Padding(
+                                          padding: EdgeInsets.only(right: 4.0),
+                                          child: Icon(Icons.campaign, color: Color(0xFFFFD700), size: 13),
+                                        ),
+                                      ),
+                                    TextSpan(
+                                      text: item.isSystem ? "${item.sender}: " : "${item.sender}: ",
+                                      style: TextStyle(
+                                        color: item.isSystem ? const Color(0xFFFFD700) : const Color(0xFF00E5FF),
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 11,
+                                      ),
+                                    ),
+                                    TextSpan(
+                                      text: item.message,
+                                      style: TextStyle(
+                                        color: item.isSystem ? Colors.white : Colors.white70,
+                                        fontSize: 11,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
                     ),
                   ),
                 ),
+
+                // Bottom Input Bar
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: const BoxDecoration(
@@ -1002,7 +1029,8 @@ style: TextStyle(color: item.isSystem ? Colors.white70 : Colors.white, fontSize:
                           child: TextField(
                             controller: _chatController,
                             style: const TextStyle(color: Colors.white, fontSize: 13),
-                            decoration: const InputDecoration(
+
+decoration: const InputDecoration(
                               hintText: "Say something...",
                               hintStyle: TextStyle(color: Colors.white38),
                               border: InputBorder.none,
@@ -1048,8 +1076,7 @@ style: TextStyle(color: item.isSystem ? Colors.white70 : Colors.white, fontSize:
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(
                       colors: [Color(0xFF8A2387), Color(0xFFE94057), Color(0xFFF27121)],
-
-),
+                    ),
                     borderRadius: BorderRadius.circular(24),
                     boxShadow: [
                       BoxShadow(
@@ -1091,40 +1118,45 @@ style: TextStyle(color: item.isSystem ? Colors.white70 : Colors.white, fontSize:
               ),
             ),
 
-            // Flying Gifts Layer
-            ..._activeFlyingGifts.map((gift) {
+            // ከመሃል ሴንተር ተነስቶ በደማቁ ፈንድቶ ወደ ወንበር የሚበር የስጦታ Layer
+
+..._activeFlyingGifts.map((gift) {
               return AnimatedBuilder(
-                animation: gift.animation,
+                animation: gift.controller,
                 builder: (context, child) {
-                  final t = gift.animation.value;
+                  final burstVal = gift.burstAnimation.value;
+                  final flightVal = gift.flightAnimation.value;
+
+                  // የመሃል ሴንተር መገኛ
+                  final centerX = size.width * 0.5;
+                  final centerY = size.height * 0.45;
+
+                  // የታለመው ወንበር መገኛ
                   final col = gift.targetSeatIndex % crossAxis;
                   final row = gift.targetSeatIndex ~/ crossAxis;
-
                   final targetX = gift.isAll ? (size.width * 0.5) : ((col + 0.5) * (size.width / crossAxis));
-                  final targetY = gift.isAll ? (size.height * 0.25) : (60.0 + (row * 65.0));
+                  final targetY = gift.isAll ? (size.height * 0.22) : (55.0 + (row * 65.0));
 
-                  final startX = size.width * 0.85;
-                  final startY = size.height * 0.90;
+                  // ከመሃል ወደ ወንበር የሚጓዝበት ርቀት
+                  final currentX = centerX + (targetX - centerX) * flightVal;
+                  final currentY = centerY + (targetY - centerY) * flightVal;
 
-                  final currentX = startX + (targetX - startX) * t;
-                  final currentY = startY + (targetY - startY) * t;
-                  final scale = gift.isAll
-                      ? (0.6 + 1.2 * (1.0 - (t - 0.5).abs() * 2))
-                      : (0.5 + 0.9 * (1.0 - (t - 0.5).abs() * 2));
+                  // ከመሃል ሲፈነዳ ትልቅ ሆኖ ወደ ወንበሩ ሲጠጋ ልኩን የሚያስተካክል ስኬል
+                  final scale = (burstVal * 1.6) - (flightVal * 0.85);
 
                   return Positioned(
-                    left: currentX - 40,
-                    top: currentY - 40,
+                    left: currentX - 45,
+                    top: currentY - 45,
                     child: Opacity(
-                      opacity: (1.0 - t * 0.2).clamp(0.0, 1.0),
+                      opacity: (1.0 - (flightVal * 0.15)).clamp(0.0, 1.0),
                       child: Transform.scale(
-                        scale: scale.clamp(0.4, 2.0),
+                        scale: scale.clamp(0.4, 2.2),
                         child: Image.asset(
                           gift.asset,
-                          width: 80,
-                          height: 80,
+                          width: 90,
+                          height: 90,
                           fit: BoxFit.contain,
-                          errorBuilder: (c, e, s) => const Icon(Icons.card_giftcard, color: Color(0xFFFFD700), size: 45),
+                          errorBuilder: (c, e, s) => const Icon(Icons.card_giftcard, color: Color(0xFFFFD700), size: 55),
                         ),
                       ),
                     ),
@@ -1140,8 +1172,7 @@ style: TextStyle(color: item.isSystem ? Colors.white70 : Colors.white, fontSize:
                 left: 16,
                 right: 90,
                 child: TweenAnimationBuilder<double>(
-
-tween: Tween(begin: 0.0, end: 1.0),
+                  tween: Tween(begin: 0.0, end: 1.0),
                   duration: const Duration(milliseconds: 350),
                   curve: Curves.easeOutBack,
                   builder: (context, value, child) {
@@ -1156,13 +1187,6 @@ tween: Tween(begin: 0.0, end: 1.0),
                           ),
                           borderRadius: BorderRadius.circular(24),
                           border: Border.all(color: const Color(0xFFFFD700), width: 1.5),
-                          boxShadow: [
-                            BoxShadow(
-                              color: const Color(0xFFFF2A85).withOpacity(0.5),
-                              blurRadius: 10,
-                              offset: const Offset(0, 3),
-                            ),
-                          ],
                         ),
                         child: Row(
                           children: [
@@ -1177,7 +1201,8 @@ tween: Tween(begin: 0.0, end: 1.0),
                                 child: Text(
                                   widget.userName.isNotEmpty ? widget.userName[0].toUpperCase() : "U",
                                   style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 14),
-                                ),
+
+),
                               ),
                             ),
                             const SizedBox(width: 8),
@@ -1218,7 +1243,7 @@ tween: Tween(begin: 0.0, end: 1.0),
                 ),
               ),
 
-// x100 Big Jackpot Burst
+            // x100 Big Jackpot Burst
             if (_showX100Badge)
               Center(
                 child: AnimatedBuilder(
@@ -1257,7 +1282,8 @@ tween: Tween(begin: 0.0, end: 1.0),
                                 "x100",
                                 style: TextStyle(
                                   color: Colors.white,
-                                  fontWeight: FontWeight.w900,
+
+fontWeight: FontWeight.w900,
                                   fontSize: 48,
                                   letterSpacing: 2,
                                   shadows: [
@@ -1302,8 +1328,7 @@ tween: Tween(begin: 0.0, end: 1.0),
                           animation: _comboRingController,
                           builder: (context, child) {
                             return CircularProgressIndicator(
-
-value: 1.0 - _comboRingController.value,
+                              value: 1.0 - _comboRingController.value,
                               strokeWidth: 3.5,
                               color: const Color(0xFFFFD700),
                               backgroundColor: Colors.white24,
