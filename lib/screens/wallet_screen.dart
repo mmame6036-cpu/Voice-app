@@ -14,8 +14,8 @@ class WalletScreen extends StatefulWidget {
     super.key,
     required this.currentCoins,
     required this.onCoinsRecharged,
-    this.userUid = "user_guest_id",
-    this.userNumericId = 
+    required this.userUid,
+    required this.userNumericId,
   });
 
   @override
