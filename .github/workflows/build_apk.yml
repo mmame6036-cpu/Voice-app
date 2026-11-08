@@ -1,4 +1,3 @@
-KEDER:
 name: Build Flutter APK
 
 on:
@@ -116,25 +115,25 @@ jobs:
                   }
               }
           }
-                     EOF
-                 sed -i '/<manifest/a \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.RECORD_AUDIO"/>\n    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>'
+          EOF
+          sed -i '/<manifest/a \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.RECORD_AUDIO"/>\n    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>'
 
-              b   android/app/src/main/AndroidManifest.xml
+           android/app/src/main/AndroidManifest.xml
 
-                - name: Restore Permanent Keystore
-                  run: |
-                  mkdir -p ~/.android
-                 rm -f ~/.android/debug.keystore
-                keytool -genkeypair -alias androiddebugkey -keypass android -keystore ~/.android/debug.keystore -storepass android -dname "CN=Android Debug,O=Android,C=US" -validity 10000 -keyalg RSA -keysize 2048
+      - name: Restore Permanent Keystore
+        run: |
+          mkdir -p ~/.android
+          rm -f ~/.android/debug.keystore
+          keytool -genkeypair -alias androiddebugkey -keypass android -keystore ~/.android/debug.keystore -storepass android -dname "CN=Android Debug,O=Android,C=US" -validity 10000 -keyalg RSA -keysize 2048
 
-             - name: Get Dependencies
-              run: flutter pub get
+      - name: Get Dependencies
+        run: flutter pub get
 
-             - name: Build Debug APK
-               run: flutter build apk --debug
+      - name: Build Debug APK
+        run: flutter build apk --debug
 
-             - name: Upload APK
-               uses: actions/upload-artifact@v4
-                  with :
-                  name: voice-app-apk
-                path: build/app/outputs/flutter-apk/app-debug.apk
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: voice-app-apk
+          path: build/app/outputs/flutter-apk/app-debug.apk
