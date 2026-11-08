@@ -16,6 +16,9 @@ class GiftSendEvent {
   final String giftName;
   final String giftIcon;
   final int comboCount;
+  final bool isLucky;
+  final int wonCoins;
+  final int luckyMultiplier;
 
   GiftSendEvent({
     required this.senderName,
@@ -23,6 +26,9 @@ class GiftSendEvent {
     required this.giftName,
     required this.giftIcon,
     required this.comboCount,
+    this.isLucky = false,
+    this.wonCoins = 0,
+    this.luckyMultiplier = 0,
   });
 }
 
@@ -32,11 +38,9 @@ class _FloatingGiftComboOverlayState extends State<FloatingGiftComboOverlay>
   Timer? _hideTimer;
   StreamSubscription? _subscription;
 
-  // Banner animations
   late AnimationController _comboScaleController;
   late Animation<double> _comboScaleAnimation;
 
-  // Center screen 5x burst animations
   late AnimationController _burstController;
   late Animation<double> _burstScaleAnimation;
   late Animation<double> _burstFadeAnimation;
@@ -46,7 +50,6 @@ class _FloatingGiftComboOverlayState extends State<FloatingGiftComboOverlay>
   void initState() {
     super.initState();
 
-    // Small combo multiplier bounce
     _comboScaleController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 250),
@@ -60,7 +63,6 @@ class _FloatingGiftComboOverlayState extends State<FloatingGiftComboOverlay>
       curve: Curves.easeOutBack,
     ));
 
-    // Center screen full-scale burst effect
     _burstController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1400),
@@ -107,8 +109,8 @@ class _FloatingGiftComboOverlayState extends State<FloatingGiftComboOverlay>
     _comboScaleController.reset();
     _comboScaleController.forward();
 
-    // Trigger central 5x combo explosion
-    if (event.comboCount > 0 && event.comboCount % 5 == 0) {
+    // Trigger burst on 5x combos OR when a lucky win explodes
+    if ((event.comboCount > 0 && event.comboCount % 5 == 0) || event.wonCoins > 0) {
       setState(() {
         _showBurst = true;
       });
@@ -138,9 +140,9 @@ class _FloatingGiftComboOverlayState extends State<FloatingGiftComboOverlay>
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        // 1. Top floating banner for regular combo track
 
-if (_currentEvent != null)
+// 1. Top floating banner for regular combo track
+        if (_currentEvent != null)
           Positioned(
             left: 16,
             top: 130,
@@ -154,16 +156,15 @@ if (_currentEvent != null)
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [
-                          Color(0xFF8E2DE2),
-                          Color(0xFF4A00E0),
-                        ],
+                      gradient: LinearGradient(
+                        colors: _currentEvent!.isLucky
+                            ? [const Color(0xFFFF8C00), const Color(0xFFFF0080)]
+                            : [const Color(0xFF8E2DE2), const Color(0xFF4A00E0)],
                       ),
                       borderRadius: BorderRadius.circular(30),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.purpleAccent.withOpacity(0.5),
+                          color: (_currentEvent!.isLucky ? Colors.orangeAccent : Colors.purpleAccent).withOpacity(0.5),
                           blurRadius: 10,
                           offset: const Offset(0, 4),
                         ),
@@ -222,12 +223,12 @@ if (_currentEvent != null)
                           fontSize: 32,
                           fontWeight: FontWeight.w900,
                           fontStyle: FontStyle.italic,
-                          color: Colors.white,
+
+color: Colors.white,
                           shadows: [
                             Shadow(
                               color: Colors.black,
-
-blurRadius: 6,
+                              blurRadius: 6,
                               offset: Offset(2, 2),
                             ),
                           ],
@@ -240,7 +241,7 @@ blurRadius: 6,
             ),
           ),
 
-        // 2. Central 5x Burst Explosion Layer
+        // 2. Central Burst / Lucky Explosion Layer
         if (_showBurst && _currentEvent != null)
           Center(
             child: IgnorePointer(
@@ -257,7 +258,10 @@ blurRadius: 6,
                           shape: BoxShape.circle,
                           boxShadow: [
                             BoxShadow(
-                              color: const Color(0xFFFF1493).withOpacity(0.6),
+                              color: (_currentEvent!.wonCoins > 0
+                                      ? const Color(0xFFFFD700)
+                                      : const Color(0xFFFF1493))
+                                  .withOpacity(0.6),
                               blurRadius: 35,
                               spreadRadius: 10,
                             ),
@@ -269,7 +273,8 @@ blurRadius: 6,
                           height: 160,
                           fit: BoxFit.contain,
                           errorBuilder: (context, error, stackTrace) =>
-                              const Text("💖", style: TextStyle(fontSize: 100)),
+                              Text(_currentEvent!.giftIcon.isNotEmpty ? _currentEvent!.giftIcon : "💎",
+                                  style: const TextStyle(fontSize: 100)),
                         ),
                       ),
                       const SizedBox(height: 12),
@@ -280,7 +285,9 @@ blurRadius: 6,
                           end: Alignment.bottomRight,
                         ).createShader(bounds),
                         child: Text(
-                          "COMBO ${_currentEvent!.comboCount}X BURST!",
+                          _currentEvent!.wonCoins > 0
+                              ? "LUCKY x${_currentEvent!.luckyMultiplier}! +${_currentEvent!.wonCoins} COINS!"
+                              : "COMBO ${_currentEvent!.comboCount}X BURST!",
                           style: const TextStyle(
                             fontSize: 26,
                             fontWeight: FontWeight.w900,
