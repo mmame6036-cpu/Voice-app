@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class BackpackScreen extends StatefulWidget {
   const BackpackScreen({super.key});
@@ -7,22 +9,21 @@ class BackpackScreen extends StatefulWidget {
   State<BackpackScreen> createState() => _BackpackScreenState();
 }
 
-class _BackpackScreenState extends State<BackpackScreen>
-    with SingleTickerProviderStateMixin {
+class _BackpackScreenState extends State<BackpackScreen> with SingleTickerProviderStateMixin {
+  final User? _currentUser = FirebaseAuth.instance.currentUser;
   late TabController _tabController;
 
-  final List<String> _tabs = [
-    "Frame",
-    "Entry",
-    "Theme",
-    "Special ID",
-    "Props",
-  ];
+  static const Color emeraldColor = Color(0xFF00E676);
+  static const Color darkBg = Color(0xFF0F0E17);
+  static const Color cardBg = Color(0xFF1E1B2E);
+
+  final List<String> _categories = ["Frames", "Rides", "Bubbles", "Badges"];
+  final List<String> _categoryKeys = ["frame", "entry", "bubble", "badge"];
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: _tabs.length, vsync: this);
+    _tabController = TabController(length: _categories.length, vsync: this);
   }
 
   @override
@@ -33,126 +34,167 @@ class _BackpackScreenState extends State<BackpackScreen>
 
   @override
   Widget build(BuildContext context) {
+    if (_currentUser == null) {
+      return const Scaffold(
+        backgroundColor: darkBg,
+        body: Center(child: Text("Please sign in", style: TextStyle(color: Colors.white))),
+      );
+    }
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
+      backgroundColor: darkBg,
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0.5,
+        backgroundColor: const Color(0xFF171524),
+        elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: Colors.black87, size: 20),
+          icon: const Icon(Icons.arrow_back_ios, color: Colors.white, size: 18),
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
           "Backpack",
-          style: TextStyle(
-            color: Colors.black87,
-            fontSize: 17,
-            fontWeight: FontWeight.bold,
-          ),
+          style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold),
         ),
         centerTitle: true,
         bottom: TabBar(
           controller: _tabController,
-          isScrollable: true,
-          labelColor: const Color(0xFF00C9A7),
-          unselectedLabelColor: Colors.black45,
-          indicatorColor: const Color(0xFF00C9A7),
-          indicatorWeight: 3,
-          labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-          tabs: _tabs.map((tab) => Tab(text: tab)).toList(),
+          indicatorColor: emeraldColor,
+          labelColor: emeraldColor,
+          unselectedLabelColor: Colors.white54,
+          indicatorWeight: 2.5,
+          tabs: _categories.map((c) => Tab(text: c)).toList(),
         ),
       ),
-      body: TabBarView(
-        controller: _tabController,
-        children: _tabs.map((tab) => _buildCategorySpace(tab)).toList(),
+      body: StreamBuilder<DocumentSnapshot>(
+        stream: FirebaseFirestore.instance.collection('users').doc(_currentUser!.uid).snapshots(),
+        builder: (context, snapshot) {
+          final data = snapshot.data?.data() as Map<String, dynamic>? ?? {};
+          final inventory = Map<String, dynamic>.from(data['inventory'] ?? {});
+          final equipped = Map<String, dynamic>.from(data['equipped'] ?? {});
+
+          return TabBarView(
+            controller: _tabController,
+            children: _categoryKeys.map((key) {
+              return _buildCategoryGrid(categoryKey: key, inventory: inventory, equipped: equipped);
+            }).toList(),
+          );
+        },
       ),
     );
   }
 
-  // የእቃዎቹ ማስቀመጫ ባዶ ቦታ (Placeholder)
-  Widget _buildCategorySpace(String categoryName) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        children: [
-          // እቃ በሚኖርበት ጊዜ የሚቀመጥበት የናሙና ካርድ ቦታ
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: Colors.black12),
-            ),
-            child: Row(
-              children: [
-                // የእቃው ፎቶ ማስቀመጫ
-                Container(
-                  width: 60,
-                  height: 60,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF00C9A7).withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Center(
-                    child: Icon(Icons.inventory_2_outlined, color: Color(0xFF00C9A7), size: 28),
-                  ),
-                ),
-                const SizedBox(width: 14),
-                // የእቃው ዝርዝር መረጃ ቦታ
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        "$categoryName Item Slot",
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                      ),
-                      const SizedBox(height: 4),
-                      const Text(
-                        "Validity: 30 Days",
-                        style: TextStyle(color: Colors.black45, fontSize: 12),
-                      ),
-                    ],
-                  ),
-                ),
-                // የ Use / Wear ቁልፍ ቦታ
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+  Widget _buildCategoryGrid({
+    required String categoryKey,
+    required Map<String, dynamic> inventory,
+    required Map<String, dynamic> equipped,
+  }) {
+    // ተጠቃሚው በዚህ ዘርፍ ስር የገዛቸው እቃዎች መለያዎች
+    final userItems = inventory.entries
+        .where((e) => (e.value is Map && e.value['category'] == categoryKey))
+        .toList();
 
-decoration: BoxDecoration(
-                    color: const Color(0xFF00C9A7),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: const Text(
-                    "Wear",
-                    style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ],
-            ),
-          ),
+    // እስካሁን ምንም ያልገዛ ከሆነ ንጹህ ባዶ የቦታ ናሙናዎችን (Slots) ያሳያል
+    final int displayCount = userItems.isNotEmpty ? userItems.length : 6;
 
-          const SizedBox(height: 40),
-
-          // ባዶ ሲሆን የሚታይ ምልክት (Empty State)
-          Center(
-            child: Column(
-              children: [
-                Icon(
-                  Icons.backpack_outlined,
-                  size: 64,
-                  color: Colors.black.withOpacity(0.15),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  "No $categoryName items available",
-                  style: const TextStyle(color: Colors.black38, fontSize: 13),
-                ),
-              ],
-            ),
-          ),
-        ],
+    return GridView.builder(
+      padding: const EdgeInsets.all(14),
+      itemCount: displayCount,
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        mainAxisSpacing: 12,
+        crossAxisSpacing: 12,
+        childAspectRatio: 0.85,
       ),
+      itemBuilder: (context, idx) {
+        final hasItem = userItems.isNotEmpty && idx < userItems.length;
+        final itemId = hasItem ? userItems[idx].key : "slot_$idx";
+        final itemData = hasItem ? (userItems[idx].value as Map<String, dynamic>) : null;
+
+        final isEquipped = equipped[categoryKey] == itemId;
+        final iconDisplay = itemData?['icon'] ?? "🎒";
+        final nameDisplay = itemData?['name'] ?? "Slot ${idx + 1}";
+
+return Container(
+          decoration: BoxDecoration(
+            color: cardBg,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isEquipped ? emeraldColor : Colors.white12,
+              width: isEquipped ? 1.8 : 1.0,
+            ),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              // SLOT 1: የምስል/አዶ ቦታ
+              Container(
+                width: 60,
+                height: 60,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withOpacity(0.04),
+                  border: Border.all(color: Colors.white10),
+                ),
+                child: Center(
+                  child: Text(iconDisplay, style: const TextStyle(fontSize: 28)),
+                ),
+              ),
+              const SizedBox(height: 8),
+
+              // SLOT 2: የስም ቦታ
+              Text(
+                nameDisplay,
+                style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 4),
+
+              // SLOT 3: የሁኔታ መለያ (Active / Stored)
+              Text(
+                isEquipped ? "In Use" : (hasItem ? "Owned" : "Empty Slot"),
+                style: TextStyle(
+                  color: isEquipped ? emeraldColor : Colors.white38,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 10),
+
+              // SLOT 4: የማጥለቂያ/የማውለቂያ ቁልፍ ቦታ
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: SizedBox(
+                  width: double.infinity,
+                  height: 32,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: isEquipped ? Colors.redAccent.withOpacity(0.8) : (hasItem ? emeraldColor : Colors.white12),
+                      padding: EdgeInsets.zero,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                    onPressed: hasItem
+                        ? () {
+                            final targetEquip = isEquipped ? null : itemId;
+                            FirebaseFirestore.instance.collection('users').doc(_currentUser!.uid).update({
+                              'equipped.$categoryKey': targetEquip,
+                            });
+                          }
+                        : null,
+                    child: Text(
+                      isEquipped ? "Unequip" : (hasItem ? "Equip" : "Slot"),
+                      style: TextStyle(
+                        color: hasItem ? Colors.black : Colors.white24,
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
