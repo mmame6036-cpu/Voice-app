@@ -219,7 +219,7 @@ _x100BadgeController.addStatusListener((status) {
         .doc(widget.roomId)
         .snapshots()
         .listen((snapshot) {
-      if (!snapshot.exists  snapshot.data() == null  !mounted) return;
+      if (!snapshot.exists || snapshot.data() == null || !mounted) return;
       final data = snapshot.data()!;
 
       if (data.containsKey('seatGifts')) {
