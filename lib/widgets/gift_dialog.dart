@@ -34,7 +34,7 @@ class GiftSendResult {
   final int multiplier;
   final int totalCost;
   final int wonCoins;
-  final int rawGiftCostPerSeat; // Full gift value for seat display (100% value)
+  final int rawGiftCostPerSeat;
 
   GiftSendResult({
     required this.gift,
@@ -43,8 +43,8 @@ class GiftSendResult {
     required this.multiplier,
     required this.totalCost,
     this.wonCoins = 0,
-    required this.rawGiftCostPerSeat,
-  });
+    int? rawGiftCostPerSeat,
+  }) : rawGiftCostPerSeat = rawGiftCostPerSeat ?? (gift.price * multiplier);
 }
 
 class GiftDialog extends StatefulWidget {
@@ -65,11 +65,9 @@ class GiftDialog extends StatefulWidget {
   State<GiftDialog> createState() => _GiftDialogState();
 }
 
-class _GiftDialogState extends State<GiftDialog>
-    with SingleTickerProviderStateMixin {
+class _GiftDialogState extends State<GiftDialog> {
   final User? _currentUser = FirebaseAuth.instance.currentUser;
   final Random _random = Random();
-  late TabController _tabController;
 
   late int _coins;
   bool _isSending = false;
@@ -79,6 +77,7 @@ class _GiftDialogState extends State<GiftDialog>
   int _selectedMultiplier = 1;
   final List<int> _multipliers = [1, 3, 7, 10, 30, 50, 77, 100];
 
+  int _selectedCategoryIndex = 0;
   int _selectedGiftIndex = 0;
   int _comboCount = 0;
   Timer? _comboTimer;
@@ -95,7 +94,6 @@ class _GiftDialogState extends State<GiftDialog>
   ];
 
   final List<GiftItem> _allGifts = const [
-    // Hot (70% diamond)
     GiftItem(
       id: "flowers",
       name: "Fragrant Flowers",
@@ -120,8 +118,6 @@ class _GiftDialogState extends State<GiftDialog>
       imageAsset: "assets/images/charm_07.webp",
       category: GiftCategory.hot,
     ),
-
-    // Lucky (4% diamond + sender gamble explosion)
     GiftItem(
       id: "lucky_dice",
       name: "Lucky Dice",
@@ -152,10 +148,9 @@ class _GiftDialogState extends State<GiftDialog>
       icon: "🏝️",
       price: 10000,
       imageAsset: "assets/images/wealth_03.webp",
-      category: GiftCategory.lucky,
-    ),
 
-// Luxury (70% diamond)
+category: GiftCategory.lucky,
+    ),
     GiftItem(
       id: "sportscar",
       name: "Pink Sports Car",
@@ -180,8 +175,6 @@ class _GiftDialogState extends State<GiftDialog>
       imageAsset: "assets/images/wealth_03.webp",
       category: GiftCategory.luxury,
     ),
-
-    // Intimacy (70% diamond)
     GiftItem(
       id: "crystal_blue_rose",
       name: "Crystal Rose",
@@ -201,7 +194,7 @@ class _GiftDialogState extends State<GiftDialog>
   ];
 
   List<GiftItem> get _currentCategoryGifts {
-    final currentCat = _categories[_tabController.index];
+    final currentCat = _categories[_selectedCategoryIndex];
     return _allGifts.where((g) => g.category == currentCat).toList();
   }
 
@@ -216,16 +209,6 @@ class _GiftDialogState extends State<GiftDialog>
   void initState() {
     super.initState();
     _coins = widget.userCoins;
-    _tabController = TabController(length: _categories.length, vsync: this);
-    _tabController.addListener(() {
-      if (!_tabController.indexIsChanging) {
-        setState(() {
-          _selectedGiftIndex = 0;
-          _comboCount = 0;
-        });
-      }
-    });
-
     if (_userList.isNotEmpty) {
       final firstUser = _userList.first;
       final sIdx = firstUser['seatIndex'] as int?;
@@ -238,7 +221,6 @@ class _GiftDialogState extends State<GiftDialog>
   @override
   void dispose() {
     _comboTimer?.cancel();
-    _tabController.dispose();
     super.dispose();
   }
 
@@ -305,7 +287,7 @@ class _GiftDialogState extends State<GiftDialog>
     if (_selectedGiftIndex >= currentGifts.length) return;
     final selectedGift = currentGifts[_selectedGiftIndex];
 
-final totalCost = _calculateTotalPrice;
+    final totalCost = _calculateTotalPrice;
     if (_coins < totalCost) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Insufficient coins balance!")),
@@ -319,7 +301,7 @@ final totalCost = _calculateTotalPrice;
       int wonCoins = 0;
       int maxMultiplier = 0;
 
-      if (selectedGift.isLucky) {
+if (selectedGift.isLucky) {
         int totalUnits = _selectedMultiplier * _selectedSeatIndices.length;
         for (int i = 0; i < totalUnits; i++) {
           int mult = _calculateLuckyMultiplier();
@@ -338,7 +320,6 @@ final totalCost = _calculateTotalPrice;
         'coins': FieldValue.increment(netDeduction),
       }, SetOptions(merge: true)).catchError((_) {});
 
-      // Point calculation: 4% for lucky, 70% for standard
       final double hostRate = selectedGift.diamondRate;
       final int diamondsPerRecipient = (selectedGift.price * _selectedMultiplier * hostRate).round();
 
@@ -397,7 +378,6 @@ final totalCost = _calculateTotalPrice;
         );
       }
 
-      // 100% full gift value goes to seat display
       final int fullSeatCost = selectedGift.price * _selectedMultiplier;
 
       if (mounted) {
@@ -427,7 +407,7 @@ final totalCost = _calculateTotalPrice;
     }
   }
 
-String _getCategoryName(GiftCategory cat) {
+  String _getCategoryName(GiftCategory cat) {
     switch (cat) {
       case GiftCategory.hot:
         return "Hot";
@@ -448,264 +428,267 @@ String _getCategoryName(GiftCategory cat) {
         ? currentGifts[_selectedGiftIndex]
         : null;
 
-    return Container(
-      height: 480,
-      decoration: const BoxDecoration(
-        color: darkBg,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      child: Column(
-        children: [
-          // Seat selector bar
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: const BoxDecoration(
-              border: Border(bottom: BorderSide(color: Colors.white10)),
-            ),
-            child: Row(
-              children: [
-                GestureDetector(
-                  onTap: _toggleSelectAll,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: _isAllSelected ? goldColor : cardBg,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: _isAllSelected ? goldColor : Colors.white24),
-                    ),
-                    child: Text(
-                      "All",
-                      style: TextStyle(
-                        color: _isAllSelected ? Colors.black : Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 10.5,
+return DefaultTabController(
+      length: _categories.length,
+      child: Container(
+        height: 480,
+        decoration: const BoxDecoration(
+          color: darkBg,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: const BoxDecoration(
+                border: Border(bottom: BorderSide(color: Colors.white10)),
+              ),
+              child: Row(
+                children: [
+                  GestureDetector(
+                    onTap: _toggleSelectAll,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: _isAllSelected ? goldColor : cardBg,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: _isAllSelected ? goldColor : Colors.white24),
+                      ),
+                      child: Text(
+                        "All",
+                        style: TextStyle(
+                          color: _isAllSelected ? Colors.black : Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 10.5,
+                        ),
                       ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: SizedBox(
-                    height: 42,
-                    child: ListView.builder(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: 30,
-                      itemBuilder: (context, index) {
-                        final seatIdx = index;
-                        final seatNum = seatIdx + 1;
-                        final occupant = _userList.firstWhere(
-                          (u) => u['seatIndex'] == seatIdx,
-                          orElse: () => null,
-                        );
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: SizedBox(
+                      height: 42,
+                      child: ListView.builder(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: 30,
+                        itemBuilder: (context, index) {
+                          final seatIdx = index;
+                          final seatNum = seatIdx + 1;
+                          final occupant = _userList.firstWhere(
+                            (u) => u['seatIndex'] == seatIdx,
+                            orElse: () => null,
+                          );
 
-                        final isOccupied = occupant != null;
-                        final isSelected = _selectedSeatIndices.contains(seatIdx);
+                          final isOccupied = occupant != null;
+                          final isSelected = _selectedSeatIndices.contains(seatIdx);
 
-                        return GestureDetector(
-                          onTap: isOccupied ? () => _toggleSeat(seatIdx) : null,
-                          child: Container(
-                            width: 32,
-                            margin: const EdgeInsets.only(right: 5),
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: isSelected
-                                  ? goldColor.withOpacity(0.25)
-                                  : (isOccupied ? cardBg : Colors.white.withOpacity(0.04)),
-                              border: Border.all(
+                          return GestureDetector(
+                            onTap: isOccupied ? () => _toggleSeat(seatIdx) : null,
+                            child: Container(
+                              width: 32,
+                              margin: const EdgeInsets.only(right: 5),
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
                                 color: isSelected
-                                    ? goldColor
-                                    : (isOccupied ? Colors.white24 : Colors.transparent),
-                                width: isSelected ? 1.5 : 0.8,
-                              ),
-                            ),
-                            child: Center(
-                              child: Text(
-
-"$seatNum",
-                                style: TextStyle(
+                                    ? goldColor.withOpacity(0.25)
+                                    : (isOccupied ? cardBg : Colors.white.withOpacity(0.04)),
+                                border: Border.all(
                                   color: isSelected
                                       ? goldColor
-                                      : (isOccupied ? Colors.white : Colors.white24),
-                                  fontSize: 10,
-                                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                      : (isOccupied ? Colors.white24 : Colors.transparent),
+                                  width: isSelected ? 1.5 : 0.8,
+                                ),
+                              ),
+                              child: Center(
+                                child: Text(
+                                  "$seatNum",
+                                  style: TextStyle(
+                                    color: isSelected
+                                        ? goldColor
+                                        : (isOccupied ? Colors.white : Colors.white24),
+                                    fontSize: 10,
+                                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+
+),
                                 ),
                               ),
                             ),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // Categories Tab Bar
-          TabBar(
-            controller: _tabController,
-            isScrollable: true,
-            indicatorColor: goldColor,
-            indicatorWeight: 2.5,
-            labelColor: Colors.white,
-            unselectedLabelColor: Colors.white38,
-            labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
-            tabs: _categories.map((c) => Tab(text: _getCategoryName(c))).toList(),
-          ),
-
-          // Gifts Grid
-          Expanded(
-            child: GridView.builder(
-              padding: const EdgeInsets.all(8),
-              itemCount: currentGifts.length,
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 4,
-                mainAxisSpacing: 6,
-                crossAxisSpacing: 6,
-                childAspectRatio: 0.82,
-              ),
-              itemBuilder: (context, index) {
-                final gift = currentGifts[index];
-                final isSelected = _selectedGiftIndex == index;
-
-                return GestureDetector(
-                  onTap: () => setState(() {
-                    _selectedGiftIndex = index;
-                    _comboCount = 0;
-                  }),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: isSelected ? goldColor.withOpacity(0.16) : cardBg,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                        color: isSelected ? goldColor : Colors.transparent,
-                        width: 1.4,
+                          );
+                        },
                       ),
                     ),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(6),
-                          child: Image.asset(
-                            gift.imageAsset,
-                            width: 32,
-                            height: 32,
-                            fit: BoxFit.cover,
-                            errorBuilder: (ctx, err, stack) =>
-                                Text(gift.icon, style: const TextStyle(fontSize: 24)),
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          gift.name,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 9.5,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        Text(
-                          "🪙 ${gift.price}",
-                          style: const TextStyle(color: goldColor, fontSize: 9.5, fontWeight: FontWeight.bold),
-                        ),
-                      ],
-                    ),
                   ),
-                );
+                ],
+              ),
+            ),
+            TabBar(
+              isScrollable: true,
+              indicatorColor: goldColor,
+              indicatorWeight: 2.5,
+              labelColor: Colors.white,
+              unselectedLabelColor: Colors.white38,
+              labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+              onTap: (index) {
+                setState(() {
+                  _selectedCategoryIndex = index;
+                  _selectedGiftIndex = 0;
+                  _comboCount = 0;
+                });
               },
+              tabs: _categories.map((c) => Tab(text: _getCategoryName(c))).toList(),
             ),
-          ),
+            Expanded(
+              child: GridView.builder(
+                padding: const EdgeInsets.all(8),
+                itemCount: currentGifts.length,
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 4,
+                  mainAxisSpacing: 6,
+                  crossAxisSpacing: 6,
+                  childAspectRatio: 0.82,
+                ),
+                itemBuilder: (context, index) {
+                  final gift = currentGifts[index];
+                  final isSelected = _selectedGiftIndex == index;
 
-// Bottom Bar
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: const BoxDecoration(
-              color: cardBg,
-              border: Border(top: BorderSide(color: Colors.white10)),
-            ),
-            child: Row(
-              children: [
-                Row(
-                  children: [
-                    const Icon(Icons.monetization_on, color: goldColor, size: 16),
-                    const SizedBox(width: 4),
-                    Text(
-                      "$_coins",
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
-                    ),
-                  ],
-                ),
-                const SizedBox(width: 8),
-                if (selectedGift != null)
-                  Text(
-                    "💎 ${(selectedGift.price * _selectedMultiplier * selectedGift.diamondRate).round()} (${selectedGift.isLucky ? '4%' : '70%'})",
-                    style: const TextStyle(color: Colors.white38, fontSize: 10),
-                  ),
-                const Spacer(),
-                PopupMenuButton<int>(
-                  color: const Color(0xFF281E48),
-                  initialValue: _selectedMultiplier,
-                  onSelected: (val) => setState(() => _selectedMultiplier = val),
-                  itemBuilder: (context) => _multipliers
-                      .map((m) => PopupMenuItem<int>(
-                            value: m,
-                            child: Text(
-                              "x$m",
-                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                  return GestureDetector(
+                    onTap: () => setState(() {
+                      _selectedGiftIndex = index;
+                      _comboCount = 0;
+                    }),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: isSelected ? goldColor.withOpacity(0.16) : cardBg,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: isSelected ? goldColor : Colors.transparent,
+                          width: 1.4,
+                        ),
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(6),
+                            child: Image.asset(
+                              gift.imageAsset,
+                              width: 32,
+                              height: 32,
+                              fit: BoxFit.cover,
+                              errorBuilder: (ctx, err, stack) =>
+                                  Text(gift.icon, style: const TextStyle(fontSize: 24)),
                             ),
-                          ))
-                      .toList(),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.08),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.white24),
-                    ),
-                    child: Row(
-                      children: [
-                        Text(
-                          "x$_selectedMultiplier",
-                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
-                        ),
-                        const Icon(Icons.arrow_drop_up, color: Colors.white70, size: 14),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _comboCount > 0 ? Colors.deepOrangeAccent : goldColor,
-                    foregroundColor: Colors.black,
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  ),
-                  onPressed: _isSending ? null : _sendGift,
-                  child: _isSending
-                      ? const SizedBox(
-                          width: 14,
-                          height: 14,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
-                        )
-                      : Text(
-                          _comboCount > 0
-                              ? "COMBO x$_comboCount"
-                              : "Send (🪙$totalCost)",
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 11,
-                            color: _comboCount > 0 ? Colors.white : Colors.black,
                           ),
-                        ),
-                ),
-              ],
+                          const SizedBox(height: 2),
+                          Text(
+                            gift.name,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 9.5,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          Text(
+                            "🪙 ${gift.price}",
+                            style: const TextStyle(color: goldColor, fontSize: 9.5, fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
             ),
-          ),
-        ],
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+
+decoration: const BoxDecoration(
+                color: cardBg,
+                border: Border(top: BorderSide(color: Colors.white10)),
+              ),
+              child: Row(
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.monetization_on, color: goldColor, size: 16),
+                      const SizedBox(width: 4),
+                      Text(
+                        "$_coins",
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(width: 8),
+                  if (selectedGift != null)
+                    Text(
+                      "💎 ${(selectedGift.price * _selectedMultiplier * selectedGift.diamondRate).round()} (${selectedGift.isLucky ? '4%' : '70%'})",
+                      style: const TextStyle(color: Colors.white38, fontSize: 10),
+                    ),
+                  const Spacer(),
+                  PopupMenuButton<int>(
+                    color: const Color(0xFF281E48),
+                    initialValue: _selectedMultiplier,
+                    onSelected: (val) => setState(() => _selectedMultiplier = val),
+                    itemBuilder: (context) => _multipliers
+                        .map((m) => PopupMenuItem<int>(
+                              value: m,
+                              child: Text(
+                                "x$m",
+                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                              ),
+                            ))
+                        .toList(),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.white24),
+                      ),
+                      child: Row(
+                        children: [
+                          Text(
+                            "x$_selectedMultiplier",
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
+                          ),
+                          const Icon(Icons.arrow_drop_up, color: Colors.white70, size: 14),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _comboCount > 0 ? Colors.deepOrangeAccent : goldColor,
+                      foregroundColor: Colors.black,
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    ),
+                    onPressed: _isSending ? null : _sendGift,
+                    child: _isSending
+                        ? const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
+                          )
+                        : Text(
+                            _comboCount > 0
+                                ? "COMBO x$_comboCount"
+                                : "Send (🪙$totalCost)",
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 11,
+                              color: _comboCount > 0 ? Colors.white : Colors.black,
+                            ),
+                          ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
