@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class BackpackScreen extends StatefulWidget {
   const BackpackScreen({super.key});
@@ -9,16 +9,20 @@ class BackpackScreen extends StatefulWidget {
   State<BackpackScreen> createState() => _BackpackScreenState();
 }
 
-class _BackpackScreenState extends State<BackpackScreen> with SingleTickerProviderStateMixin {
+class _BackpackScreenState extends State<BackpackScreen>
+    with SingleTickerProviderStateMixin {
   final User? _currentUser = FirebaseAuth.instance.currentUser;
   late TabController _tabController;
 
-  static const Color emeraldColor = Color(0xFF00E676);
-  static const Color darkBg = Color(0xFF0F0E17);
-  static const Color cardBg = Color(0xFF1E1B2E);
+  static const Color primaryTeal = Color(0xFF00C9A7);
 
-  final List<String> _categories = ["Frames", "Rides", "Bubbles", "Badges"];
-  final List<String> _categoryKeys = ["frame", "entry", "bubble", "badge"];
+  final List> _categories = [
+    {"label": "Frame", "key": "frame"},
+    {"label": "Entry", "key": "entry"},
+    {"label": "Theme", "key": "bubble"},
+    {"label": "Special ID", "key": "special_id"},
+    {"label": "Props", "key": "badge"},
+  ];
 
   @override
   void initState() {
@@ -32,49 +36,261 @@ class _BackpackScreenState extends State<BackpackScreen> with SingleTickerProvid
     super.dispose();
   }
 
+  Future<void> _toggleEquipItem({
+    required String categoryKey,
+    required String itemId,
+    required bool isCurrentlyEquipped,
+  }) async {
+    if (_currentUser == null) return;
+
+    final DocumentReference userRef =
+        FirebaseFirestore.instance.collection('users').doc(_currentUser!.uid);
+
+    try {
+      if (isCurrentlyEquipped) {
+        // Unequip item
+        await userRef.update({
+          'equipped.$categoryKey': FieldValue.delete(),
+        });
+      } else {
+        // Equip item
+        await userRef.update({
+          'equipped.$categoryKey': itemId,
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Action failed: ${e.toString()}"),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+    }
+  }
+
+  int _calculateRemainingDays(dynamic expiresAt) {
+    if (expiresAt == null) return 30;
+    if (expiresAt is Timestamp) {
+      final difference = expiresAt.toDate().difference(DateTime.now()).inDays;
+      return difference > 0 ? difference : 0;
+    }
+    return 30;
+  }
+
+  IconData _getCategoryDefaultIcon(String categoryKey) {
+    switch (categoryKey) {
+      case "frame":
+        return Icons.account_circle_outlined;
+      case "entry":
+        return Icons.auto_awesome;
+      case "bubble":
+        return Icons.chat_bubble_outline;
+      case "special_id":
+        return Icons.badge_outlined;
+      case "badge":
+        return Icons.military_tech_outlined;
+      default:
+        return Icons.inventory_2_outlined;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_currentUser == null) {
       return const Scaffold(
-        backgroundColor: darkBg,
-        body: Center(child: Text("Please sign in", style: TextStyle(color: Colors.white))),
+        backgroundColor: Color(0xFFF8F9FA),
+        body: Center(
+          child: Text(
+            "Please sign in to access Backpack",
+            style: TextStyle(color: Colors.black54),
+          ),
+        ),
       );
     }
 
     return Scaffold(
-      backgroundColor: darkBg,
+      backgroundColor: const Color(0xFFF8F9FA),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF171524),
-        elevation: 0,
+        backgroundColor: Colors.white,
+        elevation: 0.5,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: Colors.white, size: 18),
+          icon: const Icon(Icons.arrow_back_ios, color: Colors.black87, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
           "Backpack",
-          style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold),
+          style: TextStyle(
+            color: Colors.black87,
+            fontSize: 17,
+            fontWeight: FontWeight.bold,
+          ),
         ),
         centerTitle: true,
         bottom: TabBar(
           controller: _tabController,
-          indicatorColor: emeraldColor,
-          labelColor: emeraldColor,
-          unselectedLabelColor: Colors.white54,
-          indicatorWeight: 2.5,
-          tabs: _categories.map((c) => Tab(text: c)).toList(),
+          isScrollable: true,
+          labelColor: primaryTeal,
+          unselectedLabelColor: Colors.black45,
+          indicatorColor: primaryTeal,
+          indicatorWeight: 3,
+          labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+
+tabs: _categories.map((cat) => Tab(text: cat["label"])).toList(),
         ),
       ),
       body: StreamBuilder<DocumentSnapshot>(
-        stream: FirebaseFirestore.instance.collection('users').doc(_currentUser!.uid).snapshots(),
+        stream: FirebaseFirestore.instance
+            .collection('users')
+            .doc(_currentUser!.uid)
+            .snapshots(),
         builder: (context, snapshot) {
-          final data = snapshot.data?.data() as Map<String, dynamic>? ?? {};
-          final inventory = Map<String, dynamic>.from(data['inventory'] ?? {});
-          final equipped = Map<String, dynamic>.from(data['equipped'] ?? {});
+          final userData = (snapshot.hasData && snapshot.data!.exists)
+              ? snapshot.data!.data() as Map<String, dynamic>
+              : <String, dynamic>{};
+
+          final Map<String, dynamic> inventory =
+              Map<String, dynamic>.from(userData['inventory'] ?? {});
+          final Map<String, dynamic> equipped =
+              Map<String, dynamic>.from(userData['equipped'] ?? {});
 
           return TabBarView(
             controller: _tabController,
-            children: _categoryKeys.map((key) {
-              return _buildCategoryGrid(categoryKey: key, inventory: inventory, equipped: equipped);
+            children: _categories.map((cat) {
+              final String categoryKey = cat["key"]!;
+              final String categoryLabel = cat["label"]!;
+
+              // Filter items belonging to current category
+              final List<MapEntry<String, dynamic>> items = inventory.entries
+                  .where((entry) =>
+                      entry.value is Map &&
+                      entry.value['category'] == categoryKey)
+                  .toList();
+
+              if (items.isEmpty) {
+                return _buildEmptyState(categoryLabel);
+              }
+
+              return ListView.builder(
+                padding: const EdgeInsets.all(16),
+                itemCount: items.length,
+                itemBuilder: (context, index) {
+                  final String itemId = items[index].key;
+                  final Map<String, dynamic> itemData =
+                      Map<String, dynamic>.from(items[index].value as Map);
+
+                  final String name = itemData['name'] ?? "$categoryLabel Item";
+                  final int daysRemaining =
+                      _calculateRemainingDays(itemData['expiresAt']);
+                  final bool isEquipped = equipped[categoryKey] == itemId;
+
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: isEquipped ? primaryTeal : Colors.black12,
+                        width: isEquipped ? 1.6 : 1.0,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.02),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 56,
+                          height: 56,
+                          decoration: BoxDecoration(
+                            color: primaryTeal.withOpacity(0.08),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Center(
+                            child: itemData['icon'] != null &&
+                                    itemData['icon'].toString().length <= 2
+                                ? Text(
+                                    itemData['icon'].toString(),
+                                    style: const TextStyle(fontSize: 26),
+                                  )
+                                : Icon(
+                                    _getCategoryDefaultIcon(categoryKey),
+                                    color: primaryTeal,
+                                    size: 28,
+
+),
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                name,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14.5,
+                                  color: Color(0xFF1D2129),
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  const Icon(Icons.timer_outlined,
+                                      size: 13, color: Colors.black45),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    "Validity: $daysRemaining Days",
+                                    style: const TextStyle(
+                                      color: Colors.black45,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        InkWell(
+                          onTap: () => _toggleEquipItem(
+                            categoryKey: categoryKey,
+                            itemId: itemId,
+                            isCurrentlyEquipped: isEquipped,
+                          ),
+                          borderRadius: BorderRadius.circular(16),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 7,
+                            ),
+                            decoration: BoxDecoration(
+                              color: isEquipped
+                                  ? Colors.redAccent.withOpacity(0.9)
+                                  : primaryTeal,
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Text(
+                              isEquipped ? "Unequip" : "Wear",
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              );
             }).toList(),
           );
         },
@@ -82,119 +298,27 @@ class _BackpackScreenState extends State<BackpackScreen> with SingleTickerProvid
     );
   }
 
-  Widget _buildCategoryGrid({
-    required String categoryKey,
-    required Map<String, dynamic> inventory,
-    required Map<String, dynamic> equipped,
-  }) {
-    // ተጠቃሚው በዚህ ዘርፍ ስር የገዛቸው እቃዎች መለያዎች
-    final userItems = inventory.entries
-        .where((e) => (e.value is Map && e.value['category'] == categoryKey))
-        .toList();
-
-    // እስካሁን ምንም ያልገዛ ከሆነ ንጹህ ባዶ የቦታ ናሙናዎችን (Slots) ያሳያል
-    final int displayCount = userItems.isNotEmpty ? userItems.length : 6;
-
-    return GridView.builder(
-      padding: const EdgeInsets.all(14),
-      itemCount: displayCount,
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        mainAxisSpacing: 12,
-        crossAxisSpacing: 12,
-        childAspectRatio: 0.85,
-      ),
-      itemBuilder: (context, idx) {
-        final hasItem = userItems.isNotEmpty && idx < userItems.length;
-        final itemId = hasItem ? userItems[idx].key : "slot_$idx";
-        final itemData = hasItem ? (userItems[idx].value as Map<String, dynamic>) : null;
-
-        final isEquipped = equipped[categoryKey] == itemId;
-        final iconDisplay = itemData?['icon'] ?? "🎒";
-        final nameDisplay = itemData?['name'] ?? "Slot ${idx + 1}";
-
-return Container(
-          decoration: BoxDecoration(
-            color: cardBg,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: isEquipped ? emeraldColor : Colors.white12,
-              width: isEquipped ? 1.8 : 1.0,
+  Widget _buildEmptyState(String categoryName) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.backpack_outlined,
+            size: 64,
+            color: Colors.black.withOpacity(0.15),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            "No $categoryName items available",
+            style: const TextStyle(
+              color: Colors.black38,
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
             ),
           ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              // SLOT 1: የምስል/አዶ ቦታ
-              Container(
-                width: 60,
-                height: 60,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.white.withOpacity(0.04),
-                  border: Border.all(color: Colors.white10),
-                ),
-                child: Center(
-                  child: Text(iconDisplay, style: const TextStyle(fontSize: 28)),
-                ),
-              ),
-              const SizedBox(height: 8),
-
-              // SLOT 2: የስም ቦታ
-              Text(
-                nameDisplay,
-                style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 4),
-
-              // SLOT 3: የሁኔታ መለያ (Active / Stored)
-              Text(
-                isEquipped ? "In Use" : (hasItem ? "Owned" : "Empty Slot"),
-                style: TextStyle(
-                  color: isEquipped ? emeraldColor : Colors.white38,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              const SizedBox(height: 10),
-
-              // SLOT 4: የማጥለቂያ/የማውለቂያ ቁልፍ ቦታ
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: SizedBox(
-                  width: double.infinity,
-                  height: 32,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: isEquipped ? Colors.redAccent.withOpacity(0.8) : (hasItem ? emeraldColor : Colors.white12),
-                      padding: EdgeInsets.zero,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                    ),
-                    onPressed: hasItem
-                        ? () {
-                            final targetEquip = isEquipped ? null : itemId;
-                            FirebaseFirestore.instance.collection('users').doc(_currentUser!.uid).update({
-                              'equipped.$categoryKey': targetEquip,
-                            });
-                          }
-                        : null,
-                    child: Text(
-                      isEquipped ? "Unequip" : (hasItem ? "Equip" : "Slot"),
-                      style: TextStyle(
-                        color: hasItem ? Colors.black : Colors.white24,
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
+        ],
+      ),
     );
   }
 }
