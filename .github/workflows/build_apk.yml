@@ -33,10 +33,15 @@ jobs:
         run: |
           rm -rf android
           flutter create . --platforms=android --org=com.nile --project-name=voiceapp
-          if [ -f android/gradle/wrapper/gradle-wrapper.properties ]; then
-            sed -i 's|github.com/gradle/gradle-distributions/releases/download|services.gradle.org/distributions|g' android/gradle/wrapper/gradle-wrapper.properties
-            sed -i 's|gradle-7.6.3-all.zip|gradle-7.6.3-bin.zip|g' android/gradle/wrapper/gradle-wrapper.properties
-          fi
+
+          # የ 504 ስህተት የሚያመጣውን የ github ሊንክ ሙሉ በሙሉ በኦፊሴላዊው የ gradle ሰርቨር መተካት
+          cat << 'EOF' > android/gradle/wrapper/gradle-wrapper.properties
+          distributionBase=GRADLE_USER_HOME
+          distributionPath=wrapper/dists
+          distributionUrl=https\://services.gradle.org/distributions/gradle-7.6.3-bin.zip
+          zipStoreBase=GRADLE_USER_HOME
+          zipStorePath=wrapper/dists
+          EOF
 
       - name: Restore Firebase Config and Setup Plugins
         run: |
@@ -115,13 +120,12 @@ jobs:
           }
           EOF
 
-          # Permissions injection without error-prone sed commands
           cat << 'EOF' > android/app/src/main/AndroidManifest.xml
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <uses-permission android:name="android.permission.INTERNET"/>
               <uses-permission android:name="android.permission.RECORD_AUDIO"/>
 
-            <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
+           <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
               <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
               <application
                   android:label="voiceapp"
