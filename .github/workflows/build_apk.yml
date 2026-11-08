@@ -1,3 +1,4 @@
+KEDER:
 name: Build Flutter APK
 
 on:
@@ -33,6 +34,12 @@ jobs:
         run: |
           rm -rf android
           flutter create . --platforms=android --org=com.nile --project-name=voiceapp
+          # Fix the Gradle 504 Timeout URL immediately after creation
+          if [ -f android/gradle/wrapper/gradle-wrapper.properties ]; then
+            sed -i 's|https\\://services.gradle.org/distributions/|https\\://services.gradle.org/distributions/|g' android/gradle/wrapper/gradle-wrapper.properties
+            sed -i 's|github.com/gradle/gradle-distributions/releases/download|services.gradle.org/distributions|g' android/gradle/wrapper/gradle-wrapper.properties
+            sed -i 's|gradle-7.6.3-all.zip|gradle-7.6.3-bin.zip|g' android/gradle/wrapper/gradle-wrapper.properties
+          fi
 
       - name: Restore Firebase Config and Setup Plugins
         run: |
@@ -110,7 +117,9 @@ jobs:
               }
           }
           EOF
-          sed -i '/<manifest/a \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.RECORD_AUDIO"/>\n    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>' android/app/src/main/AndroidManifest.xml
+          sed -i '/<manifest/a \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.RECORD_AUDIO"/>\n    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>'
+
+          android/app/src/main/AndroidManifest.xml
 
       - name: Restore Permanent Keystore
         run: |
