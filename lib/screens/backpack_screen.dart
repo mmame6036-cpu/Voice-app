@@ -2,6 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+class BackpackCategory {
+  final String label;
+  final String key;
+
+  const BackpackCategory({required this.label, required this.key});
+}
+
 class BackpackScreen extends StatefulWidget {
   const BackpackScreen({super.key});
 
@@ -16,12 +23,12 @@ class _BackpackScreenState extends State<BackpackScreen>
 
   static const Color primaryTeal = Color(0xFF00C9A7);
 
-  final List> _categories = [
-    {"label": "Frame", "key": "frame"},
-    {"label": "Entry", "key": "entry"},
-    {"label": "Theme", "key": "bubble"},
-    {"label": "Special ID", "key": "special_id"},
-    {"label": "Props", "key": "badge"},
+  final List<BackpackCategory> _categories = const [
+    BackpackCategory(label: "Frame", key: "frame"),
+    BackpackCategory(label: "Entry", key: "entry"),
+    BackpackCategory(label: "Theme", key: "bubble"),
+    BackpackCategory(label: "Special ID", key: "special_id"),
+    BackpackCategory(label: "Props", key: "badge"),
   ];
 
   @override
@@ -48,12 +55,10 @@ class _BackpackScreenState extends State<BackpackScreen>
 
     try {
       if (isCurrentlyEquipped) {
-        // Unequip item
         await userRef.update({
           'equipped.$categoryKey': FieldValue.delete(),
         });
       } else {
-        // Equip item
         await userRef.update({
           'equipped.$categoryKey': itemId,
         });
@@ -131,13 +136,13 @@ class _BackpackScreenState extends State<BackpackScreen>
         bottom: TabBar(
           controller: _tabController,
           isScrollable: true,
-          labelColor: primaryTeal,
+
+labelColor: primaryTeal,
           unselectedLabelColor: Colors.black45,
           indicatorColor: primaryTeal,
           indicatorWeight: 3,
           labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-
-tabs: _categories.map((cat) => Tab(text: cat["label"])).toList(),
+          tabs: _categories.map((cat) => Tab(text: cat.label)).toList(),
         ),
       ),
       body: StreamBuilder<DocumentSnapshot>(
@@ -158,10 +163,9 @@ tabs: _categories.map((cat) => Tab(text: cat["label"])).toList(),
           return TabBarView(
             controller: _tabController,
             children: _categories.map((cat) {
-              final String categoryKey = cat["key"]!;
-              final String categoryLabel = cat["label"]!;
+              final String categoryKey = cat.key;
+              final String categoryLabel = cat.label;
 
-              // Filter items belonging to current category
               final List<MapEntry<String, dynamic>> items = inventory.entries
                   .where((entry) =>
                       entry.value is Map &&
@@ -220,11 +224,11 @@ tabs: _categories.map((cat) => Tab(text: cat["label"])).toList(),
                                     style: const TextStyle(fontSize: 26),
                                   )
                                 : Icon(
-                                    _getCategoryDefaultIcon(categoryKey),
+
+_getCategoryDefaultIcon(categoryKey),
                                     color: primaryTeal,
                                     size: 28,
-
-),
+                                  ),
                           ),
                         ),
                         const SizedBox(width: 14),
