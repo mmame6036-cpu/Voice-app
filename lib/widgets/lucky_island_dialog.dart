@@ -4,6 +4,21 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+// በዳይስ ቦርዱ ላይ ያለ እያንዳንዱን ሳጥን በግልጽ ለመወከል
+class IslandTile {
+  final String label;
+  final double mult;
+  final String type;
+  final IconData icon;
+
+  const IslandTile({
+    required this.label,
+    required this.mult,
+    required this.type,
+    required this.icon,
+  });
+}
+
 class LuckyIslandDialog extends StatefulWidget {
   const LuckyIslandDialog({super.key});
 
@@ -16,7 +31,7 @@ class _LuckyIslandDialogState extends State<LuckyIslandDialog>
   final User? _currentUser = FirebaseAuth.instance.currentUser;
 
   int _selectedBet = 100;
-  final List<int> _betOptions = [100, 500, 2000, 5000];
+  final List<int> _betOptions = const [100, 500, 2000, 5000];
 
   int _currentTileIndex = 0;
   bool _isRolling = false;
@@ -25,24 +40,24 @@ class _LuckyIslandDialogState extends State<LuckyIslandDialog>
   late AnimationController _diceAnimController;
   late Animation<double> _diceRotation;
 
-  // Board layout configuration (16 Tiles)
-  final List> _boardTiles = [
-    {"label": "START", "mult": 1.0, "type": "start", "icon": Icons.flag},
-    {"label": "1.2x", "mult": 1.2, "type": "win", "icon": Icons.monetization_on},
-    {"label": "0x", "mult": 0.0, "type": "empty", "icon": Icons.close},
-    {"label": "2x", "mult": 2.0, "type": "win", "icon": Icons.card_giftcard},
-    {"label": "1.5x", "mult": 1.5, "type": "win", "icon": Icons.monetization_on},
-    {"label": "TRAP", "mult": 0.0, "type": "trap", "icon": Icons.dangerous},
-    {"label": "3x", "mult": 3.0, "type": "win", "icon": Icons.card_giftcard},
-    {"label": "0.5x", "mult": 0.5, "type": "win", "icon": Icons.monetization_on},
-    {"label": "CHEST", "mult": 5.0, "type": "chest", "icon": Icons.archive},
-    {"label": "1.2x", "mult": 1.2, "type": "win", "icon": Icons.monetization_on},
-    {"label": "0x", "mult": 0.0, "type": "empty", "icon": Icons.close},
-    {"label": "2.5x", "mult": 2.5, "type": "win", "icon": Icons.card_giftcard},
-    {"label": "0.8x", "mult": 0.8, "type": "win", "icon": Icons.monetization_on},
-    {"label": "LUCKY", "mult": 10.0, "type": "lucky", "icon": Icons.stars},
-    {"label": "1.5x", "mult": 1.5, "type": "win", "icon": Icons.monetization_on},
-    {"label": "JACKPOT", "mult": 20.0, "type": "jackpot", "icon": Icons.diamond},
+  // 16ቱ የደሴቱ ሰሌዳዎች (Strong Typed List)
+  final List<IslandTile> _boardTiles = const [
+    IslandTile(label: "START", mult: 1.0, type: "start", icon: Icons.flag),
+    IslandTile(label: "1.2x", mult: 1.2, type: "win", icon: Icons.monetization_on),
+    IslandTile(label: "0x", mult: 0.0, type: "empty", icon: Icons.close),
+    IslandTile(label: "2x", mult: 2.0, type: "win", icon: Icons.card_giftcard),
+    IslandTile(label: "1.5x", mult: 1.5, type: "win", icon: Icons.monetization_on),
+    IslandTile(label: "TRAP", mult: 0.0, type: "trap", icon: Icons.dangerous),
+    IslandTile(label: "3x", mult: 3.0, type: "win", icon: Icons.card_giftcard),
+    IslandTile(label: "0.5x", mult: 0.5, type: "win", icon: Icons.monetization_on),
+    IslandTile(label: "CHEST", mult: 5.0, type: "chest", icon: Icons.archive),
+    IslandTile(label: "1.2x", mult: 1.2, type: "win", icon: Icons.monetization_on),
+    IslandTile(label: "0x", mult: 0.0, type: "empty", icon: Icons.close),
+    IslandTile(label: "2.5x", mult: 2.5, type: "win", icon: Icons.card_giftcard),
+    IslandTile(label: "0.8x", mult: 0.8, type: "win", icon: Icons.monetization_on),
+    IslandTile(label: "LUCKY", mult: 10.0, type: "lucky", icon: Icons.stars),
+    IslandTile(label: "1.5x", mult: 1.5, type: "win", icon: Icons.monetization_on),
+    IslandTile(label: "JACKPOT", mult: 20.0, type: "jackpot", icon: Icons.diamond),
   ];
 
   @override
@@ -83,20 +98,20 @@ class _LuckyIslandDialogState extends State<LuckyIslandDialog>
         FirebaseFirestore.instance.collection('users').doc(uid);
 
     try {
-      // 1. Deduct bet amount atomically
+      // 1. ሳንቲም መቀነስ
       await userRef.update({
         'coins': FieldValue.increment(-_selectedBet),
       });
 
-      // 2. Animate dice rotation
+      // 2. የዳይስ አኒሜሽን ማሽከርከር
       _diceAnimController.repeat();
       await Future.delayed(const Duration(milliseconds: 700));
-      final int diceRoll = Random().nextInt(6) + 1; // 1 to 6
+      final int diceRoll = Random().nextInt(6) + 1;
       _lastDiceResult = diceRoll;
       _diceAnimController.stop();
       _diceAnimController.reset();
 
-      // 3. Step-by-step movement animation
+// 3. የተጫዋቹ ደረጃ በደረጃ እንቅስቃሴ
       for (int step = 1; step <= diceRoll; step++) {
         await Future.delayed(const Duration(milliseconds: 220));
         if (mounted) {
@@ -106,28 +121,28 @@ class _LuckyIslandDialogState extends State<LuckyIslandDialog>
         }
       }
 
-      // 4. Calculate payout
-      final Map<String, dynamic> landTile = _boardTiles[_currentTileIndex];
-      final double multiplier = (landTile['mult'] as num).toDouble();
-      final int winAmount = (_selectedBet * multiplier).round();
+      // 4. የውጤት ስሌት
+      final IslandTile landTile = _boardTiles[_currentTileIndex];
+      final int winAmount = (_selectedBet * landTile.mult).round();
 
-if (winAmount > 0) {
+      if (winAmount > 0) {
         await userRef.update({
           'coins': FieldValue.increment(winAmount),
         });
       }
 
-      // 5. Present result to user
       if (mounted) {
         _showResultDialog(winAmount, landTile);
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text("Action failed: ${e.toString()}"),
-          backgroundColor: Colors.redAccent,
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Action failed: ${e.toString()}"),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
     } finally {
       if (mounted) {
         setState(() => _isRolling = false);
@@ -135,7 +150,7 @@ if (winAmount > 0) {
     }
   }
 
-  void _showResultDialog(int winAmount, Map<String, dynamic> tile) {
+  void _showResultDialog(int winAmount, IslandTile tile) {
     final bool isWin = winAmount > 0;
     showDialog(
       context: context,
@@ -153,7 +168,7 @@ if (winAmount > 0) {
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
-              tile['icon'] as IconData,
+              tile.icon,
               color: isWin ? const Color(0xFFFFD700) : Colors.redAccent,
               size: 48,
             ),
@@ -168,7 +183,7 @@ if (winAmount > 0) {
             ),
             const SizedBox(height: 6),
             Text(
-              "Landed on: ${tile['label']}",
+              "Landed on: ${tile.label}",
               style: const TextStyle(color: Colors.white54, fontSize: 13),
             ),
             const SizedBox(height: 10),
@@ -214,7 +229,7 @@ if (winAmount > 0) {
 
         final int liveCoins = (userData['coins'] as num?)?.toInt() ?? 0;
 
-        return Container(
+return Container(
           height: 620,
           decoration: const BoxDecoration(
             color: Color(0xFF0F172A),
@@ -223,7 +238,6 @@ if (winAmount > 0) {
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           child: Column(
             children: [
-              // Top drag bar
               Container(
                 width: 40,
                 height: 4,
@@ -233,8 +247,6 @@ if (winAmount > 0) {
                 ),
               ),
               const SizedBox(height: 12),
-
-// Title and Live Balance
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -277,8 +289,6 @@ if (winAmount > 0) {
                 ],
               ),
               const SizedBox(height: 10),
-
-              // Winner Ticker Bar
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
@@ -300,8 +310,6 @@ if (winAmount > 0) {
                 ),
               ),
               const SizedBox(height: 14),
-
-              // 4x4 Island Map Board (16 Tiles)
               Expanded(
                 child: Container(
                   padding: const EdgeInsets.all(10),
@@ -313,21 +321,22 @@ if (winAmount > 0) {
                   child: GridView.builder(
                     physics: const NeverScrollableScrollPhysics(),
                     itemCount: _boardTiles.length,
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+
+gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                       crossAxisCount: 4,
                       mainAxisSpacing: 8,
                       crossAxisSpacing: 8,
                     ),
                     itemBuilder: (context, idx) {
-                      final tile = _boardTiles[idx];
+                      final IslandTile tile = _boardTiles[idx];
                       final bool isCurrent = _currentTileIndex == idx;
-                      final String type = tile['type'];
+                      final String type = tile.type;
 
                       Color tileBg = Colors.white.withOpacity(0.06);
                       Color borderColor = Colors.white10;
                       Color iconColor = Colors.amber;
 
-if (type == "start") {
+                      if (type == "start") {
                         iconColor = const Color(0xFF00C9A7);
                       } else if (type == "trap" || type == "empty") {
                         iconColor = Colors.redAccent.withOpacity(0.8);
@@ -364,10 +373,10 @@ if (type == "start") {
                               if (isCurrent)
                                 const Icon(Icons.navigation, color: Colors.white, size: 14)
                               else
-                                Icon(tile['icon'] as IconData, color: iconColor, size: 18),
+                                Icon(tile.icon, color: iconColor, size: 18),
                               const SizedBox(height: 2),
                               Text(
-                                tile['label'] as String,
+                                tile.label,
                                 style: TextStyle(
                                   color: isCurrent ? Colors.white : Colors.white60,
                                   fontSize: 9,
@@ -384,8 +393,6 @@ if (type == "start") {
                 ),
               ),
               const SizedBox(height: 12),
-
-              // Bet Selector Options
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: _betOptions.map((amount) {
@@ -396,7 +403,8 @@ if (type == "start") {
                       margin: const EdgeInsets.symmetric(horizontal: 4),
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                       decoration: BoxDecoration(
-                        color: isSel ? const Color(0xFF00C9A7) : Colors.white10,
+
+color: isSel ? const Color(0xFF00C9A7) : Colors.white10,
                         borderRadius: BorderRadius.circular(14),
                         border: Border.all(
                           color: isSel ? Colors.white : Colors.white24,
@@ -415,8 +423,6 @@ if (type == "start") {
                 }).toList(),
               ),
               const SizedBox(height: 12),
-
-// Roll Dice Execution Button
               SizedBox(
                 width: double.infinity,
                 height: 48,
