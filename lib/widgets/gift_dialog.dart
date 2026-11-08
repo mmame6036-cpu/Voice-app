@@ -34,6 +34,7 @@ class GiftSendResult {
   final int multiplier;
   final int totalCost;
   final int wonCoins;
+  final int rawGiftCostPerSeat; // Full gift value for seat display (100% value)
 
   GiftSendResult({
     required this.gift,
@@ -42,6 +43,7 @@ class GiftSendResult {
     required this.multiplier,
     required this.totalCost,
     this.wonCoins = 0,
+    required this.rawGiftCostPerSeat,
   });
 }
 
@@ -336,7 +338,7 @@ final totalCost = _calculateTotalPrice;
         'coins': FieldValue.increment(netDeduction),
       }, SetOptions(merge: true)).catchError((_) {});
 
-      // 4% for lucky gifts, 70% for standard gifts
+      // Point calculation: 4% for lucky, 70% for standard
       final double hostRate = selectedGift.diamondRate;
       final int diamondsPerRecipient = (selectedGift.price * _selectedMultiplier * hostRate).round();
 
@@ -395,8 +397,22 @@ final totalCost = _calculateTotalPrice;
         );
       }
 
-      if (mounted && _comboCount == 1) {
-        // Keeps sheet open for continuous combos, pops if needed by caller
+      // 100% full gift value goes to seat display
+      final int fullSeatCost = selectedGift.price * _selectedMultiplier;
+
+      if (mounted) {
+        Navigator.pop(
+          context,
+          GiftSendResult(
+            gift: selectedGift,
+            targetSeatIndices: _selectedSeatIndices.toList(),
+            isAll: _isAllSelected,
+            multiplier: _selectedMultiplier,
+            totalCost: totalCost,
+            wonCoins: wonCoins,
+            rawGiftCostPerSeat: fullSeatCost,
+          ),
+        );
       }
     } catch (e) {
       if (mounted) {
@@ -411,7 +427,7 @@ final totalCost = _calculateTotalPrice;
     }
   }
 
-  String _getCategoryName(GiftCategory cat) {
+String _getCategoryName(GiftCategory cat) {
     switch (cat) {
       case GiftCategory.hot:
         return "Hot";
@@ -424,7 +440,7 @@ final totalCost = _calculateTotalPrice;
     }
   }
 
-@override
+  @override
   Widget build(BuildContext context) {
     final totalCost = _calculateTotalPrice;
     final currentGifts = _currentCategoryGifts;
@@ -504,14 +520,14 @@ final totalCost = _calculateTotalPrice;
                             ),
                             child: Center(
                               child: Text(
-                                "$seatNum",
+
+"$seatNum",
                                 style: TextStyle(
                                   color: isSelected
                                       ? goldColor
                                       : (isOccupied ? Colors.white : Colors.white24),
                                   fontSize: 10,
-
-fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                                 ),
                               ),
                             ),
@@ -603,15 +619,14 @@ fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
             ),
           ),
 
-          // Bottom Bar
+// Bottom Bar
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: const BoxDecoration(
               color: cardBg,
               border: Border(top: BorderSide(color: Colors.white10)),
             ),
-
-child: Row(
+            child: Row(
               children: [
                 Row(
                   children: [
@@ -626,72 +641,4 @@ child: Row(
                 const SizedBox(width: 8),
                 if (selectedGift != null)
                   Text(
-                    "💎 ${(selectedGift.price * _selectedMultiplier * selectedGift.diamondRate).round()} (${selectedGift.isLucky ? '4%' : '70%'})",
-                    style: const TextStyle(color: Colors.white38, fontSize: 10),
-                  ),
-                const Spacer(),
-                PopupMenuButton<int>(
-                  color: const Color(0xFF281E48),
-                  initialValue: _selectedMultiplier,
-                  onSelected: (val) => setState(() => _selectedMultiplier = val),
-                  itemBuilder: (context) => _multipliers
-                      .map((m) => PopupMenuItem<int>(
-                            value: m,
-                            child: Text(
-                              "x$m",
-                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                            ),
-                          ))
-                      .toList(),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.08),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.white24),
-                    ),
-                    child: Row(
-                      children: [
-                        Text(
-                          "x$_selectedMultiplier",
-                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
-                        ),
-                        const Icon(Icons.arrow_drop_up, color: Colors.white70, size: 14),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _comboCount > 0 ? Colors.deepOrangeAccent : goldColor,
-                    foregroundColor: Colors.black,
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  ),
-                  onPressed: _isSending ? null : _sendGift,
-                  child: _isSending
-                      ? const SizedBox(
-                          width: 14,
-                          height: 14,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
-                        )
-                      : Text(
-                          _comboCount > 0
-                              ? "COMBO x$_comboCount"
-                              : "Send (🪙$totalCost)",
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 11,
-                            color: _comboCount > 0 ? Colors.white : Colors.black,
-                          ),
-                        ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
+                    "💎 ${(selectedGift.
