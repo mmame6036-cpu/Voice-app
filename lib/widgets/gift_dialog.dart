@@ -641,4 +641,72 @@ String _getCategoryName(GiftCategory cat) {
                 const SizedBox(width: 8),
                 if (selectedGift != null)
                   Text(
-                    "💎 ${(selectedGift.
+                    "💎 ${(selectedGift.price * _selectedMultiplier * selectedGift.diamondRate).round()} (${selectedGift.isLucky ? '4%' : '70%'})",
+                    style: const TextStyle(color: Colors.white38, fontSize: 10),
+                  ),
+                const Spacer(),
+                PopupMenuButton<int>(
+                  color: const Color(0xFF281E48),
+                  initialValue: _selectedMultiplier,
+                  onSelected: (val) => setState(() => _selectedMultiplier = val),
+                  itemBuilder: (context) => _multipliers
+                      .map((m) => PopupMenuItem<int>(
+                            value: m,
+                            child: Text(
+                              "x$m",
+                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                            ),
+                          ))
+                      .toList(),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.white24),
+                    ),
+                    child: Row(
+                      children: [
+                        Text(
+                          "x$_selectedMultiplier",
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
+                        ),
+                        const Icon(Icons.arrow_drop_up, color: Colors.white70, size: 14),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _comboCount > 0 ? Colors.deepOrangeAccent : goldColor,
+                    foregroundColor: Colors.black,
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  ),
+                  onPressed: _isSending ? null : _sendGift,
+                  child: _isSending
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
+                        )
+                      : Text(
+                          _comboCount > 0
+                              ? "COMBO x$_comboCount"
+                              : "Send (🪙$totalCost)",
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 11,
+                            color: _comboCount > 0 ? Colors.white : Colors.black,
+                          ),
+                        ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
