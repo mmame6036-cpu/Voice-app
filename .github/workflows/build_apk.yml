@@ -33,9 +33,7 @@ jobs:
         run: |
           rm -rf android
           flutter create . --platforms=android --org=com.nile --project-name=voiceapp
-          # Fix the Gradle 504 Timeout URL immediately after creation
           if [ -f android/gradle/wrapper/gradle-wrapper.properties ]; then
-            sed -i 's|https\\://services.gradle.org/distributions/|https\\://services.gradle.org/distributions/|g' android/gradle/wrapper/gradle-wrapper.properties
             sed -i 's|github.com/gradle/gradle-distributions/releases/download|services.gradle.org/distributions|g' android/gradle/wrapper/gradle-wrapper.properties
             sed -i 's|gradle-7.6.3-all.zip|gradle-7.6.3-bin.zip|g' android/gradle/wrapper/gradle-wrapper.properties
           fi
@@ -116,9 +114,23 @@ jobs:
               }
           }
           EOF
-          sed -i '/<manifest/a \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.RECORD_AUDIO"/>\n    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>'
 
-           android/app/src/main/AndroidManifest.xml
+          python3 -c "
+          manifest_path = 'android/app/src/main/AndroidManifest.xml'
+          with open(manifest_path, 'r') as f:
+              text = f.read()
+          perms = '''
+              <uses-permission android:name=\"android.permission.INTERNET\"/>
+              <uses-permission android:name=\"android.permission.RECORD_AUDIO\"/>
+
+                <uses-permission android:name=\"android.permission.MODIFY_AUDIO_SETTINGS\"/>
+              <uses-permission android:name=\"android.permission.ACCESS_NETWORK_STATE\"/>
+          '''
+          if 'RECORD_AUDIO' not in text:
+              text = text.replace('<application', perms + '\n    <application', 1)
+              with open(manifest_path, 'w') as f:
+                  f.write(text)
+          "
 
       - name: Restore Permanent Keystore
         run: |
