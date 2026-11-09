@@ -45,11 +45,11 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  // ፈጣን የእንግዳ መግቢያ (ቀጥታ በ Firebase Anonymous ይገባል)
+  // Fast guest authentication via Firebase Anonymous sign-in
   Future<void> _handleGuestLogin() async {
     setState(() {
       _isLoading = true;
-      _loadingMessage = "ወደ አፑ በመግባት ላይ...";
+      _loadingMessage = "Signing in...";
     });
 
     try {
@@ -60,7 +60,7 @@ class _LoginScreenState extends State<LoginScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("የመግቢያ ስህተት፦ $e")),
+          SnackBar(content: Text("Login error: $e")),
         );
       }
     } finally {
@@ -70,7 +70,7 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  // በስልክ ቁጥር መግቢያ
+  // Phone number entry bottom sheet
   void _handlePhoneSheet() {
     final phoneController = TextEditingController();
     bool isSubmitting = false;
@@ -151,7 +151,7 @@ filled: true,
                           final rawNumber = phoneController.text.trim();
                           if (rawNumber.length < 9) {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text("እባክዎ ትክክለኛ ስልክ ቁጥር ያስገቡ")),
+                              const SnackBar(content: Text("Please enter a valid phone number")),
                             );
                             return;
                           }
@@ -180,75 +180,107 @@ filled: true,
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF0A0714),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24.0),
-          child: Column(
-            children: [
-              const Spacer(flex: 2),
-              const Icon(
-                Icons.graphic_eq,
-                color: Color(0xFFFFD700),
-                size: 54,
+      body: Stack(
+        children: [
+          // 1. Background image layer
+          Positioned.fill(
+            child: Image.asset(
+              'assets/images/login_bg.png',
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) => Container(
+                color: const Color(0xFF0A0714),
               ),
-              const SizedBox(height: 12),
-              const Text(
-                "NILE",
-                style: TextStyle(
-                  color: Color(0xFFFFD700),
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 2.0,
-                ),
-              ),
-              const SizedBox(height: 6),
-              const Text(
-                "Live Voice Lounge",
-                style: TextStyle(
-                  color: Color(0xFFE6C280),
-                  fontSize: 13,
-                  fontWeight: FontWeight.w400,
-                ),
-              ),
-              const Spacer(flex: 3),
-              if (_isLoading)
-                Column(
-                  children: [
-                    const CircularProgressIndicator(color: Color(0xFFFFD700)),
-                    const SizedBox(height: 14),
-                    Text(
-                      _loadingMessage,
-                      style: const TextStyle(color: Color(0xFFFFD700), fontSize: 13),
-                    ),
-                    const SizedBox(height: 30),
-                  ],
-                ),
-              _actionButton(
-                icon: const Icon(Icons.phone_android, size: 20, color: Color(0xFFFFD700)),
-                text: "Continue with Phone",
-                bgColor: const Color(0xFF1E2235),
-
-textColor: const Color(0xFFFFD700),
-                onTap: _isLoading ? () {} : _handlePhoneSheet,
-              ),
-              const SizedBox(height: 14),
-              _actionButton(
-                icon: const Icon(Icons.person_outline, size: 20, color: Colors.black87),
-                text: "Quick Guest Entry",
-                bgColor: const Color(0xFFFFD700),
-                textColor: Colors.black87,
-                onTap: _isLoading ? () {} : _handleGuestLogin,
-              ),
-              const Spacer(flex: 1),
-              const Text(
-                "By continuing, you agree to our Terms & Privacy Policy.",
-                style: TextStyle(color: Colors.white38, fontSize: 11),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 16),
-            ],
+            ),
           ),
-        ),
+
+          // 2. Translucent dark gradient overlay
+          Positioned.fill(
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Colors.black.withOpacity(0.45),
+                    Colors.black.withOpacity(0.75),
+                  ],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                ),
+              ),
+            ),
+          ),
+
+          // 3. Foreground UI
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24.0),
+              child: Column(
+                children: [
+                  const Spacer(flex: 2),
+                  const Icon(
+                    Icons.graphic_eq,
+                    color: Color(0xFFFFD700),
+                    size: 54,
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    "NILE",
+                    style: TextStyle(
+                      color: Color(0xFFFFD700),
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 2.0,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+
+const Text(
+                    "Live Voice Lounge",
+                    style: TextStyle(
+                      color: Color(0xFFE6C280),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+                  const Spacer(flex: 3),
+                  if (_isLoading)
+                    Column(
+                      children: [
+                        const CircularProgressIndicator(color: Color(0xFFFFD700)),
+                        const SizedBox(height: 14),
+                        Text(
+                          _loadingMessage,
+                          style: const TextStyle(color: Color(0xFFFFD700), fontSize: 13),
+                        ),
+                        const SizedBox(height: 30),
+                      ],
+                    ),
+                  _actionButton(
+                    icon: const Icon(Icons.phone_android, size: 20, color: Color(0xFFFFD700)),
+                    text: "Continue with Phone",
+                    bgColor: const Color(0xFF1E2235).withOpacity(0.9),
+                    textColor: const Color(0xFFFFD700),
+                    onTap: _isLoading ? () {} : _handlePhoneSheet,
+                  ),
+                  const SizedBox(height: 14),
+                  _actionButton(
+                    icon: const Icon(Icons.person_outline, size: 20, color: Colors.black87),
+                    text: "Quick Guest Entry",
+                    bgColor: const Color(0xFFFFD700),
+                    textColor: Colors.black87,
+                    onTap: _isLoading ? () {} : _handleGuestLogin,
+                  ),
+                  const Spacer(flex: 1),
+                  const Text(
+                    "By continuing, you agree to our Terms & Privacy Policy.",
+                    style: TextStyle(color: Colors.white60, fontSize: 11),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 16),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -266,7 +298,7 @@ textColor: const Color(0xFFFFD700),
       child: ElevatedButton(
         style: ElevatedButton.styleFrom(
           backgroundColor: bgColor,
-          elevation: 0,
+          elevation: 4,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(25),
           ),
@@ -282,6 +314,7 @@ textColor: const Color(0xFFFFD700),
               style: TextStyle(
                 color: textColor,
                 fontSize: 14,
+                fontWeight: FontWeight.bold,
               ),
             ),
           ],
