@@ -98,7 +98,6 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
   late AnimationController _comboRingController;
   Map<String, dynamic>? _lastSentGiftConfig;
 
-  // Global Win Banner
   bool _showFloatingBanner = false;
   Timer? _bannerTimer;
   int _currentWonRebate = 0;
@@ -107,7 +106,6 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
   bool _showX100Badge = false;
   late AnimationController _x100BadgeController;
 
-  // User Entry Marquee Banner
   String? _entryBannerText;
   late AnimationController _entryMarqueeController;
   late Animation<Offset> _entryMarqueeAnimation;
