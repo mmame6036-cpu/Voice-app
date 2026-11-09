@@ -459,7 +459,6 @@ if (user == widget.userName) {
           );
         }
 
-        // ለራስህ አስቀድሞ በ _executeMultiSeatSend ስለተደመረ ከሌሎች የመጣ ከሆነ ብቻ ወንበሩ ላይ ይደመራል
         if (sender != widget.userName) {
           setState(() {
             if (isAll) {
@@ -497,9 +496,6 @@ if (user == widget.userName) {
         );
       });
 
-        _saveRoomGiftsToFirestore();
-      });
-
       _socket!.on('chat_message_received', (data) {
         if (!mounted || data == null) return;
         final sender = data['sender'] ?? 'User';
@@ -515,10 +511,9 @@ if (user == widget.userName) {
     } catch (_) {}
   }
 
-  Future<String?> _fetchToken({
+Future<String?> _fetchToken({
     required String channelName,
-
-required int uid,
+    required int uid,
     required bool isPublisher,
   }) async {
     try {
