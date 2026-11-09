@@ -1,4 +1,4 @@
-import 'dart:convert';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../services/user_service.dart';
@@ -45,7 +45,6 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  // Fast guest authentication via Firebase Anonymous sign-in
   Future<void> _handleGuestLogin() async {
     setState(() {
       _isLoading = true;
@@ -70,7 +69,6 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  // Phone number entry bottom sheet
   void _handlePhoneSheet() {
     final phoneController = TextEditingController();
     bool isSubmitting = false;
@@ -124,10 +122,10 @@ class _LoginScreenState extends State<LoginScreen> {
                   prefixText: "+251 ",
                   prefixStyle: const TextStyle(color: Colors.white),
                   hintStyle: const TextStyle(color: Colors.white38),
-
-filled: true,
+                  filled: true,
                   fillColor: Colors.white.withOpacity(0.08),
-                  border: OutlineInputBorder(
+
+border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(14),
                     borderSide: BorderSide.none,
                   ),
@@ -179,66 +177,81 @@ filled: true,
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0A0714),
       body: Stack(
         children: [
-          // 1. Background image layer
-          Positioned.fill(
-            child: Image.asset(
-              'assets/images/login_bg.png',
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) => Container(
-                color: const Color(0xFF0A0714),
-              ),
-            ),
-          ),
-
-          // 2. Translucent dark gradient overlay
+          // 1. Rich Cosmic Gradient Background (Not too dark)
           Positioned.fill(
             child: Container(
-              decoration: BoxDecoration(
+              decoration: const BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
-                    Colors.black.withOpacity(0.45),
-                    Colors.black.withOpacity(0.75),
+                    Color(0xFF1B1238),
+                    Color(0xFF121B3A),
+                    Color(0xFF0F1A30),
+                    Color(0xFF1F1032),
                   ],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
                 ),
               ),
             ),
           ),
 
-          // 3. Foreground UI
+          // 2. Custom Painted Glowing Starfield
+          Positioned.fill(
+            child: CustomPaint(
+              painter: StarfieldPainter(),
+            ),
+          ),
+
+          // 3. Foreground Login Content
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24.0),
               child: Column(
                 children: [
                   const Spacer(flex: 2),
-                  const Icon(
-                    Icons.graphic_eq,
-                    color: Color(0xFFFFD700),
-                    size: 54,
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: const Color(0xFFFFD700).withOpacity(0.12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFFFFD700).withOpacity(0.3),
+                          blurRadius: 20,
+                          spreadRadius: 4,
+                        ),
+                      ],
+                    ),
+                    child: const Icon(
+                      Icons.graphic_eq,
+                      color: Color(0xFFFFD700),
+                      size: 48,
+                    ),
                   ),
-                  const SizedBox(height: 12),
-                  const Text(
+                  const SizedBox(height: 16),
+
+const Text(
                     "NILE",
                     style: TextStyle(
                       color: Color(0xFFFFD700),
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 2.0,
+                      fontSize: 32,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 3.0,
+                      shadows: [
+                        Shadow(color: Colors.black54, blurRadius: 10, offset: Offset(0, 3)),
+                      ],
                     ),
                   ),
                   const SizedBox(height: 6),
-
-const Text(
+                  const Text(
                     "Live Voice Lounge",
                     style: TextStyle(
-                      color: Color(0xFFE6C280),
-                      fontSize: 13,
-                      fontWeight: FontWeight.w400,
+                      color: Color(0xFFE0D4FF),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      letterSpacing: 1.2,
                     ),
                   ),
                   const Spacer(flex: 3),
@@ -257,8 +270,9 @@ const Text(
                   _actionButton(
                     icon: const Icon(Icons.phone_android, size: 20, color: Color(0xFFFFD700)),
                     text: "Continue with Phone",
-                    bgColor: const Color(0xFF1E2235).withOpacity(0.9),
+                    bgColor: const Color(0xFF261D4E).withOpacity(0.85),
                     textColor: const Color(0xFFFFD700),
+                    borderColor: const Color(0xFFFFD700).withOpacity(0.5),
                     onTap: _isLoading ? () {} : _handlePhoneSheet,
                   ),
                   const SizedBox(height: 14),
@@ -267,12 +281,13 @@ const Text(
                     text: "Quick Guest Entry",
                     bgColor: const Color(0xFFFFD700),
                     textColor: Colors.black87,
+                    borderColor: Colors.transparent,
                     onTap: _isLoading ? () {} : _handleGuestLogin,
                   ),
                   const Spacer(flex: 1),
                   const Text(
                     "By continuing, you agree to our Terms & Privacy Policy.",
-                    style: TextStyle(color: Colors.white60, fontSize: 11),
+                    style: TextStyle(color: Colors.white54, fontSize: 11),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 16),
@@ -290,17 +305,19 @@ const Text(
     required String text,
     required Color bgColor,
     required Color textColor,
+    required Color borderColor,
     required VoidCallback onTap,
   }) {
     return SizedBox(
       width: double.infinity,
-      height: 50,
+      height: 52,
       child: ElevatedButton(
         style: ElevatedButton.styleFrom(
           backgroundColor: bgColor,
-          elevation: 4,
+          elevation: 5,
+          side: BorderSide(color: borderColor, width: 1.2),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(25),
+            borderRadius: BorderRadius.circular(26),
           ),
         ),
         onPressed: onTap,
@@ -322,4 +339,31 @@ const Text(
       ),
     );
   }
+}
+
+// Custom Painter to render sparkling stars
+
+class StarfieldPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final random = Random(42); // fixed seed for stable stars
+    final starPaint = Paint()..color = Colors.white.withOpacity(0.8);
+    final goldPaint = Paint()..color = const Color(0xFFFFD700).withOpacity(0.7);
+    final bluePaint = Paint()..color = const Color(0xFF00E5FF).withOpacity(0.65);
+
+    for (int i = 0; i < 90; i++) {
+      final dx = random.nextDouble() * size.width;
+      final dy = random.nextDouble() * size.height;
+      final radius = random.nextDouble() * 1.8 + 0.6;
+
+      Paint p = starPaint;
+      if (i % 7 == 0) p = goldPaint;
+      if (i % 5 == 0) p = bluePaint;
+
+      canvas.drawCircle(Offset(dx, dy), radius, p);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
