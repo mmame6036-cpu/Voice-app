@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:http/http.dart' as http;
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'package:audioplayers/audioplayers.dart';
 import '../services/agora_service.dart';
@@ -70,6 +71,7 @@ class VoiceRoomScreen extends StatefulWidget {
 class _VoiceRoomScreenState extends State<VoiceRoomScreen>
     with TickerProviderStateMixin {
   final AgoraService _agoraService = AgoraService();
+  final User? _currentUser = FirebaseAuth.instance.currentUser;
   IO.Socket? _socket;
   final AudioPlayer _audioPlayer = AudioPlayer();
 
@@ -122,6 +124,9 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
   int _currentRocketLevel = 1;
   Timer? _rocketBannerTimer;
 
+  String get _resolvedUid =>
+      _currentUser?.uid ?? (widget.userUid.isNotEmpty ? widget.userUid : "user_guest_id");
+
   @override
   void initState() {
     super.initState();
@@ -139,13 +144,13 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
       duration: const Duration(milliseconds: 1400),
     );
 
-    _x100BadgeController.addStatusListener((status) {
+_x100BadgeController.addStatusListener((status) {
       if (status == AnimationStatus.completed && mounted) {
         setState(() => _showX100Badge = false);
       }
     });
 
-_entryMarqueeController = AnimationController(
+    _entryMarqueeController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 3200),
     );
@@ -194,7 +199,7 @@ _entryMarqueeController = AnimationController(
   void _initWalletSync() {
     _walletSubscription = FirebaseFirestore.instance
         .collection('users')
-        .doc(widget.userUid)
+        .doc(_resolvedUid)
         .snapshots()
         .listen((snapshot) {
       if (snapshot.exists && snapshot.data() != null && mounted) {
@@ -209,7 +214,7 @@ _entryMarqueeController = AnimationController(
   void _initDiamondsSync() {
     _diamondSubscription = FirebaseFirestore.instance
         .collection('users')
-        .doc(widget.userUid)
+        .doc(_resolvedUid)
         .snapshots()
         .listen((snapshot) {
       if (snapshot.exists && snapshot.data() != null && mounted) {
@@ -355,6 +360,7 @@ void _playCoinSound() async {
               if (_seats[i] == widget.userName) {
                 _mySeatIndex = i;
                 _agoraService.switchRole(isSpeaker: true);
+                _agoraService.setMicrophoneMute(false);
               }
             }
           }
@@ -397,10 +403,14 @@ void _playCoinSound() async {
 
           if (user == widget.userName) {
             _mySeatIndex = index;
+            _isMuted = false;
             _agoraService.switchRole(isSpeaker: true);
+            _agoraService.setMicrophoneMute(false);
           } else if (_mySeatIndex == index && user != widget.userName) {
             _mySeatIndex = null;
+            _isMuted = true;
             _agoraService.switchRole(isSpeaker: false);
+            _agoraService.setMicrophoneMute(true);
           }
         });
         _saveRoomGiftsToFirestore();
@@ -537,14 +547,14 @@ onUserJoined: (uid) {},
     final dynamicToken = await _fetchToken(
       channelName: widget.roomId,
       uid: widget.userNumericId,
-      isPublisher: false,
+      isPublisher: true,
     );
 
     await _agoraService.joinRoom(
       channelId: widget.roomId,
       uid: widget.userNumericId,
       token: dynamicToken,
-      isSpeaker: false,
+      isSpeaker: true,
     );
 
     if (mounted) setState(() => _isConnecting = false);
@@ -592,6 +602,8 @@ onUserJoined: (uid) {},
         'userName': widget.userName,
         'isLeaving': true,
       });
+      _agoraService.switchRole(isSpeaker: false);
+      _agoraService.setMicrophoneMute(true);
       return;
     }
 
@@ -611,6 +623,8 @@ onUserJoined: (uid) {},
       'userName': widget.userName,
       'isLeaving': false,
     });
+    _agoraService.switchRole(isSpeaker: true);
+    _agoraService.setMicrophoneMute(false);
   }
 
   void _toggleMute() {
@@ -660,7 +674,7 @@ onUserJoined: (uid) {},
     _comboRingController.reset();
     _comboRingController.forward();
 
-    _comboTimer = Timer(const Duration(seconds: 3), () {
+_comboTimer = Timer(const Duration(seconds: 3), () {
       if (mounted) {
         setState(() {
           _showComboButton = false;
@@ -670,7 +684,7 @@ onUserJoined: (uid) {},
     });
   }
 
-void _triggerMilestoneReward(int giftCost) {
+  void _triggerMilestoneReward(int giftCost) {
     int rewardMultiplier = 2;
     if (_comboCount >= 100) {
       rewardMultiplier = 20;
@@ -693,7 +707,7 @@ void _triggerMilestoneReward(int giftCost) {
 
     FirebaseFirestore.instance
         .collection('users')
-        .doc(widget.userUid)
+        .doc(_resolvedUid)
         .update({
       'coins': FieldValue.increment(rebate),
     }).catchError((_) {});
@@ -755,7 +769,7 @@ void _triggerMilestoneReward(int giftCost) {
       if (_seats[i] != null) {
         seatedList.add({
           'seatIndex': i,
-          'uid': _seats[i]!,
+          'uid': _seats[i] == widget.userName ? _resolvedUid : _seats[i]!,
           'name': _seats[i]!,
           'avatar': '',
         });
@@ -806,7 +820,7 @@ void _triggerMilestoneReward(int giftCost) {
         });
       }
 
-      _executeMultiSeatSend(
+_executeMultiSeatSend(
         targetSeats: result.targetSeatIndices,
         isAll: result.isAll,
         cost: result.rawGiftCostPerSeat,
@@ -821,7 +835,7 @@ void _triggerMilestoneReward(int giftCost) {
     }
   }
 
-void _executeMultiSeatSend({
+  void _executeMultiSeatSend({
     required List<int> targetSeats,
     required bool isAll,
     required int cost,
@@ -917,7 +931,7 @@ void _executeMultiSeatSend({
   @override
   Widget build(BuildContext context) {
     final int crossAxis = _totalSeats <= 12 ? 4 : (_totalSeats <= 20 ? 5 : 6);
-    final double seatDimension = _totalSeats > 20 ? 44.0 : 50.0;
+    final double seatDimension = _totalSeats > 20 ? 40.0 : 48.0;
     final size = MediaQuery.of(context).size;
 
     return Scaffold(
@@ -938,7 +952,8 @@ void _executeMultiSeatSend({
         actions: [
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            margin: const EdgeInsets.symmetric(vertical: 12),
+
+margin: const EdgeInsets.symmetric(vertical: 12),
             decoration: BoxDecoration(
               color: const Color(0xFF1E1638),
               borderRadius: BorderRadius.circular(12),
@@ -948,8 +963,7 @@ void _executeMultiSeatSend({
               mainAxisSize: MainAxisSize.min,
               children: [
                 const Text("💎 ", style: TextStyle(fontSize: 11)),
-
-Text(
+                Text(
                   "$_hostDiamonds",
                   style: const TextStyle(
                     color: Color(0xFF00E5FF),
@@ -1015,15 +1029,15 @@ Text(
                 Expanded(
                   flex: 6,
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 10.0),
+                    padding: const EdgeInsets.symmetric(horizontal: 8.0),
                     child: GridView.builder(
                       physics: const BouncingScrollPhysics(),
                       itemCount: _totalSeats,
                       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                         crossAxisCount: crossAxis,
-                        mainAxisSpacing: 10,
-                        crossAxisSpacing: 6,
-                        childAspectRatio: 0.68,
+                        mainAxisSpacing: 8,
+                        crossAxisSpacing: 4,
+                        childAspectRatio: 0.64,
                       ),
                       itemBuilder: (context, index) {
                         final occupier = _seats[index];
@@ -1035,15 +1049,14 @@ Text(
                         final bool isHostSeat = index == 0;
                         final bool isCrownSeat = index >= 1 && index <= 6;
 
-                        return GestureDetector(
+return GestureDetector(
                           onTap: () => _handleSeatTap(index),
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Stack(
                                 clipBehavior: Clip.none,
-
-alignment: Alignment.center,
+                                alignment: Alignment.center,
                                 children: [
                                   if (isHostSeat && isOccupied)
                                     Positioned(
@@ -1098,38 +1111,43 @@ alignment: Alignment.center,
                                       ),
                                     ),
                                 ],
-                              ),
-                              const SizedBox(height: 4),
+
+),
+                              const SizedBox(height: 3),
                               Text(
                                 isOccupied ? occupier : "${index + 1}",
                                 style: TextStyle(
                                   color: isOccupied ? (isCrownSeat ? const Color(0xFFFFD700) : Colors.white) : Colors.white38,
-
-fontSize: 9.5,
+                                  fontSize: 9.0,
                                   fontWeight: isOccupied ? FontWeight.bold : FontWeight.normal,
                                 ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
                               Container(
-                                margin: const EdgeInsets.only(top: 1.5),
+                                margin: const EdgeInsets.only(top: 1.0),
                                 padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
                                 decoration: BoxDecoration(
                                   color: (giftsCount > 0 && isOccupied) ? const Color(0xFFFF1493).withOpacity(0.3) : Colors.white.withOpacity(0.06),
                                   borderRadius: BorderRadius.circular(6),
                                 ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    const Text("🎁", style: TextStyle(fontSize: 8)),
-                                    const SizedBox(width: 2),
-                                    Text(isOccupied ? "$giftsCount" : "0",
+                                child: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Text("🎁", style: TextStyle(fontSize: 7.5)),
+                                      const SizedBox(width: 1.5),
+                                      Text(
+                                        isOccupied ? "$giftsCount" : "0",
                                         style: TextStyle(
                                           color: (giftsCount > 0 && isOccupied) ? const Color(0xFFFFD700) : Colors.white38,
-                                          fontSize: 8.5,
+                                          fontSize: 8.0,
                                           fontWeight: FontWeight.bold,
-                                        )),
-                                  ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ),
                             ],
@@ -1167,7 +1185,8 @@ fontSize: 9.5,
                           child: Text(
                             "Super Rocket LV.$_currentRocketLevel Active! 🚀",
                             style: const TextStyle(
-                              color: Colors.white,
+
+color: Colors.white,
                               fontSize: 11,
                               fontWeight: FontWeight.bold,
                             ),
@@ -1180,8 +1199,7 @@ fontSize: 9.5,
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(
-
-"LV.$_currentRocketLevel",
+                            "LV.$_currentRocketLevel",
                             style: const TextStyle(color: Color(0xFFFFD700), fontSize: 9.5, fontWeight: FontWeight.w900),
                           ),
                         ),
@@ -1252,15 +1270,14 @@ fontSize: 9.5,
                   ),
                 ),
 
-                Container(
+Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: const BoxDecoration(
                     color: Color(0xFF141026),
                     borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
                   ),
                   child: Row(
-
-children: [
+                    children: [
                       IconButton(
                         icon: Icon(
                           _isMuted ? Icons.mic_off : Icons.mic,
@@ -1341,7 +1358,7 @@ children: [
                 ),
               ),
 
-            ..._activeFlyingGifts.map((gift) {
+..._activeFlyingGifts.map((gift) {
               return AnimatedBuilder(
                 animation: gift.controller,
                 builder: (context, child) {
@@ -1350,12 +1367,12 @@ children: [
                   final centerX = size.width * 0.5;
                   final centerY = size.height * 0.45;
 
-final col = gift.targetSeatIndex % crossAxis;
+                  final col = gift.targetSeatIndex % crossAxis;
                   final row = gift.targetSeatIndex ~/ crossAxis;
-                  final colWidth = (size.width - 20.0) / crossAxis;
+                  final colWidth = (size.width - 16.0) / crossAxis;
 
-                  final targetX = 10.0 + (col + 0.5) * colWidth;
-                  final targetY = 15.0 + (row * (seatDimension + 34.0)) + (seatDimension * 0.5);
+                  final targetX = 8.0 + (col + 0.5) * colWidth;
+                  final targetY = 12.0 + (row * (seatDimension + 32.0)) + (seatDimension * 0.5);
 
                   final currentX = centerX + (targetX - centerX) * t;
                   final currentY = centerY + (targetY - centerY) * t;
@@ -1434,14 +1451,14 @@ final col = gift.targetSeatIndex % crossAxis;
                           children: [
                             Text(
                               _currentWinnerName,
-                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
+
+style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
                             const Text(
                               "Huge Coin Win! 🎉",
-
-style: TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold, fontSize: 10),
+                              style: TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold, fontSize: 10),
                             ),
                           ],
                         ),
@@ -1513,7 +1530,8 @@ style: TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold, fontSize
                                 decoration: BoxDecoration(
                                   color: const Color(0xFFFFD700),
                                   borderRadius: BorderRadius.circular(14),
-                                ),
+
+),
                                 child: const Text(
                                   "MEGA WINNER",
                                   style: TextStyle(color: Colors.black, fontWeight: FontWeight.w900, fontSize: 11),
@@ -1528,7 +1546,7 @@ style: TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold, fontSize
                 ),
               ),
 
-if (_showComboButton)
+            if (_showComboButton)
               Positioned(
                 bottom: 65,
                 right: 20,
