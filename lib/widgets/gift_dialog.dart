@@ -436,7 +436,6 @@ return Container(
       ),
       child: Column(
         children: [
-          // Seat selector bar
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: const BoxDecoration(
@@ -514,13 +513,12 @@ return Container(
                         );
                       },
                     ),
-                  ),
+
+),
                 ),
               ],
             ),
           ),
-
-// Categories Bar (Clean Custom Buttons, zero crashes)
           Container(
             height: 38,
             margin: const EdgeInsets.symmetric(vertical: 4),
@@ -563,8 +561,6 @@ return Container(
               },
             ),
           ),
-
-          // Gifts Grid
           Expanded(
             child: GridView.builder(
               padding: const EdgeInsets.all(8),
@@ -630,8 +626,6 @@ style: const TextStyle(
               },
             ),
           ),
-
-          // Bottom Bar
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: const BoxDecoration(
