@@ -1404,13 +1404,13 @@ Container(
               );
             }),
 
-            Positioned.fill(
-              child: IgnorePointer(
-                child: FloatingGiftComboOverlay(
-                  giftStream: _giftOverlayStreamController.stream,
-                ),
-              ),
-            ),
+            // Positioned.fill(
+            //   child: IgnorePointer(
+            //     child: FloatingGiftComboOverlay(
+            //       giftStream: _giftOverlayStreamController.stream,
+            //     ),
+            //   ),
+            // ),
 
             if (_showFloatingBanner)
               Positioned(
