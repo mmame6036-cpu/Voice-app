@@ -421,8 +421,8 @@ if (user == widget.userName) {
 
       _socket!.on('gift_broadcast', (data) {
         if (!mounted || data == null) return;
-        final isAll = data['isAll'] ?? false;
         final sender = data['senderName'] ?? "Someone";
+        final isAll = data['isAll'] ?? false;
         final giftName = data['giftName'] ?? "Gift";
         final giftCost = (data['giftCost'] as num?)?.toInt() ?? 0;
         final giftAsset = data['giftAsset'] ?? 'assets/images/wikimediaimages-candy-2201920.jpg';
@@ -459,29 +459,33 @@ if (user == widget.userName) {
           );
         }
 
-        setState(() {
-          if (isAll) {
-            for (int i = 0; i < _totalSeats; i++) {
-              if (_seats[i] != null) {
-                _seatGifts[i] += giftCost;
-                _triggerCenterGiftAnimation(giftAsset.toString(), i, isToAll: true);
+        // ለራስህ አስቀድሞ በ _executeMultiSeatSend ስለተደመረ ከሌሎች የመጣ ከሆነ ብቻ ወንበሩ ላይ ይደመራል
+        if (sender != widget.userName) {
+          setState(() {
+            if (isAll) {
+              for (int i = 0; i < _totalSeats; i++) {
+                if (_seats[i] != null) {
+                  _seatGifts[i] += giftCost;
+                  _triggerCenterGiftAnimation(giftAsset.toString(), i, isToAll: true);
+                }
+              }
+            } else if (targets.isNotEmpty) {
+              for (var t in targets) {
+                final idx = (t as num).toInt();
+                if (idx >= 0 && idx < 30 && _seats[idx] != null) {
+                  _seatGifts[idx] += giftCost;
+                  _triggerCenterGiftAnimation(giftAsset.toString(), idx);
+                }
+              }
+            } else {
+              if (_seats[targetIndex] != null) {
+                _seatGifts[targetIndex] += giftCost;
+                _triggerCenterGiftAnimation(giftAsset.toString(), targetIndex);
               }
             }
-          } else if (targets.isNotEmpty) {
-            for (var t in targets) {
-              final idx = (t as num).toInt();
-              if (idx >= 0 && idx < 30 && _seats[idx] != null) {
-                _seatGifts[idx] += giftCost;
-                _triggerCenterGiftAnimation(giftAsset.toString(), idx);
-              }
-            }
-          } else {
-            if (_seats[targetIndex] != null) {
-              _seatGifts[targetIndex] += giftCost;
-              _triggerCenterGiftAnimation(giftAsset.toString(), targetIndex);
-            }
-          }
-        });
+          });
+          _saveRoomGiftsToFirestore();
+        }
 
         _addChatMessage(
           RoomChatMessage(
@@ -491,6 +495,7 @@ if (user == widget.userName) {
             isSystem: true,
           ),
         );
+      });
 
         _saveRoomGiftsToFirestore();
       });
