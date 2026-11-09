@@ -56,8 +56,8 @@ class _FloatingGiftComboOverlayState extends State<FloatingGiftComboOverlay>
     );
 
     _comboScaleAnimation = TweenSequence<double>([
-      TweenSequenceItem(tween: Tween(begin: 1.0, end: 1.6), weight: 50),
-      TweenSequenceItem(tween: Tween(begin: 1.6, end: 1.0), weight: 50),
+      TweenSequenceItem(tween: Tween(begin: 1.0, end: 1.5), weight: 50),
+      TweenSequenceItem(tween: Tween(begin: 1.5, end: 1.0), weight: 50),
     ]).animate(CurvedAnimation(
       parent: _comboScaleController,
       curve: Curves.easeOutBack,
@@ -65,60 +65,60 @@ class _FloatingGiftComboOverlayState extends State<FloatingGiftComboOverlay>
 
     _burstController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1400),
+      duration: const Duration(milliseconds: 1200),
     );
 
-    _burstScaleAnimation = TweenSequence<double>([
-      TweenSequenceItem(
-        tween: Tween(begin: 0.1, end: 1.4).chain(CurveTween(curve: Curves.elasticOut)),
-        weight: 60,
-      ),
-      TweenSequenceItem(
-        tween: Tween(begin: 1.4, end: 1.2).chain(CurveTween(curve: Curves.easeInOut)),
-        weight: 40,
-      ),
-    ]).animate(_burstController);
+    _burstScaleAnimation = Tween<double>(begin: 0.2, end: 1.2).animate(
+      CurvedAnimation(parent: _burstController, curve: Curves.elasticOut),
+    );
 
     _burstFadeAnimation = TweenSequence<double>([
       TweenSequenceItem(tween: Tween(begin: 0.0, end: 1.0), weight: 20),
-      TweenSequenceItem(tween: Tween(begin: 1.0, end: 1.0), weight: 50),
-      TweenSequenceItem(tween: Tween(begin: 1.0, end: 0.0), weight: 30),
+      TweenSequenceItem(tween: Tween(begin: 1.0, end: 1.0), weight: 60),
+      TweenSequenceItem(tween: Tween(begin: 1.0, end: 0.0), weight: 20),
     ]).animate(_burstController);
 
     _burstController.addStatusListener((status) {
-      if (status == AnimationStatus.completed) {
-        if (mounted) {
-          setState(() {
-            _showBurst = false;
-          });
-        }
+      if (status == AnimationStatus.completed && mounted) {
+        setState(() {
+          _showBurst = false;
+        });
       }
     });
 
-    _subscription = widget.giftStream.listen((event) {
-      _showGiftCombo(event);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _subscription = widget.giftStream.listen((event) {
+        if (mounted) {
+          _showGiftCombo(event);
+        }
+      });
     });
   }
 
   void _showGiftCombo(GiftSendEvent event) {
     _hideTimer?.cancel();
+
     setState(() {
       _currentEvent = event;
     });
 
-    _comboScaleController.reset();
+    if (_comboScaleController.isAnimating) {
+      _comboScaleController.reset();
+    }
     _comboScaleController.forward();
 
-    // Trigger burst on 5x combos OR when a lucky win explodes
     if ((event.comboCount > 0 && event.comboCount % 5 == 0) || event.wonCoins > 0) {
       setState(() {
         _showBurst = true;
       });
-      _burstController.reset();
-      _burstController.forward();
+      if (_burstController.isAnimating) {
+        _burstController.reset();
+      }
+      _burstController.forward(from: 0.0);
     }
 
-    _hideTimer = Timer(const Duration(milliseconds: 2800), () {
+    _hideTimer = Timer(const Duration(milliseconds: 2600), () {
       if (mounted) {
         setState(() {
           _currentEvent = null;
@@ -138,110 +138,97 @@ class _FloatingGiftComboOverlayState extends State<FloatingGiftComboOverlay>
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      children: [
+    if (_currentEvent == null && !_showBurst) {
+      return const SizedBox.shrink();
+    }
 
-// 1. Top floating banner for regular combo track
+return Stack(
+      children: [
         if (_currentEvent != null)
           Positioned(
             left: 16,
             top: 130,
-            child: AnimatedSlide(
-              duration: const Duration(milliseconds: 300),
-              curve: Curves.easeOutCubic,
-              offset: Offset.zero,
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: _currentEvent!.isLucky
-                            ? [const Color(0xFFFF8C00), const Color(0xFFFF0080)]
-                            : [const Color(0xFF8E2DE2), const Color(0xFF4A00E0)],
-                      ),
-                      borderRadius: BorderRadius.circular(30),
-                      boxShadow: [
-                        BoxShadow(
-                          color: (_currentEvent!.isLucky ? Colors.orangeAccent : Colors.purpleAccent).withOpacity(0.5),
-                          blurRadius: 10,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                      border: Border.all(color: const Color(0xFFFFD700), width: 1.5),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: _currentEvent!.isLucky
+                          ? [const Color(0xFFFF8C00), const Color(0xFFFF0080)]
+                          : [const Color(0xFF8E2DE2), const Color(0xFF4A00E0)],
                     ),
-                    child: Row(
-                      children: [
-                        const CircleAvatar(
-                          radius: 18,
-                          backgroundColor: Color(0xFFFFD700),
-                          child: Icon(Icons.person, color: Colors.black, size: 22),
-                        ),
-                        const SizedBox(width: 8),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              _currentEvent!.senderName,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                              ),
+                    borderRadius: BorderRadius.circular(30),
+                    boxShadow: [
+                      BoxShadow(
+                        color: (_currentEvent!.isLucky ? Colors.orangeAccent : Colors.purpleAccent).withOpacity(0.5),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                    border: Border.all(color: const Color(0xFFFFD700), width: 1.5),
+                  ),
+                  child: Row(
+                    children: [
+                      const CircleAvatar(
+                        radius: 18,
+                        backgroundColor: Color(0xFFFFD700),
+                        child: Icon(Icons.person, color: Colors.black, size: 22),
+                      ),
+                      const SizedBox(width: 8),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            _currentEvent!.senderName,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
                             ),
-                            Text(
-                              "Sent ${_currentEvent!.giftName} to ${_currentEvent!.targetName}",
-                              style: const TextStyle(
-                                color: Color(0xFFFFD700),
-                                fontSize: 10,
-                              ),
+                          ),
+                          Text(
+                            "Sent ${_currentEvent!.giftName} to ${_currentEvent!.targetName}",
+                            style: const TextStyle(
+                              color: Color(0xFFFFD700),
+                              fontSize: 10,
                             ),
-                          ],
-                        ),
-                        const SizedBox(width: 10),
-                        Text(
-                          _currentEvent!.giftIcon,
-                          style: const TextStyle(fontSize: 28),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(width: 10),
+                      Text(
+                        _currentEvent!.giftIcon,
+                        style: const TextStyle(fontSize: 28),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                ScaleTransition(
+                  scale: _comboScaleAnimation,
+                  child: Text(
+                    "x${_currentEvent!.comboCount}",
+                    style: const TextStyle(
+                      fontSize: 32,
+                      fontWeight: FontWeight.w900,
+                      fontStyle: FontStyle.italic,
+                      color: Color(0xFFFFD700),
+                      shadows: [
+                        Shadow(
+                          color: Colors.black,
+                          blurRadius: 6,
+                          offset: Offset(2, 2),
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  ScaleTransition(
-                    scale: _comboScaleAnimation,
-                    child: ShaderMask(
-                      shaderCallback: (bounds) => const LinearGradient(
-                        colors: [Color(0xFFFFEE00), Color(0xFFFF3366)],
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                      ).createShader(bounds),
-                      child: Text(
-                        "x${_currentEvent!.comboCount}",
-                        style: const TextStyle(
-                          fontSize: 32,
-                          fontWeight: FontWeight.w900,
-                          fontStyle: FontStyle.italic,
-
-color: Colors.white,
-                          shadows: [
-                            Shadow(
-                              color: Colors.black,
-                              blurRadius: 6,
-                              offset: Offset(2, 2),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
-
-        // 2. Central Burst / Lucky Explosion Layer
         if (_showBurst && _currentEvent != null)
           Center(
             child: IgnorePointer(
@@ -249,7 +236,8 @@ color: Colors.white,
                 opacity: _burstFadeAnimation,
                 child: ScaleTransition(
                   scale: _burstScaleAnimation,
-                  child: Column(
+
+child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Container(
@@ -269,39 +257,32 @@ color: Colors.white,
                         ),
                         child: Image.asset(
                           "assets/images/weekly_lovers_heart_value.webp",
-                          width: 160,
-                          height: 160,
+                          width: 150,
+                          height: 150,
                           fit: BoxFit.contain,
                           errorBuilder: (context, error, stackTrace) =>
                               Text(_currentEvent!.giftIcon.isNotEmpty ? _currentEvent!.giftIcon : "💎",
-                                  style: const TextStyle(fontSize: 100)),
+                                  style: const TextStyle(fontSize: 90)),
                         ),
                       ),
                       const SizedBox(height: 12),
-                      ShaderMask(
-                        shaderCallback: (bounds) => const LinearGradient(
-                          colors: [Color(0xFFFFD700), Color(0xFFFF4500)],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ).createShader(bounds),
-                        child: Text(
-                          _currentEvent!.wonCoins > 0
-                              ? "LUCKY x${_currentEvent!.luckyMultiplier}! +${_currentEvent!.wonCoins} COINS!"
-                              : "COMBO ${_currentEvent!.comboCount}X BURST!",
-                          style: const TextStyle(
-                            fontSize: 26,
-                            fontWeight: FontWeight.w900,
-                            fontStyle: FontStyle.italic,
-                            color: Colors.white,
-                            letterSpacing: 1.5,
-                            shadows: [
-                              Shadow(
-                                color: Colors.black87,
-                                blurRadius: 8,
-                                offset: Offset(2, 3),
-                              ),
-                            ],
-                          ),
+                      Text(
+                        _currentEvent!.wonCoins > 0
+                            ? "LUCKY x${_currentEvent!.luckyMultiplier}! +${_currentEvent!.wonCoins} COINS!"
+                            : "COMBO ${_currentEvent!.comboCount}X BURST!",
+                        style: const TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.w900,
+                          fontStyle: FontStyle.italic,
+                          color: Color(0xFFFFD700),
+                          letterSpacing: 1.5,
+                          shadows: [
+                            Shadow(
+                              color: Colors.black87,
+                              blurRadius: 8,
+                              offset: Offset(2, 3),
+                            ),
+                          ],
                         ),
                       ),
                     ],
