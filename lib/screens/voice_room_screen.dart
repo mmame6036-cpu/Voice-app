@@ -11,6 +11,7 @@ import 'package:audioplayers/audioplayers.dart';
 import '../services/agora_service.dart';
 import '../widgets/gift_dialog.dart';
 import '../widgets/floating_gift_combo.dart';
+import '../widgets/fullscreen_gift_animator.dart';
 import '../widgets/room_tools_sheet.dart';
 import 'wallet_screen.dart';
 
@@ -77,6 +78,8 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
 
   final StreamController<GiftSendEvent> _giftOverlayStreamController =
       StreamController<GiftSendEvent>.broadcast();
+  final StreamController<FullscreenGiftEvent> _fullscreenAnimStreamController =
+      StreamController<FullscreenGiftEvent>.broadcast();
 
   bool _isMuted = false;
   int? _mySeatIndex;
@@ -134,7 +137,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
     _seatGifts = List.filled(30, 0);
     _seatMutes = List.filled(30, false);
 
-    _comboRingController = AnimationController(
+_comboRingController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 3),
     );
@@ -144,7 +147,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
       duration: const Duration(milliseconds: 1400),
     );
 
-_x100BadgeController.addStatusListener((status) {
+    _x100BadgeController.addStatusListener((status) {
       if (status == AnimationStatus.completed && mounted) {
         setState(() => _showX100Badge = false);
       }
@@ -268,7 +271,7 @@ _x100BadgeController.addStatusListener((status) {
 
               _playCoinSound();
 
-              _bannerTimer?.cancel();
+_bannerTimer?.cancel();
               _bannerTimer = Timer(const Duration(seconds: 4), () {
                 if (mounted) setState(() => _showFloatingBanner = false);
               });
@@ -279,7 +282,7 @@ _x100BadgeController.addStatusListener((status) {
     });
   }
 
-void _playCoinSound() async {
+  void _playCoinSound() async {
     try {
       final player = AudioPlayer();
       await player.setVolume(1.0);
@@ -401,7 +404,7 @@ void _playCoinSound() async {
             _speakingSeatIndices.remove(index);
           }
 
-          if (user == widget.userName) {
+if (user == widget.userName) {
             _mySeatIndex = index;
             _isMuted = false;
             _agoraService.switchRole(isSpeaker: true);
@@ -416,7 +419,7 @@ void _playCoinSound() async {
         _saveRoomGiftsToFirestore();
       });
 
-_socket!.on('gift_broadcast', (data) {
+      _socket!.on('gift_broadcast', (data) {
         if (!mounted || data == null) return;
         final isAll = data['isAll'] ?? false;
         final sender = data['senderName'] ?? "Someone";
@@ -444,6 +447,17 @@ _socket!.on('gift_broadcast', (data) {
             luckyMultiplier: luckyMultiplier,
           ),
         );
+
+        if (giftCost >= 500) {
+          _fullscreenAnimStreamController.add(
+            FullscreenGiftEvent(
+              giftId: "",
+              giftName: giftName,
+              asset: giftAsset.toString(),
+              senderName: sender,
+            ),
+          );
+        }
 
         setState(() {
           if (isAll) {
@@ -498,7 +512,8 @@ _socket!.on('gift_broadcast', (data) {
 
   Future<String?> _fetchToken({
     required String channelName,
-    required int uid,
+
+required int uid,
     required bool isPublisher,
   }) async {
     try {
@@ -523,8 +538,7 @@ _socket!.on('gift_broadcast', (data) {
     }
 
     await _agoraService.initEngine(
-
-onUserJoined: (uid) {},
+      onUserJoined: (uid) {},
       onUserOffline: (uid) {},
       onVolumeChanged: (speakers) {
         if (!mounted) return;
@@ -638,7 +652,7 @@ onUserJoined: (uid) {},
     _agoraService.setMicrophoneMute(_isMuted);
   }
 
-  void _changeSeatCount(int newCount) {
+void _changeSeatCount(int newCount) {
     setState(() {
       _totalSeats = newCount;
       if (_mySeatIndex != null && _mySeatIndex! >= newCount) {
@@ -674,7 +688,7 @@ onUserJoined: (uid) {},
     _comboRingController.reset();
     _comboRingController.forward();
 
-_comboTimer = Timer(const Duration(seconds: 3), () {
+    _comboTimer = Timer(const Duration(seconds: 3), () {
       if (mounted) {
         setState(() {
           _showComboButton = false;
@@ -793,7 +807,8 @@ _comboTimer = Timer(const Duration(seconds: 3), () {
     );
 
     if (result != null) {
-      _giftOverlayStreamController.add(
+
+_giftOverlayStreamController.add(
         GiftSendEvent(
           senderName: widget.userName,
           targetName: result.isAll ? "All Mics" : "Host",
@@ -820,7 +835,18 @@ _comboTimer = Timer(const Duration(seconds: 3), () {
         });
       }
 
-_executeMultiSeatSend(
+      if (result.rawGiftCostPerSeat >= 500) {
+        _fullscreenAnimStreamController.add(
+          FullscreenGiftEvent(
+            giftId: result.gift.id,
+            giftName: "${result.gift.name} x${result.multiplier}",
+            asset: result.gift.imageAsset,
+            senderName: widget.userName,
+          ),
+        );
+      }
+
+      _executeMultiSeatSend(
         targetSeats: result.targetSeatIndices,
         isAll: result.isAll,
         cost: result.rawGiftCostPerSeat,
@@ -917,6 +943,7 @@ _executeMultiSeatSend(
     _bannerTimer?.cancel();
     _audioPlayer.dispose();
     _giftOverlayStreamController.close();
+    _fullscreenAnimStreamController.close();
     for (var g in _activeFlyingGifts) {
       g.controller.dispose();
     }
@@ -928,7 +955,7 @@ _executeMultiSeatSend(
     super.dispose();
   }
 
-  @override
+@override
   Widget build(BuildContext context) {
     final int crossAxis = _totalSeats <= 12 ? 4 : (_totalSeats <= 20 ? 5 : 6);
     final double seatDimension = _totalSeats > 20 ? 40.0 : 48.0;
@@ -952,8 +979,7 @@ _executeMultiSeatSend(
         actions: [
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-
-margin: const EdgeInsets.symmetric(vertical: 12),
+            margin: const EdgeInsets.symmetric(vertical: 12),
             decoration: BoxDecoration(
               color: const Color(0xFF1E1638),
               borderRadius: BorderRadius.circular(12),
@@ -1027,7 +1053,8 @@ margin: const EdgeInsets.symmetric(vertical: 12),
             Column(
               children: [
                 Expanded(
-                  flex: 6,
+
+flex: 6,
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 8.0),
                     child: GridView.builder(
@@ -1049,7 +1076,7 @@ margin: const EdgeInsets.symmetric(vertical: 12),
                         final bool isHostSeat = index == 0;
                         final bool isCrownSeat = index >= 1 && index <= 6;
 
-return GestureDetector(
+                        return GestureDetector(
                           onTap: () => _handleSeatTap(index),
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
@@ -1093,7 +1120,8 @@ return GestureDetector(
                                         color: isCrownSeat && isOccupied
                                             ? const Color(0xFFFFD700)
                                             : (isOccupied ? Colors.white : Colors.white24),
-                                        size: seatDimension * 0.45,
+
+size: seatDimension * 0.45,
                                       ),
                                     ),
                                   ),
@@ -1111,8 +1139,7 @@ return GestureDetector(
                                       ),
                                     ),
                                 ],
-
-),
+                              ),
                               const SizedBox(height: 3),
                               Text(
                                 isOccupied ? occupier : "${index + 1}",
@@ -1164,7 +1191,8 @@ return GestureDetector(
                     height: 36,
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
                     decoration: BoxDecoration(
-                      gradient: const LinearGradient(
+
+gradient: const LinearGradient(
                         colors: [Color(0xFF8A2387), Color(0xFFE94057), Color(0xFFF27121)],
                       ),
                       borderRadius: BorderRadius.circular(18),
@@ -1185,8 +1213,7 @@ return GestureDetector(
                           child: Text(
                             "Super Rocket LV.$_currentRocketLevel Active! 🚀",
                             style: const TextStyle(
-
-color: Colors.white,
+                              color: Colors.white,
                               fontSize: 11,
                               fontWeight: FontWeight.bold,
                             ),
@@ -1242,7 +1269,8 @@ color: Colors.white,
                                     const WidgetSpan(
                                       child: Padding(
                                         padding: EdgeInsets.only(right: 4.0),
-                                        child: Icon(Icons.campaign, color: Color(0xFFFFD700), size: 13),
+
+child: Icon(Icons.campaign, color: Color(0xFFFFD700), size: 13),
                                       ),
                                     ),
                                   TextSpan(
@@ -1270,7 +1298,7 @@ color: Colors.white,
                   ),
                 ),
 
-Container(
+                Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: const BoxDecoration(
                     color: Color(0xFF141026),
@@ -1324,7 +1352,8 @@ Container(
 
             if (_entryBannerText != null)
               Positioned(
-                bottom: 75,
+
+bottom: 75,
                 left: 0,
                 right: 0,
                 child: SlideTransition(
@@ -1358,7 +1387,7 @@ Container(
                 ),
               ),
 
-..._activeFlyingGifts.map((gift) {
+            ..._activeFlyingGifts.map((gift) {
               return AnimatedBuilder(
                 animation: gift.controller,
                 builder: (context, child) {
@@ -1404,13 +1433,13 @@ Container(
               );
             }),
 
-            // Positioned.fill(
-            //   child: IgnorePointer(
-            //     child: FloatingGiftComboOverlay(
-            //       giftStream: _giftOverlayStreamController.stream,
-            //     ),
-            //   ),
-            // ),
+            FloatingGiftComboOverlay(
+              giftStream: _giftOverlayStreamController.stream,
+            ),
+
+            FullscreenGiftAnimator(
+              giftStream: _fullscreenAnimStreamController.stream,
+            ),
 
             if (_showFloatingBanner)
               Positioned(
@@ -1422,7 +1451,8 @@ Container(
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(
                       colors: [Color(0xFF38006B), Color(0xFF8E00A8), Color(0xFFFFD700)],
-                      stops: [0.0, 0.7, 1.0],
+
+stops: [0.0, 0.7, 1.0],
                     ),
                     borderRadius: BorderRadius.circular(24),
                     border: Border.all(color: const Color(0xFFFFD700), width: 1.5),
@@ -1451,8 +1481,7 @@ Container(
                           children: [
                             Text(
                               _currentWinnerName,
-
-style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
+                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -1505,7 +1534,8 @@ style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSiz
                               BoxShadow(
                                 color: const Color(0xFF00E5FF).withOpacity(0.9),
                                 blurRadius: 40,
-                                spreadRadius: 15,
+
+spreadRadius: 15,
                               ),
                             ],
                           ),
@@ -1530,8 +1560,7 @@ style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSiz
                                 decoration: BoxDecoration(
                                   color: const Color(0xFFFFD700),
                                   borderRadius: BorderRadius.circular(14),
-
-),
+                                ),
                                 child: const Text(
                                   "MEGA WINNER",
                                   style: TextStyle(color: Colors.black, fontWeight: FontWeight.w900, fontSize: 11),
@@ -1592,7 +1621,8 @@ style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSiz
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             const Text(
-                              "Combo",
+
+"Combo",
                               style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
                             ),
                             if (_comboCount > 1)
