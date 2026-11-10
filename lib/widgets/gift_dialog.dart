@@ -77,7 +77,7 @@ class _GiftDialogState extends State<GiftDialog> {
   int _selectedMultiplier = 1;
   final List<int> _multipliers = [1, 3, 7, 10, 30, 50, 77, 100];
 
-  int _selectedCategoryIndex = 0;
+  int _selectedCategoryIndex = 1; // Defaults directly to Lucky tab
   int _selectedGiftIndex = 0;
   int _comboCount = 0;
   Timer? _comboTimer;
@@ -93,7 +93,6 @@ class _GiftDialogState extends State<GiftDialog> {
     GiftCategory.intimacy,
   ];
 
-  // Gifts configured with safe existing assets to prevent crash
   final List<GiftItem> _allGifts = const [
     // 1. Hot Category (70% Diamond Conversion)
     GiftItem(
@@ -121,58 +120,114 @@ class _GiftDialogState extends State<GiftDialog> {
       category: GiftCategory.hot,
     ),
     GiftItem(
-      id: "golden_key",
-      name: "Golden Key",
-      icon: "🔑",
+      id: "magic_lamp",
+      name: "Magic Lamp",
+      icon: "🪔",
       price: 500,
-      imageAsset: "assets/images/wealth_03.webp",
+      imageAsset: "assets/images/IMG_20261109_134422_277.jpg",
       category: GiftCategory.hot,
     ),
 
     // 2. Lucky Category (4% Diamond Conversion + Rebate Multipliers)
     GiftItem(
-      id: "lucky_dice",
-      name: "Lucky Dice",
-      icon: "🎲",
-      price: 10,
-      imageAsset: "assets/images/wikimediaimages-candy-2201920.jpg",
+      id: "crystal_butterfly",
+      name: "Crystal Butterfly",
+      icon: "🦋",
+      price: 400,
+      imageAsset: "assets/images/IMG_20261109_134331_248.jpg",
       category: GiftCategory.lucky,
     ),
     GiftItem(
-      id: "lucky_box",
-      name: "Lucky Box",
-      icon: "🎁",
-      price: 100,
-      imageAsset: "assets/images/weekly_lovers_heart_value.webp",
+      id: "imperial_key",
+      name: "Imperial Key",
+      icon: "🔑",
+      price: 500,
+      imageAsset: "assets/images/IMG_20261109_134421_983.jpg",
       category: GiftCategory.lucky,
 
 ),
     GiftItem(
-      id: "lucky_wheel",
-      name: "Lucky Wheel",
-      icon: "🎡",
-      price: 1000,
-      imageAsset: "assets/images/charm_07.webp",
+      id: "golden_pink_rose",
+      name: "Golden Pink Rose",
+      icon: "🌹",
+      price: 600,
+      imageAsset: "assets/images/IMG_20261109_134331_134.jpg",
       category: GiftCategory.lucky,
     ),
     GiftItem(
-      id: "lucky_island",
-      name: "Lucky Island",
-      icon: "🏝️",
-      price: 10000,
-      imageAsset: "assets/images/wealth_03.webp",
+      id: "royal_blue_rose",
+      name: "Royal Blue Rose",
+      icon: "💙",
+      price: 700,
+      imageAsset: "assets/images/IMG_20261109_134348_270.jpg",
+      category: GiftCategory.lucky,
+    ),
+    GiftItem(
+      id: "diamond_dollar",
+      name: "Diamond Dollar",
+      icon: "💲",
+      price: 800,
+      imageAsset: "assets/images/IMG_20261110_140701_819.jpg",
+      category: GiftCategory.lucky,
+    ),
+    GiftItem(
+      id: "golden_hourglass",
+      name: "Golden Hourglass",
+      icon: "⏳",
+      price: 1000,
+      imageAsset: "assets/images/IMG_20261109_134331_209.jpg",
+      category: GiftCategory.lucky,
+    ),
+    GiftItem(
+      id: "rainbow_gem_heart",
+      name: "Rainbow Gem Heart",
+      icon: "💖",
+      price: 1200,
+      imageAsset: "assets/images/IMG_20261109_134421_942.jpg",
+      category: GiftCategory.lucky,
+    ),
+    GiftItem(
+      id: "crown_sapphire",
+      name: "Crown of Sapphire",
+      icon: "👑",
+      price: 1500,
+      imageAsset: "assets/images/IMG_20261110_140647_045.jpg",
+      category: GiftCategory.lucky,
+    ),
+    GiftItem(
+      id: "twin_dolphins",
+      name: "Twin Dolphins",
+      icon: "🐬",
+      price: 1800,
+      imageAsset: "assets/images/IMG_20261109_134331_451.jpg",
+      category: GiftCategory.lucky,
+    ),
+    GiftItem(
+      id: "prism_diamond",
+      name: "Prism Diamond",
+      icon: "💎",
+      price: 2000,
+      imageAsset: "assets/images/IMG_20261109_134330_891.jpg",
+      category: GiftCategory.lucky,
+    ),
+    GiftItem(
+      id: "crowned_diamond_heart",
+      name: "Crowned Diamond Heart",
+      icon: "💙",
+      price: 2500,
+      imageAsset: "assets/images/IMG_20261109_134343_634.jpg",
+      category: GiftCategory.lucky,
+    ),
+    GiftItem(
+      id: "royal_sapphire_crown",
+      name: "Royal Sapphire Crown",
+      icon: "👑",
+      price: 3000,
+      imageAsset: "assets/images/IMG_20261109_134422_125.jpg",
       category: GiftCategory.lucky,
     ),
 
-    // 3. Luxury Category (70% Diamond Conversion + Full-Screen Animation)
-    GiftItem(
-      id: "royal_crown",
-      name: "Royal Crown",
-      icon: "👑",
-      price: 1500,
-      imageAsset: "assets/images/wealth_03.webp",
-      category: GiftCategory.luxury,
-    ),
+    // 3. Luxury Category (70% Diamond Conversion)
     GiftItem(
       id: "sportscar",
       name: "Supercar",
@@ -200,19 +255,11 @@ class _GiftDialogState extends State<GiftDialog> {
 
     // 4. Intimacy Category (70% Diamond Conversion)
     GiftItem(
-      id: "crystal_blue_rose",
-      name: "Crystal Rose",
-      icon: "🌹",
-      price: 520,
-      imageAsset: "assets/images/wikimediaimages-candy-2201920.jpg",
-      category: GiftCategory.intimacy,
-    ),
-    GiftItem(
       id: "diamond_ring",
       name: "Diamond Ring",
       icon: "💍",
       price: 1314,
-      imageAsset: "assets/images/weekly_lovers_heart_value.webp",
+      imageAsset: "assets/images/IMG_20261109_134421_714.jpg",
       category: GiftCategory.intimacy,
     ),
     GiftItem(
@@ -256,7 +303,7 @@ class _GiftDialogState extends State<GiftDialog> {
     super.dispose();
   }
 
-  void _toggleSelectAll() {
+void _toggleSelectAll() {
     setState(() {
       if (_isAllSelected) {
         _selectedSeatIndices.clear();
@@ -296,7 +343,7 @@ class _GiftDialogState extends State<GiftDialog> {
     return unitPrice * _selectedMultiplier * _selectedSeatIndices.length;
   }
 
-int _calculateLuckyMultiplier() {
+  int _calculateLuckyMultiplier() {
     int roll = _random.nextInt(1000) + 1;
     if (roll <= 2) return 500;
     if (roll <= 10) return 100;
@@ -352,7 +399,7 @@ int _calculateLuckyMultiplier() {
         'coins': FieldValue.increment(netDeduction),
       }, SetOptions(merge: true)).catchError((_) {});
 
-      // Diamond calculation: 4% for lucky gifts, 70% for standard gifts
+      // Diamond conversion: 4% for lucky, 70% for standard
       final double hostRate = selectedGift.diamondRate;
       final int diamondsPerRecipient = max(
         1,
@@ -377,7 +424,8 @@ int _calculateLuckyMultiplier() {
       roomRef.collection('events').add({
         'type': 'gift',
         'senderId': _currentUser!.uid,
-        'giftId': selectedGift.id,
+
+'giftId': selectedGift.id,
         'giftName': selectedGift.name,
         'giftIcon': selectedGift.icon,
         'imageAsset': selectedGift.imageAsset,
@@ -416,7 +464,7 @@ int _calculateLuckyMultiplier() {
 
       final int fullSeatCost = selectedGift.price * _selectedMultiplier;
 
-if (mounted) {
+      if (mounted) {
         Navigator.pop(
           context,
           GiftSendResult(
@@ -494,7 +542,8 @@ if (mounted) {
                         color: _isAllSelected ? Colors.black : Colors.white,
                         fontWeight: FontWeight.bold,
                         fontSize: 10.5,
-                      ),
+
+),
                     ),
                   ),
                 ),
@@ -524,8 +573,7 @@ if (mounted) {
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
                               color: isSelected
-
-? goldColor.withOpacity(0.25)
+                                  ? goldColor.withOpacity(0.25)
                                   : (isOccupied ? cardBg : Colors.white.withOpacity(0.04)),
                               border: Border.all(
                                 color: isSelected
@@ -580,7 +628,8 @@ if (mounted) {
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(
                         color: isSelected ? goldColor : Colors.white12,
-                      ),
+
+),
                     ),
                     child: Center(
                       child: Text(
@@ -615,8 +664,7 @@ if (mounted) {
                   onTap: () => setState(() {
                     _selectedGiftIndex = index;
                     _comboCount = 0;
-
-}),
+                  }),
                   child: Container(
                     decoration: BoxDecoration(
                       color: isSelected ? goldColor.withOpacity(0.16) : cardBg,
@@ -653,7 +701,11 @@ if (mounted) {
                         ),
                         Text(
                           "🪙 ${gift.price}",
-                          style: const TextStyle(color: goldColor, fontSize: 9.5, fontWeight: FontWeight.bold),
+                          style: const TextStyle(
+                            color: goldColor,
+                            fontSize: 9.5,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ],
                     ),
@@ -674,9 +726,14 @@ if (mounted) {
                   children: [
                     const Icon(Icons.monetization_on, color: goldColor, size: 16),
                     const SizedBox(width: 4),
-                    Text(
+
+Text(
                       "$_coins",
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
                     ),
                   ],
                 ),
@@ -696,14 +753,16 @@ if (mounted) {
                             value: m,
                             child: Text(
                               "x$m",
-                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ))
                       .toList(),
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-
-decoration: BoxDecoration(
+                    decoration: BoxDecoration(
                       color: Colors.white.withOpacity(0.08),
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(color: Colors.white24),
@@ -712,7 +771,11 @@ decoration: BoxDecoration(
                       children: [
                         Text(
                           "x$_selectedMultiplier",
-                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 11,
+                          ),
                         ),
                         const Icon(Icons.arrow_drop_up, color: Colors.white70, size: 14),
                       ],
@@ -722,7 +785,8 @@ decoration: BoxDecoration(
                 const SizedBox(width: 8),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: _comboCount > 0 ? Colors.deepOrangeAccent : goldColor,
+                    backgroundColor:
+                        _comboCount > 0 ? Colors.deepOrangeAccent : goldColor,
                     foregroundColor: Colors.black,
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
