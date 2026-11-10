@@ -93,10 +93,12 @@ class _GiftDialogState extends State<GiftDialog> {
     GiftCategory.intimacy,
   ];
 
+  // Gifts configured with safe existing assets to prevent crash
   final List<GiftItem> _allGifts = const [
+    // 1. Hot Category (70% Diamond Conversion)
     GiftItem(
       id: "flowers",
-      name: "Fragrant Flowers",
+      name: "Fragrant Rose",
       icon: "🌸",
       price: 100,
       imageAsset: "assets/images/wikimediaimages-candy-2201920.jpg",
@@ -119,6 +121,16 @@ class _GiftDialogState extends State<GiftDialog> {
       category: GiftCategory.hot,
     ),
     GiftItem(
+      id: "golden_key",
+      name: "Golden Key",
+      icon: "🔑",
+      price: 500,
+      imageAsset: "assets/images/wealth_03.webp",
+      category: GiftCategory.hot,
+    ),
+
+    // 2. Lucky Category (4% Diamond Conversion + Rebate Multipliers)
+    GiftItem(
       id: "lucky_dice",
       name: "Lucky Dice",
       icon: "🎲",
@@ -133,7 +145,8 @@ class _GiftDialogState extends State<GiftDialog> {
       price: 100,
       imageAsset: "assets/images/weekly_lovers_heart_value.webp",
       category: GiftCategory.lucky,
-    ),
+
+),
     GiftItem(
       id: "lucky_wheel",
       name: "Lucky Wheel",
@@ -148,14 +161,23 @@ class _GiftDialogState extends State<GiftDialog> {
       icon: "🏝️",
       price: 10000,
       imageAsset: "assets/images/wealth_03.webp",
+      category: GiftCategory.lucky,
+    ),
 
-category: GiftCategory.lucky,
+    // 3. Luxury Category (70% Diamond Conversion + Full-Screen Animation)
+    GiftItem(
+      id: "royal_crown",
+      name: "Royal Crown",
+      icon: "👑",
+      price: 1500,
+      imageAsset: "assets/images/wealth_03.webp",
+      category: GiftCategory.luxury,
     ),
     GiftItem(
       id: "sportscar",
-      name: "Pink Sports Car",
+      name: "Supercar",
       icon: "🏎️",
-      price: 500,
+      price: 2000,
       imageAsset: "assets/images/wealth_03.webp",
       category: GiftCategory.luxury,
     ),
@@ -163,31 +185,41 @@ category: GiftCategory.lucky,
       id: "castle",
       name: "Magic Castle",
       icon: "🏰",
-      price: 2500,
+      price: 3500,
       imageAsset: "assets/images/charm_07.webp",
       category: GiftCategory.luxury,
     ),
     GiftItem(
       id: "rocket",
-      name: "Super Rocket",
+      name: "Space Rocket",
       icon: "🚀",
       price: 5000,
       imageAsset: "assets/images/wealth_03.webp",
       category: GiftCategory.luxury,
     ),
+
+    // 4. Intimacy Category (70% Diamond Conversion)
     GiftItem(
       id: "crystal_blue_rose",
       name: "Crystal Rose",
       icon: "🌹",
-      price: 999,
+      price: 520,
       imageAsset: "assets/images/wikimediaimages-candy-2201920.jpg",
       category: GiftCategory.intimacy,
     ),
     GiftItem(
-      id: "diamond",
+      id: "diamond_ring",
+      name: "Diamond Ring",
+      icon: "💍",
+      price: 1314,
+      imageAsset: "assets/images/weekly_lovers_heart_value.webp",
+      category: GiftCategory.intimacy,
+    ),
+    GiftItem(
+      id: "royal_diamond",
       name: "Royal Diamond",
       icon: "💎",
-      price: 1500,
+      price: 2500,
       imageAsset: "assets/images/weekly_lovers_heart_value.webp",
       category: GiftCategory.intimacy,
     ),
@@ -264,7 +296,7 @@ category: GiftCategory.lucky,
     return unitPrice * _selectedMultiplier * _selectedSeatIndices.length;
   }
 
-  int _calculateLuckyMultiplier() {
+int _calculateLuckyMultiplier() {
     int roll = _random.nextInt(1000) + 1;
     if (roll <= 2) return 500;
     if (roll <= 10) return 100;
@@ -301,7 +333,7 @@ category: GiftCategory.lucky,
       int wonCoins = 0;
       int maxMultiplier = 0;
 
-if (selectedGift.isLucky) {
+      if (selectedGift.isLucky) {
         int totalUnits = _selectedMultiplier * _selectedSeatIndices.length;
         for (int i = 0; i < totalUnits; i++) {
           int mult = _calculateLuckyMultiplier();
@@ -320,8 +352,12 @@ if (selectedGift.isLucky) {
         'coins': FieldValue.increment(netDeduction),
       }, SetOptions(merge: true)).catchError((_) {});
 
+      // Diamond calculation: 4% for lucky gifts, 70% for standard gifts
       final double hostRate = selectedGift.diamondRate;
-      final int diamondsPerRecipient = (selectedGift.price * _selectedMultiplier * hostRate).round();
+      final int diamondsPerRecipient = max(
+        1,
+        (selectedGift.price * _selectedMultiplier * hostRate).round(),
+      );
 
       for (final sIndex in _selectedSeatIndices) {
         final occupant = _userList.firstWhere(
@@ -380,7 +416,7 @@ if (selectedGift.isLucky) {
 
       final int fullSeatCost = selectedGift.price * _selectedMultiplier;
 
-      if (mounted) {
+if (mounted) {
         Navigator.pop(
           context,
           GiftSendResult(
@@ -428,7 +464,7 @@ if (selectedGift.isLucky) {
         ? currentGifts[_selectedGiftIndex]
         : null;
 
-return Container(
+    return Container(
       height: 480,
       decoration: const BoxDecoration(
         color: darkBg,
@@ -488,7 +524,8 @@ return Container(
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
                               color: isSelected
-                                  ? goldColor.withOpacity(0.25)
+
+? goldColor.withOpacity(0.25)
                                   : (isOccupied ? cardBg : Colors.white.withOpacity(0.04)),
                               border: Border.all(
                                 color: isSelected
@@ -513,8 +550,7 @@ return Container(
                         );
                       },
                     ),
-
-),
+                  ),
                 ),
               ],
             ),
@@ -579,7 +615,8 @@ return Container(
                   onTap: () => setState(() {
                     _selectedGiftIndex = index;
                     _comboCount = 0;
-                  }),
+
+}),
                   child: Container(
                     decoration: BoxDecoration(
                       color: isSelected ? goldColor.withOpacity(0.16) : cardBg,
@@ -606,8 +643,7 @@ return Container(
                         const SizedBox(height: 2),
                         Text(
                           gift.name,
-
-style: const TextStyle(
+                          style: const TextStyle(
                             color: Colors.white,
                             fontSize: 9.5,
                             fontWeight: FontWeight.bold,
@@ -666,7 +702,8 @@ style: const TextStyle(
                       .toList(),
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
+
+decoration: BoxDecoration(
                       color: Colors.white.withOpacity(0.08),
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(color: Colors.white24),
@@ -691,8 +728,7 @@ style: const TextStyle(
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                   ),
                   onPressed: _isSending ? null : _sendGift,
-
-child: _isSending
+                  child: _isSending
                       ? const SizedBox(
                           width: 14,
                           height: 14,
