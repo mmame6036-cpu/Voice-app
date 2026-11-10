@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:audioplayers/audioplayers.dart';
 
 enum GiftCategory { hot, lucky, luxury, intimacy }
 
@@ -68,6 +69,7 @@ class GiftDialog extends StatefulWidget {
 class _GiftDialogState extends State<GiftDialog> {
   final User? _currentUser = FirebaseAuth.instance.currentUser;
   final Random _random = Random();
+  final AudioPlayer _audioPlayer = AudioPlayer();
 
   late int _coins;
   bool _isSending = false;
@@ -77,7 +79,7 @@ class _GiftDialogState extends State<GiftDialog> {
   int _selectedMultiplier = 1;
   final List<int> _multipliers = [1, 3, 7, 10, 30, 50, 77, 100];
 
-  int _selectedCategoryIndex = 1; // Defaults directly to Lucky tab
+  int _selectedCategoryIndex = 1; // Lucky tab
   int _selectedGiftIndex = 0;
   int _comboCount = 0;
   Timer? _comboTimer;
@@ -93,8 +95,9 @@ class _GiftDialogState extends State<GiftDialog> {
     GiftCategory.intimacy,
   ];
 
+  // Gifts matching exact filenames on your GitHub repository
   final List<GiftItem> _allGifts = const [
-    // 1. Hot Category (70% Diamond Conversion)
+    // 1. Hot Category
     GiftItem(
       id: "flowers",
       name: "Fragrant Rose",
@@ -120,46 +123,21 @@ class _GiftDialogState extends State<GiftDialog> {
       category: GiftCategory.hot,
     ),
     GiftItem(
-      id: "magic_lamp",
-      name: "Magic Lamp",
-      icon: "🪔",
+      id: "golden_key",
+      name: "Golden Key",
+      icon: "🔑",
       price: 500,
-      imageAsset: "assets/images/IMG_20261109_134422_277.jpg",
+      imageAsset: "assets/images/wealth_03.webp",
       category: GiftCategory.hot,
     ),
 
-    // 2. Lucky Category (4% Diamond Conversion + Rebate Multipliers)
+    // 2. Lucky Category (4% Diamond Conversion)
     GiftItem(
-      id: "crystal_butterfly",
-      name: "Crystal Butterfly",
-      icon: "🦋",
-      price: 400,
-      imageAsset: "assets/images/IMG_20261109_134331_248.jpg",
-      category: GiftCategory.lucky,
-    ),
-    GiftItem(
-      id: "imperial_key",
-      name: "Imperial Key",
-      icon: "🔑",
-      price: 500,
-      imageAsset: "assets/images/IMG_20261109_134421_983.jpg",
-      category: GiftCategory.lucky,
-
-),
-    GiftItem(
-      id: "golden_pink_rose",
-      name: "Golden Pink Rose",
-      icon: "🌹",
-      price: 600,
-      imageAsset: "assets/images/IMG_20261109_134331_134.jpg",
-      category: GiftCategory.lucky,
-    ),
-    GiftItem(
-      id: "royal_blue_rose",
-      name: "Royal Blue Rose",
-      icon: "💙",
-      price: 700,
-      imageAsset: "assets/images/IMG_20261109_134348_270.jpg",
+      id: "crown_sapphire",
+      name: "Crown of sapphire",
+      icon: "👑",
+      price: 1500,
+      imageAsset: "assets/images/Crown of sapphire.jpg",
       category: GiftCategory.lucky,
     ),
     GiftItem(
@@ -167,63 +145,80 @@ class _GiftDialogState extends State<GiftDialog> {
       name: "Diamond Dollar",
       icon: "💲",
       price: 800,
-      imageAsset: "assets/images/IMG_20261110_140701_819.jpg",
+      imageAsset: "assets/images/Diamond Dollar.jpg",
+
+category: GiftCategory.lucky,
+    ),
+    GiftItem(
+      id: "diamond_ring",
+      name: "Diamond Ring",
+      icon: "💍",
+      price: 1314,
+      imageAsset: "assets/images/Diamond Ring.jpg",
       category: GiftCategory.lucky,
     ),
     GiftItem(
-      id: "golden_hourglass",
-      name: "Golden Hourglass",
-      icon: "⏳",
+      id: "frost_wolf",
+      name: "Frost Wolf",
+      icon: "🐺",
       price: 1000,
-      imageAsset: "assets/images/IMG_20261109_134331_209.jpg",
+      imageAsset: "assets/images/Frost Wolf Frame.jpg",
       category: GiftCategory.lucky,
     ),
     GiftItem(
-      id: "rainbow_gem_heart",
-      name: "Rainbow Gem Heart",
-      icon: "💖",
-      price: 1200,
-      imageAsset: "assets/images/IMG_20261109_134421_942.jpg",
-      category: GiftCategory.lucky,
-    ),
-    GiftItem(
-      id: "crown_sapphire",
-      name: "Crown of Sapphire",
-      icon: "👑",
-      price: 1500,
-      imageAsset: "assets/images/IMG_20261110_140647_045.jpg",
-      category: GiftCategory.lucky,
-    ),
-    GiftItem(
-      id: "twin_dolphins",
-      name: "Twin Dolphins",
-      icon: "🐬",
-      price: 1800,
-      imageAsset: "assets/images/IMG_20261109_134331_451.jpg",
-      category: GiftCategory.lucky,
-    ),
-    GiftItem(
-      id: "prism_diamond",
-      name: "Prism Diamond",
-      icon: "💎",
+      id: "lion_whale",
+      name: "Lion & Whale",
+      icon: "🦁",
       price: 2000,
-      imageAsset: "assets/images/IMG_20261109_134330_891.jpg",
+      imageAsset: "assets/images/Lion&Whale Emperor.jpg",
       category: GiftCategory.lucky,
     ),
     GiftItem(
-      id: "crowned_diamond_heart",
-      name: "Crowned Diamond Heart",
-      icon: "💙",
+      id: "ocean_crown",
+      name: "Ocean Crown",
+      icon: "🌊",
+      price: 1200,
+      imageAsset: "assets/images/Ocean Crown Realm.jpg",
+      category: GiftCategory.lucky,
+    ),
+    GiftItem(
+      id: "pink_kraken",
+      name: "Pink Kraken",
+      icon: "🐙",
+      price: 1500,
+      imageAsset: "assets/images/Pink Kraken Crown.jpg",
+      category: GiftCategory.lucky,
+    ),
+    GiftItem(
+      id: "seraphic_angel",
+      name: "Seraphic Angel",
+      icon: "🪽",
       price: 2500,
-      imageAsset: "assets/images/IMG_20261109_134343_634.jpg",
+      imageAsset: "assets/images/Seraphic Angel Heart.jpg",
       category: GiftCategory.lucky,
     ),
     GiftItem(
-      id: "royal_sapphire_crown",
-      name: "Royal Sapphire Crown",
+      id: "twin_whales",
+      name: "Twin Whales",
+      icon: "🐋",
+      price: 1800,
+      imageAsset: "assets/images/Twin Whales Crown.jpg",
+      category: GiftCategory.lucky,
+    ),
+    GiftItem(
+      id: "imperial_lions",
+      name: "Imperial Lions",
       icon: "👑",
       price: 3000,
-      imageAsset: "assets/images/IMG_20261109_134422_125.jpg",
+      imageAsset: "assets/images/Imperial Lions Fram.jpg",
+      category: GiftCategory.lucky,
+    ),
+    GiftItem(
+      id: "king_fox",
+      name: "King Fox",
+      icon: "🦊",
+      price: 2200,
+      imageAsset: "assets/images/King Fox Avarar Frame.jpg",
       category: GiftCategory.lucky,
     ),
 
@@ -249,24 +244,16 @@ class _GiftDialogState extends State<GiftDialog> {
       name: "Space Rocket",
       icon: "🚀",
       price: 5000,
-      imageAsset: "assets/images/wealth_03.webp",
+      imageAsset: "assets/images/wealth_08.webp",
       category: GiftCategory.luxury,
     ),
 
-    // 4. Intimacy Category (70% Diamond Conversion)
+    // 4. Intimacy Category
     GiftItem(
-      id: "diamond_ring",
-      name: "Diamond Ring",
-      icon: "💍",
-      price: 1314,
-      imageAsset: "assets/images/IMG_20261109_134421_714.jpg",
-      category: GiftCategory.intimacy,
-    ),
-    GiftItem(
-      id: "royal_diamond",
-      name: "Royal Diamond",
-      icon: "💎",
-      price: 2500,
+      id: "lovers_heart",
+      name: "Lovers Heart",
+      icon: "💖",
+      price: 520,
       imageAsset: "assets/images/weekly_lovers_heart_value.webp",
       category: GiftCategory.intimacy,
     ),
@@ -300,10 +287,17 @@ class _GiftDialogState extends State<GiftDialog> {
   @override
   void dispose() {
     _comboTimer?.cancel();
+    _audioPlayer.dispose();
     super.dispose();
   }
 
-void _toggleSelectAll() {
+  void _playCoinSound() {
+    try {
+      _audioPlayer.play(AssetSource('audio/coin.mp3'));
+    } catch (_) {}
+  }
+
+  void _toggleSelectAll() {
     setState(() {
       if (_isAllSelected) {
         _selectedSeatIndices.clear();
@@ -321,7 +315,7 @@ void _toggleSelectAll() {
     });
   }
 
-  void _toggleSeat(int seatIndex) {
+void _toggleSeat(int seatIndex) {
     setState(() {
       if (_selectedSeatIndices.contains(seatIndex)) {
         _selectedSeatIndices.remove(seatIndex);
@@ -391,15 +385,19 @@ void _toggleSelectAll() {
         }
       }
 
+      // Play coin sound
+      _playCoinSound();
+
       final senderRef = FirebaseFirestore.instance.collection('users').doc(_currentUser!.uid);
       final roomRef = FirebaseFirestore.instance.collection('rooms').doc(widget.roomId);
 
       final netDeduction = -totalCost + wonCoins;
       senderRef.set({
         'coins': FieldValue.increment(netDeduction),
+        'wealthExp': FieldValue.increment(totalCost), // Exp for 1-99 level
       }, SetOptions(merge: true)).catchError((_) {});
 
-      // Diamond conversion: 4% for lucky, 70% for standard
+      // Diamond calculation: 4% for lucky, 70% for standard
       final double hostRate = selectedGift.diamondRate;
       final int diamondsPerRecipient = max(
         1,
@@ -416,6 +414,7 @@ void _toggleSelectAll() {
           if (uid.isNotEmpty) {
             FirebaseFirestore.instance.collection('users').doc(uid).set({
               'diamonds': FieldValue.increment(diamondsPerRecipient),
+              'charmExp': FieldValue.increment(diamondsPerRecipient), // Exp for 1-99 level
             }, SetOptions(merge: true)).catchError((_) {});
           }
         }
@@ -424,8 +423,7 @@ void _toggleSelectAll() {
       roomRef.collection('events').add({
         'type': 'gift',
         'senderId': _currentUser!.uid,
-
-'giftId': selectedGift.id,
+        'giftId': selectedGift.id,
         'giftName': selectedGift.name,
         'giftIcon': selectedGift.icon,
         'imageAsset': selectedGift.imageAsset,
@@ -438,7 +436,7 @@ void _toggleSelectAll() {
         'createdAt': FieldValue.serverTimestamp(),
       }).catchError((_) {});
 
-      final updatedBalance = _coins + netDeduction;
+final updatedBalance = _coins + netDeduction;
       setState(() => _coins = updatedBalance);
       widget.onCoinsUpdated?.call(_coins);
 
@@ -542,8 +540,7 @@ void _toggleSelectAll() {
                         color: _isAllSelected ? Colors.black : Colors.white,
                         fontWeight: FontWeight.bold,
                         fontSize: 10.5,
-
-),
+                      ),
                     ),
                   ),
                 ),
@@ -562,7 +559,7 @@ void _toggleSelectAll() {
                           orElse: () => null,
                         );
 
-                        final isOccupied = occupant != null;
+final isOccupied = occupant != null;
                         final isSelected = _selectedSeatIndices.contains(seatIdx);
 
                         return GestureDetector(
@@ -628,8 +625,7 @@ void _toggleSelectAll() {
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(
                         color: isSelected ? goldColor : Colors.white12,
-
-),
+                      ),
                     ),
                     child: Center(
                       child: Text(
@@ -650,11 +646,12 @@ void _toggleSelectAll() {
             child: GridView.builder(
               padding: const EdgeInsets.all(8),
               itemCount: currentGifts.length,
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+
+gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 4,
                 mainAxisSpacing: 6,
                 crossAxisSpacing: 6,
-                childAspectRatio: 0.82,
+                childAspectRatio: 0.80,
               ),
               itemBuilder: (context, index) {
                 final gift = currentGifts[index];
@@ -678,26 +675,30 @@ void _toggleSelectAll() {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         ClipRRect(
-                          borderRadius: BorderRadius.circular(6),
+                          borderRadius: BorderRadius.circular(8),
                           child: Image.asset(
                             gift.imageAsset,
-                            width: 32,
-                            height: 32,
+                            width: 44,
+                            height: 44,
                             fit: BoxFit.cover,
                             errorBuilder: (ctx, err, stack) =>
                                 Text(gift.icon, style: const TextStyle(fontSize: 24)),
                           ),
                         ),
-                        const SizedBox(height: 2),
-                        Text(
-                          gift.name,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 9.5,
-                            fontWeight: FontWeight.bold,
+                        const SizedBox(height: 4),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 2),
+                          child: Text(
+                            gift.name,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 9.5,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.center,
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
                         ),
                         Text(
                           "🪙 ${gift.price}",
@@ -726,8 +727,7 @@ void _toggleSelectAll() {
                   children: [
                     const Icon(Icons.monetization_on, color: goldColor, size: 16),
                     const SizedBox(width: 4),
-
-Text(
+                    Text(
                       "$_coins",
                       style: const TextStyle(
                         color: Colors.white,
@@ -741,7 +741,8 @@ Text(
                 if (selectedGift != null)
                   Text(
                     "💎 ${(selectedGift.price * _selectedMultiplier * selectedGift.diamondRate).round()} (${selectedGift.isLucky ? '4%' : '70%'})",
-                    style: const TextStyle(color: Colors.white38, fontSize: 10),
+
+style: const TextStyle(color: Colors.white38, fontSize: 10),
                   ),
                 const Spacer(),
                 PopupMenuButton<int>(
