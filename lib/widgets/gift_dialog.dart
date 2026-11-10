@@ -95,7 +95,7 @@ class _GiftDialogState extends State<GiftDialog> {
     GiftCategory.intimacy,
   ];
 
-  // Gifts matching exact filenames on your GitHub repository
+  // Lucky ስጦታዎች ከትንሹ 10 ጀምሮ እስከ 1000 የተደረደሩ
   final List<GiftItem> _allGifts = const [
     // 1. Hot Category
     GiftItem(
@@ -122,121 +122,177 @@ class _GiftDialogState extends State<GiftDialog> {
       imageAsset: "assets/images/charm_07.webp",
       category: GiftCategory.hot,
     ),
+
+    // 2. Lucky Category (በስልክህ ቴሌግራም ላይ በተላኩት ቅደም ተከተልና ዋጋ)
     GiftItem(
-      id: "golden_key",
-      name: "Golden Key",
+      id: "ke1",
+      name: "ke1",
       icon: "🔑",
-      price: 500,
-      imageAsset: "assets/images/wealth_03.webp",
-      category: GiftCategory.hot,
-    ),
-
-    // 2. Lucky Category (4% Diamond Conversion)
-    GiftItem(
-      id: "crown_sapphire",
-      name: "Crown of sapphire",
-      icon: "👑",
-      price: 1500,
-      imageAsset: "assets/images/Crown of sapphire.jpg",
+      price: 10,
+      imageAsset: "assets/images/ke1.jpg",
       category: GiftCategory.lucky,
     ),
     GiftItem(
-      id: "diamond_dollar",
-      name: "Diamond Dollar",
-      icon: "💲",
-      price: 800,
-      imageAsset: "assets/images/Diamond Dollar.jpg",
-
-category: GiftCategory.lucky,
+      id: "ke2",
+      name: "ke2",
+      icon: "🔑",
+      price: 20,
+      imageAsset: "assets/images/ke2.jpg",
+      category: GiftCategory.lucky,
     ),
     GiftItem(
-      id: "diamond_ring",
-      name: "Diamond Ring",
+      id: "ke3",
+      name: "ke3",
+      icon: "👑",
+      price: 30,
+      imageAsset: "assets/images/ke3.jpg",
+      category: GiftCategory.lucky,
+    ),
+    GiftItem(
+      id: "ke4",
+
+name: "ke4",
+      icon: "💎",
+      price: 50,
+      imageAsset: "assets/images/ke4.jpg",
+      category: GiftCategory.lucky,
+    ),
+    GiftItem(
+      id: "ke5",
+      name: "ke5",
+      icon: "💠",
+      price: 80,
+      imageAsset: "assets/images/ke5.jpg",
+      category: GiftCategory.lucky,
+    ),
+    GiftItem(
+      id: "ke6",
+      name: "ke6",
+      icon: "🪔",
+      price: 100,
+      imageAsset: "assets/images/ke6.jpg",
+      category: GiftCategory.lucky,
+    ),
+    GiftItem(
+      id: "ke7",
+      name: "ke7",
       icon: "💍",
-      price: 1314,
-      imageAsset: "assets/images/Diamond Ring.jpg",
+      price: 150,
+      imageAsset: "assets/images/ke7.jpg",
       category: GiftCategory.lucky,
     ),
     GiftItem(
-      id: "frost_wolf",
-      name: "Frost Wolf",
-      icon: "🐺",
-      price: 1000,
-      imageAsset: "assets/images/Frost Wolf Frame.jpg",
+      id: "ke8",
+      name: "ke8",
+      icon: "💎",
+      price: 200,
+      imageAsset: "assets/images/ke8.jpg",
       category: GiftCategory.lucky,
     ),
     GiftItem(
-      id: "lion_whale",
-      name: "Lion & Whale",
-      icon: "🦁",
-      price: 2000,
-      imageAsset: "assets/images/Lion&Whale Emperor.jpg",
-      category: GiftCategory.lucky,
-    ),
-    GiftItem(
-      id: "ocean_crown",
-      name: "Ocean Crown",
-      icon: "🌊",
-      price: 1200,
-      imageAsset: "assets/images/Ocean Crown Realm.jpg",
-      category: GiftCategory.lucky,
-    ),
-    GiftItem(
-      id: "pink_kraken",
-      name: "Pink Kraken",
-      icon: "🐙",
-      price: 1500,
-      imageAsset: "assets/images/Pink Kraken Crown.jpg",
-      category: GiftCategory.lucky,
-    ),
-    GiftItem(
-      id: "seraphic_angel",
-      name: "Seraphic Angel",
-      icon: "🪽",
-      price: 2500,
-      imageAsset: "assets/images/Seraphic Angel Heart.jpg",
-      category: GiftCategory.lucky,
-    ),
-    GiftItem(
-      id: "twin_whales",
-      name: "Twin Whales",
-      icon: "🐋",
-      price: 1800,
-      imageAsset: "assets/images/Twin Whales Crown.jpg",
-      category: GiftCategory.lucky,
-    ),
-    GiftItem(
-      id: "imperial_lions",
-      name: "Imperial Lions",
+      id: "ke9",
+      name: "ke9",
       icon: "👑",
-      price: 3000,
-      imageAsset: "assets/images/Imperial Lions Fram.jpg",
+      price: 250,
+      imageAsset: "assets/images/ke9.jpg",
       category: GiftCategory.lucky,
     ),
     GiftItem(
-      id: "king_fox",
-      name: "King Fox",
-      icon: "🦊",
-      price: 2200,
-      imageAsset: "assets/images/King Fox Avarar Frame.jpg",
+      id: "ke10",
+      name: "ke10",
+      icon: "💠",
+      price: 300,
+      imageAsset: "assets/images/ke10.jpg",
+      category: GiftCategory.lucky,
+    ),
+    GiftItem(
+      id: "ke11",
+      name: "ke11",
+      icon: "💲",
+      price: 380,
+      imageAsset: "assets/images/ke11.jpg",
+      category: GiftCategory.lucky,
+    ),
+    GiftItem(
+      id: "ke12",
+      name: "ke12",
+      icon: "👑",
+      price: 450,
+      imageAsset: "assets/images/ke12.jpg",
+      category: GiftCategory.lucky,
+    ),
+    GiftItem(
+      id: "ke13",
+      name: "ke13",
+      icon: "🪔",
+      price: 520,
+      imageAsset: "assets/images/ke13.jpg",
+      category: GiftCategory.lucky,
+    ),
+    GiftItem(
+      id: "ke14",
+      name: "ke14",
+      icon: "🌹",
+      price: 600,
+      imageAsset: "assets/images/ke14.jpg",
+      category: GiftCategory.lucky,
+    ),
+    GiftItem(
+      id: "ke15",
+      name: "ke15",
+      icon: "💙",
+      price: 700,
+      imageAsset: "assets/images/ke15.jpg",
+      category: GiftCategory.lucky,
+    ),
+    GiftItem(
+      id: "ke16",
+      name: "ke16",
+      icon: "🐬",
+      price: 800,
+      imageAsset: "assets/images/ke16.jpg",
+      category: GiftCategory.lucky,
+    ),
+    GiftItem(
+      id: "ke17",
+      name: "ke17",
+      icon: "🌸",
+      price: 880,
+      imageAsset: "assets/images/ke17.jpg",
+      category: GiftCategory.lucky,
+    ),
+    GiftItem(
+      id: "ke18",
+      name: "ke18",
+      icon: "⏳",
+      price: 920,
+      imageAsset: "assets/images/ke18.jpg",
+      category: GiftCategory.lucky,
+    ),
+    GiftItem(
+      id: "ke19",
+      name: "ke19",
+      icon: "🦋",
+      price: 960,
+      imageAsset: "assets/images/ke19.jpg",
+      category: GiftCategory.lucky,
+    ),
+    GiftItem(
+      id: "prism_diamond",
+      name: "Prism Diamond",
+      icon: "💎",
+      price: 1000,
+      imageAsset: "assets/images/Prism Diamond.jpg",
       category: GiftCategory.lucky,
     ),
 
-    // 3. Luxury Category (70% Diamond Conversion)
+    // 3. Luxury Category
     GiftItem(
       id: "sportscar",
       name: "Supercar",
       icon: "🏎️",
       price: 2000,
       imageAsset: "assets/images/wealth_03.webp",
-      category: GiftCategory.luxury,
-    ),
-    GiftItem(
-      id: "castle",
-      name: "Magic Castle",
-      icon: "🏰",
-      price: 3500,
-      imageAsset: "assets/images/charm_07.webp",
       category: GiftCategory.luxury,
     ),
     GiftItem(
@@ -271,7 +327,7 @@ category: GiftCategory.lucky,
     return [];
   }
 
-  @override
+@override
   void initState() {
     super.initState();
     _coins = widget.userCoins;
@@ -291,9 +347,10 @@ category: GiftCategory.lucky,
     super.dispose();
   }
 
+  // የኮይን ድምፅ ማጫወቻ
   void _playCoinSound() {
     try {
-      _audioPlayer.play(AssetSource('audio/coin.mp3'));
+      _audioPlayer.play(AssetSource('sounds/coin.mp3'));
     } catch (_) {}
   }
 
@@ -315,7 +372,7 @@ category: GiftCategory.lucky,
     });
   }
 
-void _toggleSeat(int seatIndex) {
+  void _toggleSeat(int seatIndex) {
     setState(() {
       if (_selectedSeatIndices.contains(seatIndex)) {
         _selectedSeatIndices.remove(seatIndex);
@@ -385,25 +442,28 @@ void _toggleSeat(int seatIndex) {
         }
       }
 
-      // Play coin sound
+      // 1. የኮይን ድምፅ ማጫወት
       _playCoinSound();
 
       final senderRef = FirebaseFirestore.instance.collection('users').doc(_currentUser!.uid);
       final roomRef = FirebaseFirestore.instance.collection('rooms').doc(widget.roomId);
 
       final netDeduction = -totalCost + wonCoins;
+
+      // 2. Wealth EXP ማሳደግ (Level 1-99)
       senderRef.set({
         'coins': FieldValue.increment(netDeduction),
-        'wealthExp': FieldValue.increment(totalCost), // Exp for 1-99 level
+        'wealthExp': FieldValue.increment(totalCost),
       }, SetOptions(merge: true)).catchError((_) {});
 
-      // Diamond calculation: 4% for lucky, 70% for standard
+      // Diamond calculation: 4% for lucky gifts, 70% for standard gifts
       final double hostRate = selectedGift.diamondRate;
       final int diamondsPerRecipient = max(
         1,
         (selectedGift.price * _selectedMultiplier * hostRate).round(),
       );
 
+// 3. Charm EXP ማሳደግ (Level 1-99)
       for (final sIndex in _selectedSeatIndices) {
         final occupant = _userList.firstWhere(
           (u) => u['seatIndex'] == sIndex,
@@ -414,7 +474,7 @@ void _toggleSeat(int seatIndex) {
           if (uid.isNotEmpty) {
             FirebaseFirestore.instance.collection('users').doc(uid).set({
               'diamonds': FieldValue.increment(diamondsPerRecipient),
-              'charmExp': FieldValue.increment(diamondsPerRecipient), // Exp for 1-99 level
+              'charmExp': FieldValue.increment(diamondsPerRecipient),
             }, SetOptions(merge: true)).catchError((_) {});
           }
         }
@@ -436,7 +496,7 @@ void _toggleSeat(int seatIndex) {
         'createdAt': FieldValue.serverTimestamp(),
       }).catchError((_) {});
 
-final updatedBalance = _coins + netDeduction;
+      final updatedBalance = _coins + netDeduction;
       setState(() => _coins = updatedBalance);
       widget.onCoinsUpdated?.call(_coins);
 
@@ -525,7 +585,8 @@ final updatedBalance = _coins + netDeduction;
             ),
             child: Row(
               children: [
-                GestureDetector(
+
+GestureDetector(
                   onTap: _toggleSelectAll,
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
@@ -559,7 +620,7 @@ final updatedBalance = _coins + netDeduction;
                           orElse: () => null,
                         );
 
-final isOccupied = occupant != null;
+                        final isOccupied = occupant != null;
                         final isSelected = _selectedSeatIndices.contains(seatIdx);
 
                         return GestureDetector(
@@ -610,7 +671,8 @@ final isOccupied = occupant != null;
               itemBuilder: (context, index) {
                 final isSelected = _selectedCategoryIndex == index;
                 return GestureDetector(
-                  onTap: () {
+
+onTap: () {
                     setState(() {
                       _selectedCategoryIndex = index;
                       _selectedGiftIndex = 0;
@@ -646,8 +708,7 @@ final isOccupied = occupant != null;
             child: GridView.builder(
               padding: const EdgeInsets.all(8),
               itemCount: currentGifts.length,
-
-gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 4,
                 mainAxisSpacing: 6,
                 crossAxisSpacing: 6,
@@ -699,7 +760,8 @@ gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                             overflow: TextOverflow.ellipsis,
                             textAlign: TextAlign.center,
                           ),
-                        ),
+
+),
                         Text(
                           "🪙 ${gift.price}",
                           style: const TextStyle(
@@ -741,8 +803,7 @@ gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                 if (selectedGift != null)
                   Text(
                     "💎 ${(selectedGift.price * _selectedMultiplier * selectedGift.diamondRate).round()} (${selectedGift.isLucky ? '4%' : '70%'})",
-
-style: const TextStyle(color: Colors.white38, fontSize: 10),
+                    style: const TextStyle(color: Colors.white38, fontSize: 10),
                   ),
                 const Spacer(),
                 PopupMenuButton<int>(
@@ -791,7 +852,8 @@ style: const TextStyle(color: Colors.white38, fontSize: 10),
                     foregroundColor: Colors.black,
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  ),
+
+),
                   onPressed: _isSending ? null : _sendGift,
                   child: _isSending
                       ? const SizedBox(
