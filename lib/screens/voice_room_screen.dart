@@ -10,7 +10,6 @@ import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'package:audioplayers/audioplayers.dart';
 import '../services/agora_service.dart';
 import '../widgets/gift_dialog.dart';
-import '../widgets/floating_gift_combo.dart';
 import '../widgets/fullscreen_gift_animator.dart';
 import '../widgets/room_tools_sheet.dart';
 import 'wallet_screen.dart';
@@ -76,8 +75,6 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
   IO.Socket? _socket;
   final AudioPlayer _audioPlayer = AudioPlayer();
 
-  final StreamController<GiftSendEvent> _giftOverlayStreamController =
-      StreamController<GiftSendEvent>.broadcast();
   final StreamController<FullscreenGiftEvent> _fullscreenAnimStreamController =
       StreamController<FullscreenGiftEvent>.broadcast();
 
@@ -90,9 +87,9 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
   bool _isConnecting = true;
 
   int _myCoins = 0;
-  int _hostDiamonds = 0;
+  int _myPoints = 0; // የተጠቃሚው እውነተኛ ፖይንት
   StreamSubscription? _walletSubscription;
-  StreamSubscription? _diamondSubscription;
+  StreamSubscription? _pointsSubscription;
   StreamSubscription? _roomLiveSubscription;
 
   final List<CenterFlyingGift> _activeFlyingGifts = [];
@@ -102,14 +99,6 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
   Timer? _comboTimer;
   late AnimationController _comboRingController;
   Map<String, dynamic>? _lastSentGiftConfig;
-
-  bool _showFloatingBanner = false;
-  Timer? _bannerTimer;
-  int _currentWonRebate = 0;
-  String _currentWinnerName = "";
-
-  bool _showX100Badge = false;
-  late AnimationController _x100BadgeController;
 
   String? _entryBannerText;
   late AnimationController _entryMarqueeController;
@@ -137,24 +126,14 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
     _seatGifts = List.filled(30, 0);
     _seatMutes = List.filled(30, false);
 
-_comboRingController = AnimationController(
+    _comboRingController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 3),
     );
 
-    _x100BadgeController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1400),
-    );
-
-    _x100BadgeController.addStatusListener((status) {
-      if (status == AnimationStatus.completed && mounted) {
-        setState(() => _showX100Badge = false);
-      }
-    });
-
     _entryMarqueeController = AnimationController(
-      vsync: this,
+
+vsync: this,
       duration: const Duration(milliseconds: 3200),
     );
     _entryMarqueeAnimation = Tween<Offset>(
@@ -173,7 +152,7 @@ _comboRingController = AnimationController(
 
     _startRocketBannerRotation();
     _initWalletSync();
-    _initDiamondsSync();
+    _initPointsSync();
     _initRoomRealtimeSync();
     _setupAgora();
     _connectSocket();
@@ -214,8 +193,9 @@ _comboRingController = AnimationController(
     });
   }
 
-  void _initDiamondsSync() {
-    _diamondSubscription = FirebaseFirestore.instance
+  // Points በቀጥታ ከዳታቤዝ እንዲነበብ ማድረግ
+  void _initPointsSync() {
+    _pointsSubscription = FirebaseFirestore.instance
         .collection('users')
         .doc(_resolvedUid)
         .snapshots()
@@ -223,7 +203,7 @@ _comboRingController = AnimationController(
       if (snapshot.exists && snapshot.data() != null && mounted) {
         final data = snapshot.data()!;
         setState(() {
-          _hostDiamonds = (data['diamonds'] as num?)?.toInt() ?? 0;
+          _myPoints = (data['points'] as num?)?.toInt() ?? 0;
         });
       }
     });
@@ -235,7 +215,7 @@ _comboRingController = AnimationController(
         .doc(widget.roomId)
         .snapshots()
         .listen((snapshot) {
-      if (!snapshot.exists || snapshot.data() == null || !mounted) return;
+      if (!snapshot.exists  snapshot.data() == null  !mounted) return;
       final data = snapshot.data()!;
 
       if (data.containsKey('seatGifts')) {
@@ -246,50 +226,16 @@ _comboRingController = AnimationController(
           }
         });
       }
-
-      if (data.containsKey('latestWin')) {
-        final winData = data['latestWin'] as Map<String, dynamic>?;
-        if (winData != null) {
-          final timestamp = (winData['time'] as num?)?.toInt() ?? 0;
-          final nowMs = DateTime.now().millisecondsSinceEpoch;
-          if (nowMs - timestamp < 4000) {
-            final winner = winData['winnerName'] ?? "Player";
-            final rebate = (winData['amount'] as num?)?.toInt() ?? 0;
-            final combo = (winData['comboCount'] as num?)?.toInt() ?? 0;
-
-            if (_currentWinnerName != winner || _currentWonRebate != rebate) {
-              setState(() {
-                _currentWinnerName = winner;
-                _currentWonRebate = rebate;
-                _showFloatingBanner = true;
-                if (combo >= 100) {
-                  _showX100Badge = true;
-                  _x100BadgeController.reset();
-                  _x100BadgeController.forward();
-                }
-              });
-
-              _playCoinSound();
-
-_bannerTimer?.cancel();
-              _bannerTimer = Timer(const Duration(seconds: 4), () {
-                if (mounted) setState(() => _showFloatingBanner = false);
-              });
-            }
-          }
-        }
-      }
     });
   }
 
+  // Five_win.mp3 በዋናው ስክሪን ላይ ማጫወቻ
   void _playCoinSound() async {
     try {
-      final player = AudioPlayer();
-      await player.setVolume(1.0);
-      await player.play(AssetSource('sounds/five_win.mp3'));
-      player.onPlayerComplete.listen((_) {
-        player.dispose();
-      });
+      await _audioPlayer.stop();
+      await _audioPlayer.setPlayerMode(PlayerMode.lowLatency);
+      await _audioPlayer.setVolume(1.0);
+      await _audioPlayer.play(AssetSource('sounds/Five_win.mp3'));
     } catch (_) {}
   }
 
@@ -336,7 +282,7 @@ _bannerTimer?.cancel();
 
       _socket!.connect();
 
-      _socket!.onConnect((_) {
+_socket!.onConnect((_) {
         _socket!.emit('join_room', {
           'roomId': widget.roomId,
           'userName': widget.userName,
@@ -404,7 +350,7 @@ _bannerTimer?.cancel();
             _speakingSeatIndices.remove(index);
           }
 
-if (user == widget.userName) {
+          if (user == widget.userName) {
             _mySeatIndex = index;
             _isMuted = false;
             _agoraService.switchRole(isSpeaker: true);
@@ -426,27 +372,9 @@ if (user == widget.userName) {
         final giftName = data['giftName'] ?? "Gift";
         final giftCost = (data['giftCost'] as num?)?.toInt() ?? 0;
         final giftAsset = data['giftAsset'] ?? 'assets/images/wikimediaimages-candy-2201920.jpg';
-        final giftIcon = data['giftIcon'] ?? "🎁";
-        final isLucky = data['isLucky'] ?? false;
-        final wonCoins = (data['wonCoins'] as num?)?.toInt() ?? 0;
-        final luckyMultiplier = (data['luckyMultiplier'] as num?)?.toInt() ?? 0;
-        final combo = (data['comboCount'] as num?)?.toInt() ?? 1;
 
         final List targets = (data['targetSeats'] as List?) ?? [];
         final targetIndex = (data['targetSeatIndex'] as num?)?.toInt() ?? 0;
-
-        _giftOverlayStreamController.add(
-          GiftSendEvent(
-            senderName: sender,
-            targetName: isAll ? "All Mics" : "Host",
-            giftName: giftName,
-            giftIcon: giftIcon,
-            comboCount: combo,
-            isLucky: isLucky,
-            wonCoins: wonCoins,
-            luckyMultiplier: luckyMultiplier,
-          ),
-        );
 
         if (giftCost >= 500) {
           _fullscreenAnimStreamController.add(
@@ -466,7 +394,8 @@ if (user == widget.userName) {
                 if (_seats[i] != null) {
                   _seatGifts[i] += giftCost;
                   _triggerCenterGiftAnimation(giftAsset.toString(), i, isToAll: true);
-                }
+
+}
               }
             } else if (targets.isNotEmpty) {
               for (var t in targets) {
@@ -511,7 +440,7 @@ if (user == widget.userName) {
     } catch (_) {}
   }
 
-Future<String?> _fetchToken({
+  Future<String?> _fetchToken({
     required String channelName,
     required int uid,
     required bool isPublisher,
@@ -598,7 +527,7 @@ Future<String?> _fetchToken({
       _activeFlyingGifts.add(giftItem);
     });
 
-    controller.forward().then((_) {
+controller.forward().then((_) {
       if (mounted) {
         setState(() {
           _activeFlyingGifts.removeWhere((g) => g.id == giftItem.id);
@@ -652,7 +581,7 @@ Future<String?> _fetchToken({
     _agoraService.setMicrophoneMute(_isMuted);
   }
 
-void _changeSeatCount(int newCount) {
+  void _changeSeatCount(int newCount) {
     setState(() {
       _totalSeats = newCount;
       if (_mySeatIndex != null && _mySeatIndex! >= newCount) {
@@ -698,58 +627,6 @@ void _changeSeatCount(int newCount) {
     });
   }
 
-  void _triggerMilestoneReward(int giftCost) {
-    int rewardMultiplier = 2;
-    if (_comboCount >= 100) {
-      rewardMultiplier = 20;
-    } else if (_comboCount >= 60) {
-      rewardMultiplier = 8;
-    } else if (_comboCount >= 30) {
-      rewardMultiplier = 4;
-    }
-
-    final rebate = giftCost * rewardMultiplier;
-
-    setState(() {
-      _currentWinnerName = widget.userName;
-      _currentWonRebate = rebate;
-      _myCoins += rebate;
-      _showFloatingBanner = true;
-    });
-
-    _playCoinSound();
-
-    FirebaseFirestore.instance
-        .collection('users')
-        .doc(_resolvedUid)
-        .update({
-      'coins': FieldValue.increment(rebate),
-    }).catchError((_) {});
-
-    FirebaseFirestore.instance
-        .collection('rooms')
-        .doc(widget.roomId)
-        .set({
-      'latestWin': {
-        'winnerName': widget.userName,
-        'amount': rebate,
-        'comboCount': _comboCount,
-        'time': DateTime.now().millisecondsSinceEpoch,
-      }
-    }, SetOptions(merge: true)).catchError((_) {});
-
-    if (_comboCount >= 100) {
-      setState(() => _showX100Badge = true);
-      _x100BadgeController.reset();
-      _x100BadgeController.forward();
-    }
-
-    _bannerTimer?.cancel();
-    _bannerTimer = Timer(const Duration(seconds: 4), () {
-      if (mounted) setState(() => _showFloatingBanner = false);
-    });
-  }
-
   void _onComboTapped() {
     if (_lastSentGiftConfig == null) return;
     setState(() {
@@ -758,10 +635,6 @@ void _changeSeatCount(int newCount) {
 
     final config = _lastSentGiftConfig!;
     final giftCost = config['cost'] as int;
-
-    if (_comboCount % 5 == 0) {
-      _triggerMilestoneReward(giftCost);
-    }
 
     _executeMultiSeatSend(
       targetSeats: List<int>.from(config['targetSeats']),
@@ -807,32 +680,21 @@ void _changeSeatCount(int newCount) {
     );
 
     if (result != null) {
+      // ድምፁን ወዲያውኑ ማጫወት
+      _playCoinSound();
 
-_giftOverlayStreamController.add(
-        GiftSendEvent(
-          senderName: widget.userName,
-          targetName: result.isAll ? "All Mics" : "Host",
-          giftName: result.gift.name,
-          giftIcon: result.gift.icon,
-          comboCount: result.multiplier,
-          isLucky: result.gift.isLucky,
-          wonCoins: result.wonCoins,
-          luckyMultiplier: result.gift.isLucky ? result.multiplier : 0,
-        ),
-      );
+      // Points (4% ለ Lucky ስጦታዎች) ወደ ተቀባዮቹ መጨመር
+      final double rate = result.gift.isLucky ? 0.04 : 0.70;
+      final int pointsToAdd = max(1, (result.totalCost * rate).round());
 
-      if (result.wonCoins > 0) {
-        _playCoinSound();
-        setState(() {
-          _currentWinnerName = widget.userName;
-          _currentWonRebate = result.wonCoins;
-          _showFloatingBanner = true;
-        });
-
-        _bannerTimer?.cancel();
-        _bannerTimer = Timer(const Duration(seconds: 4), () {
-          if (mounted) setState(() => _showFloatingBanner = false);
-        });
+for (final seatIdx in result.targetSeatIndices) {
+        if (seatIdx < _seats.length && _seats[seatIdx] != null) {
+          final targetUid = _seats[seatIdx] == widget.userName ? _resolvedUid : _seats[seatIdx]!;
+          FirebaseFirestore.instance.collection('users').doc(targetUid).set({
+            'points': FieldValue.increment(pointsToAdd),
+            'charmExp': FieldValue.increment(pointsToAdd),
+          }, SetOptions(merge: true)).catchError((_) {});
+        }
       }
 
       if (result.rawGiftCostPerSeat >= 500) {
@@ -934,15 +796,12 @@ _giftOverlayStreamController.add(
   void dispose() {
     _rocketBannerTimer?.cancel();
     _walletSubscription?.cancel();
-    _diamondSubscription?.cancel();
+    _pointsSubscription?.cancel();
     _roomLiveSubscription?.cancel();
     _comboRingController.dispose();
-    _x100BadgeController.dispose();
     _entryMarqueeController.dispose();
     _comboTimer?.cancel();
-    _bannerTimer?.cancel();
     _audioPlayer.dispose();
-    _giftOverlayStreamController.close();
     _fullscreenAnimStreamController.close();
     for (var g in _activeFlyingGifts) {
       g.controller.dispose();
@@ -955,13 +814,13 @@ _giftOverlayStreamController.add(
     super.dispose();
   }
 
-@override
+  @override
   Widget build(BuildContext context) {
     final int crossAxis = _totalSeats <= 12 ? 4 : (_totalSeats <= 20 ? 5 : 6);
     final double seatDimension = _totalSeats > 20 ? 40.0 : 48.0;
     final size = MediaQuery.of(context).size;
 
-    return Scaffold(
+return Scaffold(
       backgroundColor: const Color(0xFF090614),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
@@ -977,22 +836,24 @@ _giftOverlayStreamController.add(
           ],
         ),
         actions: [
+          // Points በቀጥታ ከላይ እንዲታይ
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             margin: const EdgeInsets.symmetric(vertical: 12),
             decoration: BoxDecoration(
               color: const Color(0xFF1E1638),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFF00E5FF), width: 1.0),
+              border: Border.all(color: const Color(0xFFFFD700), width: 1.0),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text("💎 ", style: TextStyle(fontSize: 11)),
+                const Icon(Icons.stars, color: Color(0xFFFFD700), size: 12),
+                const SizedBox(width: 4),
                 Text(
-                  "$_hostDiamonds",
+                  "$_myPoints",
                   style: const TextStyle(
-                    color: Color(0xFF00E5FF),
+                    color: Color(0xFFFFD700),
                     fontSize: 11,
                     fontWeight: FontWeight.bold,
                   ),
@@ -1053,12 +914,12 @@ _giftOverlayStreamController.add(
             Column(
               children: [
                 Expanded(
-
-flex: 6,
+                  flex: 6,
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 8.0),
                     child: GridView.builder(
-                      physics: const BouncingScrollPhysics(),
+
+physics: const BouncingScrollPhysics(),
                       itemCount: _totalSeats,
                       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                         crossAxisCount: crossAxis,
@@ -1120,10 +981,10 @@ flex: 6,
                                         color: isCrownSeat && isOccupied
                                             ? const Color(0xFFFFD700)
                                             : (isOccupied ? Colors.white : Colors.white24),
-
-size: seatDimension * 0.45,
+                                        size: seatDimension * 0.45,
                                       ),
-                                    ),
+
+),
                                   ),
                                   if (isOccupied)
                                     Positioned(
@@ -1191,10 +1052,10 @@ size: seatDimension * 0.45,
                     height: 36,
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
                     decoration: BoxDecoration(
-
-gradient: const LinearGradient(
+                      gradient: const LinearGradient(
                         colors: [Color(0xFF8A2387), Color(0xFFE94057), Color(0xFFF27121)],
-                      ),
+
+),
                       borderRadius: BorderRadius.circular(18),
                       boxShadow: [
                         BoxShadow(
@@ -1269,9 +1130,9 @@ gradient: const LinearGradient(
                                     const WidgetSpan(
                                       child: Padding(
                                         padding: EdgeInsets.only(right: 4.0),
+                                        child: Icon(Icons.campaign, color: Color(0xFFFFD700), size: 13),
 
-child: Icon(Icons.campaign, color: Color(0xFFFFD700), size: 13),
-                                      ),
+),
                                     ),
                                   TextSpan(
                                     text: "${item.sender}: ",
@@ -1352,12 +1213,12 @@ child: Icon(Icons.campaign, color: Color(0xFFFFD700), size: 13),
 
             if (_entryBannerText != null)
               Positioned(
-
-bottom: 75,
+                bottom: 75,
                 left: 0,
                 right: 0,
                 child: SlideTransition(
-                  position: _entryMarqueeAnimation,
+
+position: _entryMarqueeAnimation,
                   child: Center(
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
@@ -1387,6 +1248,7 @@ bottom: 75,
                 ),
               ),
 
+            // ስጦታው ወደ ወንበር ሲበር የሚያሳየው አኒሜሽን
             ..._activeFlyingGifts.map((gift) {
               return AnimatedBuilder(
                 animation: gift.controller,
@@ -1433,147 +1295,9 @@ bottom: 75,
               );
             }),
 
-            FloatingGiftComboOverlay(
-              giftStream: _giftOverlayStreamController.stream,
-            ),
-
             FullscreenGiftAnimator(
               giftStream: _fullscreenAnimStreamController.stream,
             ),
-
-            if (_showFloatingBanner)
-              Positioned(
-                bottom: 125,
-                left: 16,
-                right: 90,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF38006B), Color(0xFF8E00A8), Color(0xFFFFD700)],
-
-stops: [0.0, 0.7, 1.0],
-                    ),
-                    borderRadius: BorderRadius.circular(24),
-                    border: Border.all(color: const Color(0xFFFFD700), width: 1.5),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 32,
-                        height: 32,
-                        decoration: const BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Color(0xFFFFD700),
-                        ),
-                        child: Center(
-                          child: Text(
-                            _currentWinnerName.isNotEmpty ? _currentWinnerName[0].toUpperCase() : "U",
-                            style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 14),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              _currentWinnerName,
-                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const Text(
-                              "Huge Coin Win! 🎉",
-                              style: TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold, fontSize: 10),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFF1493),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          "+$_currentWonRebate",
-                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 12),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-            if (_showX100Badge)
-              Center(
-                child: AnimatedBuilder(
-                  animation: _x100BadgeController,
-                  builder: (context, child) {
-                    final t = _x100BadgeController.value;
-                    final scale = (sin(t * pi) * 1.25).clamp(0.0, 1.3);
-                    final opacity = (1.0 - t * 0.4).clamp(0.0, 1.0);
-
-                    return Opacity(
-                      opacity: opacity,
-                      child: Transform.scale(
-                        scale: scale,
-                        child: Container(
-                          width: 220,
-                          height: 220,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            gradient: const RadialGradient(
-                              colors: [Color(0xFF00E5FF), Color(0xFF2979FF), Color(0xFF1A237E)],
-                            ),
-                            border: Border.all(color: const Color(0xFFFFD700), width: 6),
-                            boxShadow: [
-                              BoxShadow(
-                                color: const Color(0xFF00E5FF).withOpacity(0.9),
-                                blurRadius: 40,
-
-spreadRadius: 15,
-                              ),
-                            ],
-                          ),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Icon(Icons.star, color: Color(0xFFFFD700), size: 36),
-                              const Text(
-                                "x100",
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w900,
-                                  fontSize: 48,
-                                  letterSpacing: 2,
-                                  shadows: [
-                                    Shadow(color: Colors.black, blurRadius: 10, offset: Offset(2, 2)),
-                                  ],
-                                ),
-                              ),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 3),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFFFD700),
-                                  borderRadius: BorderRadius.circular(14),
-                                ),
-                                child: const Text(
-                                  "MEGA WINNER",
-                                  style: TextStyle(color: Colors.black, fontWeight: FontWeight.w900, fontSize: 11),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
 
             if (_showComboButton)
               Positioned(
@@ -1591,7 +1315,8 @@ spreadRadius: 15,
                           animation: _comboRingController,
                           builder: (context, child) {
                             return CircularProgressIndicator(
-                              value: 1.0 - _comboRingController.value,
+
+value: 1.0 - _comboRingController.value,
                               strokeWidth: 3.5,
                               color: const Color(0xFFFFD700),
                               backgroundColor: Colors.white24,
@@ -1621,8 +1346,7 @@ spreadRadius: 15,
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             const Text(
-
-"Combo",
+                              "Combo",
                               style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
                             ),
                             if (_comboCount > 1)
