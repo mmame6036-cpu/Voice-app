@@ -27,7 +27,7 @@ class _PointsWalletScreenState extends State<PointsWalletScreen>
   static const Color primaryPurple = Color(0xFF7E22CE);
 
   final TextEditingController _cashOutController = TextEditingController();
-  Map<String, dynamic>? _selectedMethod;
+  dynamic _selectedMethod;
   double _calculatedUsd = 0.0;
 
   final TextEditingController _exchangeController = TextEditingController();
@@ -39,7 +39,7 @@ class _PointsWalletScreenState extends State<PointsWalletScreen>
   String? _verifiedUserUid;
   bool _isCheckingUser = false;
 
-  final List> _paymentMethods = [
+  final List _paymentMethods = [
     {
       "name": "Telebirr",
       "currency": "ETB",
@@ -281,11 +281,11 @@ borderRadius: BorderRadius.circular(2),
                 itemCount: _paymentMethods.length,
                 itemBuilder: (context, index) {
                   final method = _paymentMethods[index];
-                  final String methodName = method['name']?.toString() ?? "";
-                  final String methodCurrency = method['currency']?.toString() ?? "";
-                  final String methodFee = method['fee']?.toString() ?? "";
-                  final Color iconColor = (method['color'] as Color?) ?? Colors.blue;
-                  final IconData iconData = (method['icon'] as IconData?) ?? Icons.payment;
+                  final String methodName = method['name'].toString();
+                  final String methodCurrency = method['currency'].toString();
+                  final String methodFee = method['fee'].toString();
+                  final Color iconColor = method['color'] as Color;
+                  final IconData iconData = method['icon'] as IconData;
 
                   return Container(
                     margin: const EdgeInsets.only(bottom: 12),
@@ -352,10 +352,10 @@ borderRadius: BorderRadius.circular(2),
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: shiroBg,
-
-appBar: AppBar(
+      appBar: AppBar(
         backgroundColor: Colors.transparent,
-        elevation: 0,
+
+elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios, color: textDark, size: 20),
           onPressed: () => Navigator.pop(context),
@@ -447,7 +447,7 @@ appBar: AppBar(
 
   Widget _buildCashOutTab() {
     final String chosenMethodName = _selectedMethod != null
-        ? (_selectedMethod!['name']?.toString() ?? "Select / Add Method")
+        ? _selectedMethod['name'].toString()
         : "Select / Add Method";
 
     return ListView(
@@ -464,10 +464,10 @@ appBar: AppBar(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
-
-mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text("Payment Method", style: TextStyle(color: textMuted, fontSize: 13, fontWeight: FontWeight.w600)),
+
+const Text("Payment Method", style: TextStyle(color: textMuted, fontSize: 13, fontWeight: FontWeight.w600)),
                   IconButton(
                     icon: const Icon(Icons.arrow_forward_ios, color: textDark, size: 14),
                     onPressed: _openPaymentMethodSheet,
@@ -555,11 +555,11 @@ mainAxisAlignment: MainAxisAlignment.spaceBetween,
         const SizedBox(height: 26),
         SizedBox(
           width: double.infinity,
-
-height: 50,
+          height: 50,
           child: ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: primaryPurple,
+
+backgroundColor: primaryPurple,
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
               elevation: 2,
@@ -657,11 +657,11 @@ height: 50,
             color: cardColor,
             borderRadius: BorderRadius.circular(18),
             border: Border.all(color: Colors.black12),
-
-),
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+
+children: [
               const Text("Recipient User ID", style: TextStyle(color: textMuted, fontSize: 13, fontWeight: FontWeight.w600)),
               const SizedBox(height: 6),
               Row(
