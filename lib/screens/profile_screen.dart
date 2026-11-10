@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'wallet_screen.dart';
+import 'points_wallet_screen.dart';
 import 'store_screen.dart';
 import 'invitation_screen.dart';
 import 'backpack_screen.dart';
@@ -64,6 +65,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  void _openPointsWallet() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const PointsWalletScreen()),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final String uid = _currentUser?.uid ?? "";
@@ -106,12 +114,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
           return SafeArea(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+
+padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               child: Column(
                 children: [
-                  // 1. የተጠቃሚ መረጃ፣ ባጆች እና ማህበራዊ ቆጣሪዎች
-
-_buildHeaderSection(
+                  // 1. User Header Section
+                  _buildHeaderSection(
                     name: displayName,
                     displayId: displayId,
                     avatarUrl: avatarUrl,
@@ -125,23 +133,27 @@ _buildHeaderSection(
                   ),
                   const SizedBox(height: 14),
 
-                  // 2. VIP CLUB ባነር
+                  // 2. VIP CLUB Banner
                   _buildVipClubCard(),
                   const SizedBox(height: 12),
 
-                  // 3. COINS & POINTS የሀብት ሳጥን
-                  _buildAssetsCard(coins: firestoreCoins, points: points),
+                  // 3. COINS & POINTS Card (Tapping Points opens PointsWalletScreen)
+                  _buildAssetsCard(
+                    coins: firestoreCoins,
+                    points: points,
+                    numericId: numericId,
+                  ),
                   const SizedBox(height: 14),
 
-                  // 4. ዋና ዋና የ 8ቱ አገልግሎቶች ግሪድ
+                  // 4. Main 8 Features Grid
                   _buildMainFeaturesGrid(coins: firestoreCoins, numericId: numericId),
                   const SizedBox(height: 14),
 
-                  // 5. COIN RECHARGE የማስታወቂያ ባነር
+                  // 5. Promo Recharge Banner
                   _buildPromoRechargeBanner(coins: firestoreCoins, numericId: numericId),
                   const SizedBox(height: 14),
 
-                  // 6. የቢዝነስ እና አስተዳደር ክፍል
+                  // 6. Creator & Business Section
                   _buildBusinessSection(numericId: numericId),
                   const SizedBox(height: 24),
                 ],
@@ -214,14 +226,14 @@ _buildHeaderSection(
                     overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 4),
-                  Wrap(
+
+Wrap(
                     spacing: 6,
                     runSpacing: 4,
                     children: [
                       _buildLevelTag(Icons.shield, "$wealthLevel", const Color(0xFF38D5C5)),
                       _buildLevelTag(Icons.arrow_upward, "$charmLevel", const Color(0xFF81D774)),
-
-_buildLevelTag(Icons.auto_awesome, "$chatLevel", const Color(0xFFB57DE5)),
+                      _buildLevelTag(Icons.auto_awesome, "$chatLevel", const Color(0xFFB57DE5)),
                       if (hasAgency)
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
@@ -324,7 +336,8 @@ _buildLevelTag(Icons.auto_awesome, "$chatLevel", const Color(0xFFB57DE5)),
       ),
       child: Row(
         children: [
-          const Icon(Icons.workspace_premium, color: Color(0xFFFFD580), size: 26),
+
+const Icon(Icons.workspace_premium, color: Color(0xFFFFD580), size: 26),
           const SizedBox(width: 10),
           const Expanded(
             child: Column(
@@ -332,8 +345,7 @@ _buildLevelTag(Icons.auto_awesome, "$chatLevel", const Color(0xFFB57DE5)),
               children: [
                 Text(
                   "VIP Club",
-
-style: TextStyle(color: Color(0xFFFFD580), fontSize: 13, fontWeight: FontWeight.bold),
+                  style: TextStyle(color: Color(0xFFFFD580), fontSize: 13, fontWeight: FontWeight.bold),
                 ),
                 Text(
                   "Upgrade to VIP and get free coins daily",
@@ -361,7 +373,11 @@ style: TextStyle(color: Color(0xFFFFD580), fontSize: 13, fontWeight: FontWeight.
   }
 
   // 3. Coins & Points Card
-  Widget _buildAssetsCard({required int coins, required double points}) {
+  Widget _buildAssetsCard({
+    required int coins,
+    required double points,
+    required int numericId,
+  }) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
       decoration: BoxDecoration(
@@ -377,50 +393,82 @@ style: TextStyle(color: Color(0xFFFFD580), fontSize: 13, fontWeight: FontWeight.
       ),
       child: Row(
         children: [
+          // Coins side -> Opens Coin Wallet/Recharge
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  "Coins",
-                  style: TextStyle(fontSize: 12, color: Color(0xFF4E5969), fontWeight: FontWeight.w600),
+            child: InkWell(
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => WalletScreen(
+                    currentCoins: coins,
+                    userNumericId: numericId,
+                    userUid: _currentUser?.uid ?? "",
+                    onCoinsRecharged: _updateCoins,
+                  ),
                 ),
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    const Icon(Icons.monetization_on, color: Color(0xFFFFB300), size: 18),
-                    const SizedBox(width: 6),
-                    Text(
-                      "$coins",
-                      style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Color(0xFF1D2129)),
-                    ),
-                  ],
-                ),
-              ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Row(
+                    children: [
+                      Text(
+                        "Coins",
+                        style: TextStyle(fontSize: 12, color: Color(0xFF4E5969), fontWeight: FontWeight.w600),
+                      ),
+                      SizedBox(width: 4),
+                      Icon(Icons.chevron_right, size: 14, color: Color(0xFF86909C)),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      const Icon(Icons.monetization_on, color: Color(0xFFFFB300), size: 18),
+                      const SizedBox(width: 6),
+                      Text(
+                        "$coins",
+                        style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Color(0xFF1D2129)),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
           Container(width: 1, height: 36, color: const Color(0xFFF2F3F5)),
           const SizedBox(width: 18),
+
+          // Points side -> Opens PointsWalletScreen
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  "Points",
-                  style: TextStyle(fontSize: 12, color: Color(0xFF4E5969), fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    const Icon(Icons.lens_blur, color: Color(0xFF00D1B2), size: 18),
-                    const SizedBox(width: 6),
-                    Text(
-                      points.toStringAsFixed(1),
-                      style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Color(0xFF00D1B2)),
-                    ),
-                  ],
-                ),
-              ],
+            child: InkWell(
+              onTap: _openPointsWallet,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Row(
+
+children: [
+                      Text(
+                        "Points",
+                        style: TextStyle(fontSize: 12, color: Color(0xFF4E5969), fontWeight: FontWeight.w600),
+                      ),
+                      SizedBox(width: 4),
+                      Icon(Icons.chevron_right, size: 14, color: Color(0xFF86909C)),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      const Icon(Icons.stars_rounded, color: Color(0xFF7E22CE), size: 18),
+                      const SizedBox(width: 6),
+                      Text(
+                        points.toInt().toString(),
+                        style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Color(0xFF7E22CE)),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
         ],
@@ -445,8 +493,7 @@ style: TextStyle(color: Color(0xFFFFD580), fontSize: 13, fontWeight: FontWeight.
       ),
       child: GridView.count(
         shrinkWrap: true,
-
-physics: const NeverScrollableScrollPhysics(),
+        physics: const NeverScrollableScrollPhysics(),
         crossAxisCount: 4,
         mainAxisSpacing: 14,
         crossAxisSpacing: 4,
@@ -509,7 +556,8 @@ physics: const NeverScrollableScrollPhysics(),
           ),
           _buildItemTile(
             icon: Icons.event_available,
-            color: const Color(0xFF36CFC9),
+
+color: const Color(0xFF36CFC9),
             label: "Task",
             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TaskScreen())),
           ),
@@ -557,8 +605,7 @@ physics: const NeverScrollableScrollPhysics(),
           ],
         ),
         padding: const EdgeInsets.symmetric(horizontal: 18),
-
-child: const Row(
+        child: const Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Column(
@@ -602,6 +649,12 @@ child: const Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
           _buildItemTile(
+            icon: Icons.stars_rounded,
+            color: const Color(0xFF7E22CE),
+            label: "Points Wallet",
+            onTap: _openPointsWallet,
+          ),
+          _buildItemTile(
             icon: Icons.person_pin,
             color: const Color(0xFF13C2C2),
             label: "Host Center",
@@ -618,7 +671,8 @@ child: const Row(
           ),
           _buildItemTile(
             icon: Icons.currency_exchange,
-            color: const Color(0xFF52C41A),
+
+color: const Color(0xFF52C41A),
             label: "Coin Seller",
             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CoinSellerScreen())),
           ),
