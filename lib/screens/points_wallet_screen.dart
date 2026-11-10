@@ -17,6 +17,8 @@ class _PointsWalletScreenState extends State<PointsWalletScreen>
   int _totalDiamonds = 0;
   int _frozenDiamonds = 0;
   int _userCoins = 0;
+  String _userDisplayName = "User";
+  int _userNumericId = 0;
 
   static const int pointsPerUsd = 10000;
 
@@ -26,13 +28,18 @@ class _PointsWalletScreenState extends State<PointsWalletScreen>
   static const Color textMuted = Color(0xFF6B655B);
   static const Color primaryPurple = Color(0xFF7E22CE);
 
+  // Cash out state
   final TextEditingController _cashOutController = TextEditingController();
+  final TextEditingController _accountNumberController = TextEditingController();
   dynamic _selectedMethod;
   double _calculatedUsd = 0.0;
+  bool _isSubmittingWithdraw = false;
 
+  // Exchange state
   final TextEditingController _exchangeController = TextEditingController();
   int _calculatedCoins = 0;
 
+  // Transfer state
   final TextEditingController _targetIdController = TextEditingController();
   final TextEditingController _transferAmountController = TextEditingController();
   String? _verifiedUserName;
@@ -46,6 +53,7 @@ class _PointsWalletScreenState extends State<PointsWalletScreen>
       "fee": "Fee: 3%",
       "icon": Icons.phone_android,
       "color": Colors.blue,
+      "accountLabel": "Telebirr Phone Number (+251...)",
     },
     {
       "name": "CBE (Commercial Bank of Ethiopia)",
@@ -53,6 +61,7 @@ class _PointsWalletScreenState extends State<PointsWalletScreen>
       "fee": "Fee: 3%",
       "icon": Icons.account_balance,
       "color": Colors.purple,
+      "accountLabel": "CBE Account Number (1000...)",
     },
     {
       "name": "Bank of Abyssinia",
@@ -60,6 +69,7 @@ class _PointsWalletScreenState extends State<PointsWalletScreen>
       "fee": "Fee: 3%",
       "icon": Icons.storefront,
       "color": Colors.amber,
+      "accountLabel": "Abyssinia Account Number",
     },
     {
       "name": "Awash Bank",
@@ -67,6 +77,7 @@ class _PointsWalletScreenState extends State<PointsWalletScreen>
       "fee": "Fee: 3%",
       "icon": Icons.account_balance_wallet,
       "color": Colors.orange,
+      "accountLabel": "Awash Account Number",
     },
     {
       "name": "Binance Pay",
@@ -74,6 +85,7 @@ class _PointsWalletScreenState extends State<PointsWalletScreen>
       "fee": "Fee: 1% + \$0.5/txn",
       "icon": Icons.currency_bitcoin,
       "color": Colors.amber,
+      "accountLabel": "Binance Pay ID or USDT Address",
     },
   ];
 
@@ -97,6 +109,8 @@ class _PointsWalletScreenState extends State<PointsWalletScreen>
           _totalDiamonds = (data['diamonds'] as num?)?.toInt() ?? 0;
           _frozenDiamonds = (data['frozenDiamonds'] as num?)?.toInt() ?? 0;
           _userCoins = (data['coins'] as num?)?.toInt() ?? 0;
+          _userDisplayName = data['name']?.toString() ?? "User";
+          _userNumericId = (data['numericId'] as num?)?.toInt() ?? 0;
         });
       }
     });
@@ -106,10 +120,120 @@ class _PointsWalletScreenState extends State<PointsWalletScreen>
   void dispose() {
     _tabController.dispose();
     _cashOutController.dispose();
+    _accountNumberController.dispose();
     _exchangeController.dispose();
     _targetIdController.dispose();
     _transferAmountController.dispose();
     super.dispose();
+  }
+
+  // Submit Withdraw Request to Firestore
+  Future<void> _submitWithdrawRequest() async {
+    if (_user == null) return;
+
+if (_selectedMethod == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please select a payment method")),
+      );
+      return;
+    }
+
+    final accountDetail = _accountNumberController.text.trim();
+    if (accountDetail.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Please enter your ${_selectedMethod['name']} account details")),
+      );
+      return;
+    }
+
+    final points = int.tryParse(_cashOutController.text.trim()) ?? 0;
+    if (points < pointsPerUsd) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Minimum withdrawal is 10,000 Points (\$1 USD)")),
+      );
+      return;
+    }
+
+    if (points > _totalDiamonds) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Insufficient points balance")),
+      );
+      return;
+    }
+
+    setState(() => _isSubmittingWithdraw = true);
+
+    try {
+      final double usdAmount = points / pointsPerUsd;
+      final batch = FirebaseFirestore.instance.batch();
+
+      // 1. Deduct points from user's balance and move to frozen or decrement
+      final userRef = FirebaseFirestore.instance.collection('users').doc(_user!.uid);
+      batch.update(userRef, {
+        'diamonds': FieldValue.increment(-points),
+        'frozenDiamonds': FieldValue.increment(points),
+      });
+
+      // 2. Create the withdrawal record in 'withdraw_requests'
+      final requestRef = FirebaseFirestore.instance.collection('withdraw_requests').doc();
+      batch.set(requestRef, {
+        'requestId': requestRef.id,
+        'uid': _user!.uid,
+        'userNumericId': _userNumericId,
+        'userName': _userDisplayName,
+        'points': points,
+        'usdAmount': usdAmount,
+        'method': _selectedMethod['name'],
+        'currency': _selectedMethod['currency'],
+        'accountDetails': accountDetail,
+        'status': 'pending', // pending, approved, rejected
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
+      await batch.commit();
+
+      _cashOutController.clear();
+      _accountNumberController.clear();
+      setState(() {
+        _calculatedUsd = 0.0;
+        _selectedMethod = null;
+      });
+
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            backgroundColor: cardColor,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: const Row(
+              children: [
+                Icon(Icons.check_circle, color: primaryPurple),
+                SizedBox(width: 8),
+                Text("Request Submitted", style: TextStyle(color: textDark, fontSize: 16)),
+              ],
+            ),
+            content: Text(
+              "Your withdrawal request of $points Points (\$${usdAmount.toStringAsFixed(2)} USD) via ${requestRef.id} has been submitted for admin review.",
+              style: const TextStyle(color: textMuted, fontSize: 13),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text("OK", style: TextStyle(color: primaryPurple, fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Withdrawal error: $e")),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSubmittingWithdraw = false);
+    }
   }
 
   Future<void> _checkTargetUser() async {
@@ -129,12 +253,11 @@ class _PointsWalletScreenState extends State<PointsWalletScreen>
           .limit(1)
           .get();
 
-      if (querySnapshot.docs.isNotEmpty) {
+if (querySnapshot.docs.isNotEmpty) {
         final doc = querySnapshot.docs.first;
         setState(() {
           _verifiedUserName = doc.data()['name']?.toString() ?? "User ${doc.data()['numericId']}";
-
-_verifiedUserUid = doc.id;
+          _verifiedUserUid = doc.id;
         });
       } else {
         if (mounted) {
@@ -254,15 +377,15 @@ _verifiedUserUid = doc.id;
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+
+children: [
             Center(
               child: Container(
                 width: 44,
                 height: 4,
                 decoration: BoxDecoration(
                   color: Colors.black26,
-
-borderRadius: BorderRadius.circular(2),
+                  borderRadius: BorderRadius.circular(2),
                 ),
               ),
             ),
@@ -334,7 +457,7 @@ borderRadius: BorderRadius.circular(2),
                             setState(() => _selectedMethod = method);
                             Navigator.pop(ctx);
                           },
-                          child: const Text("Bind", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                          child: const Text("Select", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                         ),
                       ],
                     ),
@@ -348,14 +471,13 @@ borderRadius: BorderRadius.circular(2),
     );
   }
 
-  @override
+@override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: shiroBg,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
-
-elevation: 0,
+        elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios, color: textDark, size: 20),
           onPressed: () => Navigator.pop(context),
@@ -408,7 +530,7 @@ elevation: 0,
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  "Frozen Points: $_frozenDiamonds (Included in total points)",
+                  "Frozen Points: $_frozenDiamonds (Pending admin review)",
                   style: const TextStyle(color: textMuted, fontSize: 11.5),
                 ),
               ],
@@ -448,15 +570,20 @@ elevation: 0,
   Widget _buildCashOutTab() {
     final String chosenMethodName = _selectedMethod != null
         ? _selectedMethod['name'].toString()
-        : "Select / Add Method";
+        : "Select Payment Method";
+    final String accountHint = _selectedMethod != null
+        ? _selectedMethod['accountLabel'].toString()
+        : "Account details (Select method first)";
 
     return ListView(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       children: [
+        // 1. Payment Method Selector Card
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: cardColor,
+
+color: cardColor,
             borderRadius: BorderRadius.circular(18),
             border: Border.all(color: Colors.black12),
           ),
@@ -466,8 +593,7 @@ elevation: 0,
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-
-const Text("Payment Method", style: TextStyle(color: textMuted, fontSize: 13, fontWeight: FontWeight.w600)),
+                  const Text("Payment Method", style: TextStyle(color: textMuted, fontSize: 13, fontWeight: FontWeight.w600)),
                   IconButton(
                     icon: const Icon(Icons.arrow_forward_ios, color: textDark, size: 14),
                     onPressed: _openPaymentMethodSheet,
@@ -481,7 +607,7 @@ const Text("Payment Method", style: TextStyle(color: textMuted, fontSize: 13, fo
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Icon(Icons.add_circle_outline, color: primaryPurple, size: 20),
+                      const Icon(Icons.account_balance, color: primaryPurple, size: 20),
                       const SizedBox(width: 8),
                       Text(
                         chosenMethodName,
@@ -491,10 +617,32 @@ const Text("Payment Method", style: TextStyle(color: textMuted, fontSize: 13, fo
                   ),
                 ),
               ),
+              if (_selectedMethod != null) ...[
+                const Divider(color: Colors.black12),
+                const SizedBox(height: 6),
+                Text(
+                  "Enter ${_selectedMethod['name']} Account:",
+                  style: const TextStyle(color: textMuted, fontSize: 12, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: _accountNumberController,
+                  style: const TextStyle(color: textDark, fontSize: 15, fontWeight: FontWeight.w600),
+                  decoration: InputDecoration(
+                    hintText: accountHint,
+                    hintStyle: const TextStyle(color: Colors.black38, fontSize: 13),
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                    border: InputBorder.none,
+                  ),
+                ),
+              ],
             ],
           ),
         ),
         const SizedBox(height: 14),
+
+        // 2. Points Amount Card
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
@@ -515,14 +663,15 @@ const Text("Payment Method", style: TextStyle(color: textMuted, fontSize: 13, fo
                       keyboardType: TextInputType.number,
                       style: const TextStyle(color: textDark, fontSize: 20, fontWeight: FontWeight.bold),
                       decoration: const InputDecoration(
-                        hintText: "Enter amount",
+                        hintText: "Min. 10,000",
                         hintStyle: TextStyle(color: Colors.black26, fontSize: 14),
                         border: InputBorder.none,
                       ),
                       onChanged: (val) {
                         final p = int.tryParse(val) ?? 0;
                         setState(() {
-                          _calculatedUsd = p / pointsPerUsd;
+
+_calculatedUsd = p / pointsPerUsd;
                         });
                       },
                     ),
@@ -553,23 +702,26 @@ const Text("Payment Method", style: TextStyle(color: textMuted, fontSize: 13, fo
           ),
         ),
         const SizedBox(height: 26),
+
+        // 3. Withdraw Action Button
         SizedBox(
           width: double.infinity,
           height: 50,
           child: ElevatedButton(
             style: ElevatedButton.styleFrom(
-
-backgroundColor: primaryPurple,
+              backgroundColor: primaryPurple,
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
               elevation: 2,
             ),
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text("Withdrawal request submitted")),
-              );
-            },
-            child: const Text("Withdraw Cash", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+            onPressed: _isSubmittingWithdraw ? null : _submitWithdrawRequest,
+            child: _isSubmittingWithdraw
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.2),
+                  )
+                : const Text("Withdraw Cash", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
           ),
         ),
       ],
@@ -615,7 +767,8 @@ backgroundColor: primaryPurple,
                 },
               ),
               const Divider(color: Colors.black12),
-              Row(
+
+Row(
                 children: [
                   const Icon(Icons.monetization_on, color: Colors.amber, size: 18),
                   const SizedBox(width: 6),
@@ -660,8 +813,7 @@ backgroundColor: primaryPurple,
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-
-children: [
+            children: [
               const Text("Recipient User ID", style: TextStyle(color: textMuted, fontSize: 13, fontWeight: FontWeight.w600)),
               const SizedBox(height: 6),
               Row(
@@ -704,7 +856,8 @@ children: [
               const Divider(color: Colors.black12),
               const SizedBox(height: 6),
               const Text("Transfer Points (Fee: 2%)", style: TextStyle(color: textMuted, fontSize: 13, fontWeight: FontWeight.w600)),
-              const SizedBox(height: 6),
+
+const SizedBox(height: 6),
               TextField(
                 controller: _transferAmountController,
                 keyboardType: TextInputType.number,
