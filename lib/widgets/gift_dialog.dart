@@ -24,7 +24,7 @@ class GiftItem {
     required this.category,
   });
 
-  double get diamondRate => category == GiftCategory.lucky ? 0.04 : 0.70;
+  double get pointRate => category == GiftCategory.lucky ? 0.04 : 0.70;
   bool get isLucky => category == GiftCategory.lucky;
 }
 
@@ -79,12 +79,12 @@ class _GiftDialogState extends State<GiftDialog> with SingleTickerProviderStateM
   int _selectedMultiplier = 1;
   final List<int> _multipliers = [1, 3, 7, 10, 30, 50, 77, 100];
 
-  int _selectedCategoryIndex = 1; // Lucky tab
+  int _selectedCategoryIndex = 1; // Lucky Tab
   int _selectedGiftIndex = 0;
   int _comboCount = 0;
   Timer? _comboTimer;
 
-  // Win Explosion Animation State
+  // Win Explosion Animation
   bool _showWinExplosion = false;
   int _lastWonCoins = 0;
   int _lastWinMultiplier = 0;
@@ -479,20 +479,20 @@ if (selectedGift.isLucky) {
 
       final netDeduction = -totalCost + wonCoins;
 
-      // 2. Wealth EXP ማሳደግ (Level 1-99)
+      // 2. ለላኪው Wealth EXP ማሳደግ
       senderRef.set({
         'coins': FieldValue.increment(netDeduction),
         'wealthExp': FieldValue.increment(totalCost),
       }, SetOptions(merge: true)).catchError((_) {});
 
-      // Diamond calculation
-      final double hostRate = selectedGift.diamondRate;
-      final int diamondsPerRecipient = max(
+      // Points calculation (4% for lucky, 70% for standard)
+      final double hostRate = selectedGift.pointRate;
+      final int pointsPerRecipient = max(
         1,
         (selectedGift.price * _selectedMultiplier * hostRate).round(),
       );
 
-      // 3. Charm EXP ማሳደግ (Level 1-99)
+      // 3. ለተቀባዮቹ Points እና Charm EXP ብቻ መደመር (ዳይመንድ የለም)
       for (final sIndex in _selectedSeatIndices) {
         final occupant = _userList.firstWhere(
           (u) => u['seatIndex'] == sIndex,
@@ -502,8 +502,8 @@ if (selectedGift.isLucky) {
           final uid = occupant['uid']?.toString() ?? "";
           if (uid.isNotEmpty) {
             FirebaseFirestore.instance.collection('users').doc(uid).set({
-              'diamonds': FieldValue.increment(diamondsPerRecipient),
-              'charmExp': FieldValue.increment(diamondsPerRecipient),
+              'points': FieldValue.increment(pointsPerRecipient),
+              'charmExp': FieldValue.increment(pointsPerRecipient),
             }, SetOptions(merge: true)).catchError((_) {});
           }
         }
@@ -569,9 +569,9 @@ if (selectedGift.isLucky) {
       final int fullSeatCost = selectedGift.price * _selectedMultiplier;
       if (mounted) {
         Navigator.pop(
-          context,
 
-GiftSendResult(
+context,
+          GiftSendResult(
             gift: selectedGift,
             targetSeatIndices: _selectedSeatIndices.toList(),
             isAll: _isAllSelected,
@@ -755,7 +755,7 @@ margin: const EdgeInsets.only(right: 5),
                 ),
               ),
 
-              // Gifts Grid (ራሳቸውን ችለው፣ ሳጥን ሳይኖራቸው፣ ጎላ ብለው የሚታዩ)
+              // Gifts Grid (ሳጥን የሌለው፣ ራሱን የቻለ ጎላ ያለ እይታ)
               Expanded(
                 child: GridView.builder(
                   padding: const EdgeInsets.all(8),
@@ -777,7 +777,7 @@ itemCount: currentGifts.length,
                         _comboCount = 0;
                       }),
                       child: Container(
-                        color: Colors.transparent, // ምንም አይነት አራት ማዕዘን ሳጥን የለም
+                        color: Colors.transparent,
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
@@ -798,7 +798,7 @@ itemCount: currentGifts.length,
                                 gift.imageAsset,
                                 width: 62,
                                 height: 62,
-                                fit: BoxFit.contain, // ምስሉ ራሱን ችሎ ሙሉ በሙሉ ጎላ ብሎ እንዲታይ
+                                fit: BoxFit.contain,
                                 errorBuilder: (ctx, err, stack) =>
                                     Text(gift.icon, style: const TextStyle(fontSize: 32)),
                               ),
@@ -831,7 +831,7 @@ itemCount: currentGifts.length,
                 ),
               ),
 
-              // Bottom control bar
+              // Bottom control bar (Points ብቻ የሚታይበት)
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 decoration: const BoxDecoration(
@@ -844,10 +844,10 @@ itemCount: currentGifts.length,
                       children: [
                         const Icon(Icons.monetization_on, color: goldColor, size: 16),
                         const SizedBox(width: 4),
-
-Text(
+                        Text(
                           "$_coins",
-                          style: const TextStyle(
+
+style: const TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.bold,
                             fontSize: 12,
@@ -858,7 +858,7 @@ Text(
                     const SizedBox(width: 8),
                     if (selectedGift != null)
                       Text(
-                        "💎 ${(selectedGift.price * _selectedMultiplier * selectedGift.diamondRate).round()} (${selectedGift.isLucky ? '4%' : '70%'})",
+                        "Pts ${(selectedGift.price * _selectedMultiplier * selectedGift.pointRate).round()} (${selectedGift.isLucky ? '4%' : '70%'})",
                         style: const TextStyle(color: Colors.white38, fontSize: 10),
                       ),
                     const Spacer(),
@@ -922,8 +922,7 @@ Text(
                                   : "Send (🪙$totalCost)",
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
-
-fontSize: 11,
+                                fontSize: 11,
                                 color: _comboCount > 0 ? Colors.white : Colors.black,
                               ),
                             ),
@@ -935,7 +934,7 @@ fontSize: 11,
           ),
         ),
 
-        // 5. ሙሉ ስክሪኑን የሚሞላና ፈንድቶ የሚጠፋ የራሱ የስጦታው Win Animation
+// 5. ራሱ ስጦታው ስክሪኑን ሞልቶ ፈንድቶ የሚጠፋበት አኒሜሽን
         if (_showWinExplosion && _explodingGift != null)
           Positioned.fill(
             child: AnimatedBuilder(
@@ -966,7 +965,7 @@ fontSize: 11,
                               _explodingGift!.imageAsset,
                               width: 190,
                               height: 190,
-                              fit: BoxFit.contain, // ራሱ ስጦታው ብቻ ሙሉ ሆኖ ይፈነዳል
+                              fit: BoxFit.contain,
                             ),
                           ),
                           const SizedBox(height: 14),
