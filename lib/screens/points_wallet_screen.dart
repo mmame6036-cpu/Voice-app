@@ -18,26 +18,21 @@ class _PointsWalletScreenState extends State<PointsWalletScreen>
   int _frozenDiamonds = 0;
   int _userCoins = 0;
 
-  // 1 USD = 10,000 Points conversion rate
   static const int pointsPerUsd = 10000;
 
-  // Colors: Light beige/shiro background & dark readable typography
   static const Color shiroBg = Color(0xFFF7F4EB);
   static const Color cardColor = Color(0xFFEFE9DA);
   static const Color textDark = Color(0xFF1A1A1A);
   static const Color textMuted = Color(0xFF6B655B);
   static const Color primaryPurple = Color(0xFF7E22CE);
 
-  // Cash out state
   final TextEditingController _cashOutController = TextEditingController();
   Map<String, dynamic>? _selectedMethod;
   double _calculatedUsd = 0.0;
 
-  // Exchange state
   final TextEditingController _exchangeController = TextEditingController();
   int _calculatedCoins = 0;
 
-  // Transfer state
   final TextEditingController _targetIdController = TextEditingController();
   final TextEditingController _transferAmountController = TextEditingController();
   String? _verifiedUserName;
@@ -64,21 +59,21 @@ class _PointsWalletScreenState extends State<PointsWalletScreen>
       "currency": "ETB",
       "fee": "Fee: 3%",
       "icon": Icons.storefront,
-      "color": Colors.amber.shade800,
+      "color": Colors.amber,
     },
     {
       "name": "Awash Bank",
       "currency": "ETB",
       "fee": "Fee: 3%",
       "icon": Icons.account_balance_wallet,
-      "color": Colors.orange.shade800,
+      "color": Colors.orange,
     },
     {
       "name": "Binance Pay",
       "currency": "USDT",
       "fee": "Fee: 1% + \$0.5/txn",
       "icon": Icons.currency_bitcoin,
-      "color": Colors.amber.shade700,
+      "color": Colors.amber,
     },
   ];
 
@@ -134,11 +129,12 @@ class _PointsWalletScreenState extends State<PointsWalletScreen>
           .limit(1)
           .get();
 
-if (querySnapshot.docs.isNotEmpty) {
+      if (querySnapshot.docs.isNotEmpty) {
         final doc = querySnapshot.docs.first;
         setState(() {
-          _verifiedUserName = doc.data()['name'] ?? "User ${doc.data()['numericId']}";
-          _verifiedUserUid = doc.id;
+          _verifiedUserName = doc.data()['name']?.toString() ?? "User ${doc.data()['numericId']}";
+
+_verifiedUserUid = doc.id;
         });
       } else {
         if (mounted) {
@@ -220,7 +216,6 @@ if (querySnapshot.docs.isNotEmpty) {
       return;
     }
 
-    // 10,000 Points = 9,000 Coins exchange proportion
     final coinsToAdd = ((points / 10000) * 9000).round();
 
     try {
@@ -258,8 +253,7 @@ if (querySnapshot.docs.isNotEmpty) {
         height: MediaQuery.of(context).size.height * 0.65,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         child: Column(
-
-crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Center(
               child: Container(
@@ -267,7 +261,8 @@ crossAxisAlignment: CrossAxisAlignment.start,
                 height: 4,
                 decoration: BoxDecoration(
                   color: Colors.black26,
-                  borderRadius: BorderRadius.circular(2),
+
+borderRadius: BorderRadius.circular(2),
                 ),
               ),
             ),
@@ -286,6 +281,12 @@ crossAxisAlignment: CrossAxisAlignment.start,
                 itemCount: _paymentMethods.length,
                 itemBuilder: (context, index) {
                   final method = _paymentMethods[index];
+                  final String methodName = method['name']?.toString() ?? "";
+                  final String methodCurrency = method['currency']?.toString() ?? "";
+                  final String methodFee = method['fee']?.toString() ?? "";
+                  final Color iconColor = (method['color'] as Color?) ?? Colors.blue;
+                  final IconData iconData = (method['icon'] as IconData?) ?? Icons.payment;
+
                   return Container(
                     margin: const EdgeInsets.only(bottom: 12),
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -297,8 +298,8 @@ crossAxisAlignment: CrossAxisAlignment.start,
                     child: Row(
                       children: [
                         CircleAvatar(
-                          backgroundColor: (method['color'] as Color).withOpacity(0.18),
-                          child: Icon(method['icon'] as IconData, color: method['color'] as Color, size: 22),
+                          backgroundColor: iconColor.withOpacity(0.18),
+                          child: Icon(iconData, color: iconColor, size: 22),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
@@ -306,7 +307,7 @@ crossAxisAlignment: CrossAxisAlignment.start,
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                method['name'],
+                                methodName,
                                 style: const TextStyle(
                                   color: textDark,
                                   fontSize: 13,
@@ -315,7 +316,7 @@ crossAxisAlignment: CrossAxisAlignment.start,
                               ),
                               const SizedBox(height: 2),
                               Text(
-                                "${method['currency']} • ${method['fee']}",
+                                "$methodCurrency • $methodFee",
                                 style: const TextStyle(color: textMuted, fontSize: 11),
                               ),
                             ],
@@ -351,10 +352,10 @@ crossAxisAlignment: CrossAxisAlignment.start,
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: shiroBg,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
 
-elevation: 0,
+appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios, color: textDark, size: 20),
           onPressed: () => Navigator.pop(context),
@@ -367,7 +368,6 @@ elevation: 0,
       ),
       body: Column(
         children: [
-          // Top Points Card
           Container(
             margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             padding: const EdgeInsets.all(20),
@@ -414,8 +414,6 @@ elevation: 0,
               ],
             ),
           ),
-
-          // Navigation Tabs
           Container(
             margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
             child: TabBar(
@@ -432,8 +430,6 @@ elevation: 0,
               ],
             ),
           ),
-
-          // Tab Views
           Expanded(
             child: TabBarView(
               controller: _tabController,
@@ -449,8 +445,11 @@ elevation: 0,
     );
   }
 
-  // TAB 1: Cash out
   Widget _buildCashOutTab() {
+    final String chosenMethodName = _selectedMethod != null
+        ? (_selectedMethod!['name']?.toString() ?? "Select / Add Method")
+        : "Select / Add Method";
+
     return ListView(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       children: [
@@ -465,11 +464,11 @@ elevation: 0,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+
+mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text("Payment Method", style: TextStyle(color: textMuted, fontSize: 13, fontWeight: FontWeight.w600)),
-
-IconButton(
+                  IconButton(
                     icon: const Icon(Icons.arrow_forward_ios, color: textDark, size: 14),
                     onPressed: _openPaymentMethodSheet,
                   ),
@@ -485,7 +484,7 @@ IconButton(
                       const Icon(Icons.add_circle_outline, color: primaryPurple, size: 20),
                       const SizedBox(width: 8),
                       Text(
-                        _selectedMethod != null ? _selectedMethod!['name'] : "Select / Add Method",
+                        chosenMethodName,
                         style: const TextStyle(color: primaryPurple, fontSize: 13.5, fontWeight: FontWeight.bold),
                       ),
                     ],
@@ -556,13 +555,13 @@ IconButton(
         const SizedBox(height: 26),
         SizedBox(
           width: double.infinity,
-          height: 50,
+
+height: 50,
           child: ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: primaryPurple,
               foregroundColor: Colors.white,
-
-shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
               elevation: 2,
             ),
             onPressed: () {
@@ -577,7 +576,6 @@ shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
     );
   }
 
-  // TAB 2: Exchange (Points to Coins)
   Widget _buildExchangeTab() {
     return ListView(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -649,7 +647,6 @@ shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
     );
   }
 
-  // TAB 3: Transfer
   Widget _buildTransferTab() {
     return ListView(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -660,12 +657,12 @@ shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
             color: cardColor,
             borderRadius: BorderRadius.circular(18),
             border: Border.all(color: Colors.black12),
-          ),
+
+),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-
-const Text("Recipient User ID", style: TextStyle(color: textMuted, fontSize: 13, fontWeight: FontWeight.w600)),
+              const Text("Recipient User ID", style: TextStyle(color: textMuted, fontSize: 13, fontWeight: FontWeight.w600)),
               const SizedBox(height: 6),
               Row(
                 children: [
