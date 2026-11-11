@@ -1,8 +1,9 @@
 import 'dart:async';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:video_player/video_player.dart';
+import 'package:svgaplayer_flutter/svgaplayer_flutter.dart';
 import 'wallet_screen.dart';
 import '../widgets/lucky_wheel_dialog.dart';
 import '../widgets/teen_patti_dialog.dart';
@@ -16,7 +17,7 @@ class GiftModel {
   final String name;
   final String icon;
   final int cost;
-  final String videoPath;
+  final String svgaUrl;
   final bool isLucky;
 
   const GiftModel({
@@ -24,7 +25,7 @@ class GiftModel {
     required this.name,
     required this.icon,
     this.cost = 0,
-    required this.videoPath,
+    required this.svgaUrl,
     this.isLucky = false,
   });
 }
@@ -35,28 +36,28 @@ const List<GiftModel> availableGifts = [
     name: "Rocket",
     icon: "🚀",
     cost: 100,
-    videoPath: "assets/svga/svga10.mp4",
+    svgaUrl: "https://raw.githubusercontent.com/yyued/SVGAPlayer-Android/master/app/src/main/assets/rose.svga",
   ),
   GiftModel(
     id: "2",
     name: "Sports Car",
     icon: "🏎️",
     cost: 300,
-    videoPath: "assets/svga/svga11.mp4",
+    svgaUrl: "https://raw.githubusercontent.com/yyued/SVGAPlayer-Android/master/app/src/main/assets/posche.svga",
   ),
   GiftModel(
     id: "3",
     name: "Crown Rose",
     icon: "🌹",
     cost: 50,
-    videoPath: "assets/svga/svga12.mp4",
+    svgaUrl: "https://raw.githubusercontent.com/yyued/SVGAPlayer-Android/master/app/src/main/assets/rose_2.0.svga",
   ),
   GiftModel(
     id: "4",
     name: "VIP Angel",
     icon: "💎",
     cost: 500,
-    videoPath: "assets/svga/svga13.mp4",
+    svgaUrl: "https://raw.githubusercontent.com/yyued/SVGAPlayer-Android/master/app/src/main/assets/angel.svga",
     isLucky: true,
   ),
 ];
@@ -121,8 +122,8 @@ class _RoomScreenState extends State<RoomScreen>
   late int _myUid;
   String _myDisplayName = "User";
 
-  VideoPlayerController? _videoController;
-  bool _isPlayingVideo = false;
+  SVGAAnimationController? _svgaController;
+  bool _isPlayingAnimation = false;
 
   GiftComboData? _activeComboData;
   Timer? _comboDismissTimer;
@@ -142,7 +143,7 @@ class _RoomScreenState extends State<RoomScreen>
   StreamSubscription<DocumentSnapshot>? _roomSubscription;
   StreamSubscription<QuerySnapshot>? _chatSubscription;
 
-  static const Color bgColor = Color(0xFFF5EFEB);
+static const Color bgColor = Color(0xFFF5EFEB);
   static const Color cardBg = Colors.white;
   static const Color primaryBrown = Color(0xFF3E2723);
   static const Color accentGold = Color(0xFFD49B42);
@@ -150,8 +151,7 @@ class _RoomScreenState extends State<RoomScreen>
   static const Color buttonDark = Color(0xFF4A3528);
 
   @override
-
-void initState() {
+  void initState() {
     super.initState();
     _currentCoins = widget.initialCoins;
     _activeSeatCount = widget.seatCount;
@@ -159,6 +159,8 @@ void initState() {
     _seatUids = List.filled(_activeSeatCount, null);
     _seatGiftsCount = List.filled(_activeSeatCount, 0);
     _myUid = 100001;
+
+    _svgaController = SVGAAnimationController(vsync: this);
 
     _roomSettings = RoomSettingsData(
       roomName: widget.roomTitle,
@@ -255,7 +257,8 @@ void initState() {
         .snapshots()
         .listen((querySnapshot) {
       if (querySnapshot.docs.isNotEmpty && mounted) {
-        final List<String> loadedMsgs = [];
+
+final List<String> loadedMsgs = [];
         for (var doc in querySnapshot.docs.reversed) {
           final d = doc.data();
           final sender = d['sender'] ?? "User";
@@ -272,7 +275,7 @@ void initState() {
     });
   }
 
-void _startMicMinutesTracking() {
+  void _startMicMinutesTracking() {
     _micTrackerTimer?.cancel();
     _micTrackerTimer = Timer.periodic(const Duration(minutes: 1), (timer) {
       if (_currentUser != null && _mySeatIndex != null && !_isMicMuted) {
@@ -402,7 +405,7 @@ void _startMicMinutesTracking() {
     }
   }
 
-  void _toggleRoomVoice() {
+void _toggleRoomVoice() {
     setState(() {
       _roomSettings.isRoomAudioMuted = !_roomSettings.isRoomAudioMuted;
     });
@@ -412,8 +415,7 @@ void _startMicMinutesTracking() {
   }
 
   void _toggleAllMic() {
-
-setState(() {
+    setState(() {
       _roomSettings.isAllMicClosed = !_roomSettings.isAllMicClosed;
       if (_roomSettings.isAllMicClosed) {
         if (_mySeatIndex != 0) {
@@ -501,13 +503,13 @@ setState(() {
                 itemCount: _seats.length,
                 itemBuilder: (context, idx) {
                   final u = _seats[idx];
-                  if (u == null) return const SizedBox.shrink();
+
+if (u == null) return const SizedBox.shrink();
                   final isAdmin = _roomSettings.admins.contains(u);
                   return Container(
                     margin: const EdgeInsets.only(bottom: 8),
                     decoration: BoxDecoration(
-
-color: cardBg,
+                      color: cardBg,
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(color: borderColor),
                     ),
@@ -592,14 +594,14 @@ color: cardBg,
                     selectedColor: buttonDark,
                     backgroundColor: cardBg,
                     labelStyle: TextStyle(color: sel ? Colors.white : primaryBrown, fontWeight: FontWeight.bold, fontSize: 12),
-                    onSelected: (_) => setDialogState(() => selectedAmount = amt),
+
+onSelected: (_) => setDialogState(() => selectedAmount = amt),
                   );
                 }).toList(),
               ),
               const SizedBox(height: 16),
               const Text("Red Packet Quantity", style: TextStyle(color: Colors.black54, fontSize: 12.5)),
-
-const SizedBox(height: 8),
+              const SizedBox(height: 8),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [5, 10, 15, 20].map((qty) {
@@ -681,14 +683,14 @@ const SizedBox(height: 8),
             const SizedBox(height: 12),
             Text(user, style: const TextStyle(color: primaryBrown, fontSize: 16, fontWeight: FontWeight.bold)),
             const SizedBox(height: 14),
-            Container(
+
+Container(
               decoration: BoxDecoration(color: cardBg, borderRadius: BorderRadius.circular(14), border: Border.all(color: borderColor)),
               child: Column(
                 children: [
                   ListTile(
                     leading: Icon(isMuted ? Icons.mic : Icons.mic_off, color: primaryBrown),
-
-title: Text(isMuted ? "Unmute User" : "Mute User", style: const TextStyle(color: primaryBrown, fontWeight: FontWeight.w600)),
+                    title: Text(isMuted ? "Unmute User" : "Mute User", style: const TextStyle(color: primaryBrown, fontWeight: FontWeight.w600)),
                     onTap: () {
                       setState(() {
                         if (isMuted) {
@@ -726,35 +728,27 @@ title: Text(isMuted ? "Unmute User" : "Mute User", style: const TextStyle(color:
     );
   }
 
-  Future<void> _playGiftVideo(GiftModel gift) async {
+  Future<void> _playGiftAnimation(GiftModel gift) async {
+    if (_svgaController == null) return;
     try {
-      _videoController?.dispose();
-      _videoController = VideoPlayerController.asset(gift.videoPath);
-      await _videoController!.initialize();
-
-      if (mounted) {
-        setState(() {
-          _isPlayingVideo = true;
-        });
-        _videoController!.play();
-      }
-
-      _videoController!.addListener(() {
-        if (_videoController != null &&
-            _videoController!.value.isInitialized &&
-            _videoController!.value.position >= _videoController!.value.duration) {
-          if (mounted) {
-            setState(() {
-              _isPlayingVideo = false;
-            });
-          }
-        }
+      setState(() {
+        _isPlayingAnimation = true;
       });
-    } catch (e) {
-      debugPrint("Video Play Error: $e");
+      final parser = SVGAParser.shared;
+      final videoItem = await parser.decodeFromURL(gift.svgaUrl);
+      _svgaController!.videoItem = videoItem;
+      _svgaController!.reset();
+      await _svgaController!.forward();
       if (mounted) {
         setState(() {
-          _isPlayingVideo = false;
+          _isPlayingAnimation = false;
+        });
+      }
+    } catch (e) {
+      debugPrint("SVGA Play Error: $e");
+      if (mounted) {
+        setState(() {
+          _isPlayingAnimation = false;
         });
       }
     }
@@ -874,7 +868,7 @@ if (targetSeatIndex != null && targetSeatIndex < _seatGiftsCount.length) {
     Navigator.pop(context);
 
     _triggerFloatingGiftCombo(gift: gift, target: target, multiplier: multiplier);
-    _playGiftVideo(gift);
+    _playGiftAnimation(gift);
   }
 
   void _openGiftSheet() {
@@ -1181,7 +1175,7 @@ Text(
     _comboScaleController.dispose();
     _comboDismissTimer?.cancel();
     _agoraService.leaveRoom();
-    _videoController?.dispose();
+    _svgaController?.dispose();
     _msgController.dispose();
     super.dispose();
   }
@@ -1354,7 +1348,7 @@ border: Border.all(
                     itemCount: _chatMessages.length,
                     itemBuilder: (context, index) {
                       final msg = _chatMessages[_chatMessages.length - 1 - index];
-                      final isSystem = msg.startsWith("System:")  msg.startsWith("Announcement:")  msg.startsWith("Red Packet");
+                      final isSystem = msg.startsWith("System:") || msg.startsWith("Announcement:") || msg.startsWith("Red Packet");
 
                       return Padding(
                         padding: const EdgeInsets.symmetric(vertical: 2.0),
@@ -1666,18 +1660,11 @@ onOpenRedPacket: _openRedPacketDialog,
               ),
             ),
 
-          if (_isPlayingVideo && _videoController != null && _videoController!.value.isInitialized)
+          if (_isPlayingAnimation && _svgaController != null)
             Positioned.fill(
               child: IgnorePointer(
                 ignoring: true,
-                child: FittedBox(
-                  fit: BoxFit.cover,
-                  child: SizedBox(
-                    width: _videoController!.value.size.width,
-                    height: _videoController!.value.size.height,
-                    child: VideoPlayer(_videoController!),
-                  ),
-                ),
+                child: SVGAImage(_svgaController!),
               ),
             ),
         ],
@@ -1731,8 +1718,7 @@ onOpenRedPacket: _openRedPacketDialog,
             },
           ),
           const SizedBox(height: 4),
-
-Text(
+          Text(
             isTaken ? _seats[0]! : "Host (1)",
             style: const TextStyle(
               color: primaryBrown,
@@ -1743,7 +1729,8 @@ Text(
           if (hostGifts > 0)
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-              decoration: BoxDecoration(
+
+decoration: BoxDecoration(
                 color: const Color(0xFFFBF4E6),
                 borderRadius: BorderRadius.circular(6),
                 border: Border.all(color: accentGold.withOpacity(0.5)),
