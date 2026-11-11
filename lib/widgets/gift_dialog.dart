@@ -77,14 +77,13 @@ class _GiftDialogState extends State<GiftDialog> with SingleTickerProviderStateM
   final Set<int> _selectedSeatIndices = {};
   bool _isAllSelected = false;
   int _selectedMultiplier = 1;
-  final List<int> _multipliers = [1, 3, 7, 10, 30, 50, 77, 100];
+  final List<int> _multipliers = const [1, 3, 7, 10, 30, 50, 77, 100];
 
   int _selectedCategoryIndex = 1; // Lucky Tab
   int _selectedGiftIndex = 0;
   int _comboCount = 0;
   Timer? _comboTimer;
 
-  // Win Explosion Animation
   bool _showWinExplosion = false;
   int _lastWonCoins = 0;
   int _lastWinMultiplier = 0;
@@ -97,7 +96,7 @@ class _GiftDialogState extends State<GiftDialog> with SingleTickerProviderStateM
   static const Color darkBg = Color(0xFF130F26);
   static const Color cardBg = Color(0xFF1E1738);
 
-  final List<GiftCategory> _categories = [
+  final List<GiftCategory> _categories = const [
     GiftCategory.hot,
     GiftCategory.lucky,
     GiftCategory.luxury,
@@ -131,7 +130,7 @@ class _GiftDialogState extends State<GiftDialog> with SingleTickerProviderStateM
       category: GiftCategory.hot,
     ),
 
-    // 2. Lucky Category (10 እስከ 1000)
+    // 2. Lucky Category
     GiftItem(
       id: "ke1",
       name: "ke1",
@@ -146,9 +145,9 @@ class _GiftDialogState extends State<GiftDialog> with SingleTickerProviderStateM
       icon: "🔑",
       price: 20,
       imageAsset: "assets/images/ke2.jpg",
+      category: GiftCategory.lucky,
 
-category: GiftCategory.lucky,
-    ),
+),
     GiftItem(
       id: "ke3",
       name: "ke3",
@@ -341,9 +340,11 @@ List get _userList {
     _coins = widget.userCoins;
     if (_userList.isNotEmpty) {
       final firstUser = _userList.first;
-      final sIdx = firstUser['seatIndex'] as int?;
-      if (sIdx != null) {
-        _selectedSeatIndices.add(sIdx);
+      if (firstUser is Map) {
+        final sIdx = (firstUser['seatIndex'] as num?)?.toInt();
+        if (sIdx != null) {
+          _selectedSeatIndices.add(sIdx);
+        }
       }
     }
 
@@ -373,13 +374,19 @@ List get _userList {
     super.dispose();
   }
 
-  // Five_win.mp3 ድምፅ ማጫወቻ
   Future<void> _playFiveWinSound() async {
     try {
-      await _audioPlayer.stop();
-      await _audioPlayer.setPlayerMode(PlayerMode.lowLatency);
-      await _audioPlayer.setVolume(1.0);
-      await _audioPlayer.play(AssetSource('sounds/Five_win.mp3'));
+      final AudioPlayer player = AudioPlayer();
+      await player.setPlayerMode(PlayerMode.mediaPlayer);
+      await player.setVolume(1.0);
+      try {
+        await player.play(AssetSource('sounds/Five_win.mp3'));
+      } catch (_) {
+        await player.play(AssetSource('sounds/five_win.mp3'));
+      }
+      player.onPlayerComplete.listen((_) {
+        player.dispose();
+      });
     } catch (_) {}
   }
 
@@ -391,9 +398,11 @@ List get _userList {
       } else {
         _selectedSeatIndices.clear();
         for (final user in _userList) {
-          final sIdx = user['seatIndex'] as int?;
-          if (sIdx != null) {
-            _selectedSeatIndices.add(sIdx);
+          if (user is Map) {
+            final sIdx = (user['seatIndex'] as num?)?.toInt();
+            if (sIdx != null) {
+              _selectedSeatIndices.add(sIdx);
+            }
           }
         }
         _isAllSelected = true;
@@ -446,7 +455,7 @@ List get _userList {
     if (_selectedGiftIndex >= currentGifts.length) return;
     final selectedGift = currentGifts[_selectedGiftIndex];
 
-    final totalCost = _calculateTotalPrice;
+final totalCost = _calculateTotalPrice;
     if (_coins < totalCost) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Insufficient coins balance!")),
@@ -460,7 +469,7 @@ List get _userList {
       int wonCoins = 0;
       int maxMultiplier = 0;
 
-if (selectedGift.isLucky) {
+      if (selectedGift.isLucky) {
         int totalUnits = _selectedMultiplier * _selectedSeatIndices.length;
         for (int i = 0; i < totalUnits; i++) {
           int mult = _calculateLuckyMultiplier();
@@ -471,7 +480,6 @@ if (selectedGift.isLucky) {
         }
       }
 
-      // 1. Five_win.mp3 ድምፅ ማጫወት
       _playFiveWinSound();
 
       final senderRef = FirebaseFirestore.instance.collection('users').doc(_currentUser!.uid);
@@ -479,36 +487,49 @@ if (selectedGift.isLucky) {
 
       final netDeduction = -totalCost + wonCoins;
 
-      // 2. ለላኪው Wealth EXP ማሳደግ
+      // Deduct coins & update wealthExp for sender
       senderRef.set({
         'coins': FieldValue.increment(netDeduction),
         'wealthExp': FieldValue.increment(totalCost),
       }, SetOptions(merge: true)).catchError((_) {});
 
-      // Points calculation (4% for lucky, 70% for standard)
+      // Calculate points per recipient (4% for lucky, 70% for standard)
       final double hostRate = selectedGift.pointRate;
       final int pointsPerRecipient = max(
         1,
         (selectedGift.price * _selectedMultiplier * hostRate).round(),
       );
 
-      // 3. ለተቀባዮቹ Points እና Charm EXP ብቻ መደመር (ዳይመንድ የለም)
+      // Add points to every targeted recipient
       for (final sIndex in _selectedSeatIndices) {
-        final occupant = _userList.firstWhere(
-          (u) => u['seatIndex'] == sIndex,
-          orElse: () => null,
-        );
-        if (occupant != null) {
-          final uid = occupant['uid']?.toString() ?? "";
-          if (uid.isNotEmpty) {
-            FirebaseFirestore.instance.collection('users').doc(uid).set({
-              'points': FieldValue.increment(pointsPerRecipient),
-              'charmExp': FieldValue.increment(pointsPerRecipient),
-            }, SetOptions(merge: true)).catchError((_) {});
+        String recipientUid = "";
+
+        for (final user in _userList) {
+          if (user is Map) {
+            final sIdx = (user['seatIndex'] as num?)?.toInt();
+            if (sIdx == sIndex) {
+              recipientUid = (user['uid'] ?? user['userId'] ?? user['id'] ?? "").toString();
+              break;
+            }
           }
+        }
+
+        // If seat is occupied by sender or uid matched
+        if (recipientUid.isEmpty && _selectedSeatIndices.contains(sIndex)) {
+          recipientUid = _currentUser!.uid;
+        }
+
+        if (recipientUid.isNotEmpty) {
+          FirebaseFirestore.instance.collection('users').doc(recipientUid).set({
+            'points': FieldValue.increment(pointsPerRecipient),
+            'charmExp': FieldValue.increment(pointsPerRecipient),
+            'todayTaskPoints': FieldValue.increment(pointsPerRecipient),
+            'weekTaskPoints': FieldValue.increment(pointsPerRecipient),
+          }, SetOptions(merge: true)).catchError((_) {});
         }
       }
 
+      // Record room gift event
       roomRef.collection('events').add({
         'type': 'gift',
         'senderId': _currentUser!.uid,
@@ -519,6 +540,7 @@ if (selectedGift.isLucky) {
         'multiplier': _selectedMultiplier,
         'seats': _selectedSeatIndices.toList(),
         'totalCost': totalCost,
+        'pointsAwarded': pointsPerRecipient,
         'isLucky': selectedGift.isLucky,
         'wonCoins': wonCoins,
         'luckyMultiplier': maxMultiplier,
@@ -537,7 +559,6 @@ if (selectedGift.isLucky) {
         }
       });
 
-      // 4. Lucky Win ሲሆን ራሱ ስጦታው በስክሪኑ ላይ እንዲፈነዳ ማድረግ
       if (wonCoins > 0) {
         setState(() {
           _showWinExplosion = true;
@@ -545,7 +566,8 @@ if (selectedGift.isLucky) {
           _lastWinMultiplier = maxMultiplier;
           _explodingGift = selectedGift;
         });
-        _explosionController.forward(from: 0.0).then((_) {
+
+_explosionController.forward(from: 0.0).then((_) {
           if (mounted) {
             setState(() => _showWinExplosion = false);
             final int fullSeatCost = selectedGift.price * _selectedMultiplier;
@@ -569,8 +591,7 @@ if (selectedGift.isLucky) {
       final int fullSeatCost = selectedGift.price * _selectedMultiplier;
       if (mounted) {
         Navigator.pop(
-
-context,
+          context,
           GiftSendResult(
             gift: selectedGift,
             targetSeatIndices: _selectedSeatIndices.toList(),
@@ -663,20 +684,25 @@ context,
                           itemBuilder: (context, index) {
                             final seatIdx = index;
                             final seatNum = seatIdx + 1;
-                            final occupant = _userList.firstWhere(
-                              (u) => u['seatIndex'] == seatIdx,
-                              orElse: () => null,
-                            );
 
-                            final isOccupied = occupant != null;
+bool isOccupied = false;
+                            for (final user in _userList) {
+                              if (user is Map) {
+                                final sIdx = (user['seatIndex'] as num?)?.toInt();
+                                if (sIdx == seatIdx) {
+                                  isOccupied = true;
+                                  break;
+                                }
+                              }
+                            }
+
                             final isSelected = _selectedSeatIndices.contains(seatIdx);
 
                             return GestureDetector(
                               onTap: isOccupied ? () => _toggleSeat(seatIdx) : null,
                               child: Container(
                                 width: 32,
-
-margin: const EdgeInsets.only(right: 5),
+                                margin: const EdgeInsets.only(right: 5),
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
                                   color: isSelected
@@ -737,7 +763,8 @@ margin: const EdgeInsets.only(right: 5),
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(
                             color: isSelected ? goldColor : Colors.white12,
-                          ),
+
+),
                         ),
                         child: Center(
                           child: Text(
@@ -755,12 +782,11 @@ margin: const EdgeInsets.only(right: 5),
                 ),
               ),
 
-              // Gifts Grid (ሳጥን የሌለው፣ ራሱን የቻለ ጎላ ያለ እይታ)
+              // Gifts Grid
               Expanded(
                 child: GridView.builder(
                   padding: const EdgeInsets.all(8),
-
-itemCount: currentGifts.length,
+                  itemCount: currentGifts.length,
                   gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: 4,
                     mainAxisSpacing: 8,
@@ -816,7 +842,7 @@ itemCount: currentGifts.length,
                               textAlign: TextAlign.center,
                             ),
                             Text(
-                              "🪙 ${gift.price}",
+                              "${gift.price}",
                               style: const TextStyle(
                                 color: goldColor,
                                 fontSize: 9.5,
@@ -831,7 +857,7 @@ itemCount: currentGifts.length,
                 ),
               ),
 
-              // Bottom control bar (Points ብቻ የሚታይበት)
+// Bottom control bar
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 decoration: const BoxDecoration(
@@ -846,8 +872,7 @@ itemCount: currentGifts.length,
                         const SizedBox(width: 4),
                         Text(
                           "$_coins",
-
-style: const TextStyle(
+                          style: const TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.bold,
                             fontSize: 12,
@@ -910,7 +935,8 @@ style: const TextStyle(
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                       ),
                       onPressed: _isSending ? null : _sendGift,
-                      child: _isSending
+
+child: _isSending
                           ? const SizedBox(
                               width: 14,
                               height: 14,
@@ -919,7 +945,7 @@ style: const TextStyle(
                           : Text(
                               _comboCount > 0
                                   ? "COMBO x$_comboCount"
-                                  : "Send (🪙$totalCost)",
+                                  : "Send ($totalCost)",
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 11,
@@ -934,7 +960,7 @@ style: const TextStyle(
           ),
         ),
 
-// 5. ራሱ ስጦታው ስክሪኑን ሞልቶ ፈንድቶ የሚጠፋበት አኒሜሽን
+        // Lucky Win animation
         if (_showWinExplosion && _explodingGift != null)
           Positioned.fill(
             child: AnimatedBuilder(
