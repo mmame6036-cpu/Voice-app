@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:svgaplayer_flutter/svgaplayer_flutter.dart';
 import 'wallet_screen.dart';
 import '../widgets/lucky_wheel_dialog.dart';
@@ -16,6 +18,7 @@ class GiftModel {
   final String icon;
   final int cost;
   final String svgaUrl;
+  final bool isLucky;
 
   const GiftModel({
     required this.id,
@@ -23,6 +26,7 @@ class GiftModel {
     required this.icon,
     this.cost = 0,
     required this.svgaUrl,
+    this.isLucky = false,
   });
 }
 
@@ -54,6 +58,7 @@ const List<GiftModel> availableGifts = [
     icon: "💎",
     cost: 500,
     svgaUrl: "https://raw.githubusercontent.com/yyued/SVGAPlayer-Android/master/app/src/main/assets/angel.svga",
+    isLucky: true,
   ),
 ];
 
@@ -95,6 +100,7 @@ class RoomScreen extends StatefulWidget {
 
 class _RoomScreenState extends State<RoomScreen>
     with TickerProviderStateMixin {
+  final User? _currentUser = FirebaseAuth.instance.currentUser;
   final AgoraService _agoraService = AgoraService();
 
   late int _currentCoins;
@@ -102,6 +108,7 @@ class _RoomScreenState extends State<RoomScreen>
   bool _isMicMuted = false;
   int? _mySeatIndex;
   late List<String?> _seats;
+  late List<String?> _seatUids;
   late List<int> _seatGiftsCount;
 
   bool _isAllSeatsTargeted = false;
@@ -112,12 +119,12 @@ class _RoomScreenState extends State<RoomScreen>
   ];
   final TextEditingController _msgController = TextEditingController();
 
-  late final int _myUid;
+  late int _myUid;
+  String _myDisplayName = "User";
 
   SVGAAnimationController? _svgaController;
   bool _isPlayingAnimation = false;
 
-  // Floating Combo Banner Properties
   GiftComboData? _activeComboData;
   Timer? _comboDismissTimer;
   late AnimationController _comboScaleController;
@@ -132,8 +139,16 @@ class _RoomScreenState extends State<RoomScreen>
 
   late RoomSettingsData _roomSettings;
 
-  static const String nightSkyBgUrl =
-      "https://images.unsplash.com/photo-1534447677768-be436bb09401?q=80&w=1080&auto=format&fit=crop";
+  Timer? _micTrackerTimer;
+  StreamSubscription<DocumentSnapshot>? _roomSubscription;
+  StreamSubscription<QuerySnapshot>? _chatSubscription;
+
+static const Color bgColor = Color(0xFFF5EFEB);
+  static const Color cardBg = Colors.white;
+  static const Color primaryBrown = Color(0xFF3E2723);
+  static const Color accentGold = Color(0xFFD49B42);
+  static const Color borderColor = Color(0xFFE2D6C5);
+  static const Color buttonDark = Color(0xFF4A3528);
 
   @override
   void initState() {
@@ -141,8 +156,10 @@ class _RoomScreenState extends State<RoomScreen>
     _currentCoins = widget.initialCoins;
     _activeSeatCount = widget.seatCount;
     _seats = List.filled(_activeSeatCount, null);
+    _seatUids = List.filled(_activeSeatCount, null);
     _seatGiftsCount = List.filled(_activeSeatCount, 0);
-    _myUid = Random().nextInt(899999) + 100000;
+    _myUid = 100001;
+
     _svgaController = SVGAAnimationController(vsync: this);
 
     _roomSettings = RoomSettingsData(
@@ -151,7 +168,7 @@ class _RoomScreenState extends State<RoomScreen>
       seatCount: _activeSeatCount,
     );
 
-_pulseController = AnimationController(
+    _pulseController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 900),
     )..repeat(reverse: true);
@@ -169,7 +186,111 @@ _pulseController = AnimationController(
       curve: Curves.easeOutBack,
     ));
 
+    _fetchUserProfile();
     _initVoiceEngine();
+    _syncRoomWithFirestore();
+    _listenToLiveRoomChats();
+  }
+
+  Future<void> _fetchUserProfile() async {
+    if (_currentUser != null) {
+      final snap = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(_currentUser!.uid)
+          .get();
+      if (snap.exists && snap.data() != null) {
+        final d = snap.data()!;
+        if (mounted) {
+          setState(() {
+            _myUid = (d['numericId'] as num?)?.toInt() ?? 100001;
+            _myDisplayName = (d['name'] ?? d['displayName'] ?? "User").toString();
+            _currentCoins = (d['coins'] as num?)?.toInt() ?? _currentCoins;
+          });
+        }
+      }
+    }
+  }
+
+  void _syncRoomWithFirestore() {
+    final roomRef = FirebaseFirestore.instance.collection('rooms').doc(channelName);
+    _roomSubscription = roomRef.snapshots().listen((snapshot) {
+      if (snapshot.exists && snapshot.data() != null) {
+        final data = snapshot.data()!;
+        if (data['seats'] is List) {
+          final List incomingSeats = data['seats'] as List;
+          final List incomingUids = (data['seatUids'] as List?) ?? [];
+          final List incomingGifts = (data['seatGifts'] as List?) ?? [];
+
+          if (mounted) {
+            setState(() {
+              for (int i = 0; i < _activeSeatCount; i++) {
+                if (i < incomingSeats.length) {
+                  _seats[i] = incomingSeats[i];
+                }
+                if (i < incomingUids.length) {
+                  _seatUids[i] = incomingUids[i];
+                }
+                if (i < incomingGifts.length) {
+                  _seatGiftsCount[i] = (incomingGifts[i] as num).toInt();
+                }
+              }
+
+              if (_currentUser != null && _seatUids.contains(_currentUser!.uid)) {
+                _mySeatIndex = _seatUids.indexOf(_currentUser!.uid);
+              } else {
+                _mySeatIndex = null;
+              }
+            });
+          }
+        }
+      }
+    });
+  }
+
+  void _listenToLiveRoomChats() {
+    _chatSubscription = FirebaseFirestore.instance
+        .collection('rooms')
+        .doc(channelName)
+        .collection('chats')
+        .orderBy('timestamp', descending: true)
+        .limit(30)
+        .snapshots()
+        .listen((querySnapshot) {
+      if (querySnapshot.docs.isNotEmpty && mounted) {
+
+final List<String> loadedMsgs = [];
+        for (var doc in querySnapshot.docs.reversed) {
+          final d = doc.data();
+          final sender = d['sender'] ?? "User";
+          final txt = d['text'] ?? "";
+          if (txt.toString().isNotEmpty) {
+            loadedMsgs.add("$sender: $txt");
+          }
+        }
+        setState(() {
+          _chatMessages.clear();
+          _chatMessages.addAll(loadedMsgs);
+        });
+      }
+    });
+  }
+
+  void _startMicMinutesTracking() {
+    _micTrackerTimer?.cancel();
+    _micTrackerTimer = Timer.periodic(const Duration(minutes: 1), (timer) {
+      if (_currentUser != null && _mySeatIndex != null && !_isMicMuted) {
+        FirebaseFirestore.instance
+            .collection('users')
+            .doc(_currentUser!.uid)
+            .set({
+          'todayMicMinutes': FieldValue.increment(1),
+        }, SetOptions(merge: true));
+      }
+    });
+  }
+
+  void _stopMicMinutesTracking() {
+    _micTrackerTimer?.cancel();
   }
 
   Future<void> _initVoiceEngine() async {
@@ -227,7 +348,7 @@ _pulseController = AnimationController(
     await _agoraService.switchRole(isSpeaker: isSpeaker);
   }
 
-  void _handleSeatTap(int index) {
+  void _handleSeatTap(int index) async {
     if (_roomSettings.isAllMicClosed && index != 0 && _mySeatIndex != 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("All mics are closed by the host")),
@@ -241,20 +362,33 @@ _pulseController = AnimationController(
       return;
     }
 
-    setState(() {
-      if (_seats[index] == null) {
-        if (_mySeatIndex != null) _seats[_mySeatIndex!] = null;
-        _seats[index] = "User_$_myUid";
-        _mySeatIndex = index;
-        _isMicMuted = false;
-        _updateBroadcasterRole(true);
-      } else if (_mySeatIndex == index) {
-        _seats[index] = null;
-        _mySeatIndex = null;
-        _isMicMuted = true;
-        _updateBroadcasterRole(false);
+    if (_seats[index] == null) {
+      if (_mySeatIndex != null) {
+        _seats[_mySeatIndex!] = null;
+        _seatUids[_mySeatIndex!] = null;
       }
-    });
+      _seats[index] = _myDisplayName;
+      _seatUids[index] = _currentUser?.uid;
+      _mySeatIndex = index;
+      _isMicMuted = false;
+      _updateBroadcasterRole(true);
+      _startMicMinutesTracking();
+    } else if (_mySeatIndex == index) {
+      _seats[index] = null;
+      _seatUids[index] = null;
+      _mySeatIndex = null;
+      _isMicMuted = true;
+      _updateBroadcasterRole(false);
+      _stopMicMinutesTracking();
+    }
+
+    setState(() {});
+
+    await FirebaseFirestore.instance.collection('rooms').doc(channelName).set({
+      'seats': _seats,
+      'seatUids': _seatUids,
+      'seatGifts': _seatGiftsCount,
+    }, SetOptions(merge: true));
   }
 
   Future<void> _toggleMic() async {
@@ -263,10 +397,15 @@ _pulseController = AnimationController(
     });
     if (_mySeatIndex != null) {
       await _agoraService.setMicrophoneMute(_isMicMuted);
+      if (_isMicMuted) {
+        _stopMicMinutesTracking();
+      } else {
+        _startMicMinutesTracking();
+      }
     }
   }
 
-  void _toggleRoomVoice() {
+void _toggleRoomVoice() {
     setState(() {
       _roomSettings.isRoomAudioMuted = !_roomSettings.isRoomAudioMuted;
     });
@@ -282,6 +421,7 @@ _pulseController = AnimationController(
         if (_mySeatIndex != 0) {
           _isMicMuted = true;
           _agoraService.setMicrophoneMute(true);
+          _stopMicMinutesTracking();
         }
       }
     });
@@ -295,24 +435,29 @@ _pulseController = AnimationController(
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        backgroundColor: const Color(0xFF1E1B38),
-        title: const Text("Set Room Password", style: TextStyle(color: Colors.white)),
+        backgroundColor: bgColor,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text("Set Room Password", style: TextStyle(color: primaryBrown, fontWeight: FontWeight.bold)),
         content: TextField(
           controller: passCtrl,
           keyboardType: TextInputType.number,
-          style: const TextStyle(color: Colors.white),
-          decoration: const InputDecoration(
-
-hintText: "Enter 4-digit code (Leave blank to remove)",
-            hintStyle: TextStyle(color: Colors.white38),
+          style: const TextStyle(color: primaryBrown),
+          decoration: InputDecoration(
+            hintText: "Enter 4-digit code (Leave blank to remove)",
+            hintStyle: const TextStyle(color: Colors.black38, fontSize: 12),
+            filled: true,
+            fillColor: cardBg,
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: borderColor)),
+            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: borderColor)),
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text("Cancel"),
+            child: const Text("Cancel", style: TextStyle(color: Colors.black54)),
           ),
           ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: buttonDark),
             onPressed: () {
               setState(() {
                 final txt = passCtrl.text.trim();
@@ -323,7 +468,7 @@ hintText: "Enter 4-digit code (Leave blank to remove)",
                 SnackBar(content: Text(_roomSettings.password == null ? "Password removed" : "Password set successfully")),
               );
             },
-            child: const Text("Save"),
+            child: const Text("Save", style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -333,19 +478,24 @@ hintText: "Enter 4-digit code (Leave blank to remove)",
   void _openAdminSheet() {
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF141226),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
+      backgroundColor: Colors.transparent,
       builder: (_) => Container(
-        height: 320,
-        padding: const EdgeInsets.all(16),
+        height: 340,
+        padding: const EdgeInsets.all(18),
+        decoration: const BoxDecoration(
+          color: bgColor,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Center(
+              child: Container(width: 44, height: 4, decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(2))),
+            ),
+            const SizedBox(height: 14),
             const Text(
               "Room Administrators",
-              style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+              style: TextStyle(color: primaryBrown, fontSize: 16, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 12),
             Expanded(
@@ -353,29 +503,40 @@ hintText: "Enter 4-digit code (Leave blank to remove)",
                 itemCount: _seats.length,
                 itemBuilder: (context, idx) {
                   final u = _seats[idx];
-                  if (u == null) return const SizedBox.shrink();
+
+if (u == null) return const SizedBox.shrink();
                   final isAdmin = _roomSettings.admins.contains(u);
-                  return ListTile(
-                    leading: const CircleAvatar(
-                      backgroundColor: Color(0xFF2A224E),
-                      child: Icon(Icons.person, color: Color(0xFFFFD700)),
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    decoration: BoxDecoration(
+                      color: cardBg,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: borderColor),
                     ),
-                    title: Text(u, style: const TextStyle(color: Colors.white)),
-                    trailing: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: isAdmin ? Colors.redAccent : const Color(0xFF00C9A7),
+                    child: ListTile(
+                      leading: const CircleAvatar(
+                        backgroundColor: bgColor,
+                        child: Icon(Icons.person, color: primaryBrown),
                       ),
-                      onPressed: () {
-                        setState(() {
-                          if (isAdmin) {
-                            _roomSettings.admins.remove(u);
-                          } else {
-                            _roomSettings.admins.add(u);
-                          }
-                        });
-                        Navigator.pop(context);
-                      },
-                      child: Text(isAdmin ? "Remove Admin" : "Make Admin", style: const TextStyle(color: Colors.white)),
+                      title: Text(u, style: const TextStyle(color: primaryBrown, fontWeight: FontWeight.bold, fontSize: 13)),
+                      trailing: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: isAdmin ? Colors.redAccent : const Color(0xFF107C41),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          elevation: 0,
+                        ),
+                        onPressed: () {
+                          setState(() {
+                            if (isAdmin) {
+                              _roomSettings.admins.remove(u);
+                            } else {
+                              _roomSettings.admins.add(u);
+                            }
+                          });
+                          Navigator.pop(context);
+                        },
+                        child: Text(isAdmin ? "Remove Admin" : "Make Admin", style: const TextStyle(color: Colors.white, fontSize: 11)),
+                      ),
                     ),
                   );
                 },
@@ -394,51 +555,52 @@ hintText: "Enter 4-digit code (Leave blank to remove)",
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: const Color(0xFF1B162B),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
+      backgroundColor: Colors.transparent,
       builder: (context) => StatefulBuilder(
         builder: (ctx, setDialogState) => Container(
           padding: const EdgeInsets.all(20),
+          decoration: const BoxDecoration(
+            color: bgColor,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Center(
                 child: Container(
-                  width: 40,
+                  width: 44,
                   height: 4,
-                  decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2)),
-
-),
+                  decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(2)),
+                ),
               ),
               const SizedBox(height: 16),
               const Center(
                 child: Text(
-                  "🧧 Send Red Packet",
-                  style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                  "Send Red Packet",
+                  style: TextStyle(color: primaryBrown, fontSize: 18, fontWeight: FontWeight.bold),
                 ),
               ),
               const SizedBox(height: 16),
-              const Text("Total Coins in Red Packets", style: TextStyle(color: Colors.white70, fontSize: 13)),
+              const Text("Total Coins in Red Packets", style: TextStyle(color: Colors.black54, fontSize: 12.5)),
               const SizedBox(height: 8),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [100, 500, 1000].map((amt) {
                   final sel = selectedAmount == amt;
                   return ChoiceChip(
-                    label: Text("🪙 $amt"),
+                    label: Text("$amt Coins"),
                     selected: sel,
-                    selectedColor: const Color(0xFFFFD700),
-                    backgroundColor: const Color(0xFF2A224E),
-                    labelStyle: TextStyle(color: sel ? Colors.black : Colors.white, fontWeight: FontWeight.bold),
-                    onSelected: (_) => setDialogState(() => selectedAmount = amt),
+                    selectedColor: buttonDark,
+                    backgroundColor: cardBg,
+                    labelStyle: TextStyle(color: sel ? Colors.white : primaryBrown, fontWeight: FontWeight.bold, fontSize: 12),
+
+onSelected: (_) => setDialogState(() => selectedAmount = amt),
                   );
                 }).toList(),
               ),
               const SizedBox(height: 16),
-              const Text("Red Packet Quantity", style: TextStyle(color: Colors.white70, fontSize: 13)),
+              const Text("Red Packet Quantity", style: TextStyle(color: Colors.black54, fontSize: 12.5)),
               const SizedBox(height: 8),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -447,9 +609,9 @@ hintText: "Enter 4-digit code (Leave blank to remove)",
                   return ChoiceChip(
                     label: Text("x$qty"),
                     selected: sel,
-                    selectedColor: const Color(0xFFFFD700),
-                    backgroundColor: const Color(0xFF2A224E),
-                    labelStyle: TextStyle(color: sel ? Colors.black : Colors.white, fontWeight: FontWeight.bold),
+                    selectedColor: buttonDark,
+                    backgroundColor: cardBg,
+                    labelStyle: TextStyle(color: sel ? Colors.white : primaryBrown, fontWeight: FontWeight.bold, fontSize: 12),
                     onSelected: (_) => setDialogState(() => selectedCount = qty),
                   );
                 }).toList(),
@@ -459,9 +621,10 @@ hintText: "Enter 4-digit code (Leave blank to remove)",
                 width: double.infinity,
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFFF3366),
+                    backgroundColor: const Color(0xFF107C41),
                     padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    elevation: 0,
                   ),
                   onPressed: () {
                     if (_currentCoins < selectedAmount) {
@@ -472,8 +635,20 @@ hintText: "Enter 4-digit code (Leave blank to remove)",
                     }
                     setState(() {
                       _currentCoins -= selectedAmount;
-                      _chatMessages.add("🧧 Red Packet of $selectedAmount Coins dropped in room!");
                     });
+
+                    FirebaseFirestore.instance.collection('rooms').doc(channelName).collection('chats').add({
+                      'sender': 'System',
+                      'text': "Red Packet of $selectedAmount Coins dropped in room!",
+                      'timestamp': FieldValue.serverTimestamp(),
+                    });
+
+                    if (_currentUser != null) {
+                      FirebaseFirestore.instance
+                          .collection('users')
+                          .doc(_currentUser!.uid)
+                          .update({'coins': FieldValue.increment(-selectedAmount)});
+                    }
                     widget.onCoinUpdate(_currentCoins);
                     Navigator.pop(context);
                   },
@@ -492,41 +667,60 @@ hintText: "Enter 4-digit code (Leave blank to remove)",
     final isMuted = _mutedSeats.contains(index);
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF141226),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (_) => Padding(
-
-padding: const EdgeInsets.all(16),
+      backgroundColor: Colors.transparent,
+      builder: (_) => Container(
+        padding: const EdgeInsets.all(18),
+        decoration: const BoxDecoration(
+          color: bgColor,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(user, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 12),
-            ListTile(
-              leading: Icon(isMuted ? Icons.mic : Icons.mic_off, color: const Color(0xFFFFD700)),
-              title: Text(isMuted ? "Unmute User" : "Mute User", style: const TextStyle(color: Colors.white)),
-              onTap: () {
-                setState(() {
-                  if (isMuted) {
-                    _mutedSeats.remove(index);
-                  } else {
-                    _mutedSeats.add(index);
-                  }
-                });
-                Navigator.pop(context);
-              },
+            Center(
+              child: Container(width: 44, height: 4, decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(2))),
             ),
-            ListTile(
-              leading: const Icon(Icons.exit_to_app, color: Colors.redAccent),
-              title: const Text("Kick from Seat", style: TextStyle(color: Colors.redAccent)),
-              onTap: () {
-                setState(() {
-                  _seats[index] = null;
-                });
-                Navigator.pop(context);
-              },
+            const SizedBox(height: 12),
+            Text(user, style: const TextStyle(color: primaryBrown, fontSize: 16, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 14),
+
+Container(
+              decoration: BoxDecoration(color: cardBg, borderRadius: BorderRadius.circular(14), border: Border.all(color: borderColor)),
+              child: Column(
+                children: [
+                  ListTile(
+                    leading: Icon(isMuted ? Icons.mic : Icons.mic_off, color: primaryBrown),
+                    title: Text(isMuted ? "Unmute User" : "Mute User", style: const TextStyle(color: primaryBrown, fontWeight: FontWeight.w600)),
+                    onTap: () {
+                      setState(() {
+                        if (isMuted) {
+                          _mutedSeats.remove(index);
+                        } else {
+                          _mutedSeats.add(index);
+                        }
+                      });
+                      Navigator.pop(context);
+                    },
+                  ),
+                  const Divider(height: 1, color: borderColor),
+                  ListTile(
+                    leading: const Icon(Icons.exit_to_app, color: Colors.redAccent),
+                    title: const Text("Kick from Seat", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.w600)),
+                    onTap: () async {
+                      setState(() {
+                        _seats[index] = null;
+                        _seatUids[index] = null;
+                      });
+                      Navigator.pop(context);
+
+                      await FirebaseFirestore.instance.collection('rooms').doc(channelName).set({
+                        'seats': _seats,
+                        'seatUids': _seatUids,
+                      }, SetOptions(merge: true));
+                    },
+                  ),
+                ],
+              ),
             ),
           ],
         ),
@@ -583,7 +777,7 @@ padding: const EdgeInsets.all(16),
 
     setState(() {
       _activeComboData = GiftComboData(
-        senderName: "User_$_myUid",
+        senderName: _myDisplayName,
         targetName: target,
         giftName: gift.name,
         giftIcon: gift.icon,
@@ -608,7 +802,7 @@ padding: const EdgeInsets.all(16),
     required String target,
     int? targetSeatIndex,
     required int multiplier,
-  }) {
+  }) async {
     final int totalCost = gift.cost * multiplier;
 
     if (_currentCoins < totalCost) {
@@ -618,21 +812,57 @@ padding: const EdgeInsets.all(16),
       return;
     }
 
+    final double rate = gift.isLucky ? 0.04 : 0.70;
+    final int pointsPerRecipient = (totalCost * rate).round();
+
     setState(() {
       _currentCoins -= totalCost;
 
-      if (targetSeatIndex != null && targetSeatIndex < _seatGiftsCount.length) {
+if (targetSeatIndex != null && targetSeatIndex < _seatGiftsCount.length) {
         _seatGiftsCount[targetSeatIndex] += totalCost;
+        final recipientUid = _seatUids[targetSeatIndex];
+        if (recipientUid != null && recipientUid.isNotEmpty) {
+          FirebaseFirestore.instance.collection('users').doc(recipientUid).set({
+            'points': FieldValue.increment(pointsPerRecipient),
+            'charmExp': FieldValue.increment(pointsPerRecipient),
+            'todayTaskPoints': FieldValue.increment(pointsPerRecipient),
+            'weekTaskPoints': FieldValue.increment(pointsPerRecipient),
+          }, SetOptions(merge: true));
+        }
       } else if (target == "All Seats") {
         for (int i = 0; i < _seatGiftsCount.length; i++) {
           if (_seats[i] != null) {
             _seatGiftsCount[i] += totalCost;
+            final recipientUid = _seatUids[i];
+            if (recipientUid != null && recipientUid.isNotEmpty) {
+              FirebaseFirestore.instance.collection('users').doc(recipientUid).set({
+                'points': FieldValue.increment(pointsPerRecipient),
+                'charmExp': FieldValue.increment(pointsPerRecipient),
+                'todayTaskPoints': FieldValue.increment(pointsPerRecipient),
+                'weekTaskPoints': FieldValue.increment(pointsPerRecipient),
+              }, SetOptions(merge: true));
+            }
           }
         }
       }
-
-      _chatMessages.add("User_$_myUid sent ${gift.name} ${gift.icon} x$multiplier to $target");
     });
+
+    await FirebaseFirestore.instance.collection('rooms').doc(channelName).collection('chats').add({
+      'sender': _myDisplayName,
+      'text': "sent ${gift.name} ${gift.icon} x$multiplier to $target",
+      'timestamp': FieldValue.serverTimestamp(),
+    });
+
+    await FirebaseFirestore.instance.collection('rooms').doc(channelName).set({
+      'seatGifts': _seatGiftsCount,
+    }, SetOptions(merge: true));
+
+    if (_currentUser != null) {
+      await FirebaseFirestore.instance.collection('users').doc(_currentUser!.uid).set({
+        'coins': FieldValue.increment(-totalCost),
+        'wealthExp': FieldValue.increment(totalCost),
+      }, SetOptions(merge: true));
+    }
 
     widget.onCoinUpdate(_currentCoins);
     Navigator.pop(context);
@@ -641,14 +871,11 @@ padding: const EdgeInsets.all(16),
     _playGiftAnimation(gift);
   }
 
-void _openGiftSheet() {
+  void _openGiftSheet() {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: const Color(0xFF141226),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
+      backgroundColor: Colors.transparent,
       builder: (context) {
         GiftModel selectedGift = availableGifts[0];
         String selectedTarget = "All Seats";
@@ -660,13 +887,17 @@ void _openGiftSheet() {
             return Container(
               height: 530,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: const BoxDecoration(
+                color: bgColor,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              ),
               child: Column(
                 children: [
                   Container(
-                    width: 40,
+                    width: 44,
                     height: 4,
                     decoration: BoxDecoration(
-                      color: Colors.white24,
+                      color: Colors.black26,
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
@@ -680,7 +911,8 @@ void _openGiftSheet() {
                           isSelected: selectedTarget == "All Seats",
                           onTap: () {
                             setSheetState(() {
-                              selectedTarget = "All Seats";
+
+selectedTarget = "All Seats";
                               selectedSeatIndex = null;
                             });
                             setState(() {
@@ -729,15 +961,10 @@ void _openGiftSheet() {
                           },
                           child: Container(
                             decoration: BoxDecoration(
-                              color: isSelected
-                                  ? const Color(0xFF2A244D)
-                                  : const Color(0xFF1E1B38),
-
-borderRadius: BorderRadius.circular(14),
+                              color: isSelected ? const Color(0xFFFBF4E6) : cardBg,
+                              borderRadius: BorderRadius.circular(14),
                               border: Border.all(
-                                color: isSelected
-                                    ? const Color(0xFFFFD700)
-                                    : Colors.white10,
+                                color: isSelected ? accentGold : borderColor,
                                 width: isSelected ? 2 : 1,
                               ),
                             ),
@@ -749,7 +976,7 @@ borderRadius: BorderRadius.circular(14),
                                 Text(
                                   gift.name,
                                   style: const TextStyle(
-                                    color: Colors.white,
+                                    color: primaryBrown,
                                     fontSize: 11,
                                     fontWeight: FontWeight.w600,
                                   ),
@@ -761,13 +988,13 @@ borderRadius: BorderRadius.circular(14),
                                 Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    const Icon(Icons.monetization_on,
-                                        size: 12, color: Color(0xFFFFD700)),
+                                    const Icon(Icons.monetization_on, size: 12, color: accentGold),
                                     const SizedBox(width: 2),
-                                    Text(
+
+Text(
                                       "${gift.cost}",
                                       style: const TextStyle(
-                                        color: Color(0xFFFFD700),
+                                        color: accentGold,
                                         fontSize: 11,
                                         fontWeight: FontWeight.bold,
                                       ),
@@ -797,18 +1024,17 @@ borderRadius: BorderRadius.circular(14),
                             margin: const EdgeInsets.only(right: 8),
                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                             decoration: BoxDecoration(
-                              color: isChosen ? const Color(0xFFFFD700) : const Color(0xFF1E1B38),
+                              color: isChosen ? buttonDark : cardBg,
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(
-                                color: isChosen ? const Color(0xFFFFD700) : Colors.white24,
+                                color: isChosen ? buttonDark : borderColor,
                               ),
                             ),
                             child: Text(
                               "x$mult",
                               style: TextStyle(
-                                color: isChosen ? Colors.black : Colors.white70,
-
-fontWeight: FontWeight.bold,
+                                color: isChosen ? Colors.white : primaryBrown,
+                                fontWeight: FontWeight.bold,
                                 fontSize: 12,
                               ),
                             ),
@@ -823,13 +1049,12 @@ fontWeight: FontWeight.bold,
                     children: [
                       Row(
                         children: [
-                          const Icon(Icons.monetization_on,
-                              color: Color(0xFFFFD700), size: 18),
+                          const Icon(Icons.monetization_on, color: accentGold, size: 20),
                           const SizedBox(width: 4),
                           Text(
                             "$_currentCoins",
                             style: const TextStyle(
-                              color: Colors.white,
+                              color: primaryBrown,
                               fontWeight: FontWeight.bold,
                               fontSize: 15,
                             ),
@@ -848,32 +1073,30 @@ fontWeight: FontWeight.bold,
                                       });
                                       setSheetState(() {});
                                       widget.onCoinUpdate(newCoins);
-                                    },
+
+},
                                   ),
                                 ),
                               );
                             },
                             child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 3),
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                               decoration: BoxDecoration(
-                                color: const Color(0xFF2B224F),
+                                color: cardBg,
                                 borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                    color: const Color(0xFFFFD700), width: 0.8),
+                                border: Border.all(color: borderColor),
                               ),
                               child: const Row(
                                 children: [
                                   Text(
                                     "Recharge",
                                     style: TextStyle(
-                                      color: Color(0xFFFFD700),
+                                      color: primaryBrown,
                                       fontSize: 11,
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
-                                  Icon(Icons.chevron_right,
-                                      size: 14, color: Color(0xFFFFD700)),
+                                  Icon(Icons.chevron_right, size: 14, color: primaryBrown),
                                 ],
                               ),
                             ),
@@ -882,14 +1105,11 @@ fontWeight: FontWeight.bold,
                       ),
                       ElevatedButton(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFFFD700),
-                          foregroundColor: Colors.black,
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 28, vertical: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(24),
-
-),
+                          backgroundColor: const Color(0xFF107C41),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          elevation: 0,
                         ),
                         onPressed: () => _sendGift(
                           gift: selectedGift,
@@ -928,16 +1148,16 @@ fontWeight: FontWeight.bold,
         margin: const EdgeInsets.only(right: 8),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFFFFD700) : const Color(0xFF221F3A),
+          color: isSelected ? buttonDark : cardBg,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: isSelected ? const Color(0xFFFFD700) : Colors.white12,
+            color: isSelected ? buttonDark : borderColor,
           ),
         ),
         child: Text(
           title,
           style: TextStyle(
-            color: isSelected ? Colors.black : Colors.white70,
+            color: isSelected ? Colors.white : primaryBrown,
             fontSize: 12,
             fontWeight: FontWeight.bold,
           ),
@@ -948,6 +1168,9 @@ fontWeight: FontWeight.bold,
 
   @override
   void dispose() {
+    _stopMicMinutesTracking();
+    _roomSubscription?.cancel();
+    _chatSubscription?.cancel();
     _pulseController.dispose();
     _comboScaleController.dispose();
     _comboDismissTimer?.cancel();
@@ -962,13 +1185,13 @@ fontWeight: FontWeight.bold,
     final double seatSize = _activeSeatCount > 20 ? 38.0 : 44.0;
     final int crossCount = _activeSeatCount > 20 ? 6 : (_activeSeatCount > 12 ? 5 : 4);
 
-    return Scaffold(
-      extendBodyBehindAppBar: true,
+return Scaffold(
+      backgroundColor: bgColor,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: Colors.white, size: 20),
+          icon: const Icon(Icons.arrow_back_ios, color: primaryBrown, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
         title: Column(
@@ -976,14 +1199,14 @@ fontWeight: FontWeight.bold,
           children: [
             Text(
               _roomSettings.roomName,
-              style: const TextStyle(fontSize: 15, color: Colors.white, fontWeight: FontWeight.bold),
+              style: const TextStyle(fontSize: 15, color: primaryBrown, fontWeight: FontWeight.bold),
             ),
             Row(
               children: [
-                Text("UID: $_myUid", style: const TextStyle(fontSize: 11, color: Colors.white70)),
+                Text("UID: $_myUid", style: const TextStyle(fontSize: 11, color: Colors.black54)),
                 if (_roomSettings.password != null) ...[
                   const SizedBox(width: 6),
-                  const Icon(Icons.lock, color: Color(0xFFFFD700), size: 12),
+                  const Icon(Icons.lock, color: accentGold, size: 12),
                 ],
               ],
             ),
@@ -991,7 +1214,7 @@ fontWeight: FontWeight.bold,
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.share, color: Colors.white),
+            icon: const Icon(Icons.share, color: primaryBrown),
             onPressed: () {},
           ),
           IconButton(
@@ -1002,19 +1225,6 @@ fontWeight: FontWeight.bold,
       ),
       body: Stack(
         children: [
-          Container(
-            decoration: BoxDecoration(
-              image: DecorationImage(
-                image: const NetworkImage(nightSkyBgUrl),
-                fit: BoxFit.cover,
-                colorFilter: ColorFilter.mode(
-                  Colors.black.withOpacity(0.45),
-
-BlendMode.darken,
-                ),
-              ),
-            ),
-          ),
           SafeArea(
             child: Column(
               children: [
@@ -1058,44 +1268,38 @@ BlendMode.darken,
                                           height: seatSize,
                                           decoration: BoxDecoration(
                                             shape: BoxShape.circle,
-                                            color: Colors.white.withOpacity(0.12),
-                                            border: Border.all(
+                                            color: cardBg,
+
+border: Border.all(
                                               color: _isAllSeatsTargeted
-                                                  ? const Color(0xFFFFD700)
+                                                  ? accentGold
                                                   : (isSpeaking
-                                                      ? Colors.cyanAccent
-                                                      : Colors.white24),
+                                                      ? const Color(0xFF107C41)
+                                                      : borderColor),
                                               width: _isAllSeatsTargeted
                                                   ? 2.5
                                                   : (isSpeaking ? (2.0 + pulse * 1.5) : 1),
                                             ),
-                                            boxShadow: _isAllSeatsTargeted
-                                                ? [
-                                                    BoxShadow(
-                                                      color: const Color(0xFFFFD700).withOpacity(0.8),
-                                                      blurRadius: 10,
-                                                      spreadRadius: 2,
-                                                    )
-                                                  ]
-
-: (isSpeaking
-                                                    ? [
-                                                        BoxShadow(
-                                                          color: Colors.cyanAccent.withOpacity(0.5),
-                                                          blurRadius: 8 + (pulse * 6),
-                                                          spreadRadius: 2,
-                                                        )
-                                                      ]
-                                                    : null),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: _isAllSeatsTargeted
+                                                    ? accentGold.withOpacity(0.4)
+                                                    : (isSpeaking
+                                                        ? const Color(0xFF107C41).withOpacity(0.3)
+                                                        : Colors.black.withOpacity(0.04)),
+                                                blurRadius: 6 + (pulse * 4),
+                                                spreadRadius: 1,
+                                              ),
+                                            ],
                                           ),
                                           child: Center(
                                             child: isTaken
                                                 ? (isMuted
                                                     ? const Icon(Icons.mic_off, color: Colors.redAccent, size: 18)
-                                                    : const Icon(Icons.person, color: Color(0xFFFFD700), size: 20))
+                                                    : const Icon(Icons.person, color: primaryBrown, size: 20))
                                                 : (isMuted
-                                                    ? const Icon(Icons.lock, color: Colors.white38, size: 16)
-                                                    : const Icon(Icons.chair, color: Colors.white70, size: 18)),
+                                                    ? const Icon(Icons.lock, color: Colors.black26, size: 16)
+                                                    : const Icon(Icons.chair, color: Colors.black38, size: 18)),
                                           ),
                                         );
                                       },
@@ -1104,8 +1308,8 @@ BlendMode.darken,
                                     Text(
                                       isTaken ? _seats[seatIndex]! : "$seatIndex",
                                       style: TextStyle(
-                                        color: isTaken ? const Color(0xFFFFD700) : Colors.white70,
-                                        fontSize: 9,
+                                        color: isTaken ? primaryBrown : Colors.black54,
+                                        fontSize: 9.5,
                                         fontWeight: FontWeight.bold,
                                       ),
                                       maxLines: 1,
@@ -1115,13 +1319,15 @@ BlendMode.darken,
                                       Container(
                                         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
                                         decoration: BoxDecoration(
-                                          color: Colors.pink.withOpacity(0.3),
+                                          color: const Color(0xFFFBF4E6),
                                           borderRadius: BorderRadius.circular(6),
+                                          border: Border.all(color: accentGold.withOpacity(0.5)),
                                         ),
                                         child: Text(
-                                          "💖 $giftPoints",
-                                          style: const TextStyle(color: Colors.pinkAccent, fontSize: 8, fontWeight: FontWeight.bold),
-                                        ),
+                                          "$giftPoints",
+                                          style: const TextStyle(color: accentGold, fontSize: 8.5, fontWeight: FontWeight.bold),
+
+),
                                       ),
                                   ],
                                 ),
@@ -1142,23 +1348,25 @@ BlendMode.darken,
                     itemCount: _chatMessages.length,
                     itemBuilder: (context, index) {
                       final msg = _chatMessages[_chatMessages.length - 1 - index];
-                      final isSystem = msg.startsWith("System:") || msg.startsWith("Announcement:") || msg.startsWith("🧧");
+                      final isSystem = msg.startsWith("System:") || msg.startsWith("Announcement:") || msg.startsWith("Red Packet");
 
-return Padding(
+                      return Padding(
                         padding: const EdgeInsets.symmetric(vertical: 2.0),
                         child: Align(
                           alignment: Alignment.centerLeft,
                           child: Container(
                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                             decoration: BoxDecoration(
-                              color: isSystem ? Colors.purple.withOpacity(0.4) : Colors.black45,
+                              color: isSystem ? const Color(0xFFFBF4E6) : cardBg.withOpacity(0.9),
                               borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: borderColor),
                             ),
                             child: Text(
                               msg,
                               style: TextStyle(
-                                color: isSystem ? const Color(0xFFFFD700) : Colors.white,
+                                color: isSystem ? accentGold : primaryBrown,
                                 fontSize: 11,
+                                fontWeight: isSystem ? FontWeight.bold : FontWeight.normal,
                               ),
                             ),
                           ),
@@ -1170,15 +1378,15 @@ return Padding(
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.75),
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                    color: cardBg,
+                    border: const Border(top: BorderSide(color: borderColor)),
                   ),
                   child: Row(
                     children: [
                       IconButton(
                         icon: Icon(
                           _isMicMuted ? Icons.mic_off : Icons.mic,
-                          color: _isMicMuted ? Colors.redAccent : Colors.cyanAccent,
+                          color: _isMicMuted ? Colors.redAccent : const Color(0xFF107C41),
                         ),
                         onPressed: _toggleMic,
                       ),
@@ -1186,112 +1394,129 @@ return Padding(
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 14),
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.15),
+                            color: bgColor,
                             borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: borderColor),
                           ),
                           child: TextField(
                             controller: _msgController,
-                            style: const TextStyle(color: Colors.white, fontSize: 13),
+                            style: const TextStyle(color: primaryBrown, fontSize: 13),
                             decoration: const InputDecoration(
                               hintText: "Say Hello...",
-                              hintStyle: TextStyle(color: Colors.white54),
+                              hintStyle: TextStyle(color: Colors.black38),
                               border: InputBorder.none,
                             ),
-                            onSubmitted: (val) {
-                              if (val.trim().isNotEmpty) {
-                                setState(() => _chatMessages.add("User_$_myUid: $val"));
+                            onSubmitted: (val) async {
+                              final txt = val.trim();
+
+if (txt.isNotEmpty) {
                                 _msgController.clear();
+                                await FirebaseFirestore.instance
+                                    .collection('rooms')
+                                    .doc(channelName)
+                                    .collection('chats')
+                                    .add({
+                                  'sender': _myDisplayName,
+                                  'text': txt,
+                                  'timestamp': FieldValue.serverTimestamp(),
+                                });
                               }
                             },
                           ),
                         ),
                       ),
                       IconButton(
-                        icon: const Icon(Icons.sports_esports, color: Color(0xFFFFD700)),
+                        icon: const Icon(Icons.sports_esports, color: accentGold),
                         onPressed: () {
                           showModalBottomSheet(
                             context: context,
-                            backgroundColor: const Color(0xFF141226),
-                            shape: const RoundedRectangleBorder(
-                              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-                            ),
-                            builder: (context) => Padding(
+                            backgroundColor: Colors.transparent,
+                            builder: (context) => Container(
                               padding: const EdgeInsets.all(20.0),
+                              decoration: const BoxDecoration(
+                                color: bgColor,
+                                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                              ),
                               child: Column(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-
-Container(
-                                    width: 40,
-                                    height: 4,
-                                    decoration: BoxDecoration(
-                                      color: Colors.white24,
-                                      borderRadius: BorderRadius.circular(2),
+                                  Center(
+                                    child: Container(
+                                      width: 44,
+                                      height: 4,
+                                      decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(2)),
                                     ),
                                   ),
                                   const SizedBox(height: 16),
                                   const Text(
                                     "Select Mini-Game",
                                     style: TextStyle(
-                                      color: Colors.white,
+                                      color: primaryBrown,
                                       fontWeight: FontWeight.bold,
-                                      fontSize: 18,
+                                      fontSize: 17,
                                     ),
                                   ),
-                                  const SizedBox(height: 20),
-                                  ListTile(
-                                    leading: const CircleAvatar(
-                                      backgroundColor: Color(0xFF2A224E),
-                                      child: Text("🎰", style: TextStyle(fontSize: 20)),
-                                    ),
-                                    title: const Text(
-                                      "Lucky Spin Wheel",
-                                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                                    ),
-                                    trailing: const Icon(Icons.chevron_right, color: Color(0xFFFFD700)),
-                                    onTap: () {
-                                      Navigator.pop(context);
-                                      showModalBottomSheet(
-                                        context: context,
-                                        isScrollControlled: true,
-                                        backgroundColor: Colors.transparent,
-                                        builder: (_) => LuckyWheelDialog(
-                                          currentCoins: _currentCoins,
-                                          onCoinsUpdated: (newCoins) {
-                                            setState(() => _currentCoins = newCoins);
-                                            widget.onCoinUpdate(newCoins);
-                                          },
-                                        ),
-                                      );
-                                    },
-                                  ),
-                                  const Divider(color: Colors.white10),
-                                  ListTile(
-                                    leading: const CircleAvatar(
-                                      backgroundColor: Color(0xFF2A224E),
-                                      child: Text("🃏", style: TextStyle(fontSize: 20)),
-                                    ),
-                                    title: const Text(
-                                      "Teen Patti (3 Cards)",
-                                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                                    ),
-                                    trailing: const Icon(Icons.chevron_right, color: Color(0xFFFFD700)),
-                                    onTap: () {
-                                      Navigator.pop(context);
-                                      showModalBottomSheet(
-                                        context: context,
-                                        isScrollControlled: true,
-                                        backgroundColor: Colors.transparent,
-                                        builder: (_) => TeenPattiDialog(
-                                          currentCoins: _currentCoins,
+                                  const SizedBox(height: 16),
+                                  Container(
+                                    decoration: BoxDecoration(color: cardBg, borderRadius: BorderRadius.circular(16), border: Border.all(color: borderColor)),
+                                    child: Column(
+                                      children: [
+                                        ListTile(
+                                          leading: const CircleAvatar(
+                                            backgroundColor: bgColor,
+                                            child: Text("🎰", style: TextStyle(fontSize: 20)),
+                                          ),
+                                          title: const Text(
+                                            "Lucky Spin Wheel",
+                                            style: TextStyle(color: primaryBrown, fontWeight: FontWeight.bold, fontSize: 13),
+                                          ),
+                                          trailing: const Icon(Icons.chevron_right, color: primaryBrown),
+                                          onTap: () {
+                                            Navigator.pop(context);
+                                            showModalBottomSheet(
+                                              context: context,
 
-onCoinsUpdated: (newCoins) {
-                                            setState(() => _currentCoins = newCoins);
-                                            widget.onCoinUpdate(newCoins);
+isScrollControlled: true,
+                                              backgroundColor: Colors.transparent,
+                                              builder: (_) => LuckyWheelDialog(
+                                                currentCoins: _currentCoins,
+                                                onCoinsUpdated: (newCoins) {
+                                                  setState(() => _currentCoins = newCoins);
+                                                  widget.onCoinUpdate(newCoins);
+                                                },
+                                              ),
+                                            );
                                           },
                                         ),
-                                      );
-                                    },
+                                        const Divider(height: 1, color: borderColor),
+                                        ListTile(
+                                          leading: const CircleAvatar(
+                                            backgroundColor: bgColor,
+                                            child: Text("🃏", style: TextStyle(fontSize: 20)),
+                                          ),
+                                          title: const Text(
+                                            "Teen Patti (3 Cards)",
+                                            style: TextStyle(color: primaryBrown, fontWeight: FontWeight.bold, fontSize: 13),
+                                          ),
+                                          trailing: const Icon(Icons.chevron_right, color: primaryBrown),
+                                          onTap: () {
+                                            Navigator.pop(context);
+                                            showModalBottomSheet(
+                                              context: context,
+                                              isScrollControlled: true,
+                                              backgroundColor: Colors.transparent,
+                                              builder: (_) => TeenPattiDialog(
+                                                currentCoins: _currentCoins,
+                                                onCoinsUpdated: (newCoins) {
+                                                  setState(() => _currentCoins = newCoins);
+                                                  widget.onCoinUpdate(newCoins);
+                                                },
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                      ],
+                                    ),
                                   ),
                                 ],
                               ),
@@ -1300,11 +1525,11 @@ onCoinsUpdated: (newCoins) {
                         },
                       ),
                       IconButton(
-                        icon: const Icon(Icons.card_giftcard, color: Color(0xFFFFD700)),
+                        icon: const Icon(Icons.card_giftcard, color: accentGold),
                         onPressed: _openGiftSheet,
                       ),
                       IconButton(
-                        icon: const Icon(Icons.grid_view_rounded, color: Colors.white70),
+                        icon: const Icon(Icons.grid_view_rounded, color: primaryBrown),
                         onPressed: () {
                           showModalBottomSheet(
                             context: context,
@@ -1315,7 +1540,8 @@ onCoinsUpdated: (newCoins) {
                               onToggleAllMic: _toggleAllMic,
                               onOpenPasswordDialog: _openPasswordDialog,
                               onOpenAdminSheet: _openAdminSheet,
-                              onOpenRedPacket: _openRedPacketDialog,
+
+onOpenRedPacket: _openRedPacketDialog,
                               onOpenRoomSettings: () {
                                 Navigator.push(
                                   context,
@@ -1323,14 +1549,22 @@ onCoinsUpdated: (newCoins) {
                                     builder: (_) => RoomSettingsScreen(
                                       settings: _roomSettings,
                                       currentSeats: _seats,
-                                      onKickSeat: (idx) {
-                                        setState(() => _seats[idx] = null);
+                                      onKickSeat: (idx) async {
+                                        setState(() {
+                                          _seats[idx] = null;
+                                          _seatUids[idx] = null;
+                                        });
+                                        await FirebaseFirestore.instance.collection('rooms').doc(channelName).set({
+                                          'seats': _seats,
+                                          'seatUids': _seatUids,
+                                        }, SetOptions(merge: true));
                                       },
                                       onUpdateSettings: (newSet) {
                                         setState(() {
                                           _roomSettings = newSet;
                                           _activeSeatCount = newSet.seatCount;
                                           _seats = List.filled(_activeSeatCount, null);
+                                          _seatUids = List.filled(_activeSeatCount, null);
                                           _seatGiftsCount = List.filled(_activeSeatCount, 0);
                                         });
                                       },
@@ -1349,7 +1583,6 @@ onCoinsUpdated: (newCoins) {
             ),
           ),
           
-          // Floating Live Gift Combo Banner
           if (_activeComboData != null)
             Positioned(
               left: 16,
@@ -1357,29 +1590,26 @@ onCoinsUpdated: (newCoins) {
               child: Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF8E2DE2), Color(0xFF4A00E0)],
-                      ),
+                      color: cardBg,
                       borderRadius: BorderRadius.circular(30),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.purpleAccent.withOpacity(0.5),
+                          color: Colors.black.withOpacity(0.08),
                           blurRadius: 10,
-
-offset: const Offset(0, 4),
+                          offset: const Offset(0, 4),
                         ),
                       ],
-                      border: Border.all(color: const Color(0xFFFFD700), width: 1.5),
+                      border: Border.all(color: accentGold, width: 1.5),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         const CircleAvatar(
                           radius: 16,
-                          backgroundColor: Color(0xFFFFD700),
-                          child: Icon(Icons.person, color: Colors.black, size: 20),
+                          backgroundColor: bgColor,
+                          child: Icon(Icons.person, color: primaryBrown, size: 20),
                         ),
                         const SizedBox(width: 8),
                         Column(
@@ -1389,16 +1619,18 @@ offset: const Offset(0, 4),
                             Text(
                               _activeComboData!.senderName,
                               style: const TextStyle(
-                                color: Colors.white,
+                                color: primaryBrown,
                                 fontSize: 11,
                                 fontWeight: FontWeight.bold,
-                              ),
+
+),
                             ),
                             Text(
                               "Sent ${_activeComboData!.giftName} to ${_activeComboData!.targetName}",
                               style: const TextStyle(
-                                color: Color(0xFFFFD700),
+                                color: accentGold,
                                 fontSize: 10,
+                                fontWeight: FontWeight.bold,
                               ),
                             ),
                           ],
@@ -1414,27 +1646,13 @@ offset: const Offset(0, 4),
                   const SizedBox(width: 8),
                   ScaleTransition(
                     scale: _comboScaleAnimation,
-                    child: ShaderMask(
-                      shaderCallback: (bounds) => const LinearGradient(
-                        colors: [Color(0xFFFFEE00), Color(0xFFFF3366)],
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                      ).createShader(bounds),
-                      child: Text(
-                        "x${_activeComboData!.comboCount}",
-                        style: const TextStyle(
-                          fontSize: 32,
-                          fontWeight: FontWeight.w900,
-                          fontStyle: FontStyle.italic,
-                          color: Colors.white,
-                          shadows: [
-                            Shadow(
-                              color: Colors.black,
-                              blurRadius: 6,
-                              offset: Offset(2, 2),
-                            ),
-                          ],
-                        ),
+                    child: Text(
+                      "x${_activeComboData!.comboCount}",
+                      style: const TextStyle(
+                        fontSize: 30,
+                        fontWeight: FontWeight.w900,
+                        fontStyle: FontStyle.italic,
+                        color: accentGold,
                       ),
                     ),
                   ),
@@ -1442,7 +1660,6 @@ offset: const Offset(0, 4),
               ),
             ),
 
-          // Full Screen SVGA Gift Animation
           if (_isPlayingAnimation && _svgaController != null)
             Positioned.fill(
               child: IgnorePointer(
@@ -1465,8 +1682,7 @@ offset: const Offset(0, 4),
       child: Column(
         children: [
           AnimatedBuilder(
-
-animation: _pulseController,
+            animation: _pulseController,
             builder: (context, _) {
               final pulse = _pulseController.value;
               return Container(
@@ -1474,45 +1690,38 @@ animation: _pulseController,
                 height: 72,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  gradient: RadialGradient(
-                    colors: [
-                      isSpeaking
-                          ? Colors.cyanAccent.withOpacity(0.5)
-                          : const Color(0xFF6C5CE7).withOpacity(0.4),
-                      const Color(0xFF141226).withOpacity(0.85),
-                    ],
-                  ),
+                  color: cardBg,
                   border: Border.all(
                     color: _isAllSeatsTargeted
-                        ? const Color(0xFFFFD700)
-                        : (isSpeaking ? Colors.cyanAccent : const Color(0xFFFFD700)),
+                        ? accentGold
+                        : (isSpeaking ? const Color(0xFF107C41) : accentGold),
                     width: _isAllSeatsTargeted ? 3.0 : (isSpeaking ? (2.5 + pulse * 1.5) : 2),
                   ),
                   boxShadow: [
                     BoxShadow(
                       color: _isAllSeatsTargeted
-                          ? const Color(0xFFFFD700).withOpacity(0.8)
+                          ? accentGold.withOpacity(0.5)
                           : (isSpeaking
-                              ? Colors.cyanAccent.withOpacity(0.7)
-                              : const Color(0xFFFFD700).withOpacity(0.4)),
-                      blurRadius: 12 + (pulse * 8),
-                      spreadRadius: 2 + (pulse * 3),
+                              ? const Color(0xFF107C41).withOpacity(0.4)
+                              : accentGold.withOpacity(0.25)),
+                      blurRadius: 10 + (pulse * 6),
+                      spreadRadius: 2,
                     ),
                   ],
                 ),
                 child: Center(
                   child: isTaken
-                      ? const Icon(Icons.person, color: Color(0xFFFFD700), size: 34)
-                      : const Icon(Icons.chair, color: Color(0xFFFFD700), size: 30),
+                      ? const Icon(Icons.person, color: accentGold, size: 34)
+                      : const Icon(Icons.chair, color: accentGold, size: 30),
                 ),
               );
             },
           ),
           const SizedBox(height: 4),
           Text(
-            isTaken ? _seats[0]! : "1",
+            isTaken ? _seats[0]! : "Host (1)",
             style: const TextStyle(
-              color: Color(0xFFFFD700),
+              color: primaryBrown,
               fontSize: 12,
               fontWeight: FontWeight.bold,
             ),
@@ -1520,13 +1729,15 @@ animation: _pulseController,
           if (hostGifts > 0)
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-              decoration: BoxDecoration(
-                color: Colors.pink.withOpacity(0.3),
+
+decoration: BoxDecoration(
+                color: const Color(0xFFFBF4E6),
                 borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: accentGold.withOpacity(0.5)),
               ),
               child: Text(
-                "💖 $hostGifts",
-                style: const TextStyle(color: Colors.pinkAccent, fontSize: 9, fontWeight: FontWeight.bold),
+                "$hostGifts",
+                style: const TextStyle(color: accentGold, fontSize: 9, fontWeight: FontWeight.bold),
               ),
             ),
         ],
