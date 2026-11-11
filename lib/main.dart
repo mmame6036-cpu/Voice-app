@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'screens/login_screen.dart';
-import 'screens/main_navigation.dart';
+import 'screens/main_navigation_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -11,6 +11,10 @@ void main() async {
 
 class NileApp extends StatelessWidget {
   const NileApp({super.key});
+
+  static const Color bgColor = Color(0xFFF5EFEB);
+  static const Color primaryBrown = Color(0xFF3E2723);
+  static const Color accentGold = Color(0xFFD49B42);
 
   Future<FirebaseApp> _initializeFirebase() async {
     try {
@@ -33,9 +37,14 @@ class NileApp extends StatelessWidget {
     return MaterialApp(
       title: 'NILE Live',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData.dark().copyWith(
-        scaffoldBackgroundColor: const Color(0xFF0D0A1C),
-        primaryColor: const Color(0xFFFFD700),
+      theme: ThemeData(
+        scaffoldBackgroundColor: bgColor,
+        primaryColor: primaryBrown,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: accentGold,
+          primary: primaryBrown,
+          secondary: accentGold,
+        ),
       ),
       home: FutureBuilder<FirebaseApp>(
         future: _initializeFirebase(),
@@ -49,10 +58,11 @@ class NileApp extends StatelessWidget {
           }
 
           return const Scaffold(
-            backgroundColor: Color(0xFF0D0A1C),
+            backgroundColor: bgColor,
             body: Center(
               child: CircularProgressIndicator(
-                color: Color(0xFFFFD700),
+                color: accentGold,
+                strokeWidth: 2.5,
               ),
             ),
           );
@@ -62,50 +72,35 @@ class NileApp extends StatelessWidget {
   }
 }
 
-class AuthWrapper extends StatefulWidget {
+class AuthWrapper extends StatelessWidget {
   const AuthWrapper({super.key});
 
-  @override
-  State<AuthWrapper> createState() => _AuthWrapperState();
-}
-
-class _AuthWrapperState extends State<AuthWrapper> {
-  bool _isLoading = true;
-  bool _isLoggedIn = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _checkStatus();
-  }
-
-  Future<void> _checkStatus() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (mounted) {
-      setState(() {
-        _isLoggedIn = user != null;
-        _isLoading = false;
-      });
-    }
-  }
+  static const Color bgColor = Color(0xFFF5EFEB);
+  static const Color accentGold = Color(0xFFD49B42);
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
-      return const Scaffold(
-        backgroundColor: Color(0xFF0D0A1C),
-        body: Center(
-          child: CircularProgressIndicator(
-            color: Color(0xFFFFD700),
-          ),
-        ),
-      );
-    }
+    return StreamBuilder<User?>(
+      stream: FirebaseAuth.instance.authStateChanges(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+            backgroundColor: bgColor,
+            body: Center(
+              child: CircularProgressIndicator(
+                color: accentGold,
+                strokeWidth: 2.5,
+              ),
+            ),
+          );
+        }
 
-    if (_isLoggedIn) {
-      return const MainNavigationScreen();
-    }
+        if (snapshot.hasData && snapshot.data != null) {
+          return const MainNavigationScreen();
+        }
 
-    return const LoginScreen();
+        return const LoginScreen();
+      },
+    );
   }
 }
