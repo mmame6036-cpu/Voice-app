@@ -29,7 +29,7 @@ class _LevelScreenState extends State<LevelScreen>
     super.dispose();
   }
 
-  // የሌቭል እርከኖች ዝርዝር (Lv.1-9 እስከ Lv.90-99)
+  // የተስተካከለ የዝርዝር መግለጫ
   final List> _levelTiers = const [
     {"range": "Lv.1-9", "tag": 1, "hasMedal": false},
     {"range": "Lv.10-19", "tag": 10, "hasMedal": true},
@@ -43,7 +43,6 @@ class _LevelScreenState extends State<LevelScreen>
     {"range": "Lv.90-99", "tag": 90, "hasMedal": true},
   ];
 
-  // ለእያንዳንዱ እርከን ሜዳሊያ የሚያምር አይከን
   Widget _buildMedalIcon(int tag, bool isWealth) {
     if (isWealth) {
       switch (tag) {
@@ -65,7 +64,7 @@ class _LevelScreenState extends State<LevelScreen>
           return const Icon(Icons.diamond, color: Color(0xFFFF4081), size: 34);
         case 90:
         default:
-          return const Icon(Icons.crown, color: Color(0xFFFFD700), size: 36);
+          return const Icon(Icons.workspace_premium, color: Color(0xFFFFD700), size: 36);
       }
     } else {
       switch (tag) {
@@ -104,9 +103,9 @@ class _LevelScreenState extends State<LevelScreen>
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios, color: Colors.white70, size: 20),
           onPressed: () => Navigator.pop(context),
+        ),
 
-),
-        centerTitle: true,
+centerTitle: true,
         title: SizedBox(
           width: 220,
           child: TabBar(
@@ -145,18 +144,15 @@ class _LevelScreenState extends State<LevelScreen>
                 final String name = userData['name'] ?? userData['displayName'] ?? "User";
                 final String avatarUrl = userData['avatar'] ?? userData['photoURL'] ?? "";
 
-                // Wealth Data
                 final int wealthExp = (userData['wealthExp'] as num?)?.toInt() ?? 0;
                 final int wealthLevel = (userData['wealthLevel'] as num?)?.toInt() ?? 1;
 
-                // Charm Data
                 final int charmExp = (userData['charmExp'] as num?)?.toInt() ?? (userData['points'] as num?)?.toInt() ?? 0;
                 final int charmLevel = (userData['charmLevel'] as num?)?.toInt() ?? 1;
 
                 return TabBarView(
                   controller: _tabController,
                   children: [
-                    // 1. Wealth Tab Body
                     _buildContent(
                       isWealth: true,
                       name: name,
@@ -165,7 +161,6 @@ class _LevelScreenState extends State<LevelScreen>
                       currentValue: wealthExp,
                       subDescription: "Wealth level is based on total coins recharged.",
                     ),
-                    // 2. Charm Tab Body
                     _buildContent(
                       isWealth: false,
                       name: name,
@@ -189,7 +184,6 @@ class _LevelScreenState extends State<LevelScreen>
     required int currentValue,
     required String subDescription,
   }) {
-    // ቀጣዩን ሌቭል ለማደግ የሚያስፈልግ ስሌት
     final int nextLevel = level < 99 ? level + 1 : 99;
     final int targetExpForNext = nextLevel * 5000;
     final int neededForUpgrade = (targetExpForNext - currentValue).clamp(0, targetExpForNext);
@@ -204,14 +198,13 @@ class _LevelScreenState extends State<LevelScreen>
     return ListView(
       physics: const BouncingScrollPhysics(),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-
-children: [
-        // Header Section (የተጠቃሚው ፕሮፋይልና ስም)
+      children: [
         Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Container(
-              width: 58,
+
+width: 58,
               height: 58,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
@@ -244,7 +237,6 @@ children: [
                         ),
                       ),
                       const SizedBox(width: 8),
-                      // Level Tag
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
@@ -287,10 +279,7 @@ children: [
             ),
           ],
         ),
-
         const SizedBox(height: 22),
-
-        // Progress Bar Section
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
@@ -310,8 +299,7 @@ children: [
                 color: Colors.white70,
                 fontSize: 11,
               ),
-
-),
+            ),
             Text(
               "Lv.$nextLevel",
               style: const TextStyle(
@@ -320,7 +308,8 @@ children: [
                 fontWeight: FontWeight.bold,
               ),
             ),
-          ],
+
+],
         ),
         const SizedBox(height: 8),
         Container(
@@ -345,10 +334,7 @@ children: [
             ),
           ),
         ),
-
         const SizedBox(height: 26),
-
-        // Title and Subtitle
         Text(
           isWealth ? "Wealth Level" : "Charm Level",
           style: const TextStyle(
@@ -365,14 +351,11 @@ children: [
             fontSize: 11.5,
           ),
         ),
-
         const SizedBox(height: 16),
-
-        // 10 የሌቭል እርከኖች ካርዶች (Lv.1-9 እስከ Lv.90-99)
         ..._levelTiers.map((tier) {
-          final String range = tier['range'];
-          final int tagNum = tier['tag'];
-          final bool hasMedal = tier['hasMedal'];
+          final String range = tier['range'] as String;
+          final int tagNum = tier['tag'] as int;
+          final bool hasMedal = tier['hasMedal'] as bool;
 
           return Padding(
             padding: const EdgeInsets.only(bottom: 18),
@@ -402,7 +385,6 @@ children: [
                   child: hasMedal
                       ? Row(
                           children: [
-                            // Wealth Tag Box
                             Expanded(
                               child: Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
@@ -419,14 +401,14 @@ children: [
                                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                                     decoration: BoxDecoration(
                                       color: tagColor,
-
-borderRadius: BorderRadius.circular(12),
+                                      borderRadius: BorderRadius.circular(12),
                                     ),
                                     child: Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
                                         Icon(
-                                          isWealth ? Icons.shield : Icons.favorite,
+
+isWealth ? Icons.shield : Icons.favorite,
                                           color: Colors.white,
                                           size: 10,
                                         ),
@@ -450,7 +432,6 @@ borderRadius: BorderRadius.circular(12),
                               width: 1,
                               color: Colors.white12,
                             ),
-                            // Medal Details Box
                             Expanded(
                               child: Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
@@ -497,15 +478,15 @@ borderRadius: BorderRadius.circular(12),
                                     ),
                                     const SizedBox(width: 4),
                                     Text(
-
-"$tagNum",
+                                      "$tagNum",
                                       style: const TextStyle(
                                         color: Colors.white,
                                         fontSize: 10,
                                         fontWeight: FontWeight.bold,
                                       ),
                                     ),
-                                  ],
+
+],
                                 ),
                               ),
                             ],
