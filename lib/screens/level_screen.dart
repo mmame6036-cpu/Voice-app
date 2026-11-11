@@ -29,8 +29,8 @@ class _LevelScreenState extends State<LevelScreen>
     super.dispose();
   }
 
-  // የተስተካከለ የዝርዝር መግለጫ
-  final List> _levelTiers = const [
+  
+final List _levelTiers = const [
     {"range": "Lv.1-9", "tag": 1, "hasMedal": false},
     {"range": "Lv.10-19", "tag": 10, "hasMedal": true},
     {"range": "Lv.20-29", "tag": 20, "hasMedal": true},
@@ -42,7 +42,6 @@ class _LevelScreenState extends State<LevelScreen>
     {"range": "Lv.80-89", "tag": 80, "hasMedal": true},
     {"range": "Lv.90-99", "tag": 90, "hasMedal": true},
   ];
-
   Widget _buildMedalIcon(int tag, bool isWealth) {
     if (isWealth) {
       switch (tag) {
