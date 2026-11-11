@@ -15,27 +15,39 @@ class _CoinSellerScreenState extends State<CoinSellerScreen>
   final User? _currentUser = FirebaseAuth.instance.currentUser;
   late TabController _tabController;
 
-  int _selectedPayoutChannel = 0; // 0: Telebirr, 1: CBE, 2: Abyssinia, 3: Binance
-  int _selectedRechargeChannel = 0; // 0: Binance Pay, 1: Telebirr
-  int _selectedPackageIndex = 0;
+  int _salesMethodIndex = 0; // 0: User, 1: Coinseller
+  int _rechargeSubTabIndex = 0; // 0: Official, 1: Coin Seller
+  int _selectedPaymentMethod = 0; // 0: Telebirr, 1: Binance Pay
+  int _selectedRechargePackage = 0;
 
   final TextEditingController _receiverIdController = TextEditingController();
   final TextEditingController _coinAmountController = TextEditingController();
-  final TextEditingController _accountNumberController = TextEditingController();
-  final TextEditingController _accountNameController = TextEditingController();
+  final TextEditingController _customExchangeController = TextEditingController();
+  final TextEditingController _greetingController = TextEditingController();
 
   bool _isProcessing = false;
-  String _checkedUserName = "";
+  String _verifiedReceiverName = "";
 
-  static const Color goldColor = Color(0xFFFFD700);
-  static const Color darkBg = Color(0xFF0D0A1C);
-  static const Color cardBg = Color(0xFF171524);
+  static const Color bgColor = Color(0xFFF5EFEB);
+  static const Color cardBg = Colors.white;
+  static const Color primaryBrown = Color(0xFF3E2723);
+  static const Color accentGold = Color(0xFFD49B42);
+  static const Color borderColor = Color(0xFFE2D6C5);
+  static const Color buttonDark = Color(0xFF4A3528);
 
-    final _rechargePackages = [
-    {"coins": "1,980,000", "price": "\$200", "tag": "Standard"},
-    {"coins": "9,900,000", "price": "\$1,000", "tag": "Standard"},
-    {"coins": "14,850,000", "price": "\$1,500", "tag": "Popular"},
-    {"coins": "30,000,000", "price": "\$3,000", "tag": "VIP Merchant"},
+  final List> _rechargePackages = const [
+    {"coins": 1980000, "price": "\$200", "tier": "Standard Seller"},
+    {"coins": 9900000, "price": "\$1,000", "tier": "Standard Seller"},
+    {"coins": 14850000, "price": "\$1,500", "tier": "Senior Seller"},
+    {"coins": 30000000, "price": "\$3,000", "tier": "Senior Seller"},
+  ];
+
+  final List> _exchangePacks = const [
+    {"coins": 960000, "points": 1000000},
+    {"coins": 1960000, "points": 2000000},
+    {"coins": 9800000, "points": 10000000},
+    {"coins": 14700000, "points": 15000000},
+    {"coins": 30000000, "points": 30000000},
   ];
 
   @override
@@ -49,18 +61,26 @@ class _CoinSellerScreenState extends State<CoinSellerScreen>
     _tabController.dispose();
     _receiverIdController.dispose();
     _coinAmountController.dispose();
-    _accountNumberController.dispose();
-    _accountNameController.dispose();
+    _customExchangeController.dispose();
+    _greetingController.dispose();
     super.dispose();
   }
 
   void _copyToClipboard(String text) {
     Clipboard.setData(ClipboardData(text: text));
+    _showToast("Copied ID: $text");
+  }
+
+  void _showToast(String message) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text("Copied to clipboard", style: TextStyle(color: goldColor)),
-        backgroundColor: cardBg,
-        duration: Duration(seconds: 1),
+      SnackBar(
+        content: Text(
+          message,
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
+        backgroundColor: primaryBrown,
+        duration: const Duration(seconds: 2),
       ),
     );
   }
@@ -69,7 +89,7 @@ class _CoinSellerScreenState extends State<CoinSellerScreen>
     final queryText = _receiverIdController.text.trim();
     if (queryText.isEmpty) return;
 
-    setState(() => _checkedUserName = "Searching...");
+    setState(() => _verifiedReceiverName = "Searching...");
 
     try {
       final int? numId = int.tryParse(queryText);
@@ -91,38 +111,38 @@ class _CoinSellerScreenState extends State<CoinSellerScreen>
       if (query.docs.isNotEmpty) {
         final data = query.docs.first.data() as Map<String, dynamic>;
         setState(() {
-          _checkedUserName = data['nickname'] ?? data['name'] ?? "Verified User";
+          _verifiedReceiverName = data['name'] ?? data['displayName'] ?? "Verified User";
         });
       } else {
-        setState(() => _checkedUserName = "User Not Found");
+        setState(() => _verifiedReceiverName = "User Not Found");
       }
     } catch (_) {
-      setState(() => _checkedUserName = "Verification Error");
+      setState(() => _verifiedReceiverName = "Verification Failed");
     }
   }
 
-  Future<void> _executeCoinTransfer(int sellerBalance) async {
+Future<void> _executeCoinTransfer(int sellerBalance) async {
     final targetInput = _receiverIdController.text.trim();
     final amountInput = int.tryParse(_coinAmountController.text.trim()) ?? 0;
 
     if (targetInput.isEmpty || amountInput <= 0) {
-      _showFeedback("Please enter a valid receiver ID and coin amount.");
+      _showToast("Please enter a valid receiver ID and coin amount.");
       return;
     }
 
     if (amountInput % 1000 != 0) {
-      _showFeedback("Amount must be a multiple of 1,000.");
+      _showToast("Coin amount must be a multiple of 1,000.");
       return;
     }
 
     if (amountInput > sellerBalance) {
-      _showFeedback("Insufficient seller balance.");
+      _showToast("Insufficient coin balance.");
       return;
     }
 
     setState(() => _isProcessing = true);
 
-try {
+    try {
       final int? numId = int.tryParse(targetInput);
       QuerySnapshot query;
       if (numId != null) {
@@ -140,12 +160,13 @@ try {
       }
 
       if (query.docs.isEmpty) {
-        _showFeedback("Target receiver account does not exist.");
+        _showToast("Target receiver account does not exist.");
         setState(() => _isProcessing = false);
         return;
       }
 
-      final receiverRef = query.docs.first.reference;
+      final receiverDoc = query.docs.first;
+      final receiverRef = receiverDoc.reference;
       final sellerRef = FirebaseFirestore.instance.collection('users').doc(_currentUser!.uid);
 
       await FirebaseFirestore.instance.runTransaction((transaction) async {
@@ -162,197 +183,237 @@ try {
         final logRef = FirebaseFirestore.instance.collection('coin_transfers').doc();
         transaction.set(logRef, {
           'sellerUid': _currentUser!.uid,
-          'receiverUid': receiverRef.id,
-          'amount': amountInput,
+          'receiverUid': receiverDoc.id,
+          'receiverId': targetInput,
+          'salesMethod': _salesMethodIndex == 0 ? "User" : "Coinseller",
+          'coins': amountInput,
           'timestamp': FieldValue.serverTimestamp(),
-          'type': 'transfer',
         });
       });
 
       _receiverIdController.clear();
       _coinAmountController.clear();
-      setState(() => _checkedUserName = "");
-      _showFeedback("Transfer of $amountInput Coins completed successfully!");
+      setState(() => _verifiedReceiverName = "");
+      _showToast("Successfully transferred $amountInput Coins!");
     } catch (e) {
-      _showFeedback("Transfer failed: $e");
+      _showToast("Transfer failed: $e");
     } finally {
       setState(() => _isProcessing = false);
     }
   }
 
-  Future<void> _submitPayoutRequest(int availableDiamonds) async {
-    final accountNum = _accountNumberController.text.trim();
-    final accountName = _accountNameController.text.trim();
+  Future<void> _executePointsExchange(int userPoints, int pointsCost, int coinsGain) async {
+    if (pointsCost <= 0 || coinsGain <= 0) return;
 
-    if (accountNum.isEmpty || accountName.isEmpty) {
-      _showFeedback("Please fill in account details.");
-      return;
-    }
-
-    if (availableDiamonds < 100000) {
-      _showFeedback("Minimum payout requirement is 100,000 Diamonds.");
+    if (userPoints < pointsCost) {
+      _showToast("Insufficient points balance.");
       return;
     }
 
     setState(() => _isProcessing = true);
 
     try {
-      final channels = ["Telebirr", "Commercial Bank of Ethiopia (CBE)", "Bank of Abyssinia", "Binance Pay (USDT)"];
-      final chosenChannel = channels[_selectedPayoutChannel];
+      final userRef = FirebaseFirestore.instance.collection('users').doc(_currentUser!.uid);
 
-      await FirebaseFirestore.instance.collection('payout_requests').add({
-        'uid': _currentUser!.uid,
-        'channel': chosenChannel,
-        'accountNumber': accountNum,
-        'accountName': accountName,
-        'diamondAmount': availableDiamonds,
-        'status': 'pending',
-        'createdAt': FieldValue.serverTimestamp(),
+      await FirebaseFirestore.instance.runTransaction((transaction) async {
+        final snap = await transaction.get(userRef);
+        final currentPts = (snap.data() as Map<String, dynamic>)['points'] ?? 0;
+
+        if (currentPts < pointsCost) {
+          throw Exception("Insufficient points.");
+        }
+
+        transaction.update(userRef, {
+          'points': FieldValue.increment(-pointsCost),
+          'coins': FieldValue.increment(coinsGain),
+        });
+
+        final logRef = FirebaseFirestore.instance.collection('point_exchanges').doc();
+        transaction.set(logRef, {
+          'uid': _currentUser!.uid,
+          'pointsDeducted': pointsCost,
+          'coinsAdded': coinsGain,
+          'timestamp': FieldValue.serverTimestamp(),
+        });
       });
 
-      _accountNumberController.clear();
-      _accountNameController.clear();
-      Navigator.pop(context);
-      _showFeedback("Payout request submitted for $chosenChannel!");
+_customExchangeController.clear();
+      _showToast("Exchanged $pointsCost Points for $coinsGain Coins!");
     } catch (e) {
-      _showFeedback("Submission error: $e");
+      _showToast("Exchange failed: $e");
     } finally {
       setState(() => _isProcessing = false);
     }
   }
 
-  void _showFeedback(String message) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message, style: const TextStyle(color: goldColor, fontWeight: FontWeight.bold)),
-        backgroundColor: cardBg,
-      ),
-    );
-  }
-
-  void _openPayoutModal(int availableDiamonds) {
+  void _showHistoryModal(String title, String collectionName) {
     showModalBottomSheet(
       context: context,
+      backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      backgroundColor: cardBg,
-      shape: const RoundedRectangleBorder(
-
-borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (ctx) => StatefulBuilder(
-        builder: (context, setModalState) => Padding(
-          padding: EdgeInsets.only(
-            left: 20,
-            right: 20,
-            top: 20,
-            bottom: MediaQuery.of(context).viewInsets.bottom + 20,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                "Diamond Points Settlement",
-                style: TextStyle(color: goldColor, fontSize: 17, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                "Available: $availableDiamonds Points (≈ \$${(availableDiamonds / 10000).toStringAsFixed(2)} USD)",
-                style: const TextStyle(color: goldColor, fontSize: 13),
-              ),
-              const SizedBox(height: 18),
-              const Text(
-                "Select Payout Method",
-                style: TextStyle(color: goldColor, fontSize: 13, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 10),
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    _buildPayoutOption(0, "Telebirr", Icons.phone_android, setModalState),
-                    _buildPayoutOption(1, "CBE", Icons.account_balance, setModalState),
-                    _buildPayoutOption(2, "Abyssinia", Icons.account_balance_wallet, setModalState),
-                    _buildPayoutOption(3, "Binance Pay", Icons.currency_bitcoin, setModalState),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: _accountNumberController,
-                style: const TextStyle(color: goldColor),
-                decoration: InputDecoration(
-                  hintText: _selectedPayoutChannel == 3 ? "Binance Pay ID / USDT Address" : "Account / Phone Number",
-                  hintStyle: TextStyle(color: goldColor.withOpacity(0.4), fontSize: 13),
-                  filled: true,
-                  fillColor: Colors.white.withOpacity(0.05),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                ),
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: _accountNameController,
-                style: const TextStyle(color: goldColor),
-                decoration: InputDecoration(
-                  hintText: "Account Holder Full Name",
-                  hintStyle: TextStyle(color: goldColor.withOpacity(0.4), fontSize: 13),
-                  filled: true,
-                  fillColor: Colors.white.withOpacity(0.05),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                ),
-              ),
-              const SizedBox(height: 20),
-              SizedBox(
-                width: double.infinity,
-                height: 48,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: goldColor,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  onPressed: _isProcessing ? null : () => _submitPayoutRequest(availableDiamonds),
-                  child: _isProcessing
-                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
-                      : const Text("Submit Payout Request", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 14)),
-                ),
-              ),
-            ],
-          ),
+      builder: (ctx) => Container(
+        height: MediaQuery.of(context).size.height * 0.75,
+        decoration: const BoxDecoration(
+          color: bgColor,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         ),
-      ),
-    );
-  }
-
-Widget _buildPayoutOption(int index, String label, IconData icon, StateSetter setModalState) {
-    final bool isSelected = _selectedPayoutChannel == index;
-    return GestureDetector(
-      onTap: () {
-        setModalState(() => _selectedPayoutChannel = index);
-        setState(() => _selectedPayoutChannel = index);
-      },
-      child: Container(
-        margin: const EdgeInsets.only(right: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: isSelected ? goldColor : Colors.white.withOpacity(0.06),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: goldColor.withOpacity(isSelected ? 1.0 : 0.3)),
-        ),
-        child: Row(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(icon, color: isSelected ? Colors.black : goldColor, size: 16),
-            const SizedBox(width: 6),
+            Center(
+              child: Container(
+                width: 44,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.black26,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
             Text(
-              label,
-              style: TextStyle(
-                color: isSelected ? Colors.black : goldColor,
+              title,
+              style: const TextStyle(
+                fontSize: 16,
                 fontWeight: FontWeight.bold,
-                fontSize: 12,
+                color: primaryBrown,
+              ),
+            ),
+            const SizedBox(height: 14),
+            Expanded(
+              child: StreamBuilder<QuerySnapshot>(
+                stream: FirebaseFirestore.instance
+                    .collection(collectionName)
+                    .where(
+                      collectionName == 'coin_transfers' ? 'sellerUid' : 'uid',
+                      isEqualTo: _currentUser?.uid,
+                    )
+                    .limit(20)
+                    .snapshots(),
+                builder: (context, snapshot) {
+                  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                    return const Center(
+                      child: Text(
+                        "No history records found.",
+                        style: TextStyle(color: Colors.black45, fontSize: 13),
+                      ),
+                    );
+                  }
+
+                  return ListView.builder(
+                    itemCount: snapshot.data!.docs.length,
+                    itemBuilder: (context, idx) {
+                      final item = snapshot.data!.docs[idx].data() as Map<String, dynamic>;
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 10),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: cardBg,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: borderColor),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  item['salesMethod'] != null
+                                      ? "Transfer (${item['salesMethod']})"
+                                      : "Exchange",
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12.5,
+                                    color: primaryBrown,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+
+Text(
+                                  item['receiverId'] != null
+                                      ? "To ID: ${item['receiverId']}"
+                                      : "Coins: +${item['coinsAdded']}",
+                                  style: const TextStyle(color: Colors.black54, fontSize: 11),
+                                ),
+                              ],
+                            ),
+                            Text(
+                              item['coins'] != null ? "-${item['coins']} Coins" : "-${item['pointsDeducted']} Pts",
+                              style: const TextStyle(
+                                color: accentGold,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  );
+                },
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  void _showGreetingDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: bgColor,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text(
+          "Greeting Message Settings",
+          style: TextStyle(color: primaryBrown, fontSize: 16, fontWeight: FontWeight.bold),
+        ),
+        content: TextField(
+          controller: _greetingController,
+          maxLines: 3,
+          style: const TextStyle(color: primaryBrown),
+          decoration: InputDecoration(
+            hintText: "Enter automatic greeting for your buyers...",
+            hintStyle: const TextStyle(color: Colors.black38, fontSize: 12),
+            filled: true,
+            fillColor: cardBg,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: borderColor),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: borderColor),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Cancel", style: TextStyle(color: Colors.black54)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: buttonDark,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: () async {
+              final msg = _greetingController.text.trim();
+              if (msg.isNotEmpty && _currentUser != null) {
+                await FirebaseFirestore.instance
+                    .collection('users')
+                    .doc(_currentUser!.uid)
+                    .set({'sellerGreeting': msg}, SetOptions(merge: true));
+              }
+              if (mounted) Navigator.pop(ctx);
+              _showToast("Greeting message saved.");
+            },
+            child: const Text("Save", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
       ),
     );
   }
@@ -361,494 +422,738 @@ Widget _buildPayoutOption(int index, String label, IconData icon, StateSetter se
   Widget build(BuildContext context) {
     final String uid = _currentUser?.uid ?? "";
 
+    if (uid.isEmpty) {
+      return const Scaffold(
+        backgroundColor: bgColor,
+        body: Center(
+          child: Text("Please sign in first.", style: TextStyle(color: Colors.black54)),
+        ),
+      );
+    }
+
     return Scaffold(
-      backgroundColor: darkBg,
+      backgroundColor: bgColor,
       appBar: AppBar(
-        backgroundColor: cardBg,
+        backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: goldColor, size: 20),
-          onPressed: () => Navigator.pop(context),
+          icon: const Icon(Icons.arrow_back_ios, color: primaryBrown, size: 20),
+
+onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
-          "Coin Seller Portal",
-          style: TextStyle(color: goldColor, fontSize: 17, fontWeight: FontWeight.bold),
+          "Coin Seller Hub",
+          style: TextStyle(
+            color: primaryBrown,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
         ),
         centerTitle: true,
       ),
       body: StreamBuilder<DocumentSnapshot>(
-        stream: uid.isNotEmpty
-            ? FirebaseFirestore.instance.collection('users').doc(uid).snapshots()
-            : null,
-        builder: (context, userSnap) {
-          final uData = (userSnap.hasData && userSnap.data!.exists)
-              ? userSnap.data!.data() as Map<String, dynamic>
+        stream: FirebaseFirestore.instance.collection('users').doc(uid).snapshots(),
+        builder: (context, snapshot) {
+          final userData = (snapshot.hasData && snapshot.data!.exists)
+              ? snapshot.data!.data() as Map<String, dynamic>
               : <String, dynamic>{};
 
-          final int coins = uData['coins'] ?? 0;
-          final int diamonds = uData['diamonds'] ?? 0;
-          final String displayId = uData['numericId']?.toString() ?? (uid.length >= 6 ? uid.substring(0, 6) : "100000");
+          final String name = userData['agencyName'] ?? userData['name'] ?? userData['displayName'] ?? "KEDIR FAMS";
+          final String numericId = (userData['numericId'] ?? userData['id'] ?? "1753925").toString();
+          final int coins = (userData['coins'] as num?)?.toInt() ?? 0;
+          final int points = (userData['points'] as num?)?.toInt() ?? 0;
+          final String currentLevel = userData['sellerLevel'] ?? "Beginner Seller";
 
-          return NestedScrollView(
-            headerSliverBuilder: (context, innerBoxIsScrolled) {
-              return [
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Column(
-                      children: [
-                        // Profile Banner
-                        Container(
-                          padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(
-                            color: cardBg,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: goldColor.withOpacity(0.3)),
-                          ),
-                          child: Row(
+          return ListView(
+            physics: const BouncingScrollPhysics(),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            children: [
+              // 1. Seller Profile Card
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: cardBg,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: borderColor),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 52,
+                      height: 52,
+                      decoration: BoxDecoration(
+                        color: bgColor,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: borderColor),
+                      ),
+                      child: const Icon(Icons.storefront, color: primaryBrown, size: 26),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
                             children: [
-                              Container(
-                                width: 50,
-                                height: 50,
-                                decoration: BoxDecoration(
-                                  color: goldColor.withOpacity(0.15),
-                                  shape: BoxShape.circle,
-                                  border: Border.all(color: goldColor),
+                              Flexible(
+                                child: Text(
+                                  name,
+                                  style: const TextStyle(
+                                    color: primaryBrown,
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
-                                child: const Center(
-                                  child: Icon(Icons.storefront, color: goldColor, size: 26),
-                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              GestureDetector(
+                                onTap: () => _copyToClipboard(numericId),
+                                child: const Icon(Icons.copy, size: 12, color: primaryBrown),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            "ID: $numericId",
+                            style: const TextStyle(color: Colors.black45, fontSize: 11),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            "Current level: $currentLevel",
+                            style: const TextStyle(
+                              color: accentGold,
+
+fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF107C41),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: const Text(
+                        "Level Up",
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 12),
+
+              // 2. Balance & Payment Method Card
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: cardBg,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: borderColor),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          "Balance",
+                          style: TextStyle(color: Colors.black45, fontSize: 12),
+                        ),
+                        GestureDetector(
+                          onTap: () => _showHistoryModal("Transfer History", "coin_transfers"),
+                          child: const Text(
+                            "Details >",
+                            style: TextStyle(color: primaryBrown, fontSize: 11.5, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        const Icon(Icons.monetization_on, color: accentGold, size: 26),
+                        const SizedBox(width: 8),
+                        Text(
+                          "$coins",
+                          style: const TextStyle(
+                            color: primaryBrown,
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const Divider(color: Color(0xFFEFE6DE), height: 22),
+                    const Text(
+                      "Payment Method:",
+                      style: TextStyle(color: primaryBrown, fontSize: 12, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        _buildPaymentMethodPill(0, "Telebirr", Icons.phone_android),
+                        const SizedBox(width: 10),
+                        _buildPaymentMethodPill(1, "Binance Pay", Icons.currency_bitcoin),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 14),
+
+              // 3. Tab Structure (Transfer, Recharge, Exchange)
+              Container(
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE8DFD8),
+                  borderRadius: BorderRadius.circular(24),
 
 ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    const Text(
-                                      "MERCHANT ACCOUNT",
-                                      style: TextStyle(color: goldColor, fontWeight: FontWeight.bold, fontSize: 14),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    GestureDetector(
-                                      onTap: () => _copyToClipboard(displayId),
-                                      child: Row(
-                                        children: [
-                                          Text("ID: $displayId", style: TextStyle(color: goldColor.withOpacity(0.8), fontSize: 12)),
-                                          const SizedBox(width: 6),
-                                          const Icon(Icons.copy, size: 12, color: goldColor),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                decoration: BoxDecoration(
-                                  color: goldColor.withOpacity(0.2),
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(color: goldColor),
-                                ),
-                                child: const Text(
-                                  "Certified",
-                                  style: TextStyle(color: goldColor, fontSize: 11, fontWeight: FontWeight.bold),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
+                child: TabBar(
+                  controller: _tabController,
+                  indicator: BoxDecoration(
+                    color: buttonDark,
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                  labelColor: Colors.white,
+                  unselectedLabelColor: const Color(0xFF6D5446),
+                  labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                  tabs: const [
+                    Tab(text: "Transfer"),
+                    Tab(text: "Recharge"),
+                    Tab(text: "Exchange"),
+                  ],
+                ),
+              ),
 
-                        const SizedBox(height: 12),
+              const SizedBox(height: 12),
 
-                        // Balance Card
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [Color(0xFF281C4B), cardBg],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: goldColor.withOpacity(0.3)),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  const Text(
-                                    "Seller Coin Balance",
-                                    style: TextStyle(color: goldColor, fontSize: 13, fontWeight: FontWeight.bold),
-                                  ),
-                                  GestureDetector(
-                                    onTap: () => _openPayoutModal(diamonds),
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              // Tab View Content
+              SizedBox(
+                height: 480,
+                child: TabBarView(
+                  controller: _tabController,
+                  children: [
+                    _buildTransferSection(coins),
+                    _buildRechargeSection(),
+                    _buildExchangeSection(points),
+                  ],
+                ),
+              ),
 
-decoration: BoxDecoration(
-                                        color: goldColor,
-                                        borderRadius: BorderRadius.circular(10),
-                                      ),
-                                      child: const Text(
-                                        "Convert Points",
-                                        style: TextStyle(color: Colors.black, fontSize: 11, fontWeight: FontWeight.bold),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 8),
-                              Row(
-                                children: [
-                                  const Icon(Icons.monetization_on, color: goldColor, size: 28),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    "$coins",
-                                    style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: goldColor),
-                                  ),
-                                ],
-                              ),
-                              const Divider(color: Colors.white10, height: 20),
-                              Text(
-                                "Diamonds Available: $diamonds Pts",
-                                style: TextStyle(color: goldColor.withOpacity(0.8), fontSize: 12),
-                              ),
-                            ],
+              const SizedBox(height: 14),
+
+              // 4. Greeting Message Setting Card
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: cardBg,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: borderColor),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Row(
+                      children: [
+                        Icon(Icons.chat_bubble_outline, color: primaryBrown, size: 20),
+                        SizedBox(width: 10),
+                        Text(
+                          "Greeting Message Settings",
+                          style: TextStyle(
+                            color: primaryBrown,
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
                       ],
                     ),
-                  ),
-                ),
-
-                SliverPersistentHeader(
-                  pinned: true,
-                  delegate: _SellerTabDelegate(
-                    TabBar(
-                      controller: _tabController,
-                      indicatorColor: goldColor,
-                      indicatorWeight: 3,
-                      labelColor: goldColor,
-                      unselectedLabelColor: goldColor.withOpacity(0.4),
-                      labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                      tabs: const [
-                        Tab(text: "Transfer"),
-                        Tab(text: "Recharge"),
-                        Tab(text: "Settlement"),
-                      ],
+                    IconButton(
+                      icon: const Icon(Icons.arrow_forward_ios, size: 14, color: primaryBrown),
+                      onPressed: _showGreetingDialog,
                     ),
-                  ),
+                  ],
                 ),
-              ];
-            },
-            body: TabBarView(
-              controller: _tabController,
-              children: [
-                _buildTransferTab(coins),
-                _buildRechargeTab(),
-                _buildSettlementTab(diamonds),
-              ],
-            ),
+              ),
+
+              const SizedBox(height: 24),
+            ],
           );
         },
       ),
     );
   }
 
-  Widget _buildTransferTab(int sellerBalance) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text("Receiver User ID or UID:", style: TextStyle(color: goldColor, fontWeight: FontWeight.bold, fontSize: 13)),
-          const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            decoration: BoxDecoration(
-              color: cardBg,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: goldColor.withOpacity(0.3)),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _receiverIdController,
-                    style: const TextStyle(color: goldColor),
-                    decoration: InputDecoration(
-
-hintText: "Enter Receiver Numeric ID (e.g. 100000)",
-                      hintStyle: TextStyle(color: goldColor.withOpacity(0.4), fontSize: 13),
-                      border: InputBorder.none,
-                    ),
-                  ),
-                ),
-                TextButton(
-                  onPressed: _verifyReceiver,
-                  child: const Text("Verify", style: TextStyle(color: goldColor, fontWeight: FontWeight.bold)),
-                ),
-              ],
-            ),
+  Widget _buildPaymentMethodPill(int index, String label, IconData icon) {
+    final bool isSelected = _selectedPaymentMethod == index;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() => _selectedPaymentMethod = index),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+            color: isSelected ? buttonDark : bgColor,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: isSelected ? buttonDark : borderColor),
           ),
-          if (_checkedUserName.isNotEmpty) ...[
-            const SizedBox(height: 6),
-            Text(
-              "Account: $_checkedUserName",
-              style: const TextStyle(color: goldColor, fontSize: 12, fontWeight: FontWeight.w600),
-            ),
-          ],
-          const SizedBox(height: 18),
-          const Text("Coin Amount:", style: TextStyle(color: goldColor, fontWeight: FontWeight.bold, fontSize: 13)),
-          const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            decoration: BoxDecoration(
-              color: cardBg,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: goldColor.withOpacity(0.3)),
-            ),
-            child: TextField(
-              controller: _coinAmountController,
-              keyboardType: TextInputType.number,
-              style: const TextStyle(color: goldColor),
-              decoration: InputDecoration(
-                hintText: "Enter amount (Multiples of 1,000)",
-                hintStyle: TextStyle(color: goldColor.withOpacity(0.4), fontSize: 13),
-                border: InputBorder.none,
-              ),
-            ),
-          ),
-          const SizedBox(height: 24),
-          SizedBox(
-            width: double.infinity,
-            height: 48,
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: goldColor,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-              ),
-              onPressed: _isProcessing ? null : () => _executeCoinTransfer(sellerBalance),
-              child: _isProcessing
-                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
-                  : const Text("Confirm Transfer", style: TextStyle(color: Colors.black, fontSize: 15, fontWeight: FontWeight.bold)),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRechargeTab() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text("Select Recharge Method:", style: TextStyle(color: goldColor, fontWeight: FontWeight.bold, fontSize: 13)),
-          const SizedBox(height: 10),
-          Row(
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Expanded(
-                child: GestureDetector(
-                  onTap: () => setState(() => _selectedRechargeChannel = 0),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    decoration: BoxDecoration(
-                      color: _selectedRechargeChannel == 0 ? goldColor.withOpacity(0.15) : cardBg,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: goldColor.withOpacity(_selectedRechargeChannel == 0 ? 1.0 : 0.2),
-                        width: 1.5,
-                      ),
-                    ),
-                    child: Column(
-                      children: const [
-                        Icon(Icons.currency_bitcoin, color: goldColor, size: 24),
-                        SizedBox(height: 4),
-
-Text("Binance Pay", style: TextStyle(color: goldColor, fontSize: 12, fontWeight: FontWeight.bold)),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: GestureDetector(
-                  onTap: () => setState(() => _selectedRechargeChannel = 1),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    decoration: BoxDecoration(
-                      color: _selectedRechargeChannel == 1 ? goldColor.withOpacity(0.15) : cardBg,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: goldColor.withOpacity(_selectedRechargeChannel == 1 ? 1.0 : 0.2),
-                        width: 1.5,
-                      ),
-                    ),
-                    child: Column(
-                      children: const [
-                        Icon(Icons.phone_android, color: goldColor, size: 24),
-                        SizedBox(height: 4),
-                        Text("Telebirr", style: TextStyle(color: goldColor, fontSize: 12, fontWeight: FontWeight.bold)),
-                      ],
-                    ),
-                  ),
+              Icon(icon, color: isSelected ? Colors.white : primaryBrown, size: 16),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  color: isSelected ? Colors.white : primaryBrown,
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 20),
-          const Text("Wholesale Packages:", style: TextStyle(color: goldColor, fontWeight: FontWeight.bold, fontSize: 13)),
-          const SizedBox(height: 10),
-          GridView.builder(
-            itemCount: _rechargePackages.length,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              crossAxisSpacing: 10,
-              mainAxisSpacing: 10,
-              childAspectRatio: 1.5,
-            ),
-            itemBuilder: (context, idx) {
-              final pkg = _rechargePackages[idx];
-              final isSelected = _selectedPackageIndex == idx;
-              return GestureDetector(
-                onTap: () => setState(() => _selectedPackageIndex = idx),
-                child: Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: isSelected ? goldColor.withOpacity(0.15) : cardBg,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: goldColor.withOpacity(isSelected ? 1.0 : 0.2)),
-                  ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text("${pkg['coins']} Coins", style: const TextStyle(color: goldColor, fontWeight: FontWeight.bold, fontSize: 12)),
-                      const SizedBox(height: 4),
-                      Text(pkg['price'].toString(), style: TextStyle(color: goldColor.withOpacity(0.7), fontSize: 10)),
-                    ],
-                  ),
-                ),
-              );
-            },
-          ),
-          const SizedBox(height: 20),
-          SizedBox(
-            width: double.infinity,
-            height: 48,
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: goldColor,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-              ),
-              onPressed: () {
-                final chosen = _selectedRechargeChannel == 0 ? "Binance Pay" : "Telebirr";
-                _showFeedback("Opening $chosen merchant payment gateway...");
-              },
-              child: const Text("Recharge Now", style: TextStyle(color: Colors.black, fontSize: 15, fontWeight: FontWeight.bold)),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
 
-Widget _buildSettlementTab(int availableDiamonds) {
+  // 1. Transfer Section
+  Widget _buildTransferSection(int sellerCoins) {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: cardBg,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: goldColor.withOpacity(0.3)),
+
+physics: const BouncingScrollPhysics(),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: cardBg,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: borderColor),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              "Sales Method",
+              style: TextStyle(color: primaryBrown, fontSize: 13, fontWeight: FontWeight.bold),
             ),
-            child: Row(
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                _buildSalesMethodOption(0, "User"),
+                const SizedBox(width: 10),
+                _buildSalesMethodOption(1, "Coinseller"),
+              ],
+            ),
+            const SizedBox(height: 14),
+            const Text(
+              "User ID",
+              style: TextStyle(color: primaryBrown, fontSize: 13, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: BoxDecoration(
+                color: bgColor,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: borderColor),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _receiverIdController,
+                      style: const TextStyle(color: primaryBrown),
+                      decoration: const InputDecoration(
+                        hintText: "Enter user ID",
+                        hintStyle: TextStyle(color: Colors.black38, fontSize: 12),
+                        border: InputBorder.none,
+                      ),
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: _verifyReceiver,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: buttonDark,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Text(
+                        "Check",
+                        style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (_verifiedReceiverName.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(
+                "Name: $_verifiedReceiverName",
+                style: const TextStyle(color: accentGold, fontSize: 11.5, fontWeight: FontWeight.bold),
+              ),
+            ],
+            const SizedBox(height: 14),
+            const Text(
+              "Coin Amount",
+              style: TextStyle(color: primaryBrown, fontSize: 13, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: BoxDecoration(
+                color: bgColor,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: borderColor),
+              ),
+              child: TextField(
+                controller: _coinAmountController,
+                keyboardType: TextInputType.number,
+                style: const TextStyle(color: primaryBrown),
+                decoration: const InputDecoration(
+                  hintText: "Enter amount *1,000",
+                  hintStyle: TextStyle(color: Colors.black38, fontSize: 12),
+
+border: InputBorder.none,
+                ),
+              ),
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              "Please enter a multiple of 1",
+              style: TextStyle(color: Colors.black38, fontSize: 10.5),
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              height: 46,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF107C41),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  elevation: 0,
+                ),
+                onPressed: _isProcessing ? null : () => _executeCoinTransfer(sellerCoins),
+                child: _isProcessing
+                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    : const Text("Transfer", style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Center(
+              child: GestureDetector(
+                onTap: () => _showHistoryModal("Transfer Details", "coin_transfers"),
+                child: const Text(
+                  "Transfer Detail >",
+                  style: TextStyle(color: primaryBrown, fontSize: 11.5, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSalesMethodOption(int index, String label) {
+    final bool isSelected = _salesMethodIndex == index;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() => _salesMethodIndex = index),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+            color: isSelected ? buttonDark : bgColor,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: isSelected ? buttonDark : borderColor),
+          ),
+          child: Center(
+            child: Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? Colors.white : primaryBrown,
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // 2. Recharge Section
+  Widget _buildRechargeSection() {
+    return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: cardBg,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: borderColor),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                _buildRechargeSubTab(0, "Official"),
+                const SizedBox(width: 10),
+                _buildRechargeSubTab(1, "Coin Seller"),
+              ],
+            ),
+            const SizedBox(height: 14),
+            const Text(
+              "Select Recharge Package",
+              style: TextStyle(color: primaryBrown, fontSize: 13, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 10),
+            GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: _rechargePackages.length,
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                crossAxisSpacing: 10,
+                mainAxisSpacing: 10,
+                childAspectRatio: 1.45,
+
+),
+              itemBuilder: (context, idx) {
+                final pkg = _rechargePackages[idx];
+                final isSelected = _selectedRechargePackage == idx;
+                return GestureDetector(
+                  onTap: () => setState(() => _selectedRechargePackage = idx),
+                  child: Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: isSelected ? const Color(0xFFFBF4E6) : bgColor,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: isSelected ? accentGold : borderColor, width: isSelected ? 1.5 : 1),
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          "${pkg['coins']} Coins",
+                          style: const TextStyle(color: primaryBrown, fontSize: 11.5, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          pkg['price'].toString(),
+                          style: const TextStyle(color: accentGold, fontSize: 12, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          pkg['tier'].toString(),
+                          style: const TextStyle(color: Colors.black38, fontSize: 9.5),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 18),
+            SizedBox(
+              width: double.infinity,
+              height: 46,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF107C41),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  elevation: 0,
+                ),
+                onPressed: () {
+                  final channel = _selectedPaymentMethod == 0 ? "Telebirr" : "Binance Pay";
+                  _showToast("Opening $channel gateway for wholesale recharge...");
+                },
+                child: const Text("Recharge", style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Center(
+              child: GestureDetector(
+                onTap: () => _showHistoryModal("Recharge Details", "coin_recharges"),
+                child: const Text(
+                  "Recharge Details >",
+                  style: TextStyle(color: primaryBrown, fontSize: 11.5, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRechargeSubTab(int index, String label) {
+    final bool isSelected = _rechargeSubTabIndex == index;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() => _rechargeSubTabIndex = index),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 7),
+          decoration: BoxDecoration(
+            color: isSelected ? buttonDark : bgColor,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: isSelected ? buttonDark : borderColor),
+          ),
+          child: Center(
+            child: Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? Colors.white : primaryBrown,
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+// 3. Exchange Section (Points to Coins)
+  Widget _buildExchangeSection(int userPoints) {
+    return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: cardBg,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: borderColor),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text("Available Diamond Points:", style: TextStyle(color: goldColor, fontWeight: FontWeight.bold, fontSize: 13)),
-                Text("$availableDiamonds Pts", style: const TextStyle(color: goldColor, fontWeight: FontWeight.bold, fontSize: 15)),
+                const Text("My Points", style: TextStyle(color: Colors.black45, fontSize: 12)),
+                Text(
+                  "$userPoints Pts",
+                  style: const TextStyle(color: accentGold, fontSize: 14, fontWeight: FontWeight.bold),
+                ),
               ],
             ),
-          ),
-          const SizedBox(height: 16),
-          const Text("Accepted Channels for Cashout:", style: TextStyle(color: goldColor, fontWeight: FontWeight.bold, fontSize: 13)),
-          const SizedBox(height: 10),
-          _buildPayoutChannelCard("Telebirr", "Instant local cashout", Icons.phone_android),
-          _buildPayoutChannelCard("Commercial Bank of Ethiopia (CBE)", "Direct bank deposit", Icons.account_balance),
-          _buildPayoutChannelCard("Bank of Abyssinia", "Direct bank deposit", Icons.account_balance_wallet),
-          _buildPayoutChannelCard("Binance Pay (USDT)", "Crypto settlement globally", Icons.currency_bitcoin),
-          const SizedBox(height: 20),
-          SizedBox(
-            width: double.infinity,
-            height: 48,
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: goldColor,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+            const Divider(color: Color(0xFFEFE6DE), height: 18),
+            const Text(
+              "Custom Exchange",
+              style: TextStyle(color: primaryBrown, fontSize: 13, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: BoxDecoration(
+                color: bgColor,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: borderColor),
               ),
-              onPressed: () => _openPayoutModal(availableDiamonds),
-              child: const Text("Request Payout", style: TextStyle(color: Colors.black, fontSize: 15, fontWeight: FontWeight.bold)),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _customExchangeController,
+                      keyboardType: TextInputType.number,
+                      style: const TextStyle(color: primaryBrown),
+                      decoration: const InputDecoration(
+                        hintText: "Enter points to exchange",
+                        hintStyle: TextStyle(color: Colors.black38, fontSize: 12),
+                        border: InputBorder.none,
+                      ),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      final input = int.tryParse(_customExchangeController.text.trim()) ?? 0;
+                      if (input > 0) {
+                        // 1 USD = 10,000 Points; 1:1 direct equivalence to coins
+                        _executePointsExchange(userPoints, input, input);
+                      }
+                    },
+                    child: const Text("Convert", style: TextStyle(color: accentGold, fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+            const SizedBox(height: 14),
+            const Text(
+              "Standard Exchange Packs",
+              style: TextStyle(color: primaryBrown, fontSize: 13, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            ..._exchangePacks.map((pack) {
+              final int coinsGain = pack['coins'] as int;
+              final int pointsCost = pack['points'] as int;
+              return Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: bgColor,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: borderColor),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+
+"$coinsGain Coins",
+                          style: const TextStyle(color: primaryBrown, fontWeight: FontWeight.bold, fontSize: 12),
+                        ),
+                        Text(
+                          "$pointsCost Points",
+                          style: const TextStyle(color: Colors.black38, fontSize: 10.5),
+                        ),
+                      ],
+                    ),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF107C41),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                        elevation: 0,
+                      ),
+                      onPressed: _isProcessing
+                          ? null
+                          : () => _executePointsExchange(userPoints, pointsCost, coinsGain),
+                      child: const Text("Exchange", style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                    ),
+                  ],
+                ),
+              );
+            }),
+            const SizedBox(height: 8),
+            Center(
+              child: GestureDetector(
+                onTap: () => _showHistoryModal("Exchange Details", "point_exchanges"),
+                child: const Text(
+                  "Exchange Details >",
+                  style: TextStyle(color: primaryBrown, fontSize: 11.5, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
-
-  Widget _buildPayoutChannelCard(String name, String subtitle, IconData icon) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: cardBg,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: goldColor.withOpacity(0.2)),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, color: goldColor, size: 20),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(name, style: const TextStyle(color: goldColor, fontWeight: FontWeight.bold, fontSize: 12)),
-                Text(subtitle, style: TextStyle(color: goldColor.withOpacity(0.5), fontSize: 10)),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SellerTabDelegate extends SliverPersistentHeaderDelegate {
-  final TabBar _tabBar;
-  _SellerTabDelegate(this._tabBar);
-
-  @override
-  double get minExtent => _tabBar.preferredSize.height;
-  @override
-  double get maxExtent => _tabBar.preferredSize.height;
-
-  @override
-  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
-    return Container(color: const Color(0xFF171524), child: _tabBar);
-  }
-
-  @override
-  bool shouldRebuild(_SellerTabDelegate oldDelegate) => false;
 }
