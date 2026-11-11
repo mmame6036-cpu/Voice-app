@@ -35,14 +35,14 @@ class _CoinSellerScreenState extends State<CoinSellerScreen>
   static const Color borderColor = Color(0xFFE2D6C5);
   static const Color buttonDark = Color(0xFF4A3528);
 
-  final List> _rechargePackages = const [
+  final List _rechargePackages = const [
     {"coins": 1980000, "price": "\$200", "tier": "Standard Seller"},
     {"coins": 9900000, "price": "\$1,000", "tier": "Standard Seller"},
     {"coins": 14850000, "price": "\$1,500", "tier": "Senior Seller"},
     {"coins": 30000000, "price": "\$3,000", "tier": "Senior Seller"},
   ];
 
-  final List> _exchangePacks = const [
+  final List _exchangePacks = const [
     {"coins": 960000, "points": 1000000},
     {"coins": 1960000, "points": 2000000},
     {"coins": 9800000, "points": 10000000},
