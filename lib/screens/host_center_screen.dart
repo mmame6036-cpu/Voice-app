@@ -15,7 +15,7 @@ class _HostCenterScreenState extends State<HostCenterScreen> {
   bool _isJoining = false;
   int _selectedRecordTab = 0;
 
-  static const List> _hostPolicyTiers = [
+  static const List _hostPolicyTiers = [
     {"level": "S", "req": 50000000, "reward": 180000, "maxHours": 2},
     {"level": "A", "req": 20000000, "reward": 90000, "maxHours": 2},
     {"level": "B", "req": 10000000, "reward": 75000, "maxHours": 2},
