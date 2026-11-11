@@ -229,13 +229,19 @@ vsync: this,
     });
   }
 
-  // Five_win.mp3 በዋናው ስክሪን ላይ ማጫወቻ
   void _playCoinSound() async {
     try {
-      await _audioPlayer.stop();
-      await _audioPlayer.setPlayerMode(PlayerMode.lowLatency);
-      await _audioPlayer.setVolume(1.0);
-      await _audioPlayer.play(AssetSource('sounds/Five_win.mp3'));
+      final AudioPlayer player = AudioPlayer();
+      await player.setPlayerMode(PlayerMode.mediaPlayer);
+      await player.setVolume(1.0);
+      try {
+        await player.play(AssetSource('sounds/Five_win.mp3'));
+      } catch (_) {
+        await player.play(AssetSource('sounds/five_win.mp3'));
+      }
+      player.onPlayerComplete.listen((_) {
+        player.dispose();
+      });
     } catch (_) {}
   }
 
