@@ -5,7 +5,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'home_screen.dart';
 import 'messages_screen.dart';
 import 'profile_screen.dart';
-import 'voice_room_screen.dart';
+import 'room_screen.dart';
+import '../services/agora_service.dart';
 
 class MainNavigationScreen extends StatefulWidget {
   const MainNavigationScreen({super.key});
@@ -21,6 +22,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   String _displayName = "Host";
   StreamSubscription<DocumentSnapshot>? _userSubscription;
 
+  final AgoraService _agoraService = AgoraService();
+  Offset _floatingOffset = const Offset(16, 120);
+
   static const Color navBgColor = Color(0xFF161426);
   static const Color activeGold = Color(0xFFFFD700);
   static const Color inactiveColor = Color(0xFF8E8A9F);
@@ -30,12 +34,20 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   void initState() {
     super.initState();
     _listenToUserData();
+    _agoraService.addListener(_onRoomStateChanged);
   }
 
   @override
   void dispose() {
     _userSubscription?.cancel();
+    _agoraService.removeListener(_onRoomStateChanged);
     super.dispose();
+  }
+
+  void _onRoomStateChanged() {
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   void _listenToUserData() {
@@ -67,14 +79,15 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   }
 
   void _joinRoom(String roomTitle) {
+    _agoraService.restoreRoom();
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => VoiceRoomScreen(
+        builder: (_) => RoomScreen(
           roomTitle: roomTitle,
-          roomId: "nile_${roomTitle.toLowerCase().replaceAll(' ', '_')}",
-          hostName: _displayName,
-          userNumericId: _numericId,
+          initialCoins: _coins,
+          onCoinUpdate: _updateCoins,
+          seatCount: _agoraService.currentSeatCount,
         ),
       ),
     );
@@ -108,13 +121,14 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
               ),
             ),
             const SizedBox(height: 16),
-            Row(
+            const Row(
               mainAxisAlignment: MainAxisAlignment.center,
-              children: const [
+              children: [
                 Icon(Icons.casino, color: Color(0xFFFFD700), size: 26),
                 SizedBox(width: 8),
                 Text(
-                  "Party Game Center",
+
+"Party Game Center",
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 18,
@@ -125,8 +139,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
             ),
             const SizedBox(height: 6),
             const Text(
-
-"Play live multiplayer mini-games and earn coin multipliers",
+              "Play live multiplayer mini-games and earn coin multipliers",
               style: TextStyle(color: Colors.white54, fontSize: 12),
               textAlign: TextAlign.center,
             ),
@@ -221,7 +234,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, color: accentColor, size: 30),
+
+Icon(icon, color: accentColor, size: 30),
             const SizedBox(height: 8),
             Text(
               title,
@@ -245,7 +259,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     );
   }
 
-void _openGiftVault() {
+  void _openGiftVault() {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -276,8 +290,8 @@ void _openGiftVault() {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  children: const [
+                const Row(
+                  children: [
                     Icon(Icons.card_giftcard, color: Color(0xFFFF4081), size: 24),
                     SizedBox(width: 8),
                     Text(
@@ -331,7 +345,8 @@ void _openGiftVault() {
                 childAspectRatio: 0.88,
                 children: [
                   _buildVaultGiftTile("Prism Diamond", "1000 Coins", Icons.diamond, const Color(0xFF00E5FF)),
-                  _buildVaultGiftTile("Rose Cruise", "30000 Coins", Icons.directions_boat, const Color(0xFFFF4081)),
+
+_buildVaultGiftTile("Rose Cruise", "30000 Coins", Icons.directions_boat, const Color(0xFFFF4081)),
                   _buildVaultGiftTile("Space Rocket", "5000 Coins", Icons.rocket_launch, const Color(0xFFFFD700)),
                   _buildVaultGiftTile("Lovers Heart", "520 Coins", Icons.favorite, const Color(0xFFE91E63)),
                   _buildVaultGiftTile("Gold Crown", "450 Coins", Icons.workspace_premium, const Color(0xFFFFB300)),
@@ -345,7 +360,7 @@ void _openGiftVault() {
     );
   }
 
-Widget _buildVaultGiftTile(String name, String price, IconData icon, Color color) {
+  Widget _buildVaultGiftTile(String name, String price, IconData icon, Color color) {
     return Container(
       decoration: BoxDecoration(
         color: const Color(0xFF231F3F),
@@ -391,6 +406,116 @@ Widget _buildVaultGiftTile(String name, String price, IconData icon, Color color
     );
   }
 
+  Widget _buildFloatingMiniRoom() {
+    return Positioned(
+      right: _floatingOffset.dx,
+      bottom: _floatingOffset.dy,
+      child: GestureDetector(
+        onPanUpdate: (details) {
+          setState(() {
+            _floatingOffset = Offset(
+              (_floatingOffset.dx - details.delta.dx).clamp(8.0, MediaQuery.of(context).size.width - 210),
+              (_floatingOffset.dy - details.delta.dy).clamp(80.0, MediaQuery.of(context).size.height - 140),
+            );
+          });
+        },
+        onTap: () {
+          final title = _agoraService.currentRoomTitle.isNotEmpty
+              ? _agoraService.currentRoomTitle
+              : "VIP Voice Room";
+          _joinRoom(title);
+        },
+        child: Material(
+          color: Colors.transparent,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
+              color: const Color(0xFF3E2723),
+              borderRadius: BorderRadius.circular(30),
+              border: Border.all(color: const Color(0xFFD49B42), width: 1.5),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.35),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 34,
+                  height: 34,
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Color(0xFFD49B42),
+                  ),
+                  child: const Icon(Icons.graphic_eq, color: Color(0xFF3E2723), size: 20),
+                ),
+
+const SizedBox(width: 8),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 90),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        _agoraService.currentRoomTitle.isNotEmpty
+                            ? _agoraService.currentRoomTitle
+                            : "Live Room",
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const Text(
+                        "Tap to return",
+                        style: TextStyle(color: Color(0xFFD49B42), fontSize: 9),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 6),
+                GestureDetector(
+                  onTap: () => _agoraService.setMicrophoneMute(!_agoraService.isMicMuted),
+                  child: Container(
+                    padding: const EdgeInsets.all(5),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.white.withOpacity(0.12),
+                    ),
+                    child: Icon(
+                      _agoraService.isMicMuted ? Icons.mic_off : Icons.mic,
+                      color: _agoraService.isMicMuted ? Colors.redAccent : Colors.greenAccent,
+                      size: 16,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                GestureDetector(
+                  onTap: () => _agoraService.leaveRoom(),
+                  child: Container(
+                    padding: const EdgeInsets.all(5),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.redAccent.withOpacity(0.2),
+                    ),
+                    child: const Icon(Icons.close, color: Colors.redAccent, size: 16),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final List<Widget> screens = [
@@ -407,9 +532,15 @@ Widget _buildVaultGiftTile(String name, String price, IconData icon, Color color
     ];
 
     return Scaffold(
-      body: IndexedStack(
-        index: _currentIndex,
-        children: screens,
+      body: Stack(
+        children: [
+          IndexedStack(
+            index: _currentIndex,
+            children: screens,
+          ),
+          if (_agoraService.isInRoom && _agoraService.isMinimized)
+            _buildFloatingMiniRoom(),
+        ],
       ),
       bottomNavigationBar: Container(
         height: 66,
@@ -437,7 +568,8 @@ Widget _buildVaultGiftTile(String name, String price, IconData icon, Color color
               label: "Message",
             ),
             GestureDetector(
-              onTap: _openPartyGameHub,
+
+onTap: _openPartyGameHub,
               child: Container(
                 width: 50,
                 height: 50,
@@ -472,8 +604,7 @@ Widget _buildVaultGiftTile(String name, String price, IconData icon, Color color
                   Container(
                     width: 32,
                     height: 32,
-
-decoration: BoxDecoration(
+                    decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: const Color(0xFFFF4081).withOpacity(0.15),
                     ),
