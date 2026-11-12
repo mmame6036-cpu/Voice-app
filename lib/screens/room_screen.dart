@@ -1068,48 +1068,50 @@ Text(
                           ),
                           const SizedBox(width: 8),
                           GestureDetector(
-  onTap: () {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => WalletScreen(
-          userUid: _currentUser?.uid ?? '',
-          userNumericId: _myUid,
-          currentCoins: _currentCoins,
-          onCoinsRecharged: (newCoins) {
-            setState(() {
-              _currentCoins = newCoins;
-            });
-            setSheetState(() {});
-            widget.onCoinUpdate(newCoins);
-          },
-        ),
-      ),
-    );
-  }, 
-                        },
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: cardBg,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: borderColor),
-                            ),
-                            child: const Row(
-                              children: [
-                                Text(
-                                  "Recharge",
-                                  style: TextStyle(
-                                    color: primaryBrown,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold,
+                            GestureDetector(
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => WalletScreen(
+                                    userUid: _currentUser?.uid ?? '',
+                                    userNumericId: _myUid,
+                                    currentCoins: _currentCoins,
+                                    onCoinsRecharged: (newCoins) {
+                                      setState(() {
+                                        _currentCoins = newCoins;
+                                      });
+                                      setSheetState(() {});
+                                      widget.onCoinUpdate(newCoins);
+                                    },
                                   ),
                                 ),
-                                Icon(Icons.chevron_right, size: 14, color: primaryBrown),
-                              ],
+                              );
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: cardBg,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: borderColor),
+                              ),
+                              child: const Row(
+                                children: [
+                                  Text(
+                                    "Recharge",
+                                    style: TextStyle(
+                                      color: primaryBrown,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  Icon(Icons.chevron_right, size: 14, color: primaryBrown),
+                                ],
+                              ),
                             ),
                           ),
-                        ),    
+                        ],
+                      ),
                       ElevatedButton(
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF107C41),
@@ -1143,7 +1145,6 @@ Text(
       });
     });
   }
-
   Widget _targetChip({
     required String title,
     required bool isSelected,
