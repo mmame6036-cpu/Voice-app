@@ -1068,7 +1068,6 @@ Text(
                           ),
                           const SizedBox(width: 8),
                           GestureDetector(
-                            GestureDetector(
                             onTap: () {
                               Navigator.push(
                                 context,
@@ -1081,7 +1080,8 @@ Text(
                                       setState(() {
                                         _currentCoins = newCoins;
                                       });
-                                      setSheetState(() {});
+
+setSheetState(() {});
                                       widget.onCoinUpdate(newCoins);
                                     },
                                   ),
@@ -1145,6 +1145,7 @@ Text(
       });
     });
   }
+
   Widget _targetChip({
     required String title,
     required bool isSelected,
@@ -1362,7 +1363,7 @@ decoration: BoxDecoration(
                     itemCount: _chatMessages.length,
                     itemBuilder: (context, index) {
                       final msg = _chatMessages[_chatMessages.length - 1 - index];
-                      final isSystem = msg.startsWith("System:") || msg.startsWith("Announcement:") || msg.startsWith("Red Packet");
+                      final isSystem = RegExp(r'^(System:|Announcement:|Red Packet)').hasMatch(msg);
 
                       return Padding(
                         padding: const EdgeInsets.symmetric(vertical: 2.0),
@@ -1418,9 +1419,9 @@ decoration: BoxDecoration(
                             decoration: const InputDecoration(
                               hintText: "Say Hello...",
                               hintStyle: TextStyle(color: Colors.black38),
+                              border: InputBorder.none,
 
-border: InputBorder.none,
-                            ),
+),
                             onSubmitted: (val) async {
                               final txt = val.trim();
                               if (txt.isNotEmpty) {
@@ -1486,9 +1487,9 @@ border: InputBorder.none,
                                           ),
                                           trailing: const Icon(Icons.chevron_right, color: primaryBrown),
                                           onTap: () {
+                                            Navigator.pop(context);
 
-Navigator.pop(context);
-                                            showModalBottomSheet(
+showModalBottomSheet(
                                               context: context,
                                               isScrollControlled: true,
                                               backgroundColor: Colors.transparent,
@@ -1551,9 +1552,9 @@ Navigator.pop(context);
                             builder: (_) => BasicToolsSheet(
                               settings: _roomSettings,
                               onToggleRoomVoice: _toggleRoomVoice,
+                              onToggleAllMic: _toggleAllMic,
 
-onToggleAllMic: _toggleAllMic,
-                              onOpenPasswordDialog: _openPasswordDialog,
+onOpenPasswordDialog: _openPasswordDialog,
                               onOpenAdminSheet: _openAdminSheet,
                               onOpenRedPacket: _openRedPacketDialog,
                               onOpenRoomSettings: () {
@@ -1632,9 +1633,9 @@ onToggleAllMic: _toggleAllMic,
                           children: [
                             Text(
                               _activeComboData!.senderName,
+                              style: const TextStyle(
 
-style: const TextStyle(
-                                color: primaryBrown,
+color: primaryBrown,
                                 fontSize: 11,
                                 fontWeight: FontWeight.bold,
                               ),
@@ -1733,9 +1734,9 @@ style: const TextStyle(
                 child: Center(
                   child: isTaken
                       ? const Icon(Icons.person, color: accentGold, size: 34)
+                      : const Icon(Icons.chair, color: accentGold, size: 30),
 
-: const Icon(Icons.chair, color: accentGold, size: 30),
-                ),
+),
               );
             },
           ),
