@@ -328,7 +328,9 @@ void _startMicMinutesTracking() {
       await _agoraService.joinRoom(
         channelId: channelName,
         uid: _myUid,
-        isSpeaker: false,
+        isSpeaker: _mySeatIndex != null,
+        roomTitle: widget.roomTitle,
+        seatCount: _activeSeatCount,
       );
 
       if (mounted) {
@@ -411,9 +413,8 @@ void _startMicMinutesTracking() {
     );
   }
 
-  void _toggleAllMic() {
-
-setState(() {
+void _toggleAllMic() {
+    setState(() {
       _roomSettings.isAllMicClosed = !_roomSettings.isAllMicClosed;
       if (_roomSettings.isAllMicClosed) {
         if (_mySeatIndex != 0) {
@@ -1072,15 +1073,16 @@ Text(
                                 context,
                                 MaterialPageRoute(
                                   builder: (_) => WalletScreen(
+                                    userUid: _currentUser?.uid ?? '',
                                     currentCoins: _currentCoins,
                                     onCoinsRecharged: (newCoins) {
                                       setState(() {
                                         _currentCoins = newCoins;
                                       });
                                       setSheetState(() {});
-                                      widget.onCoinUpdate(newCoins);
 
-},
+widget.onCoinUpdate(newCoins);
+                                    },
                                   ),
                                 ),
                               );
@@ -1180,7 +1182,6 @@ Text(
     _pulseController.dispose();
     _comboScaleController.dispose();
     _comboDismissTimer?.cancel();
-    _agoraService.leaveRoom();
     _videoController?.dispose();
     _msgController.dispose();
     super.dispose();
@@ -1197,8 +1198,12 @@ return Scaffold(
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: primaryBrown, size: 20),
-          onPressed: () => Navigator.pop(context),
+          icon: const Icon(Icons.keyboard_arrow_down, color: primaryBrown, size: 28),
+          tooltip: "Minimize Room",
+          onPressed: () {
+            _agoraService.minimizeRoom();
+            Navigator.pop(context);
+          },
         ),
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1225,7 +1230,10 @@ return Scaffold(
           ),
           IconButton(
             icon: const Icon(Icons.power_settings_new, color: Colors.redAccent),
-            onPressed: () => Navigator.pop(context),
+            onPressed: () async {
+              await _agoraService.leaveRoom();
+              if (mounted) Navigator.pop(context);
+            },
           ),
         ],
       ),
@@ -1272,11 +1280,11 @@ return Scaffold(
                                         return Container(
                                           width: seatSize,
                                           height: seatSize,
-                                          decoration: BoxDecoration(
+
+decoration: BoxDecoration(
                                             shape: BoxShape.circle,
                                             color: cardBg,
-
-border: Border.all(
+                                            border: Border.all(
                                               color: _isAllSeatsTargeted
                                                   ? accentGold
                                                   : (isSpeaking
@@ -1330,10 +1338,10 @@ border: Border.all(
                                           border: Border.all(color: accentGold.withOpacity(0.5)),
                                         ),
                                         child: Text(
-                                          "$giftPoints",
-                                          style: const TextStyle(color: accentGold, fontSize: 8.5, fontWeight: FontWeight.bold),
 
-),
+"$giftPoints",
+                                          style: const TextStyle(color: accentGold, fontSize: 8.5, fontWeight: FontWeight.bold),
+                                        ),
                                       ),
                                   ],
                                 ),
@@ -1410,12 +1418,12 @@ border: Border.all(
                             decoration: const InputDecoration(
                               hintText: "Say Hello...",
                               hintStyle: TextStyle(color: Colors.black38),
-                              border: InputBorder.none,
+
+border: InputBorder.none,
                             ),
                             onSubmitted: (val) async {
                               final txt = val.trim();
-
-if (txt.isNotEmpty) {
+                              if (txt.isNotEmpty) {
                                 _msgController.clear();
                                 await FirebaseFirestore.instance
                                     .collection('rooms')
@@ -1478,11 +1486,11 @@ if (txt.isNotEmpty) {
                                           ),
                                           trailing: const Icon(Icons.chevron_right, color: primaryBrown),
                                           onTap: () {
-                                            Navigator.pop(context);
+
+Navigator.pop(context);
                                             showModalBottomSheet(
                                               context: context,
-
-isScrollControlled: true,
+                                              isScrollControlled: true,
                                               backgroundColor: Colors.transparent,
                                               builder: (_) => LuckyWheelDialog(
                                                 currentCoins: _currentCoins,
@@ -1543,11 +1551,11 @@ isScrollControlled: true,
                             builder: (_) => BasicToolsSheet(
                               settings: _roomSettings,
                               onToggleRoomVoice: _toggleRoomVoice,
-                              onToggleAllMic: _toggleAllMic,
+
+onToggleAllMic: _toggleAllMic,
                               onOpenPasswordDialog: _openPasswordDialog,
                               onOpenAdminSheet: _openAdminSheet,
-
-onOpenRedPacket: _openRedPacketDialog,
+                              onOpenRedPacket: _openRedPacketDialog,
                               onOpenRoomSettings: () {
                                 Navigator.push(
                                   context,
@@ -1624,12 +1632,12 @@ onOpenRedPacket: _openRedPacketDialog,
                           children: [
                             Text(
                               _activeComboData!.senderName,
-                              style: const TextStyle(
+
+style: const TextStyle(
                                 color: primaryBrown,
                                 fontSize: 11,
                                 fontWeight: FontWeight.bold,
-
-),
+                              ),
                             ),
                             Text(
                               "Sent ${_activeComboData!.giftName} to ${_activeComboData!.targetName}",
@@ -1725,14 +1733,14 @@ onOpenRedPacket: _openRedPacketDialog,
                 child: Center(
                   child: isTaken
                       ? const Icon(Icons.person, color: accentGold, size: 34)
-                      : const Icon(Icons.chair, color: accentGold, size: 30),
+
+: const Icon(Icons.chair, color: accentGold, size: 30),
                 ),
               );
             },
           ),
           const SizedBox(height: 4),
-
-Text(
+          Text(
             isTaken ? _seats[0]! : "Host (1)",
             style: const TextStyle(
               color: primaryBrown,
