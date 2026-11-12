@@ -1068,27 +1068,27 @@ Text(
                           ),
                           const SizedBox(width: 8),
                           GestureDetector(
-                            onTap: () {
-                              Navigator.push(
-  context,
-  MaterialPageRoute(
-    builder: (_) => WalletScreen(
-      userUid: _currentUser?.uid ?? '',
-      userNumericId: _myUid,
-      currentCoins: _currentCoins,
-      onCoinsRecharged: (newCoins) {
-        setState(() {
-          _currentCoins = newCoins;
-        });
-        setSheetState(() {});
-        widget.onCoinUpdate(newCoins);
-      },
-    ),
-  ),
-);
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                              decoration: BoxDecoration(
+  onTap: () {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => WalletScreen(
+          userUid: _currentUser?.uid ?? '',
+          userNumericId: _myUid,
+          currentCoins: _currentCoins,
+          onCoinsRecharged: (newCoins) {
+            setState(() {
+              _currentCoins = newCoins;
+            });
+            setSheetState(() {});
+            widget.onCoinUpdate(newCoins);
+          },
+        ),
+      ),
+    );
+  }, // <-- ይህች የመዝጊያ ቅንፍ (}) መኖሯን አረጋግጥ!
+  child: Container(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                                 color: cardBg,
                                 borderRadius: BorderRadius.circular(12),
                                 border: Border.all(color: borderColor),
