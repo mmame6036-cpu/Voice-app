@@ -1086,30 +1086,30 @@ Text(
         ),
       ),
     );
-  }, // <-- ይህች የመዝጊያ ቅንፍ (}) መኖሯን አረጋግጥ!
-  child: Container(
-    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                color: cardBg,
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: borderColor),
-                              ),
-                              child: const Row(
-                                children: [
-                                  Text(
-                                    "Recharge",
-                                    style: TextStyle(
-                                      color: primaryBrown,
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.bold,
-                                    ),
+  }, 
+                        },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: cardBg,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: borderColor),
+                            ),
+                            child: const Row(
+                              children: [
+                                Text(
+                                  "Recharge",
+                                  style: TextStyle(
+                                    color: primaryBrown,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
                                   ),
-                                  Icon(Icons.chevron_right, size: 14, color: primaryBrown),
-                                ],
-                              ),
+                                ),
+                                Icon(Icons.chevron_right, size: 14, color: primaryBrown),
+                              ],
                             ),
                           ),
-                        ],
-                      ),
+                        ),    
                       ElevatedButton(
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF107C41),
