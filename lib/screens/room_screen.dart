@@ -1070,23 +1070,22 @@ Text(
                           GestureDetector(
                             onTap: () {
                               Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => WalletScreen(
-                                    userUid: _currentUser?.uid ?? '',
-                                    currentCoins: _currentCoins,
-                                    onCoinsRecharged: (newCoins) {
-                                      setState(() {
-                                        _currentCoins = newCoins;
-                                      });
-                                      setSheetState(() {});
-
-widget.onCoinUpdate(newCoins);
-                                    },
-                                  ),
-                                ),
-                              );
-                            },
+  context,
+  MaterialPageRoute(
+    builder: (_) => WalletScreen(
+      userUid: _currentUser?.uid ?? '',
+      userNumericId: _myUid,
+      currentCoins: _currentCoins,
+      onCoinsRecharged: (newCoins) {
+        setState(() {
+          _currentCoins = newCoins;
+        });
+        setSheetState(() {});
+        widget.onCoinUpdate(newCoins);
+      },
+    ),
+  ),
+);
                             child: Container(
                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                               decoration: BoxDecoration(
@@ -1362,7 +1361,7 @@ decoration: BoxDecoration(
                     itemCount: _chatMessages.length,
                     itemBuilder: (context, index) {
                       final msg = _chatMessages[_chatMessages.length - 1 - index];
-                      final isSystem = msg.startsWith("System:")  msg.startsWith("Announcement:")  msg.startsWith("Red Packet");
+                      final isSystem = msg.startsWith("System:") || msg.startsWith("Announcement:") || msg.startsWith("Red Packet");
 
                       return Padding(
                         padding: const EdgeInsets.symmetric(vertical: 2.0),
