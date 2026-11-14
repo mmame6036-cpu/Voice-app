@@ -546,91 +546,96 @@ String statusText = "Withdrawal locked: Must join an agency first.";
     }
 
     Color btnColor = Colors.black26;
-    VoidCallback? btnAction;
     if (canWithdraw) {
       btnColor = const Color(0xFF4A3528);
-      btnAction = () {
-        Navigator.pop(ctx);
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const PointsWalletScreen()),
-        );
-      };
     }
 
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      builder: (ctx) => Container(
-        padding: const EdgeInsets.all(20),
-        decoration: const BoxDecoration(
-          color: Color(0xFFFAF7F2),
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              "Withdraw Earnings",
-              style: TextStyle(color: Color(0xFF3E2723), fontSize: 17, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              "Available Balance: $points Points (\$${usdValue.toStringAsFixed(2)} USD)",
-              style: const TextStyle(color: Colors.black87, fontSize: 13),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              statusText,
-              style: TextStyle(
-                color: statusColor,
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
+      builder: (ctx) {
+        VoidCallback? btnAction;
+        if (canWithdraw) {
+          btnAction = () {
+            Navigator.pop(ctx);
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const PointsWalletScreen()),
+            );
+          };
+        }
+
+        return Container(
+          padding: const EdgeInsets.all(20),
+          decoration: const BoxDecoration(
+            color: Color(0xFFFAF7F2),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                "Withdraw Earnings",
+                style: TextStyle(color: Color(0xFF3E2723), fontSize: 17, fontWeight: FontWeight.bold),
               ),
-            ),
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFE2D6C5)),
+              const SizedBox(height: 10),
+              Text(
+                "Available Balance: $points Points (\$${usdValue.toStringAsFixed(2)} USD)",
+                style: const TextStyle(color: Colors.black87, fontSize: 13),
               ),
-              child: const Row(
-                children: [
-                  Icon(Icons.account_balance_wallet, color: Color(0xFFD49B42)),
-                  SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      "Telebirr / CBE / Abyssinia / Awash / Binance Pay",
-                      style: TextStyle(color: Color(0xFF3E2723), fontSize: 12, fontWeight: FontWeight.bold),
+              const SizedBox(height: 6),
+              Text(
+                statusText,
+                style: TextStyle(
+                  color: statusColor,
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFE2D6C5)),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.account_balance_wallet, color: Color(0xFFD49B42)),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        "Telebirr / CBE / Abyssinia / Awash / Binance Pay",
+                        style: TextStyle(color: Color(0xFF3E2723), fontSize: 12, fontWeight: FontWeight.bold),
+                      ),
                     ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 18),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: btnColor,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    elevation: 0,
                   ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 18),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: btnColor,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  elevation: 0,
-                ),
-                onPressed: btnAction,
-                child: const Text(
-                  "Proceed to Points Wallet",
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                  onPressed: btnAction,
+                  child: const Text(
+                    "Proceed to Points Wallet",
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                  ),
                 ),
               ),
-            ),
-          ],
-        ),
-      ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -645,9 +650,8 @@ String statusText = "Withdrawal locked: Must join an agency first.";
       );
     }
 
-    return Scaffold(
-
-backgroundColor: const Color(0xFFF5EFEB),
+return Scaffold(
+      backgroundColor: const Color(0xFFF5EFEB),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -825,13 +829,12 @@ final tierCalc = _calculateTier(giftIncome7Days);
                 physics: const BouncingScrollPhysics(),
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 children: [
-                  // 1. Header Profile & Agency Bar
                   Row(
                     children: [
-
-Container(
+                      Container(
                         width: 54,
-                        height: 54,
+
+height: 54,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           border: Border.all(color: const Color(0xFFDDD0C2), width: 1.5),
@@ -930,7 +933,6 @@ decoration: BoxDecoration(
 
                   const SizedBox(height: 16),
 
-                  // 2. Income & Hourly Tier Card
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
@@ -989,9 +991,9 @@ decoration: BoxDecoration(
                               ),
                             ),
                             GestureDetector(
+                              onTap: _showPolicyDialog,
 
-onTap: _showPolicyDialog,
-                              child: const Text(
+child: const Text(
                                 "Rules >",
                                 style: TextStyle(
                                   color: Color(0xFF8D6E63),
@@ -1035,7 +1037,6 @@ onTap: _showPolicyDialog,
 
                   const SizedBox(height: 16),
 
-                  // 3. Points Overview Header Bar
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -1070,9 +1071,9 @@ onTap: _showPolicyDialog,
                             child: const Text(
                               "Total Income",
                               style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                            ),
 
 ),
-                          ),
                           const SizedBox(width: 8),
                           GestureDetector(
                             onTap: () {
@@ -1101,7 +1102,6 @@ onTap: _showPolicyDialog,
 
                   const SizedBox(height: 12),
 
-                  // 4. Points Source 6-Grid Breakdown
                   GridView.count(
                     crossAxisCount: 3,
                     shrinkWrap: true,
@@ -1121,7 +1121,6 @@ onTap: _showPolicyDialog,
 
                   const SizedBox(height: 18),
 
-                  // 5. Work Detail Summary Card with Daily Claim
                   Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
@@ -1153,11 +1152,11 @@ onTap: _showPolicyDialog,
                                 ),
                                 child: Text(
                                   claimBtnText,
-
-style: TextStyle(
+                                  style: TextStyle(
                                     color: claimBtnTextCol,
                                     fontSize: 10.5,
-                                    fontWeight: FontWeight.bold,
+
+fontWeight: FontWeight.bold,
                                   ),
                                 ),
                               ),
@@ -1187,7 +1186,6 @@ style: TextStyle(
 
                   const SizedBox(height: 16),
 
-                  // 6. Bottom Tabs: Today's live record & Daily Statistics
                   Row(
                     children: [
                       GestureDetector(
@@ -1240,13 +1238,13 @@ style: TextStyle(
                     )
                   else
                     StreamBuilder<QuerySnapshot>(
-
-stream: FirebaseFirestore.instance
+                      stream: FirebaseFirestore.instance
                           .collection('hosts')
                           .doc(currentUser!.uid)
                           .collection('live_records')
                           .orderBy('createdAt', descending: true)
-                          .limit(10)
+
+.limit(10)
                           .snapshots(),
                       builder: (context, recordSnapshot) {
                         List records = [];
@@ -1318,7 +1316,7 @@ stream: FirebaseFirestore.instance
                       },
                     ),
 
-const SizedBox(height: 20),
+                  const SizedBox(height: 20),
                 ],
               );
             },
@@ -1328,7 +1326,7 @@ const SizedBox(height: 20),
     );
   }
 
-  Widget _buildStatRow(String label, String value) {
+Widget _buildStatRow(String label, String value) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
