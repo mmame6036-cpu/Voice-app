@@ -57,7 +57,6 @@ class _MessagesScreenState extends State<MessagesScreen> {
   void _initFirebaseListeners() {
     final db = FirebaseFirestore.instance;
 
-    // 1. Listen to System Messages
     _systemSub = db
         .collection('users')
         .doc(_uid)
@@ -80,7 +79,6 @@ class _MessagesScreenState extends State<MessagesScreen> {
       });
     }, onError: (_) {});
 
-    // 2. Listen to Official Notifications
     _officialSub = db
         .collection('official_notifications')
         .orderBy('timestamp', descending: true)
@@ -96,7 +94,6 @@ class _MessagesScreenState extends State<MessagesScreen> {
       });
     }, onError: (_) {});
 
-    // 3. Listen to Customer Service Chat Summary
     _supportSub = db
         .collection('support_chats')
         .doc(_uid)
@@ -130,7 +127,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
     return "$m-$d $h:$min";
   }
 
-Future<void> _markAllAsRead() async {
+  Future<void> _markAllAsRead() async {
     setState(() {
       _unreadSystemCount = 0;
       _unreadOfficialCount = 0;
@@ -140,7 +137,7 @@ Future<void> _markAllAsRead() async {
       _unreadFollowerCount = 0;
     });
 
-    try {
+try {
       final db = FirebaseFirestore.instance;
       final sysSnap = await db
           .collection('users')
@@ -191,7 +188,8 @@ Future<void> _markAllAsRead() async {
                 contentPadding: EdgeInsets.zero,
                 activeColor: const Color(0xFF00B4DB),
                 title: const Text("System & Official Alerts"),
-                subtitle: const Text("Receive wallet, security & event updates"),
+                subtitle:
+                    const Text("Receive wallet, security & event updates"),
                 value: systemAlertsOn,
                 onChanged: (v) => setModalState(() => systemAlertsOn = v),
               ),
@@ -211,9 +209,8 @@ Future<void> _markAllAsRead() async {
 
   @override
   Widget build(BuildContext context) {
-    final List> channels = [
+    final List channels = [
       {
-        'key': 'system',
         'icon': Icons.mark_email_unread_rounded,
         'bgColor': const Color(0xFF29B6F6),
         'title': 'System Message',
@@ -231,7 +228,6 @@ Future<void> _markAllAsRead() async {
         },
       },
       {
-        'key': 'official',
         'icon': Icons.notifications_none_rounded,
         'bgColor': const Color(0xFF26C6DA),
         'title': 'Official Notification',
@@ -249,11 +245,9 @@ Future<void> _markAllAsRead() async {
         },
       },
       {
-        'key': 'support',
         'icon': Icons.headset_mic_rounded,
         'bgColor': const Color(0xFF26A69A),
-
-'title': 'Customer Service',
+        'title': 'Customer Service',
         'subtitle': _latestSupportSubtitle,
         'time': _latestSupportTime,
         'unread': _unreadSupportCount,
@@ -269,7 +263,7 @@ Future<void> _markAllAsRead() async {
       },
     ];
 
-    final filteredChannels = channels.where((ch) {
+final filteredChannels = channels.where((ch) {
       if (!_showAll && (ch['unread'] as int) == 0) return false;
       if (_searchQuery.isNotEmpty) {
         final q = _searchQuery.toLowerCase();
@@ -284,7 +278,6 @@ Future<void> _markAllAsRead() async {
       backgroundColor: const Color(0xFFF5F7F9),
       body: Column(
         children: [
-          // Festive Aqua/Teal Header matching design
           Container(
             padding: EdgeInsets.only(
               top: MediaQuery.of(context).padding.top + 8,
@@ -333,8 +326,6 @@ Future<void> _markAllAsRead() async {
               ],
             ),
           ),
-
-          // Rounded White Main Container
           Expanded(
             child: Container(
               transform: Matrix4.translationValues(0, -10, 0),
@@ -344,7 +335,6 @@ Future<void> _markAllAsRead() async {
               ),
               child: Column(
                 children: [
-                  // Filter Tabs (All / Unread) + Search
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
                     child: Row(
@@ -361,8 +351,7 @@ Future<void> _markAllAsRead() async {
                           icon: Icon(
                             _isSearching ? Icons.close : Icons.search,
                             color: Colors.black54,
-
-size: 25,
+                            size: 25,
                           ),
                           onPressed: () {
                             setState(() {
@@ -377,9 +366,9 @@ size: 25,
                       ],
                     ),
                   ),
-
                   if (_isSearching)
-                    Padding(
+
+Padding(
                       padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
                       child: TextField(
                         controller: _searchController,
@@ -399,8 +388,6 @@ size: 25,
                         ),
                       ),
                     ),
-
-                  // Quick Action Row (Notice, Interaction, Followers)
                   Padding(
                     padding:
                         const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -447,8 +434,7 @@ size: 25,
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-
-builder: (_) => const FollowersListScreen(),
+                                builder: (_) => const FollowersListScreen(),
                               ),
                             );
                           },
@@ -456,10 +442,7 @@ builder: (_) => const FollowersListScreen(),
                       ],
                     ),
                   ),
-
                   const Divider(height: 1, color: Color(0xFFEEEEEE)),
-
-                  // Main Channels List (System Message, Official Notification, Customer Service)
                   Expanded(
                     child: filteredChannels.isEmpty
                         ? Center(
@@ -467,7 +450,8 @@ builder: (_) => const FollowersListScreen(),
                               _showAll
                                   ? 'No matching messages'
                                   : 'No unread messages',
-                              style: const TextStyle(
+
+style: const TextStyle(
                                   color: Colors.black45, fontSize: 14),
                             ),
                           )
@@ -555,8 +539,7 @@ builder: (_) => const FollowersListScreen(),
                   Row(
                     children: [
                       Flexible(
-
-child: Text(
+                        child: Text(
                           title,
                           style: const TextStyle(
                             fontWeight: FontWeight.w600,
@@ -575,7 +558,8 @@ child: Text(
                     const SizedBox(height: 4),
                     Text(
                       subtitle,
-                      style: const TextStyle(
+
+style: const TextStyle(
                         color: Colors.black45,
                         fontSize: 13.5,
                       ),
@@ -667,8 +651,7 @@ child: Text(
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-
-),
+                    ),
                   ),
                 ),
             ],
@@ -688,9 +671,6 @@ child: Text(
   }
 }
 
-// ============================================================================
-// 1. SYSTEM MESSAGE SCREEN (Firebase + Built-in System Alerts)
-// ============================================================================
 class SystemMessageScreen extends StatefulWidget {
   final String uid;
   const SystemMessageScreen({super.key, required this.uid});
@@ -700,10 +680,11 @@ class SystemMessageScreen extends StatefulWidget {
 }
 
 class _SystemMessageScreenState extends State<SystemMessageScreen> {
-  final List> _defaultSystemMessages = [
+  final List _defaultSystemMessages = [
     {
       'title': 'WELCOME to NILE Live!',
-      'time': '08-10 19:29:14',
+
+'time': '08-10 19:29:14',
       'body':
           'Welcome to NILE Live Voice Party! Enjoy 30-seat live voice lounges, exciting mini-games like Ocean Hunt, and daily host rewards. Never share your OTP code or password with anyone.',
       'icon': Icons.verified_user,
@@ -766,7 +747,7 @@ class _SystemMessageScreenState extends State<SystemMessageScreen> {
         ),
         centerTitle: true,
       ),
-      body: StreamBuilder<QuerySnapshot>>(
+      body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
             .collection('users')
             .doc(widget.uid)
@@ -774,11 +755,12 @@ class _SystemMessageScreenState extends State<SystemMessageScreen> {
             .orderBy('timestamp', descending: true)
             .snapshots(),
         builder: (context, snapshot) {
-          final List> items = [];
+          final List items = [];
 
-          if (snapshot.hasData && snapshot.data!.docs.isNotEmpty) {
+          if (snapshot.hasData && snapshot.data != null) {
             for (final doc in snapshot.data!.docs) {
-              final d = doc.data();
+              final raw = doc.data();
+              final Map d = raw is Map ? raw : {};
               items.add({
                 'title': (d['title'] ?? 'System Notice').toString(),
                 'time': d['timestamp'] is Timestamp
@@ -795,7 +777,7 @@ class _SystemMessageScreenState extends State<SystemMessageScreen> {
           }
           items.addAll(_defaultSystemMessages);
 
-return ListView.builder(
+          return ListView.builder(
             padding: const EdgeInsets.all(14),
             itemCount: items.length,
             itemBuilder: (context, index) {
@@ -812,7 +794,8 @@ return ListView.builder(
                       blurRadius: 8,
                       offset: const Offset(0, 3),
                     ),
-                  ],
+
+],
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -858,15 +841,12 @@ return ListView.builder(
   }
 }
 
-// ============================================================================
-// 2. OFFICIAL NOTIFICATION SCREEN (Global Announcements from Firebase)
-// ============================================================================
 class OfficialNotificationScreen extends StatelessWidget {
   const OfficialNotificationScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final List> defaultAnnouncements = [
+    final List defaultAnnouncements = [
       {
         'title': 'NILE Live 1st Anniversary Celebration!',
         'time': 'Today',
@@ -892,8 +872,7 @@ class OfficialNotificationScreen extends StatelessWidget {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0.5,
-
-leading: IconButton(
+        leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios, color: Colors.black, size: 18),
           onPressed: () => Navigator.pop(context),
         ),
@@ -913,17 +892,18 @@ leading: IconButton(
         ),
         centerTitle: true,
       ),
-      body: StreamBuilder<QuerySnapshot>>(
+      body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
             .collection('official_notifications')
             .orderBy('timestamp', descending: true)
             .snapshots(),
         builder: (context, snapshot) {
-          final List> list = [];
+          final List list = [];
 
-          if (snapshot.hasData && snapshot.data!.docs.isNotEmpty) {
+if (snapshot.hasData && snapshot.data != null) {
             for (final doc in snapshot.data!.docs) {
-              final d = doc.data();
+              final raw = doc.data();
+              final Map d = raw is Map ? raw : {};
               list.add({
                 'title': (d['title'] ?? 'Official Update').toString(),
                 'time': d['timestamp'] is Timestamp
@@ -998,9 +978,6 @@ leading: IconButton(
   }
 }
 
-// ============================================================================
-// 3. CUSTOMER SERVICE LIVE CHAT SCREEN (Real-Time Firebase Support + Quick FAQ)
-// ============================================================================
 class CustomerServiceChatScreen extends StatefulWidget {
   final String uid;
   const CustomerServiceChatScreen({super.key, required this.uid});
@@ -1014,7 +991,7 @@ class _CustomerServiceChatScreenState extends State<CustomerServiceChatScreen> {
   final TextEditingController _msgController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
 
-  final List> _quickFaqs = [
+  final List _quickFaqs = [
     {
       'q': '💰 Coin Recharge / Telebirr',
       'a':
@@ -1024,7 +1001,8 @@ class _CustomerServiceChatScreenState extends State<CustomerServiceChatScreen> {
       'q': '🎙️ Host Salary & Agency',
       'a':
           'Hosts earn diamonds from gifts in live voice rooms. Reach your daily target and withdraw via Agency Center or Wallet.',
-    },
+
+},
     {
       'q': '🔒 Account & Password Help',
       'a':
@@ -1120,7 +1098,7 @@ class _CustomerServiceChatScreenState extends State<CustomerServiceChatScreen> {
     }
   }
 
-@override
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF2F5F8),
@@ -1148,16 +1126,16 @@ class _CustomerServiceChatScreenState extends State<CustomerServiceChatScreen> {
                   fontWeight: FontWeight.bold),
             ),
             SizedBox(width: 4),
-            Icon(Icons.verified, color: Color(0xFF29B6F6), size: 16),
+
+Icon(Icons.verified, color: Color(0xFF29B6F6), size: 16),
           ],
         ),
         centerTitle: true,
       ),
       body: Column(
         children: [
-          // Chat Messages Stream
           Expanded(
-            child: StreamBuilder<QuerySnapshot>>(
+            child: StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
                   .collection('support_chats')
                   .doc(widget.uid)
@@ -1165,7 +1143,7 @@ class _CustomerServiceChatScreenState extends State<CustomerServiceChatScreen> {
                   .orderBy('timestamp', descending: false)
                   .snapshots(),
               builder: (context, snapshot) {
-                if (!snapshot.hasData) {
+                if (!snapshot.hasData || snapshot.data == null) {
                   return const Center(
                     child: CircularProgressIndicator(color: Color(0xFF26A69A)),
                   );
@@ -1176,7 +1154,8 @@ class _CustomerServiceChatScreenState extends State<CustomerServiceChatScreen> {
                   padding: const EdgeInsets.all(14),
                   itemCount: docs.length,
                   itemBuilder: (context, index) {
-                    final data = docs[index].data();
+                    final raw = docs[index].data();
+                    final Map data = raw is Map ? raw : {};
                     final bool isSupport = data['isSupport'] == true;
                     final String text = (data['text'] ?? '').toString();
 
@@ -1213,8 +1192,7 @@ class _CustomerServiceChatScreenState extends State<CustomerServiceChatScreen> {
                           text,
                           style: TextStyle(
                             color: isSupport ? Colors.black87 : Colors.white,
-
-fontSize: 14,
+                            fontSize: 14,
                             height: 1.4,
                           ),
                         ),
@@ -1225,8 +1203,6 @@ fontSize: 14,
               },
             ),
           ),
-
-          // Quick Help FAQ Chips
           Container(
             height: 44,
             color: Colors.white,
@@ -1240,20 +1216,22 @@ fontSize: 14,
                 return ActionChip(
                   backgroundColor: const Color(0xFFE0F7FA),
                   label: Text(
-                    faq['q']!,
+
+faq['q'].toString(),
                     style: const TextStyle(
                       color: Color(0xFF00838F),
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                  onPressed: () => _sendMessage(faq['q']!, autoReply: faq['a']),
+                  onPressed: () => _sendMessage(
+                    faq['q'].toString(),
+                    autoReply: faq['a'].toString(),
+                  ),
                 );
               },
             ),
           ),
-
-          // Message Input Bar
           SafeArea(
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -1302,9 +1280,6 @@ fontSize: 14,
   }
 }
 
-// ============================================================================
-// EXISTING SUB-SCREENS (Notice, Interaction, Followers, Content Detail)
-// ============================================================================
 class NoticeDetailScreen extends StatelessWidget {
   const NoticeDetailScreen({super.key});
 
@@ -1319,8 +1294,7 @@ class NoticeDetailScreen extends StatelessWidget {
       },
       {
         "title": "Community Guidelines Update",
-
-"date": "Yesterday 04:15 PM",
+        "date": "Yesterday 04:15 PM",
         "body":
             "Respect fellow broadcasters and guests. Any form of harassment in live audio lounges will result in room locks.",
       },
@@ -1350,7 +1324,8 @@ class NoticeDetailScreen extends StatelessWidget {
       body: ListView.builder(
         padding: const EdgeInsets.all(14),
         itemCount: notices.length,
-        itemBuilder: (context, index) {
+
+itemBuilder: (context, index) {
           final item = notices[index];
           return Card(
             margin: const EdgeInsets.only(bottom: 12),
@@ -1438,8 +1413,7 @@ class InteractionDetailScreen extends StatelessWidget {
         separatorBuilder: (_, __) =>
             const Divider(height: 1, color: Color(0xFFE8ECEF)),
         itemBuilder: (context, index) {
-
-final item = interactions[index];
+          final item = interactions[index];
           return ListTile(
             leading: CircleAvatar(
               backgroundColor: (item["color"] as Color).withOpacity(0.15),
@@ -1552,8 +1526,7 @@ class _FollowersListScreenState extends State<FollowersListScreen> {
                       isFollowing ? Colors.black87 : Colors.white,
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(18)),
-
-padding:
+                  padding:
                       const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                 ),
                 onPressed: () {
@@ -1598,7 +1571,8 @@ class NoticeContentScreen extends StatelessWidget {
       appBar: AppBar(
         title: Text(title,
             style: const TextStyle(
-                color: Colors.black,
+
+color: Colors.black,
                 fontSize: 16,
                 fontWeight: FontWeight.bold)),
         backgroundColor: Colors.white,
@@ -1673,8 +1647,7 @@ class NoticeContentScreen extends StatelessWidget {
               const SizedBox(height: 24),
               SizedBox(
                 width: double.infinity,
-
-child: ElevatedButton(
+                child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF16122C),
                     shape: RoundedRectangleBorder(
