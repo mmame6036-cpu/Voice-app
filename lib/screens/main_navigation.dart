@@ -20,7 +20,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   int _coins = 0;
   int _numericId = 100001;
   String _displayName = "Host";
-  StreamSubscription<DocumentSnapshot>? _userSubscription;
+  bool _isBanned = false;
+  String _banReason = "";
+  StreamSubscription? _userSubscription;
 
   final AgoraService _agoraService = AgoraService();
   Offset _floatingOffset = const Offset(16, 120);
@@ -57,16 +59,27 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           .doc(user.uid)
           .snapshots()
           .listen((snapshot) {
-        if (snapshot.exists && snapshot.data() != null) {
-          final data = snapshot.data()!;
-          if (mounted) {
-            setState(() {
-              _coins = (data['coins'] as num?)?.toInt() ?? 0;
-              _numericId = (data['numericId'] as num?)?.toInt() ?? 100001;
-              _displayName =
-                  (data['name'] ?? data['displayName'] ?? "User").toString();
-            });
-          }
+        if (!snapshot.exists) return;
+        final raw = snapshot.data();
+        if (raw == null) return;
+        final Map data = raw is Map ? raw : {};
+
+        final bool bannedNow = data['isBanned'] == true;
+        final String reasonText = (data['banReason'] ?? '').toString();
+
+        if (bannedNow && _agoraService.isInRoom) {
+          _agoraService.leaveRoom();
+        }
+
+        if (mounted) {
+          setState(() {
+            _coins = (data['coins'] as num?)?.toInt() ?? 0;
+            _numericId = (data['numericId'] as num?)?.toInt() ?? 100001;
+            _displayName =
+                (data['name'] ?? data['displayName'] ?? "User").toString();
+            _isBanned = bannedNow;
+            _banReason = reasonText;
+          });
         }
       });
     }
@@ -79,6 +92,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   }
 
   void _joinRoom(String roomTitle) {
+    if (_isBanned) return;
     _agoraService.restoreRoom();
     Navigator.push(
       context,
@@ -93,7 +107,127 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     );
   }
 
+  Widget _buildBannedScreen() {
+    String reasonDisplay =
+        "Violation of NILE Live community guidelines or terms of service.";
+    if (_banReason.isNotEmpty) {
+      reasonDisplay = _banReason;
+    }
+
+    return Scaffold(
+      backgroundColor: const Color(0xFF0F0B1E),
+      body: SafeArea(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: const Color(0xFF18122B),
+                borderRadius: BorderRadius.circular(22),
+                border: Border.all(color: Colors.redAccent, width: 1.5),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(16),
+
+decoration: BoxDecoration(
+                      color: Colors.redAccent.withOpacity(0.15),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.block,
+                      color: Colors.redAccent,
+                      size: 48,
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  const Text(
+                    "Account Suspended",
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    "ID: $_numericId ($_displayName)",
+                    style: const TextStyle(
+                      color: Color(0xFFF3BA2F),
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  const Text(
+                    "አካውንትዎ በ NILE Live አስተዳደር ታግዷል።",
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    reasonDisplay,
+                    style: const TextStyle(
+                      color: Colors.white60,
+                      fontSize: 12.5,
+                      height: 1.4,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 48,
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.redAccent,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      onPressed: () async {
+                        await FirebaseAuth.instance.signOut();
+                      },
+                      icon: const Icon(Icons.logout, size: 20),
+                      label: const Text(
+                        "Sign Out (ውጣ)",
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildFloatingMiniRoom() {
+    String roomTitleText = "Live Room";
+    if (_agoraService.currentRoomTitle.isNotEmpty) {
+      roomTitleText = _agoraService.currentRoomTitle;
+    }
+
+    IconData micIcon = Icons.mic;
+    Color micColor = Colors.greenAccent;
+    if (_agoraService.isMicMuted) {
+      micIcon = Icons.mic_off;
+      micColor = Colors.redAccent;
+    }
+
     return Positioned(
       right: _floatingOffset.dx,
       bottom: _floatingOffset.dy,
@@ -106,13 +240,15 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
               (_floatingOffset.dy - details.delta.dy)
                   .clamp(80.0, MediaQuery.of(context).size.height - 140),
             );
-          });
+
+});
         },
         onTap: () {
-          final title = _agoraService.currentRoomTitle.isNotEmpty
-              ? _agoraService.currentRoomTitle
-              : "VIP Voice Room";
-          _joinRoom(title);
+          String targetTitle = "VIP Voice Room";
+          if (_agoraService.currentRoomTitle.isNotEmpty) {
+            targetTitle = _agoraService.currentRoomTitle;
+          }
+          _joinRoom(targetTitle);
         },
         child: Material(
           color: Colors.transparent,
@@ -126,8 +262,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                 BoxShadow(
                   color: Colors.black.withOpacity(0.35),
                   blurRadius: 12,
-
-offset: const Offset(0, 4),
+                  offset: const Offset(0, 4),
                 ),
               ],
             ),
@@ -152,9 +287,7 @@ offset: const Offset(0, 4),
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        _agoraService.currentRoomTitle.isNotEmpty
-                            ? _agoraService.currentRoomTitle
-                            : "Live Room",
+                        roomTitleText,
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 11,
@@ -182,10 +315,8 @@ offset: const Offset(0, 4),
                       color: Colors.white.withOpacity(0.12),
                     ),
                     child: Icon(
-                      _agoraService.isMicMuted ? Icons.mic_off : Icons.mic,
-                      color: _agoraService.isMicMuted
-                          ? Colors.redAccent
-                          : Colors.greenAccent,
+                      micIcon,
+                      color: micColor,
                       size: 16,
                     ),
                   ),
@@ -213,6 +344,10 @@ offset: const Offset(0, 4),
 
   @override
   Widget build(BuildContext context) {
+    if (_isBanned) {
+      return _buildBannedScreen();
+    }
+
     final List<Widget> screens = [
       HomeScreen(
         coins: _coins,
@@ -226,7 +361,7 @@ offset: const Offset(0, 4),
       ),
     ];
 
-    return Scaffold(
+return Scaffold(
       body: Stack(
         children: [
           IndexedStack(
@@ -238,8 +373,7 @@ offset: const Offset(0, 4),
         ],
       ),
       bottomNavigationBar: Container(
-
-height: 64,
+        height: 64,
         decoration: BoxDecoration(
           color: navBgColor,
           boxShadow: [
@@ -285,6 +419,13 @@ height: 64,
     required String label,
   }) {
     final bool isSelected = _currentIndex == index;
+    Color itemColor = inactiveColor;
+    FontWeight itemWeight = FontWeight.normal;
+    if (isSelected) {
+      itemColor = activeGold;
+      itemWeight = FontWeight.bold;
+    }
+
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: () => setState(() => _currentIndex = index),
@@ -293,16 +434,16 @@ height: 64,
         children: [
           Icon(
             icon,
-            color: isSelected ? activeGold : inactiveColor,
+            color: itemColor,
             size: 23,
           ),
           const SizedBox(height: 3),
           Text(
             label,
             style: TextStyle(
-              color: isSelected ? activeGold : inactiveColor,
+              color: itemColor,
               fontSize: 11.5,
-              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+              fontWeight: itemWeight,
             ),
           ),
         ],
