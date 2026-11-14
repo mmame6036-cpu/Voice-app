@@ -15,6 +15,7 @@ import 'host_center_screen.dart';
 import 'agency_screen.dart';
 import 'coin_seller_screen.dart';
 import 'support_screen.dart';
+import 'admin_dashboard_screen.dart';
 import '../widgets/lucky_island_dialog.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -72,6 +73,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  void _openAdminDashboard() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const AdminDashboardScreen()),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final String uid = _currentUser?.uid ?? "";
@@ -83,39 +91,60 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ? FirebaseFirestore.instance.collection('users').doc(uid).snapshots()
             : null,
         builder: (context, snapshot) {
-          final userData = (snapshot.hasData && snapshot.data!.exists)
-              ? snapshot.data!.data() as Map<String, dynamic>
-              : <String, dynamic>{};
+          final rawData = (snapshot.hasData && snapshot.data!.exists)
+              ? snapshot.data!.data()
+              : null;
+          final Map userData = rawData is Map ? rawData : {};
 
-          final String displayName = userData['name'] ??
-              userData['nickname'] ??
-              _currentUser?.displayName ??
-              "User";
+          final String displayName = (userData['name'] ??
+                  userData['nickname'] ??
+                  _currentUser?.displayName ??
+                  "User")
+              .toString();
 
           final int numericId = (userData['numericId'] as num?)?.toInt() ?? 0;
           final String displayId = numericId != 0
               ? numericId.toString()
-              : (uid.length >= 6 ? uid.substring(0, 6).toUpperCase() : (uid.isEmpty ? "000000" : uid));
+              : (uid.length >= 6
+                  ? uid.substring(0, 6).toUpperCase()
+                  : (uid.isEmpty ? "000000" : uid));
 
-          final int firestoreCoins = (userData['coins'] as num?)?.toInt() ?? _coins;
+          final int firestoreCoins =
+              (userData['coins'] as num?)?.toInt() ?? _coins;
           final double points = (userData['diamonds'] as num?)?.toDouble() ??
               (userData['points'] as num?)?.toDouble() ??
               0.0;
 
-          final int followedCount = (userData['followedCount'] as num?)?.toInt() ?? 0;
-          final int followingCount = (userData['followingCount'] as num?)?.toInt() ?? 0;
-          final int friendsCount = (userData['friendsCount'] as num?)?.toInt() ?? 0;
+          final int followedCount =
+              (userData['followedCount'] as num?)?.toInt() ?? 0;
+          final int followingCount =
+              (userData['followingCount'] as num?)?.toInt() ?? 0;
+          final int friendsCount =
+              (userData['friendsCount'] as num?)?.toInt() ?? 0;
 
-          final int wealthLevel = (userData['wealthLevel'] as num?)?.toInt() ?? 0;
-          final int charmLevel = (userData['charmLevel'] as num?)?.toInt() ?? 0;
+          final int wealthLevel =
+              (userData['wealthLevel'] as num?)?.toInt() ?? 0;
+
+final int charmLevel =
+              (userData['charmLevel'] as num?)?.toInt() ?? 0;
           final int chatLevel = (userData['chatLevel'] as num?)?.toInt() ?? 0;
-          final String? agencyId = userData['agencyId'];
-          final String? avatarUrl = userData['avatarUrl'];
+          final String? agencyId = userData['agencyId']?.toString();
+          final String? avatarUrl = userData['avatarUrl']?.toString();
+
+          bool isAdmin = userData['isAdmin'] == true;
+          if (numericId == 100001) {
+            isAdmin = true;
+          }
+          if (userData['role'] == 'admin') {
+            isAdmin = true;
+          }
+          if (userData['role'] == 'super_admin') {
+            isAdmin = true;
+          }
 
           return SafeArea(
             child: SingleChildScrollView(
-
-padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               child: Column(
                 children: [
                   // 1. User Header Section
@@ -137,7 +166,7 @@ padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                   _buildVipClubCard(),
                   const SizedBox(height: 12),
 
-                  // 3. COINS & POINTS Card (Tapping Points opens PointsWalletScreen)
+                  // 3. COINS & POINTS Card
                   _buildAssetsCard(
                     coins: firestoreCoins,
                     points: points,
@@ -146,15 +175,20 @@ padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                   const SizedBox(height: 14),
 
                   // 4. Main 8 Features Grid
-                  _buildMainFeaturesGrid(coins: firestoreCoins, numericId: numericId),
+                  _buildMainFeaturesGrid(
+                      coins: firestoreCoins, numericId: numericId),
                   const SizedBox(height: 14),
 
                   // 5. Promo Recharge Banner
-                  _buildPromoRechargeBanner(coins: firestoreCoins, numericId: numericId),
+                  _buildPromoRechargeBanner(
+                      coins: firestoreCoins, numericId: numericId),
                   const SizedBox(height: 14),
 
-                  // 6. Creator & Business Section
-                  _buildBusinessSection(numericId: numericId),
+                  // 6. Creator, Business & Admin Section
+                  _buildBusinessSection(
+                    numericId: numericId,
+                    isAdmin: isAdmin,
+                  ),
                   const SizedBox(height: 24),
                 ],
               ),
@@ -182,7 +216,6 @@ padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       children: [
         Row(
           children: [
-            // Avatar with Frame
             Container(
               width: 68,
               height: 68,
@@ -202,15 +235,16 @@ padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               padding: const EdgeInsets.all(2.5),
               child: CircleAvatar(
                 backgroundColor: Colors.white,
-                backgroundImage: avatarUrl != null ? NetworkImage(avatarUrl) : null,
+                backgroundImage:
+                    avatarUrl != null ? NetworkImage(avatarUrl) : null,
                 child: avatarUrl == null
-                    ? const Icon(Icons.person, size: 36, color: Color(0xFFC7CBD1))
+
+? const Icon(Icons.person,
+                        size: 36, color: Color(0xFFC7CBD1))
                     : null,
               ),
             ),
             const SizedBox(width: 12),
-
-            // Name, Badges & ID
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -226,24 +260,30 @@ padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                     overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 4),
-
-Wrap(
+                  Wrap(
                     spacing: 6,
                     runSpacing: 4,
                     children: [
-                      _buildLevelTag(Icons.shield, "$wealthLevel", const Color(0xFF38D5C5)),
-                      _buildLevelTag(Icons.arrow_upward, "$charmLevel", const Color(0xFF81D774)),
-                      _buildLevelTag(Icons.auto_awesome, "$chatLevel", const Color(0xFFB57DE5)),
+                      _buildLevelTag(Icons.shield, "$wealthLevel",
+                          const Color(0xFF38D5C5)),
+                      _buildLevelTag(Icons.arrow_upward, "$charmLevel",
+                          const Color(0xFF81D774)),
+                      _buildLevelTag(Icons.auto_awesome, "$chatLevel",
+                          const Color(0xFFB57DE5)),
                       if (hasAgency)
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 1.5),
                           decoration: BoxDecoration(
                             color: const Color(0xFF5AB6FF),
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: const Text(
                             "AGENCY",
-                            style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                            style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 9,
+                                fontWeight: FontWeight.bold),
                           ),
                         ),
                     ],
@@ -256,10 +296,14 @@ Wrap(
                       children: [
                         Text(
                           "ID:$displayId",
-                          style: const TextStyle(fontSize: 11.5, color: Color(0xFF86909C), fontWeight: FontWeight.w600),
+                          style: const TextStyle(
+                              fontSize: 11.5,
+                              color: Color(0xFF86909C),
+                              fontWeight: FontWeight.w600),
                         ),
                         const SizedBox(width: 4),
-                        const Icon(Icons.copy, size: 11, color: Color(0xFF86909C)),
+                        const Icon(Icons.copy,
+                            size: 11, color: Color(0xFF86909C)),
                       ],
                     ),
                   ),
@@ -270,8 +314,6 @@ Wrap(
           ],
         ),
         const SizedBox(height: 16),
-
-        // Social Stats
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
@@ -298,19 +340,23 @@ Wrap(
           const SizedBox(width: 2),
           Text(
             value,
-            style: const TextStyle(color: Colors.white, fontSize: 9.5, fontWeight: FontWeight.bold),
+            style: const TextStyle(
+                color: Colors.white, fontSize: 9.5, fontWeight: FontWeight.bold),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildStatItem(String count, String label) {
+Widget _buildStatItem(String count, String label) {
     return Column(
       children: [
         Text(
           count,
-          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1D2129)),
+          style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF1D2129)),
         ),
         const SizedBox(height: 2),
         Text(
@@ -336,8 +382,8 @@ Wrap(
       ),
       child: Row(
         children: [
-
-const Icon(Icons.workspace_premium, color: Color(0xFFFFD580), size: 26),
+          const Icon(Icons.workspace_premium,
+              color: Color(0xFFFFD580), size: 26),
           const SizedBox(width: 10),
           const Expanded(
             child: Column(
@@ -345,7 +391,10 @@ const Icon(Icons.workspace_premium, color: Color(0xFFFFD580), size: 26),
               children: [
                 Text(
                   "VIP Club",
-                  style: TextStyle(color: Color(0xFFFFD580), fontSize: 13, fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                      color: Color(0xFFFFD580),
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold),
                 ),
                 Text(
                   "Upgrade to VIP and get free coins daily",
@@ -364,7 +413,10 @@ const Icon(Icons.workspace_premium, color: Color(0xFFFFD580), size: 26),
             ),
             child: const Text(
               "Get VIP",
-              style: TextStyle(color: Color(0xFF3E2D1D), fontSize: 11, fontWeight: FontWeight.bold),
+              style: TextStyle(
+                  color: Color(0xFF3E2D1D),
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold),
             ),
           ),
         ],
@@ -393,7 +445,6 @@ const Icon(Icons.workspace_premium, color: Color(0xFFFFD580), size: 26),
       ),
       child: Row(
         children: [
-          // Coins side -> Opens Coin Wallet/Recharge
           Expanded(
             child: InkWell(
               onTap: () => Navigator.push(
@@ -414,20 +465,29 @@ const Icon(Icons.workspace_premium, color: Color(0xFFFFD580), size: 26),
                     children: [
                       Text(
                         "Coins",
-                        style: TextStyle(fontSize: 12, color: Color(0xFF4E5969), fontWeight: FontWeight.w600),
+                        style: TextStyle(
+                            fontSize: 12,
+                            color: Color(0xFF4E5969),
+                            fontWeight: FontWeight.w600),
                       ),
                       SizedBox(width: 4),
-                      Icon(Icons.chevron_right, size: 14, color: Color(0xFF86909C)),
+
+Icon(Icons.chevron_right,
+                          size: 14, color: Color(0xFF86909C)),
                     ],
                   ),
                   const SizedBox(height: 6),
                   Row(
                     children: [
-                      const Icon(Icons.monetization_on, color: Color(0xFFFFB300), size: 18),
+                      const Icon(Icons.monetization_on,
+                          color: Color(0xFFFFB300), size: 18),
                       const SizedBox(width: 6),
                       Text(
                         "$coins",
-                        style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Color(0xFF1D2129)),
+                        style: const TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF1D2129)),
                       ),
                     ],
                   ),
@@ -437,8 +497,6 @@ const Icon(Icons.workspace_premium, color: Color(0xFFFFD580), size: 26),
           ),
           Container(width: 1, height: 36, color: const Color(0xFFF2F3F5)),
           const SizedBox(width: 18),
-
-          // Points side -> Opens PointsWalletScreen
           Expanded(
             child: InkWell(
               onTap: _openPointsWallet,
@@ -446,24 +504,31 @@ const Icon(Icons.workspace_premium, color: Color(0xFFFFD580), size: 26),
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Row(
-
-children: [
+                    children: [
                       Text(
                         "Points",
-                        style: TextStyle(fontSize: 12, color: Color(0xFF4E5969), fontWeight: FontWeight.w600),
+                        style: TextStyle(
+                            fontSize: 12,
+                            color: Color(0xFF4E5969),
+                            fontWeight: FontWeight.w600),
                       ),
                       SizedBox(width: 4),
-                      Icon(Icons.chevron_right, size: 14, color: Color(0xFF86909C)),
+                      Icon(Icons.chevron_right,
+                          size: 14, color: Color(0xFF86909C)),
                     ],
                   ),
                   const SizedBox(height: 6),
                   Row(
                     children: [
-                      const Icon(Icons.stars_rounded, color: Color(0xFF7E22CE), size: 18),
+                      const Icon(Icons.stars_rounded,
+                          color: Color(0xFF7E22CE), size: 18),
                       const SizedBox(width: 6),
                       Text(
                         points.toInt().toString(),
-                        style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Color(0xFF7E22CE)),
+                        style: const TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF7E22CE)),
                       ),
                     ],
                   ),
@@ -519,7 +584,8 @@ children: [
             icon: Icons.storefront,
             color: const Color(0xFFFF4D4F),
             label: "Store",
-            onTap: () => Navigator.push(
+
+onTap: () => Navigator.push(
               context,
               MaterialPageRoute(
                 builder: (_) => StoreScreen(
@@ -534,13 +600,15 @@ children: [
             icon: Icons.mark_email_unread,
             color: const Color(0xFFFF7A45),
             label: "Invitation",
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const InvitationScreen())),
+            onTap: () => Navigator.push(context,
+                MaterialPageRoute(builder: (_) => const InvitationScreen())),
           ),
           _buildItemTile(
             icon: Icons.backpack,
             color: const Color(0xFF40A9FF),
             label: "Backpack",
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const BackpackScreen())),
+            onTap: () => Navigator.push(context,
+                MaterialPageRoute(builder: (_) => const BackpackScreen())),
           ),
           _buildItemTile(
             icon: Icons.landscape,
@@ -552,20 +620,22 @@ children: [
             icon: Icons.military_tech,
             color: const Color(0xFF9254DE),
             label: "Level",
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const LevelScreen())),
+            onTap: () => Navigator.push(context,
+                MaterialPageRoute(builder: (_) => const LevelScreen())),
           ),
           _buildItemTile(
             icon: Icons.event_available,
-
-color: const Color(0xFF36CFC9),
+            color: const Color(0xFF36CFC9),
             label: "Task",
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TaskScreen())),
+            onTap: () => Navigator.push(
+                context, MaterialPageRoute(builder: (_) => const TaskScreen())),
           ),
           _buildItemTile(
             icon: Icons.verified_user,
             color: const Color(0xFFFFC53D),
             label: "Badge",
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const BadgeScreen())),
+            onTap: () => Navigator.push(context,
+                MaterialPageRoute(builder: (_) => const BadgeScreen())),
           ),
         ],
       ),
@@ -573,7 +643,8 @@ color: const Color(0xFF36CFC9),
   }
 
   // 5. Promo Carousel Banner
-  Widget _buildPromoRechargeBanner({required int coins, required int numericId}) {
+  Widget _buildPromoRechargeBanner(
+      {required int coins, required int numericId}) {
     return GestureDetector(
       onTap: () => Navigator.push(
         context,
@@ -614,12 +685,18 @@ color: const Color(0xFF36CFC9),
               children: [
                 Text(
                   "UP TO 60% OFF",
-                  style: TextStyle(color: Color(0xFFFFE58F), fontWeight: FontWeight.bold, fontSize: 11),
+                  style: TextStyle(
+                      color: Color(0xFFFFE58F),
+                      fontWeight: FontWeight.bold,
+                      fontSize: 11),
                 ),
                 SizedBox(height: 2),
                 Text(
                   "COIN RECHARGE",
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 18),
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 18),
                 ),
               ],
             ),
@@ -630,8 +707,58 @@ color: const Color(0xFF36CFC9),
     );
   }
 
-  // 6. Creator & Business Section
-  Widget _buildBusinessSection({required int numericId}) {
+// 6. Creator, Business & Admin Section
+  Widget _buildBusinessSection({
+    required int numericId,
+    required bool isAdmin,
+  }) {
+    final List<Widget> items = [
+      _buildItemTile(
+        icon: Icons.stars_rounded,
+        color: const Color(0xFF7E22CE),
+        label: "Points Wallet",
+        onTap: _openPointsWallet,
+      ),
+      _buildItemTile(
+        icon: Icons.person_pin,
+        color: const Color(0xFF13C2C2),
+        label: "Host Center",
+        onTap: () => Navigator.push(context,
+            MaterialPageRoute(builder: (_) => const HostCenterScreen())),
+      ),
+      _buildItemTile(
+        icon: Icons.business_center,
+        color: const Color(0xFF1890FF),
+        label: "Agency",
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+              builder: (_) => AgencyScreen(userNumericId: numericId)),
+        ),
+      ),
+      _buildItemTile(
+        icon: Icons.currency_exchange,
+        color: const Color(0xFF52C41A),
+        label: "Coin Seller",
+        onTap: () => Navigator.push(context,
+            MaterialPageRoute(builder: (_) => const CoinSellerScreen())),
+      ),
+      _buildItemTile(
+        icon: Icons.support_agent,
+        color: const Color(0xFF722ED1),
+        label: "Support",
+        onTap: () => Navigator.push(context,
+            MaterialPageRoute(builder: (_) => const SupportScreen())),
+      ),
+      if (isAdmin)
+        _buildItemTile(
+          icon: Icons.admin_panel_settings,
+          color: const Color(0xFFF3BA2F),
+          label: "Admin Panel",
+          onTap: _openAdminDashboard,
+        ),
+    ];
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 14),
       decoration: BoxDecoration(
@@ -645,44 +772,14 @@ color: const Color(0xFF36CFC9),
           ),
         ],
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          _buildItemTile(
-            icon: Icons.stars_rounded,
-            color: const Color(0xFF7E22CE),
-            label: "Points Wallet",
-            onTap: _openPointsWallet,
-          ),
-          _buildItemTile(
-            icon: Icons.person_pin,
-            color: const Color(0xFF13C2C2),
-            label: "Host Center",
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const HostCenterScreen())),
-          ),
-          _buildItemTile(
-            icon: Icons.business_center,
-            color: const Color(0xFF1890FF),
-            label: "Agency",
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => AgencyScreen(userNumericId: numericId)),
-            ),
-          ),
-          _buildItemTile(
-            icon: Icons.currency_exchange,
-
-color: const Color(0xFF52C41A),
-            label: "Coin Seller",
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CoinSellerScreen())),
-          ),
-          _buildItemTile(
-            icon: Icons.support_agent,
-            color: const Color(0xFF722ED1),
-            label: "Support",
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SupportScreen())),
-          ),
-        ],
+      child: GridView.count(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        crossAxisCount: 4,
+        mainAxisSpacing: 14,
+        crossAxisSpacing: 4,
+        childAspectRatio: 0.9,
+        children: items,
       ),
     );
   }
