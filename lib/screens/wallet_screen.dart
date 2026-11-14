@@ -31,11 +31,10 @@ class _WalletScreenState extends State<WalletScreen> {
   int _selectedPackageIdx = 0;
   late TextEditingController _userIdController;
   bool _isProcessingPayment = false;
-  StreamSubscription<DocumentSnapshot>>? _walletSub;
+  StreamSubscription? _walletSub;
 
   final String _serverUrl = "https://nile-token-server.onrender.com";
 
-  // ይፋዊ የ Binance Pay የሳንቲም ፓኬጆች
   static const _binancePackages = [
     {"coins": 35000, "price": "\$5", "usd": 5, "bonus": "+0%"},
     {"coins": 70000, "price": "\$10", "usd": 10, "bonus": "+5%"},
@@ -45,7 +44,6 @@ class _WalletScreenState extends State<WalletScreen> {
     {"coins": 3500000, "price": "\$500", "usd": 500, "bonus": "+25%"},
   ];
 
-  // ነጥብ ወደ ሳንቲም መቀየሪያ ፓኬጆች (80% ተመን)
   static const _exchangeOptions = [
     {"points": 1000, "coins": 800},
     {"points": 5000, "coins": 4000},
@@ -69,7 +67,6 @@ class _WalletScreenState extends State<WalletScreen> {
     super.dispose();
   }
 
-  // Coins እና Points በቅጽበት ከ Firestore ጋር እንዲቆጥሩ
   void _listenToUserWallet() {
     _walletSub = FirebaseFirestore.instance
         .collection('users')
@@ -89,7 +86,6 @@ class _WalletScreenState extends State<WalletScreen> {
     });
   }
 
-  // ግብይቱን በዳታቤዝ መዝግቦ ሳንቲም ወዲያውኑ መጨመሪያ
   Future<void> _recordTransactionAndAddCoins({
     required int addedCoins,
     required String amountStr,
@@ -131,7 +127,6 @@ class _WalletScreenState extends State<WalletScreen> {
     }
   }
 
-// ነጥብ (Points) ወደ ሳንቲም (Coins) መቀየሪያ
   Future<void> _exchangePointsToCoins(int pointsCost, int coinsGain) async {
     if (_points < pointsCost) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -143,7 +138,7 @@ class _WalletScreenState extends State<WalletScreen> {
       return;
     }
 
-    setState(() => _isProcessingPayment = true);
+setState(() => _isProcessingPayment = true);
     try {
       final db = FirebaseFirestore.instance;
       final userRef = db.collection('users').doc(widget.userUid);
@@ -194,9 +189,8 @@ class _WalletScreenState extends State<WalletScreen> {
     }
   }
 
-  // ነጥብ ወደ ገንዘብ (USDT / Telebirr) ወጪ መጠየቂያ
   void _showWithdrawDialog() {
-    const int minWithdrawPoints = 100000; // 100,000 Points = $10
+    const int minWithdrawPoints = 100000;
     if (_points < minWithdrawPoints) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -242,8 +236,7 @@ class _WalletScreenState extends State<WalletScreen> {
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
                   value: selectedMethod,
-
-dropdownColor: const Color(0xFF261D45),
+                  dropdownColor: const Color(0xFF261D45),
                   style: const TextStyle(color: Colors.white, fontSize: 13),
                   decoration: InputDecoration(
                     labelText: "Payment Method",
@@ -251,7 +244,8 @@ dropdownColor: const Color(0xFF261D45),
                     filled: true,
                     fillColor: Colors.black26,
                     border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12)),
+
+borderRadius: BorderRadius.circular(12)),
                   ),
                   items: const [
                     DropdownMenuItem(
@@ -313,9 +307,15 @@ dropdownColor: const Color(0xFF261D45),
               onPressed: () async {
                 final reqPoints = int.tryParse(pointsController.text.trim()) ?? 0;
                 final account = addressController.text.trim();
-                if (reqPoints < minWithdrawPoints || reqPoints > _points) {
+                if (reqPoints < minWithdrawPoints) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text("ትክክለኛ የነጥብ መጠን ያስገቡ!")),
+                    const SnackBar(content: Text("ቢያንስ 100,000 Points ያስገቡ!")),
+                  );
+                  return;
+                }
+                if (reqPoints > _points) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text("ያለዎት ነጥብ አይበቃም!")),
                   );
                   return;
                 }
@@ -334,9 +334,10 @@ dropdownColor: const Color(0xFF261D45),
                   final userRef = db.collection('users').doc(widget.userUid);
                   final usdAmount = reqPoints / 10000.0;
 
-await db.runTransaction((tx) async {
+                  await db.runTransaction((tx) async {
                     final snap = await tx.get(userRef);
-                    final cur = (snap.data()?['points'] as num?)?.toInt() ?? 0;
+
+final cur = (snap.data()?['points'] as num?)?.toInt() ?? 0;
                     if (cur < reqPoints) throw Exception("Insufficient points");
                     tx.update(userRef, {
                       'points': FieldValue.increment(-reqPoints),
@@ -385,7 +386,6 @@ await db.runTransaction((tx) async {
     );
   }
 
-  // የ Binance Pay ክፍያ መስኮት
   void _processBinancePay() {
     final pkg = _binancePackages[_selectedPackageIdx];
     final coinsToAdd = pkg["coins"] as int;
@@ -435,11 +435,11 @@ await db.runTransaction((tx) async {
                     color: Colors.white)),
             const SizedBox(height: 4),
             Text("Price: $priceStr (USDT)",
-
-style: const TextStyle(
+                style: const TextStyle(
                     color: Color(0xFFF3BA2F),
                     fontWeight: FontWeight.bold,
-                    fontSize: 18)),
+
+fontSize: 18)),
             const SizedBox(height: 14),
             Container(
               padding: const EdgeInsets.all(12),
@@ -534,8 +534,7 @@ style: const TextStyle(
                       ),
                     ),
                   );
-
-}
+                }
               } finally {
                 if (mounted) setState(() => _isProcessingPayment = false);
               }
@@ -548,7 +547,7 @@ style: const TextStyle(
     );
   }
 
-  @override
+@override
   Widget build(BuildContext context) {
     const goldColor = Color(0xFFF3BA2F);
     const diamondColor = Color(0xFF00E5FF);
@@ -574,7 +573,6 @@ style: const TextStyle(
         children: [
           Column(
             children: [
-              // Top Switcher: Coins Wallet vs Points Wallet
               Container(
                 margin: const EdgeInsets.fromLTRB(16, 12, 16, 6),
                 padding: const EdgeInsets.all(4),
@@ -640,12 +638,12 @@ style: const TextStyle(
                   ],
                 ),
               ),
-
-Expanded(
+              Expanded(
                 child: _activeTab == 0
                     ? _buildCoinsTab(goldColor)
                     : _buildPointsTab(diamondColor),
-              ),
+
+),
             ],
           ),
           if (_isProcessingPayment)
@@ -660,9 +658,6 @@ Expanded(
     );
   }
 
-  // =========================================================================
-  // TAB 1: COINS WALLET (Binance Pay Recharge)
-  // =========================================================================
   Widget _buildCoinsTab(Color brandColor) {
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
@@ -744,8 +739,7 @@ Expanded(
             decoration: BoxDecoration(
               color: const Color(0xFF1E1638),
               borderRadius: BorderRadius.circular(12),
-
-border: Border.all(color: Colors.white12),
+              border: Border.all(color: Colors.white12),
             ),
             child: Row(
               children: [
@@ -755,7 +749,8 @@ border: Border.all(color: Colors.white12),
                     keyboardType: TextInputType.number,
                     style: const TextStyle(
                         fontWeight: FontWeight.bold,
-                        fontSize: 14,
+
+fontSize: 14,
                         color: Colors.white),
                     decoration: const InputDecoration(
                       border: InputBorder.none,
@@ -847,8 +842,7 @@ border: Border.all(color: Colors.white12),
               final isSelected = _selectedPackageIdx == idx;
 
               return GestureDetector(
-
-onTap: () => setState(() => _selectedPackageIdx = idx),
+                onTap: () => setState(() => _selectedPackageIdx = idx),
                 child: Container(
                   decoration: BoxDecoration(
                     color: isSelected
@@ -856,7 +850,8 @@ onTap: () => setState(() => _selectedPackageIdx = idx),
                         : const Color(0xFF1E1638),
                     borderRadius: BorderRadius.circular(14),
                     border: Border.all(
-                      color: isSelected ? brandColor : Colors.white12,
+
+color: isSelected ? brandColor : Colors.white12,
                       width: isSelected ? 1.8 : 1.0,
                     ),
                   ),
@@ -940,24 +935,21 @@ onTap: () => setState(() => _selectedPackageIdx = idx),
     );
   }
 
-  // =========================================================================
-  // TAB 2: POINTS WALLET (Live Points Counter, Exchange & Withdraw)
-  // =========================================================================
   Widget _buildPointsTab(Color diamondColor) {
-    final double usdValue = _points / 10000.0; // 10,000 Points = $1.00
+    final double usdValue = _points / 10000.0;
 
-return SingleChildScrollView(
+    return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Points Balance Card
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
               gradient: const LinearGradient(
-                colors: [Color(0xFF0E3954), Color(0xFF130E26)],
+
+colors: [Color(0xFF0E3954), Color(0xFF130E26)],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
@@ -1026,8 +1018,6 @@ return SingleChildScrollView(
             ),
           ),
           const SizedBox(height: 16),
-
-          // Withdraw Button
           SizedBox(
             width: double.infinity,
             height: 48,
@@ -1047,8 +1037,6 @@ return SingleChildScrollView(
             ),
           ),
           const SizedBox(height: 22),
-
-// Exchange Points to Coins Section
           const Text(
             "Exchange Points to Coins (Instant)",
             style: TextStyle(
@@ -1059,7 +1047,8 @@ return SingleChildScrollView(
           const SizedBox(height: 10),
           GridView.builder(
             shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
+
+physics: const NeverScrollableScrollPhysics(),
             itemCount: _exchangeOptions.length,
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 2,
@@ -1108,8 +1097,6 @@ return SingleChildScrollView(
             },
           ),
           const SizedBox(height: 22),
-
-          // Live Points History from Firestore
           const Text(
             "Recent Points Activity",
             style: TextStyle(
@@ -1118,7 +1105,7 @@ return SingleChildScrollView(
                 color: Colors.white),
           ),
           const SizedBox(height: 8),
-          StreamBuilder<QuerySnapshot>>(
+          StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance
                 .collection('point_transactions')
                 .where('userUid', isEqualTo: widget.userUid)
@@ -1126,7 +1113,7 @@ return SingleChildScrollView(
                 .limit(15)
                 .snapshots(),
             builder: (context, snapshot) {
-              if (!snapshot.hasData) {
+              if (!snapshot.hasData || snapshot.data == null) {
                 return const Padding(
                   padding: EdgeInsets.all(16),
                   child: Center(
@@ -1153,14 +1140,17 @@ return SingleChildScrollView(
                 );
               }
 
-return ListView.builder(
+              return ListView.builder(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 itemCount: docs.length,
                 itemBuilder: (context, i) {
-                  final d = docs[i].data();
+
+final raw = docs[i].data();
+                  final Map d = raw is Map ? raw : {};
                   final int pts = (d['points'] as num?)?.toInt() ?? 0;
-                  final String type = (d['type'] ?? 'GIFT_RECEIVED').toString();
+                  final String type =
+                      (d['type'] ?? 'GIFT_RECEIVED').toString();
                   final bool isPositive = pts >= 0;
 
                   return Container(
