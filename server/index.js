@@ -11,30 +11,49 @@ app.use(express.json());
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: "*",
-    methods: ["GET", "POST"]
+    origin: '*',
+    methods: ['GET', 'POST']
   }
 });
 
-const APP_ID = 'd00a25d96dfc44cc866cd8f41c496b36';
+let APP_ID = 'd00a25d96dfc44cc866cd8f41c496b36';
+if (process.env.AGORAApp_ID) {
+  APP_ID = process.env.AGORAApp_ID;
+}
 const APP_CERTIFICATE = 'f612162b922c4dc4857cf5ab274c0108';
 
+// In-memory store for pending Binance Pay orders
+const pendingOrders = new Map();
+
+// 1. Health Check Endpoint
 app.get('/ping', (req, res) => {
   res.status(200).send('pong');
 });
+
+// 2. Custom Auth Token Endpoint
 app.post('/auth/custom-token', (req, res) => {
   res.status(200).json({
     success: true,
-    token: "mock_guest_token_" + Date.now()
+    token: 'mock_guest_token_' + Date.now()
   });
 });
+
+// 3. Agora RTC Token Generator
 app.get('/rtcToken', (req, res) => {
   const channelName = req.query.channelName;
   const uid = parseInt(req.query.uid, 10);
-  const roleType = req.query.role === 'publisher' ? RtcRole.PUBLISHER : RtcRole.SUBSCRIBER;
 
-  if (!channelName || isNaN(uid)) {
-    return res.status(400).json({ error: 'channelName and numeric uid are required' });
+  let roleType = RtcRole.SUBSCRIBER;
+  if (req.query.role === 'publisher') {
+    roleType = RtcRole.PUBLISHER;
+  }
+
+  if (!channelName) {
+    return res.status(400).json({ error: 'channelName is required' });
+  }
+
+  if (isNaN(uid)) {
+    return res.status(400).json({ error: 'numeric uid is required' });
   }
 
   const expirationTimeInSeconds = 86400;
@@ -56,6 +75,81 @@ app.get('/rtcToken', (req, res) => {
   }
 });
 
+// 4. Create Binance Pay Order
+app.post('/api/payment/binance-pay', (req, res) => {
+  const { userUid, userNumericId, targetNumericId, coins, priceUsd, txnId } = req.body;
+
+  if (!txnId) {
+    return res.status(400).json({
+      success: false,
+      message: 'Missing transaction ID'
+    });
+  }
+
+  if (!coins) {
+    return res.status(400).json({
+      success: false,
+      message: 'Missing coins amount'
+    });
+  }
+
+  if (!priceUsd) {
+    return res.status(400).json({
+      success: false,
+      message: 'Missing USD price'
+    });
+  }
+
+  pendingOrders.set(txnId, {
+    userUid: userUid,
+    userNumericId: userNumericId,
+    targetNumericId: targetNumericId,
+    coins: coins,
+    priceUsd: priceUsd,
+    status: 'PENDING',
+    createdAt: Date.now()
+  });
+
+  let payId = 'NOT_CONFIGURED';
+  if (process.env.BINANCE_PAY_ID) {
+    payId = process.env.BINANCE_PAY_ID;
+  }
+
+  return res.status(200).json({
+    success: true,
+    status: 'PENDING',
+    verified: false,
+    binancePayId: payId,
+    message: 'Awaiting USDT payment confirmation'
+  });
+});
+
+// 5. Verify Binance Pay Order
+app.post('/api/payment/verify-binance-pay', (req, res) => {
+  const { txnId } = req.body;
+  const order = pendingOrders.get(txnId);
+
+  if (!order) {
+    return res.status(404).json({
+      verified: false,
+      message: 'Order not found or expired'
+    });
+  }
+
+  if (order.status === 'PAID') {
+    return res.status(200).json({
+      verified: true,
+      credited: false
+    });
+  }
+
+  return res.status(200).json({
+    verified: false,
+    message: 'Payment not confirmed yet. Please wait 1 minute or contact support with Order Ref.'
+  });
+});
+
+// 6. Real-Time Seat, Gift, and Chat Engine (Socket.io)
 const roomStates = {};
 
 io.on('connection', (socket) => {
@@ -79,17 +173,17 @@ io.on('connection', (socket) => {
       seats: roomStates[roomId].seats
     });
 
-    console.log(userName + ' joined room: ' + roomId);
+console.log(userName + ' joined room: ' + roomId);
   });
 
   socket.on('seat_action', (data) => {
     const { roomId, seatIndex, userName, isLeaving } = data;
 
-    if (roomStates[roomId] && seatIndex >= 0 && seatIndex < 30) {
+    if (roomStates[roomId] && seatIndex >= 0 && seatIndex <= 29) {
       if (isLeaving) {
         roomStates[roomId].seats[seatIndex] = null;
       } else {
-        for (let i = 0; i < 30; i++) {
+        for (let i = 0; i <= 29; i++) {
           if (roomStates[roomId].seats[i] === userName) {
             roomStates[roomId].seats[i] = null;
           }
@@ -97,9 +191,14 @@ io.on('connection', (socket) => {
         roomStates[roomId].seats[seatIndex] = userName;
       }
 
+      let updatedUser = userName;
+      if (isLeaving) {
+        updatedUser = null;
+      }
+
       io.to(roomId).emit('seat_state_updated', {
         seatIndex: seatIndex,
-        userName: isLeaving ? null : userName,
+        userName: updatedUser,
         seats: roomStates[roomId].seats
       });
     }
@@ -122,7 +221,7 @@ io.on('connection', (socket) => {
     const userName = socket.userName;
 
     if (roomId && userName && roomStates[roomId]) {
-      for (let i = 0; i < 30; i++) {
+      for (let i = 0; i <= 29; i++) {
         if (roomStates[roomId].seats[i] === userName) {
           roomStates[roomId].seats[i] = null;
           io.to(roomId).emit('seat_state_updated', {
@@ -137,6 +236,7 @@ io.on('connection', (socket) => {
   });
 });
 
+// 7. Keep-Alive Self-Ping Engine
 const SERVER_URL = 'https://nile-token-server.onrender.com/ping';
 setInterval(() => {
   fetch(SERVER_URL)
@@ -144,7 +244,11 @@ setInterval(() => {
     .catch((err) => console.log('Keep-alive ping error:', err.message));
 }, 600000);
 
-const PORT = process.env.PORT || 3000;
+let PORT = 3000;
+if (process.env.PORT) {
+  PORT = process.env.PORT;
+}
+
 server.listen(PORT, () => {
   console.log('Server listening on port ' + PORT);
 });
