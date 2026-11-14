@@ -118,7 +118,7 @@ class _RoomScreenState extends State<RoomScreen>
   ];
   final TextEditingController _msgController = TextEditingController();
 
-  late int _myUid;
+  int _myUid = 0;
   String _myDisplayName = "User";
 
   VideoPlayerController? _videoController;
@@ -150,15 +150,19 @@ class _RoomScreenState extends State<RoomScreen>
   static const Color buttonDark = Color(0xFF4A3528);
 
   @override
-
-void initState() {
+  void initState() {
     super.initState();
     _currentCoins = widget.initialCoins;
     _activeSeatCount = widget.seatCount;
     _seats = List.filled(_activeSeatCount, null);
     _seatUids = List.filled(_activeSeatCount, null);
     _seatGiftsCount = List.filled(_activeSeatCount, 0);
-    _myUid = 100001;
+
+if (_currentUser != null) {
+      _myUid = (_currentUser!.uid.hashCode.abs() % 899999) + 100000;
+    } else {
+      _myUid = 100001;
+    }
 
     _roomSettings = RoomSettingsData(
       roomName: widget.roomTitle,
@@ -184,61 +188,97 @@ void initState() {
       curve: Curves.easeOutBack,
     ));
 
-    _fetchUserProfile();
-    _initVoiceEngine();
+    _bootRoom();
+  }
+
+  Future<void> _bootRoom() async {
+    await _fetchUserProfile();
+    await _initVoiceEngine();
     _syncRoomWithFirestore();
     _listenToLiveRoomChats();
   }
 
   Future<void> _fetchUserProfile() async {
-    if (_currentUser != null) {
+    final user = _currentUser;
+    if (user == null) return;
+
+    try {
       final snap = await FirebaseFirestore.instance
           .collection('users')
-          .doc(_currentUser!.uid)
+          .doc(user.uid)
           .get();
-      if (snap.exists && snap.data() != null) {
-        final d = snap.data()!;
-        if (mounted) {
-          setState(() {
-            _myUid = (d['numericId'] as num?)?.toInt() ?? 100001;
-            _myDisplayName = (d['name'] ?? d['displayName'] ?? "User").toString();
-            _currentCoins = (d['coins'] as num?)?.toInt() ?? _currentCoins;
-          });
+      if (snap.exists) {
+        final d = snap.data();
+        if (d != null) {
+          final int fetchedId = (d['numericId'] as num?)?.toInt() ?? 0;
+          String fetchedName = "User";
+          if (d['name'] != null) {
+            fetchedName = d['name'].toString();
+          } else if (d['displayName'] != null) {
+            fetchedName = d['displayName'].toString();
+          }
+
+          if (mounted) {
+            setState(() {
+              if (fetchedId > 0) {
+                _myUid = fetchedId;
+              }
+              _myDisplayName = fetchedName;
+              _currentCoins = (d['coins'] as num?)?.toInt() ?? _currentCoins;
+            });
+          }
         }
       }
+    } catch (e) {
+      debugPrint("Fetch profile error: $e");
     }
   }
 
   void _syncRoomWithFirestore() {
-    final roomRef = FirebaseFirestore.instance.collection('rooms').doc(channelName);
+    final roomRef =
+        FirebaseFirestore.instance.collection('rooms').doc(channelName);
     _roomSubscription = roomRef.snapshots().listen((snapshot) {
-      if (snapshot.exists && snapshot.data() != null) {
-        final data = snapshot.data()!;
-        if (data['seats'] is List) {
-          final List incomingSeats = data['seats'] as List;
-          final List incomingUids = (data['seatUids'] as List?) ?? [];
-          final List incomingGifts = (data['seatGifts'] as List?) ?? [];
+      if (!snapshot.exists) return;
+      final data = snapshot.data();
+      if (data == null) return;
 
-          if (mounted) {
-            setState(() {
-              for (int i = 0; i < _activeSeatCount; i++) {
-                if (i < incomingSeats.length) {
-                  _seats[i] = incomingSeats[i];
-                }
-                if (i < incomingUids.length) {
-                  _seatUids[i] = incomingUids[i];
-                }
-                if (i < incomingGifts.length) {
-                  _seatGiftsCount[i] = (incomingGifts[i] as num).toInt();
-                }
-              }
+      if (data['seats'] is List) {
+        final List incomingSeats = data['seats'] as List;
+        final List incomingUids = (data['seatUids'] as List?) ?? [];
+        final List incomingGifts = (data['seatGifts'] as List?) ?? [];
 
-              if (_currentUser != null && _seatUids.contains(_currentUser!.uid)) {
-                _mySeatIndex = _seatUids.indexOf(_currentUser!.uid);
-              } else {
-                _mySeatIndex = null;
+        if (mounted) {
+          final int? previousSeat = _mySeatIndex;
+          int? updatedSeat;
+
+          setState(() {
+            for (int i = 0; i < _activeSeatCount; i++) {
+              if (i < incomingSeats.length) {
+                _seats[i] = incomingSeats[i];
               }
-            });
+              if (i < incomingUids.length) {
+                _seatUids[i] = incomingUids[i];
+              }
+              if (i < incomingGifts.length) {
+                _seatGiftsCount[i] = (incomingGifts[i] as num).toInt();
+              }
+            }
+
+            if (_currentUser != null) {
+              if (_seatUids.contains(_currentUser!.uid)) {
+                updatedSeat = _seatUids.indexOf(_currentUser!.uid);
+              }
+            }
+            _mySeatIndex = updatedSeat;
+          });
+
+          if (previousSeat == null) {
+            if (updatedSeat != null) {
+              _updateBroadcasterRole(true);
+            }
+          } else if (updatedSeat == null) {
+            _updateBroadcasterRole(false);
+            _stopMicMinutesTracking();
           }
         }
       }
@@ -247,41 +287,54 @@ void initState() {
 
   void _listenToLiveRoomChats() {
     _chatSubscription = FirebaseFirestore.instance
-        .collection('rooms')
+
+.collection('rooms')
         .doc(channelName)
         .collection('chats')
         .orderBy('timestamp', descending: true)
         .limit(30)
         .snapshots()
         .listen((querySnapshot) {
-      if (querySnapshot.docs.isNotEmpty && mounted) {
-        final List<String> loadedMsgs = [];
-        for (var doc in querySnapshot.docs.reversed) {
-          final d = doc.data();
-          final sender = d['sender'] ?? "User";
-          final txt = d['text'] ?? "";
-          if (txt.toString().isNotEmpty) {
-            loadedMsgs.add("$sender: $txt");
+      if (querySnapshot.docs.isNotEmpty) {
+        if (mounted) {
+          final List<String> loadedMsgs = [];
+          for (var doc in querySnapshot.docs.reversed) {
+            final d = doc.data();
+            String sender = "User";
+            if (d['sender'] != null) {
+              sender = d['sender'].toString();
+            }
+            String txt = "";
+            if (d['text'] != null) {
+              txt = d['text'].toString();
+            }
+            if (txt.isNotEmpty) {
+              loadedMsgs.add("$sender: $txt");
+            }
           }
+          setState(() {
+            _chatMessages.clear();
+            _chatMessages.addAll(loadedMsgs);
+          });
         }
-        setState(() {
-          _chatMessages.clear();
-          _chatMessages.addAll(loadedMsgs);
-        });
       }
     });
   }
 
-void _startMicMinutesTracking() {
+  void _startMicMinutesTracking() {
     _micTrackerTimer?.cancel();
     _micTrackerTimer = Timer.periodic(const Duration(minutes: 1), (timer) {
-      if (_currentUser != null && _mySeatIndex != null && !_isMicMuted) {
-        FirebaseFirestore.instance
-            .collection('users')
-            .doc(_currentUser!.uid)
-            .set({
-          'todayMicMinutes': FieldValue.increment(1),
-        }, SetOptions(merge: true));
+      if (_currentUser != null) {
+        if (_mySeatIndex != null) {
+          if (!_isMicMuted) {
+            FirebaseFirestore.instance
+                .collection('users')
+                .doc(_currentUser!.uid)
+                .set({
+              'todayMicMinutes': FieldValue.increment(1),
+            }, SetOptions(merge: true));
+          }
+        }
       }
     });
   }
@@ -292,18 +345,26 @@ void _startMicMinutesTracking() {
 
   Future<void> _initVoiceEngine() async {
     try {
+      _agoraService.onErrorCallback = (String errMsg) {
+        if (mounted) {
+          setState(() {
+            _chatMessages.add("System: $errMsg");
+          });
+        }
+      };
+
       await _agoraService.initEngine(
         onUserJoined: (uid) {
           if (mounted) {
             setState(() {
-              _chatMessages.add("User $uid joined");
+              _chatMessages.add("System: User $uid connected to audio");
             });
           }
         },
         onUserOffline: (uid) {
           if (mounted) {
             setState(() {
-              _chatMessages.add("User $uid left");
+              _chatMessages.add("System: User $uid left audio");
             });
           }
         },
@@ -312,11 +373,19 @@ void _startMicMinutesTracking() {
             setState(() {
               _speakingSeatIndices.clear();
               for (var speaker in speakers) {
-                if ((speaker.volume ?? 0) > 4) {
-                  final bool isLocalSpeaker =
-                      speaker.uid == 0 ? true : (speaker.uid == _myUid);
-                  if (isLocalSpeaker && _mySeatIndex != null) {
-                    _speakingSeatIndices.add(_mySeatIndex!);
+                final int vol = speaker.volume ?? 0;
+                if (vol > 4) {
+                  bool isLocalSpeaker = false;
+                  if (speaker.uid == 0) {
+                    isLocalSpeaker = true;
+                  } else if (speaker.uid == _myUid) {
+                    isLocalSpeaker = true;
+                  }
+
+                  if (isLocalSpeaker) {
+                    if (_mySeatIndex != null) {
+                      _speakingSeatIndices.add(_mySeatIndex!);
+                    }
                   }
                 }
               }
@@ -335,7 +404,7 @@ void _startMicMinutesTracking() {
 
       if (mounted) {
         setState(() {
-          _chatMessages.add("Connected to voice network (UID: $_myUid)");
+          _chatMessages.add("System: Connected to voice network (UID: $_myUid)");
         });
       }
     } catch (e) {
@@ -348,20 +417,26 @@ void _startMicMinutesTracking() {
   }
 
   void _handleSeatTap(int index) async {
-    if (_roomSettings.isAllMicClosed && index != 0 && _mySeatIndex != 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("All mics are closed by the host")),
-      );
-      return;
+    if (_roomSettings.isAllMicClosed) {
+      if (index != 0) {
+        if (_mySeatIndex != 0) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("All mics are closed by the host")),
+          );
+          return;
+        }
+      }
     }
 
     final user = _seats[index];
-    if (user != null && _mySeatIndex != index) {
-      _openSeatUserAction(index, user);
-      return;
+    if (user != null) {
+      if (_mySeatIndex != index) {
+        _openSeatUserAction(index, user);
+        return;
+      }
     }
 
-    if (_seats[index] == null) {
+if (_seats[index] == null) {
       if (_mySeatIndex != null) {
         _seats[_mySeatIndex!] = null;
         _seatUids[_mySeatIndex!] = null;
@@ -370,18 +445,20 @@ void _startMicMinutesTracking() {
       _seatUids[index] = _currentUser?.uid;
       _mySeatIndex = index;
       _isMicMuted = false;
-      _updateBroadcasterRole(true);
+      setState(() {});
+
+      await _updateBroadcasterRole(true);
       _startMicMinutesTracking();
     } else if (_mySeatIndex == index) {
       _seats[index] = null;
       _seatUids[index] = null;
       _mySeatIndex = null;
       _isMicMuted = true;
-      _updateBroadcasterRole(false);
+      setState(() {});
+
+      await _updateBroadcasterRole(false);
       _stopMicMinutesTracking();
     }
-
-    setState(() {});
 
     await FirebaseFirestore.instance.collection('rooms').doc(channelName).set({
       'seats': _seats,
@@ -404,16 +481,26 @@ void _startMicMinutesTracking() {
     }
   }
 
-  void _toggleRoomVoice() {
+  Future<void> _toggleRoomVoice() async {
     setState(() {
       _roomSettings.isRoomAudioMuted = !_roomSettings.isRoomAudioMuted;
     });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(_roomSettings.isRoomAudioMuted ? "Room Voice Muted" : "Room Voice Active")),
-    );
+    final eng = _agoraService.engine;
+    if (eng != null) {
+      await eng.muteAllRemoteAudioStreams(_roomSettings.isRoomAudioMuted);
+    }
+    if (mounted) {
+      String msg = "Room Voice Active";
+      if (_roomSettings.isRoomAudioMuted) {
+        msg = "Room Voice Muted";
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(msg)),
+      );
+    }
   }
 
-void _toggleAllMic() {
+  void _toggleAllMic() {
     setState(() {
       _roomSettings.isAllMicClosed = !_roomSettings.isAllMicClosed;
       if (_roomSettings.isAllMicClosed) {
@@ -424,19 +511,28 @@ void _toggleAllMic() {
         }
       }
     });
+    String msg = "All Mics Opened";
+    if (_roomSettings.isAllMicClosed) {
+      msg = "All Mics Closed";
+    }
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(_roomSettings.isAllMicClosed ? "All Mics Closed" : "All Mics Opened")),
+      SnackBar(content: Text(msg)),
     );
   }
 
   void _openPasswordDialog() {
-    final passCtrl = TextEditingController(text: _roomSettings.password ?? "");
+    String currentPass = "";
+    if (_roomSettings.password != null) {
+      currentPass = _roomSettings.password!;
+    }
+    final passCtrl = TextEditingController(text: currentPass);
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
         backgroundColor: bgColor,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text("Set Room Password", style: TextStyle(color: primaryBrown, fontWeight: FontWeight.bold)),
+        title: const Text("Set Room Password",
+            style: TextStyle(color: primaryBrown, fontWeight: FontWeight.bold)),
         content: TextField(
           controller: passCtrl,
           keyboardType: TextInputType.number,
@@ -446,8 +542,12 @@ void _toggleAllMic() {
             hintStyle: const TextStyle(color: Colors.black38, fontSize: 12),
             filled: true,
             fillColor: cardBg,
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: borderColor)),
-            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: borderColor)),
+            border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: borderColor)),
+            enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: borderColor)),
           ),
         ),
         actions: [
@@ -457,14 +557,23 @@ void _toggleAllMic() {
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: buttonDark),
-            onPressed: () {
+
+onPressed: () {
               setState(() {
                 final txt = passCtrl.text.trim();
-                _roomSettings.password = txt.isEmpty ? null : txt;
+                if (txt.isEmpty) {
+                  _roomSettings.password = null;
+                } else {
+                  _roomSettings.password = txt;
+                }
               });
               Navigator.pop(context);
+              String statusMsg = "Password set successfully";
+              if (_roomSettings.password == null) {
+                statusMsg = "Password removed";
+              }
               ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text(_roomSettings.password == null ? "Password removed" : "Password set successfully")),
+                SnackBar(content: Text(statusMsg)),
               );
             },
             child: const Text("Save", style: TextStyle(color: Colors.white)),
@@ -489,12 +598,20 @@ void _toggleAllMic() {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Center(
-              child: Container(width: 44, height: 4, decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(2))),
+              child: Container(
+                  width: 44,
+                  height: 4,
+                  decoration: BoxDecoration(
+                      color: Colors.black26,
+                      borderRadius: BorderRadius.circular(2))),
             ),
             const SizedBox(height: 14),
             const Text(
               "Room Administrators",
-              style: TextStyle(color: primaryBrown, fontSize: 16, fontWeight: FontWeight.bold),
+              style: TextStyle(
+                  color: primaryBrown,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 12),
             Expanded(
@@ -504,11 +621,16 @@ void _toggleAllMic() {
                   final u = _seats[idx];
                   if (u == null) return const SizedBox.shrink();
                   final isAdmin = _roomSettings.admins.contains(u);
+                  Color btnBg = const Color(0xFF107C41);
+                  String btnTxt = "Make Admin";
+                  if (isAdmin) {
+                    btnBg = Colors.redAccent;
+                    btnTxt = "Remove Admin";
+                  }
                   return Container(
                     margin: const EdgeInsets.only(bottom: 8),
                     decoration: BoxDecoration(
-
-color: cardBg,
+                      color: cardBg,
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(color: borderColor),
                     ),
@@ -517,11 +639,16 @@ color: cardBg,
                         backgroundColor: bgColor,
                         child: Icon(Icons.person, color: primaryBrown),
                       ),
-                      title: Text(u, style: const TextStyle(color: primaryBrown, fontWeight: FontWeight.bold, fontSize: 13)),
+                      title: Text(u,
+                          style: const TextStyle(
+                              color: primaryBrown,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13)),
                       trailing: ElevatedButton(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: isAdmin ? Colors.redAccent : const Color(0xFF107C41),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          backgroundColor: btnBg,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10)),
                           elevation: 0,
                         ),
                         onPressed: () {
@@ -530,11 +657,14 @@ color: cardBg,
                               _roomSettings.admins.remove(u);
                             } else {
                               _roomSettings.admins.add(u);
-                            }
+
+}
                           });
                           Navigator.pop(context);
                         },
-                        child: Text(isAdmin ? "Remove Admin" : "Make Admin", style: const TextStyle(color: Colors.white, fontSize: 11)),
+                        child: Text(btnTxt,
+                            style: const TextStyle(
+                                color: Colors.white, fontSize: 11)),
                       ),
                     ),
                   );
@@ -570,48 +700,71 @@ color: cardBg,
                 child: Container(
                   width: 44,
                   height: 4,
-                  decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(2)),
+                  decoration: BoxDecoration(
+                      color: Colors.black26,
+                      borderRadius: BorderRadius.circular(2)),
                 ),
               ),
               const SizedBox(height: 16),
               const Center(
                 child: Text(
                   "Send Red Packet",
-                  style: TextStyle(color: primaryBrown, fontSize: 18, fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                      color: primaryBrown,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold),
                 ),
               ),
               const SizedBox(height: 16),
-              const Text("Total Coins in Red Packets", style: TextStyle(color: Colors.black54, fontSize: 12.5)),
+              const Text("Total Coins in Red Packets",
+                  style: TextStyle(color: Colors.black54, fontSize: 12.5)),
               const SizedBox(height: 8),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [100, 500, 1000].map((amt) {
                   final sel = selectedAmount == amt;
+                  Color lblColor = primaryBrown;
+                  if (sel) {
+                    lblColor = Colors.white;
+                  }
                   return ChoiceChip(
                     label: Text("$amt Coins"),
                     selected: sel,
                     selectedColor: buttonDark,
                     backgroundColor: cardBg,
-                    labelStyle: TextStyle(color: sel ? Colors.white : primaryBrown, fontWeight: FontWeight.bold, fontSize: 12),
-                    onSelected: (_) => setDialogState(() => selectedAmount = amt),
+                    labelStyle: TextStyle(
+                        color: lblColor,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12),
+                    onSelected: (_) =>
+                        setDialogState(() => selectedAmount = amt),
                   );
                 }).toList(),
               ),
               const SizedBox(height: 16),
-              const Text("Red Packet Quantity", style: TextStyle(color: Colors.black54, fontSize: 12.5)),
-
-const SizedBox(height: 8),
+              const Text("Red Packet Quantity",
+                  style: TextStyle(color: Colors.black54, fontSize: 12.5)),
+              const SizedBox(height: 8),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [5, 10, 15, 20].map((qty) {
                   final sel = selectedCount == qty;
+                  Color lblColor = primaryBrown;
+                  if (sel) {
+                    lblColor = Colors.white;
+                  }
                   return ChoiceChip(
                     label: Text("x$qty"),
                     selected: sel,
                     selectedColor: buttonDark,
                     backgroundColor: cardBg,
-                    labelStyle: TextStyle(color: sel ? Colors.white : primaryBrown, fontWeight: FontWeight.bold, fontSize: 12),
-                    onSelected: (_) => setDialogState(() => selectedCount = qty),
+                    labelStyle: TextStyle(
+                        color: lblColor,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12),
+
+onSelected: (_) =>
+                        setDialogState(() => selectedCount = qty),
                   );
                 }).toList(),
               ),
@@ -622,13 +775,16 @@ const SizedBox(height: 8),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF107C41),
                     padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16)),
                     elevation: 0,
                   ),
                   onPressed: () {
                     if (_currentCoins < selectedAmount) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text("Insufficient coins to send Red Packet!")),
+                        const SnackBar(
+                            content:
+                                Text("Insufficient coins to send Red Packet!")),
                       );
                       return;
                     }
@@ -636,9 +792,14 @@ const SizedBox(height: 8),
                       _currentCoins -= selectedAmount;
                     });
 
-                    FirebaseFirestore.instance.collection('rooms').doc(channelName).collection('chats').add({
+                    FirebaseFirestore.instance
+                        .collection('rooms')
+                        .doc(channelName)
+                        .collection('chats')
+                        .add({
                       'sender': 'System',
-                      'text': "Red Packet of $selectedAmount Coins dropped in room!",
+                      'text':
+                          "Red Packet of $selectedAmount Coins dropped in room!",
                       'timestamp': FieldValue.serverTimestamp(),
                     });
 
@@ -646,12 +807,15 @@ const SizedBox(height: 8),
                       FirebaseFirestore.instance
                           .collection('users')
                           .doc(_currentUser!.uid)
-                          .update({'coins': FieldValue.increment(-selectedAmount)});
+                          .update(
+                              {'coins': FieldValue.increment(-selectedAmount)});
                     }
                     widget.onCoinUpdate(_currentCoins);
                     Navigator.pop(context);
                   },
-                  child: const Text("Send Red Packets", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  child: const Text("Send Red Packets",
+                      style: TextStyle(
+                          color: Colors.white, fontWeight: FontWeight.bold)),
                 ),
               ),
               const SizedBox(height: 10),
@@ -664,6 +828,13 @@ const SizedBox(height: 8),
 
   void _openSeatUserAction(int index, String user) {
     final isMuted = _mutedSeats.contains(index);
+    IconData micIcon = Icons.mic_off;
+    String micLabel = "Mute User";
+    if (isMuted) {
+      micIcon = Icons.mic;
+      micLabel = "Unmute User";
+    }
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -677,19 +848,33 @@ const SizedBox(height: 8),
           mainAxisSize: MainAxisSize.min,
           children: [
             Center(
-              child: Container(width: 44, height: 4, decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(2))),
+              child: Container(
+                  width: 44,
+                  height: 4,
+                  decoration: BoxDecoration(
+                      color: Colors.black26,
+                      borderRadius: BorderRadius.circular(2))),
             ),
             const SizedBox(height: 12),
-            Text(user, style: const TextStyle(color: primaryBrown, fontSize: 16, fontWeight: FontWeight.bold)),
+            Text(user,
+                style: const TextStyle(
+                    color: primaryBrown,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold)),
             const SizedBox(height: 14),
             Container(
-              decoration: BoxDecoration(color: cardBg, borderRadius: BorderRadius.circular(14), border: Border.all(color: borderColor)),
-              child: Column(
+              decoration: BoxDecoration(
+                  color: cardBg,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: borderColor)),
+
+child: Column(
                 children: [
                   ListTile(
-                    leading: Icon(isMuted ? Icons.mic : Icons.mic_off, color: primaryBrown),
-
-title: Text(isMuted ? "Unmute User" : "Mute User", style: const TextStyle(color: primaryBrown, fontWeight: FontWeight.w600)),
+                    leading: Icon(micIcon, color: primaryBrown),
+                    title: Text(micLabel,
+                        style: const TextStyle(
+                            color: primaryBrown, fontWeight: FontWeight.w600)),
                     onTap: () {
                       setState(() {
                         if (isMuted) {
@@ -703,8 +888,12 @@ title: Text(isMuted ? "Unmute User" : "Mute User", style: const TextStyle(color:
                   ),
                   const Divider(height: 1, color: borderColor),
                   ListTile(
-                    leading: const Icon(Icons.exit_to_app, color: Colors.redAccent),
-                    title: const Text("Kick from Seat", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.w600)),
+                    leading: const Icon(Icons.exit_to_app,
+                        color: Colors.redAccent),
+                    title: const Text("Kick from Seat",
+                        style: TextStyle(
+                            color: Colors.redAccent,
+                            fontWeight: FontWeight.w600)),
                     onTap: () async {
                       setState(() {
                         _seats[index] = null;
@@ -712,7 +901,10 @@ title: Text(isMuted ? "Unmute User" : "Mute User", style: const TextStyle(color:
                       });
                       Navigator.pop(context);
 
-                      await FirebaseFirestore.instance.collection('rooms').doc(channelName).set({
+                      await FirebaseFirestore.instance
+                          .collection('rooms')
+                          .doc(channelName)
+                          .set({
                         'seats': _seats,
                         'seatUids': _seatUids,
                       }, SetOptions(merge: true));
@@ -741,13 +933,16 @@ title: Text(isMuted ? "Unmute User" : "Mute User", style: const TextStyle(color:
       }
 
       _videoController!.addListener(() {
-        if (_videoController != null &&
-            _videoController!.value.isInitialized &&
-            _videoController!.value.position >= _videoController!.value.duration) {
-          if (mounted) {
-            setState(() {
-              _isPlayingVideo = false;
-            });
+        final ctrl = _videoController;
+        if (ctrl != null) {
+          if (ctrl.value.isInitialized) {
+            if (ctrl.value.position >= ctrl.value.duration) {
+              if (mounted) {
+                setState(() {
+                  _isPlayingVideo = false;
+                });
+              }
+            }
           }
         }
       });
@@ -769,9 +964,16 @@ title: Text(isMuted ? "Unmute User" : "Mute User", style: const TextStyle(color:
     final now = DateTime.now();
     final targetKey = "${gift.id}_$target";
 
-    if (_lastGiftTargetKey == targetKey &&
-        _lastGiftTimestamp != null &&
-        now.difference(_lastGiftTimestamp!).inSeconds < 4) {
+    bool isStreak = false;
+    if (_lastGiftTargetKey == targetKey) {
+      if (_lastGiftTimestamp != null) {
+        if (now.difference(_lastGiftTimestamp!).inSeconds < 4) {
+          isStreak = true;
+        }
+      }
+    }
+
+    if (isStreak) {
       _currentComboStreak += multiplier;
     } else {
       _currentComboStreak = multiplier;
@@ -812,46 +1014,37 @@ title: Text(isMuted ? "Unmute User" : "Mute User", style: const TextStyle(color:
   }) async {
     final int totalCost = gift.cost * multiplier;
 
-    if (_currentCoins < totalCost) {
+if (_currentCoins < totalCost) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Insufficient coins! Please recharge.")),
       );
       return;
     }
 
-    final double rate = gift.isLucky ? 0.04 : 0.70;
+    double rate = 0.70;
+    if (gift.isLucky) {
+      rate = 0.04;
+    }
     final int pointsPerRecipient = (totalCost * rate).round();
+
+    String senderUid = "";
+    if (_currentUser != null) {
+      senderUid = _currentUser!.uid;
+    }
 
     setState(() {
       _currentCoins -= totalCost;
 
-if (targetSeatIndex != null && targetSeatIndex < _seatGiftsCount.length) {
-        _seatGiftsCount[targetSeatIndex] += totalCost;
-        final recipientUid = _seatUids[targetSeatIndex];
-        if (recipientUid != null && recipientUid.isNotEmpty) {
-          FirebaseFirestore.instance.collection('users').doc(recipientUid).set({
-            'points': FieldValue.increment(pointsPerRecipient),
-            'todayPoints': FieldValue.increment(pointsPerRecipient),
-            'charmExp': FieldValue.increment(pointsPerRecipient),
-            'todayTaskPoints': FieldValue.increment(pointsPerRecipient),
-            'weekTaskPoints': FieldValue.increment(pointsPerRecipient),
-          }, SetOptions(merge: true));
-
-          FirebaseFirestore.instance.collection('point_transactions').add({
-            'userUid': recipientUid,
-            'senderUid': _currentUser?.uid ?? '',
-            'type': 'GIFT_RECEIVED',
-            'points': pointsPerRecipient,
-            'createdAt': FieldValue.serverTimestamp(),
-          });
-        }
-      } else if (target == "All Seats") {
-        for (int i = 0; i < _seatGiftsCount.length; i++) {
-          if (_seats[i] != null) {
-            _seatGiftsCount[i] += totalCost;
-            final recipientUid = _seatUids[i];
-            if (recipientUid != null && recipientUid.isNotEmpty) {
-              FirebaseFirestore.instance.collection('users').doc(recipientUid).set({
+      if (targetSeatIndex != null) {
+        if (targetSeatIndex < _seatGiftsCount.length) {
+          _seatGiftsCount[targetSeatIndex] += totalCost;
+          final recipientUid = _seatUids[targetSeatIndex];
+          if (recipientUid != null) {
+            if (recipientUid.isNotEmpty) {
+              FirebaseFirestore.instance
+                  .collection('users')
+                  .doc(recipientUid)
+                  .set({
                 'points': FieldValue.increment(pointsPerRecipient),
                 'todayPoints': FieldValue.increment(pointsPerRecipient),
                 'charmExp': FieldValue.increment(pointsPerRecipient),
@@ -861,7 +1054,7 @@ if (targetSeatIndex != null && targetSeatIndex < _seatGiftsCount.length) {
 
               FirebaseFirestore.instance.collection('point_transactions').add({
                 'userUid': recipientUid,
-                'senderUid': _currentUser?.uid ?? '',
+                'senderUid': senderUid,
                 'type': 'GIFT_RECEIVED',
                 'points': pointsPerRecipient,
                 'createdAt': FieldValue.serverTimestamp(),
@@ -869,10 +1062,45 @@ if (targetSeatIndex != null && targetSeatIndex < _seatGiftsCount.length) {
             }
           }
         }
+      } else if (target == "All Seats") {
+        for (int i = 0; i < _seatGiftsCount.length; i++) {
+          if (_seats[i] != null) {
+            _seatGiftsCount[i] += totalCost;
+            final recipientUid = _seatUids[i];
+            if (recipientUid != null) {
+              if (recipientUid.isNotEmpty) {
+                FirebaseFirestore.instance
+                    .collection('users')
+                    .doc(recipientUid)
+                    .set({
+                  'points': FieldValue.increment(pointsPerRecipient),
+                  'todayPoints': FieldValue.increment(pointsPerRecipient),
+                  'charmExp': FieldValue.increment(pointsPerRecipient),
+                  'todayTaskPoints': FieldValue.increment(pointsPerRecipient),
+                  'weekTaskPoints': FieldValue.increment(pointsPerRecipient),
+                }, SetOptions(merge: true));
+
+                FirebaseFirestore.instance
+                    .collection('point_transactions')
+                    .add({
+                  'userUid': recipientUid,
+                  'senderUid': senderUid,
+                  'type': 'GIFT_RECEIVED',
+                  'points': pointsPerRecipient,
+                  'createdAt': FieldValue.serverTimestamp(),
+                });
+              }
+            }
+          }
+        }
       }
     });
 
-    await FirebaseFirestore.instance.collection('rooms').doc(channelName).collection('chats').add({
+    await FirebaseFirestore.instance
+        .collection('rooms')
+        .doc(channelName)
+        .collection('chats')
+        .add({
       'sender': _myDisplayName,
       'text': "sent ${gift.name} ${gift.icon} x$multiplier to $target",
       'timestamp': FieldValue.serverTimestamp(),
@@ -883,20 +1111,26 @@ if (targetSeatIndex != null && targetSeatIndex < _seatGiftsCount.length) {
     }, SetOptions(merge: true));
 
     if (_currentUser != null) {
-      await FirebaseFirestore.instance.collection('users').doc(_currentUser!.uid).set({
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(_currentUser!.uid)
+          .set({
         'coins': FieldValue.increment(-totalCost),
         'wealthExp': FieldValue.increment(totalCost),
       }, SetOptions(merge: true));
     }
 
     widget.onCoinUpdate(_currentCoins);
-    Navigator.pop(context);
+    if (mounted) {
+      Navigator.pop(context);
+    }
 
-    _triggerFloatingGiftCombo(gift: gift, target: target, multiplier: multiplier);
+    _triggerFloatingGiftCombo(
+        gift: gift, target: target, multiplier: multiplier);
     _playGiftVideo(gift);
   }
 
-  void _openGiftSheet() {
+void _openGiftSheet() {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -909,14 +1143,18 @@ if (targetSeatIndex != null && targetSeatIndex < _seatGiftsCount.length) {
 
         return StatefulBuilder(
           builder: (context, setSheetState) {
+            String currentUid = "";
+            if (_currentUser != null) {
+              currentUid = _currentUser!.uid;
+            }
+
             return Container(
               height: 530,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: const BoxDecoration(
                 color: bgColor,
                 borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-
-),
+              ),
               child: Column(
                 children: [
                   Container(
@@ -946,7 +1184,10 @@ if (targetSeatIndex != null && targetSeatIndex < _seatGiftsCount.length) {
                           },
                         ),
                         ...List.generate(_activeSeatCount, (i) {
-                          final seatLabel = i == 0 ? "Host (1)" : "Seat ${i + 1}";
+                          String seatLabel = "Seat ${i + 1}";
+                          if (i == 0) {
+                            seatLabel = "Host (1)";
+                          }
                           return _targetChip(
                             title: seatLabel,
                             isSelected: selectedTarget == seatLabel,
@@ -968,7 +1209,8 @@ if (targetSeatIndex != null && targetSeatIndex < _seatGiftsCount.length) {
                   Expanded(
                     child: GridView.builder(
                       itemCount: availableGifts.length,
-                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
                         crossAxisCount: 4,
                         mainAxisSpacing: 10,
                         crossAxisSpacing: 10,
@@ -978,7 +1220,16 @@ if (targetSeatIndex != null && targetSeatIndex < _seatGiftsCount.length) {
                         final gift = availableGifts[index];
                         final isSelected = selectedGift.id == gift.id;
 
-                        return GestureDetector(
+                        Color itemBg = cardBg;
+                        Color itemBorder = borderColor;
+                        double itemBorderW = 1.0;
+                        if (isSelected) {
+                          itemBg = const Color(0xFFFBF4E6);
+                          itemBorder = accentGold;
+                          itemBorderW = 2.0;
+                        }
+
+return GestureDetector(
                           onTap: () {
                             setSheetState(() {
                               selectedGift = gift;
@@ -986,23 +1237,23 @@ if (targetSeatIndex != null && targetSeatIndex < _seatGiftsCount.length) {
                           },
                           child: Container(
                             decoration: BoxDecoration(
-                              color: isSelected ? const Color(0xFFFBF4E6) : cardBg,
+                              color: itemBg,
                               borderRadius: BorderRadius.circular(14),
                               border: Border.all(
-                                color: isSelected ? accentGold : borderColor,
-                                width: isSelected ? 2 : 1,
+                                color: itemBorder,
+                                width: itemBorderW,
                               ),
                             ),
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Text(gift.icon, style: const TextStyle(fontSize: 30)),
+                                Text(gift.icon,
+                                    style: const TextStyle(fontSize: 30)),
                                 const SizedBox(height: 4),
                                 Text(
                                   gift.name,
                                   style: const TextStyle(
-
-color: primaryBrown,
+                                    color: primaryBrown,
                                     fontSize: 11,
                                     fontWeight: FontWeight.w600,
                                   ),
@@ -1014,7 +1265,8 @@ color: primaryBrown,
                                 Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    const Icon(Icons.monetization_on, size: 12, color: accentGold),
+                                    const Icon(Icons.monetization_on,
+                                        size: 12, color: accentGold),
                                     const SizedBox(width: 2),
                                     Text(
                                       "${gift.cost}",
@@ -1039,6 +1291,15 @@ color: primaryBrown,
                     child: Row(
                       children: giftMultipliers.map((mult) {
                         final isChosen = selectedMultiplier == mult;
+                        Color pillBg = cardBg;
+                        Color pillBorder = borderColor;
+                        Color pillText = primaryBrown;
+                        if (isChosen) {
+                          pillBg = buttonDark;
+                          pillBorder = buttonDark;
+                          pillText = Colors.white;
+                        }
+
                         return GestureDetector(
                           onTap: () {
                             setSheetState(() {
@@ -1047,18 +1308,20 @@ color: primaryBrown,
                           },
                           child: Container(
                             margin: const EdgeInsets.only(right: 8),
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                            decoration: BoxDecoration(
-                              color: isChosen ? buttonDark : cardBg,
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 5),
+
+decoration: BoxDecoration(
+                              color: pillBg,
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(
-                                color: isChosen ? buttonDark : borderColor,
+                                color: pillBorder,
                               ),
                             ),
                             child: Text(
                               "x$mult",
                               style: TextStyle(
-                                color: isChosen ? Colors.white : primaryBrown,
+                                color: pillText,
                                 fontWeight: FontWeight.bold,
                                 fontSize: 12,
                               ),
@@ -1074,7 +1337,8 @@ color: primaryBrown,
                     children: [
                       Row(
                         children: [
-                          const Icon(Icons.monetization_on, color: accentGold, size: 20),
+                          const Icon(Icons.monetization_on,
+                              color: accentGold, size: 20),
                           const SizedBox(width: 4),
                           Text(
                             "$_currentCoins",
@@ -1082,8 +1346,7 @@ color: primaryBrown,
                               color: primaryBrown,
                               fontWeight: FontWeight.bold,
                               fontSize: 15,
-
-),
+                            ),
                           ),
                           const SizedBox(width: 8),
                           GestureDetector(
@@ -1092,7 +1355,7 @@ color: primaryBrown,
                                 context,
                                 MaterialPageRoute(
                                   builder: (_) => WalletScreen(
-                                    userUid: _currentUser?.uid ?? '',
+                                    userUid: currentUid,
                                     userNumericId: _myUid,
                                     currentCoins: _currentCoins,
                                     onCoinsRecharged: (newCoins) {
@@ -1107,7 +1370,8 @@ color: primaryBrown,
                               );
                             },
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 3),
                               decoration: BoxDecoration(
                                 color: cardBg,
                                 borderRadius: BorderRadius.circular(12),
@@ -1123,19 +1387,23 @@ color: primaryBrown,
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
-                                  Icon(Icons.chevron_right, size: 14, color: primaryBrown),
+                                  Icon(Icons.chevron_right,
+                                      size: 14, color: primaryBrown),
                                 ],
                               ),
                             ),
                           ),
-                        ],
+
+],
                       ),
                       ElevatedButton(
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF107C41),
                           foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 24, vertical: 12),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16)),
                           elevation: 0,
                         ),
                         onPressed: () => _sendGift(
@@ -1146,7 +1414,8 @@ color: primaryBrown,
                         ),
                         child: Text(
                           "Send (Total: ${selectedGift.cost * selectedMultiplier})",
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                          style: const TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 13),
                         ),
                       ),
                     ],
@@ -1169,23 +1438,31 @@ color: primaryBrown,
     required bool isSelected,
     required VoidCallback onTap,
   }) {
+    Color chipBg = cardBg;
+    Color chipBorder = borderColor;
+    Color chipText = primaryBrown;
+    if (isSelected) {
+      chipBg = buttonDark;
+      chipBorder = buttonDark;
+      chipText = Colors.white;
+    }
+
     return GestureDetector(
       onTap: onTap,
       child: Container(
         margin: const EdgeInsets.only(right: 8),
-
-padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
         decoration: BoxDecoration(
-          color: isSelected ? buttonDark : cardBg,
+          color: chipBg,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: isSelected ? buttonDark : borderColor,
+            color: chipBorder,
           ),
         ),
         child: Text(
           title,
           style: TextStyle(
-            color: isSelected ? Colors.white : primaryBrown,
+            color: chipText,
             fontSize: 12,
             fontWeight: FontWeight.bold,
           ),
@@ -1209,8 +1486,38 @@ padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
 
   @override
   Widget build(BuildContext context) {
-    final double seatSize = _activeSeatCount > 20 ? 38.0 : 44.0;
-    final int crossCount = _activeSeatCount > 20 ? 6 : (_activeSeatCount > 12 ? 5 : 4);
+    double seatSize = 44.0;
+    if (_activeSeatCount > 20) {
+      seatSize = 38.0;
+    }
+
+    int crossCount = 4;
+    if (_activeSeatCount > 20) {
+      crossCount = 6;
+    } else if (_activeSeatCount > 12) {
+      crossCount = 5;
+    }
+
+    int gridItemCount = 0;
+    if (_activeSeatCount > 1) {
+      gridItemCount = _activeSeatCount - 1;
+    }
+
+    IconData bottomMicIcon = Icons.mic;
+    Color bottomMicColor = const Color(0xFF107C41);
+    if (_isMicMuted) {
+      bottomMicIcon = Icons.mic_off;
+      bottomMicColor = Colors.redAccent;
+    }
+
+    bool showVideoOverlay = false;
+    if (_isPlayingVideo) {
+      if (_videoController != null) {
+        if (_videoController!.value.isInitialized) {
+          showVideoOverlay = true;
+        }
+      }
+    }
 
     return Scaffold(
       backgroundColor: bgColor,
@@ -1218,10 +1525,12 @@ padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.keyboard_arrow_down, color: primaryBrown, size: 28),
+          icon: const Icon(Icons.keyboard_arrow_down,
+              color: primaryBrown, size: 28),
           tooltip: "Minimize Room",
           onPressed: () {
-            _agoraService.minimizeRoom();
+
+_agoraService.minimizeRoom();
             Navigator.pop(context);
           },
         ),
@@ -1230,11 +1539,16 @@ padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
           children: [
             Text(
               _roomSettings.roomName,
-              style: const TextStyle(fontSize: 15, color: primaryBrown, fontWeight: FontWeight.bold),
+              style: const TextStyle(
+                  fontSize: 15,
+                  color: primaryBrown,
+                  fontWeight: FontWeight.bold),
             ),
             Row(
               children: [
-                Text("UID: $_myUid", style: const TextStyle(fontSize: 11, color: Colors.black54)),
+                Text("UID: $_myUid",
+                    style:
+                        const TextStyle(fontSize: 11, color: Colors.black54)),
                 if (_roomSettings.password != null) ...[
                   const SizedBox(width: 6),
                   const Icon(Icons.lock, color: accentGold, size: 12),
@@ -1274,8 +1588,9 @@ padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                           child: GridView.builder(
                             shrinkWrap: true,
                             physics: const NeverScrollableScrollPhysics(),
-                            itemCount: _activeSeatCount > 1 ? _activeSeatCount - 1 : 0,
-                            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                            itemCount: gridItemCount,
+                            gridDelegate:
+                                SliverGridDelegateWithFixedCrossAxisCount(
                               crossAxisCount: crossCount,
                               mainAxisSpacing: 10,
                               crossAxisSpacing: 8,
@@ -1283,17 +1598,44 @@ padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                             ),
                             itemBuilder: (context, index) {
                               final seatIndex = index + 1;
+                              final isTaken = _seats[seatIndex] != null;
 
-final isTaken = _seats[seatIndex] != null;
-                              final bool isMyActiveMic =
-                                  _mySeatIndex == seatIndex && !_isMicMuted;
-                              final bool isSpeaking = isMyActiveMic
-                                  ? true
-                                  : _speakingSeatIndices.contains(seatIndex);
-                              final bool isMuted = _mutedSeats.contains(seatIndex)
-                                  ? true
-                                  : _roomSettings.isAllMicClosed;
+                              bool isSpeaking =
+                                  _speakingSeatIndices.contains(seatIndex);
+                              if (_mySeatIndex == seatIndex) {
+                                if (!_isMicMuted) {
+                                  isSpeaking = true;
+                                }
+                              }
+
+                              bool isMuted = _roomSettings.isAllMicClosed;
+                              if (_mutedSeats.contains(seatIndex)) {
+                                isMuted = true;
+                              }
+
                               final giftPoints = _seatGiftsCount[seatIndex];
+
+                              Widget seatCenterIcon = const Icon(Icons.chair,
+                                  color: Colors.black38, size: 18);
+                              if (isTaken) {
+                                if (isMuted) {
+                                  seatCenterIcon = const Icon(Icons.mic_off,
+                                      color: Colors.redAccent, size: 18);
+                                } else {
+                                  seatCenterIcon = const Icon(Icons.person,
+                                      color: primaryBrown, size: 20);
+                                }
+                              } else if (isMuted) {
+                                seatCenterIcon = const Icon(Icons.lock,
+                                    color: Colors.black26, size: 16);
+                              }
+
+String seatLabelText = "$seatIndex";
+                              Color seatLabelColor = Colors.black54;
+                              if (isTaken) {
+                                seatLabelText = _seats[seatIndex]!;
+                                seatLabelColor = primaryBrown;
+                              }
 
                               return GestureDetector(
                                 onTap: () => _handleSeatTap(seatIndex),
@@ -1303,6 +1645,23 @@ final isTaken = _seats[seatIndex] != null;
                                       animation: _pulseController,
                                       builder: (context, _) {
                                         final pulse = _pulseController.value;
+                                        Color ringColor = borderColor;
+                                        double ringWidth = 1.0;
+                                        Color glowColor =
+                                            Colors.black.withOpacity(0.04);
+
+                                        if (_isAllSeatsTargeted) {
+                                          ringColor = accentGold;
+                                          ringWidth = 2.5;
+                                          glowColor =
+                                              accentGold.withOpacity(0.4);
+                                        } else if (isSpeaking) {
+                                          ringColor = const Color(0xFF107C41);
+                                          ringWidth = 2.0 + pulse * 1.5;
+                                          glowColor = const Color(0xFF107C41)
+                                              .withOpacity(0.3);
+                                        }
+
                                         return Container(
                                           width: seatSize,
                                           height: seatSize,
@@ -1310,45 +1669,28 @@ final isTaken = _seats[seatIndex] != null;
                                             shape: BoxShape.circle,
                                             color: cardBg,
                                             border: Border.all(
-                                              color: _isAllSeatsTargeted
-                                                  ? accentGold
-                                                  : (isSpeaking
-                                                      ? const Color(0xFF107C41)
-                                                      : borderColor),
-                                              width: _isAllSeatsTargeted
-                                                  ? 2.5
-                                                  : (isSpeaking ? (2.0 + pulse * 1.5) : 1),
+                                              color: ringColor,
+                                              width: ringWidth,
                                             ),
                                             boxShadow: [
                                               BoxShadow(
-                                                color: _isAllSeatsTargeted
-                                                    ? accentGold.withOpacity(0.4)
-                                                    : (isSpeaking
-                                                        ? const Color(0xFF107C41).withOpacity(0.3)
-                                                        : Colors.black.withOpacity(0.04)),
+                                                color: glowColor,
                                                 blurRadius: 6 + (pulse * 4),
                                                 spreadRadius: 1,
                                               ),
                                             ],
                                           ),
                                           child: Center(
-                                            child: isTaken
-                                                ? (isMuted
-                                                    ? const Icon(Icons.mic_off, color: Colors.redAccent, size: 18)
-                                                    : const Icon(Icons.person, color: primaryBrown, size: 20))
-                                                : (isMuted
-                                                    ? const Icon(Icons.lock, color: Colors.black26, size: 16)
-                                                    : const Icon(Icons.chair, color: Colors.black38, size: 18)),
+                                            child: seatCenterIcon,
                                           ),
                                         );
                                       },
-
-),
+                                    ),
                                     const SizedBox(height: 3),
                                     Text(
-                                      isTaken ? _seats[seatIndex]! : "$seatIndex",
+                                      seatLabelText,
                                       style: TextStyle(
-                                        color: isTaken ? primaryBrown : Colors.black54,
+                                        color: seatLabelColor,
                                         fontSize: 9.5,
                                         fontWeight: FontWeight.bold,
                                       ),
@@ -1356,16 +1698,24 @@ final isTaken = _seats[seatIndex] != null;
                                       overflow: TextOverflow.ellipsis,
                                     ),
                                     if (giftPoints > 0)
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+
+Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 4, vertical: 1),
                                         decoration: BoxDecoration(
                                           color: const Color(0xFFFBF4E6),
-                                          borderRadius: BorderRadius.circular(6),
-                                          border: Border.all(color: accentGold.withOpacity(0.5)),
+                                          borderRadius:
+                                              BorderRadius.circular(6),
+                                          border: Border.all(
+                                              color:
+                                                  accentGold.withOpacity(0.5)),
                                         ),
                                         child: Text(
                                           "$giftPoints",
-                                          style: const TextStyle(color: accentGold, fontSize: 8.5, fontWeight: FontWeight.bold),
+                                          style: const TextStyle(
+                                              color: accentGold,
+                                              fontSize: 8.5,
+                                              fontWeight: FontWeight.bold),
                                         ),
                                       ),
                                   ],
@@ -1386,26 +1736,39 @@ final isTaken = _seats[seatIndex] != null;
                     reverse: true,
                     itemCount: _chatMessages.length,
                     itemBuilder: (context, index) {
-                      final msg = _chatMessages[_chatMessages.length - 1 - index];
-                      final isSystem = RegExp(r'^(System:|Announcement:|Red Packet)').hasMatch(msg);
+                      final msg =
+                          _chatMessages[_chatMessages.length - 1 - index];
+                      final isSystem = RegExp(
+                              r'^(System:|Announcement:|Red Packet)')
+                          .hasMatch(msg);
+
+                      Color msgBg = cardBg.withOpacity(0.9);
+                      Color msgColor = primaryBrown;
+                      FontWeight msgWeight = FontWeight.normal;
+                      if (isSystem) {
+                        msgBg = const Color(0xFFFBF4E6);
+                        msgColor = accentGold;
+                        msgWeight = FontWeight.bold;
+                      }
 
                       return Padding(
                         padding: const EdgeInsets.symmetric(vertical: 2.0),
                         child: Align(
                           alignment: Alignment.centerLeft,
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 4),
                             decoration: BoxDecoration(
-                              color: isSystem ? const Color(0xFFFBF4E6) : cardBg.withOpacity(0.9),
+                              color: msgBg,
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(color: borderColor),
                             ),
                             child: Text(
                               msg,
                               style: TextStyle(
-                                color: isSystem ? accentGold : primaryBrown,
+                                color: msgColor,
                                 fontSize: 11,
-                                fontWeight: isSystem ? FontWeight.bold : FontWeight.normal,
+                                fontWeight: msgWeight,
                               ),
                             ),
                           ),
@@ -1415,18 +1778,19 @@ final isTaken = _seats[seatIndex] != null;
                   ),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  decoration: BoxDecoration(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: const BoxDecoration(
+                    color: cardBg,
 
-color: cardBg,
-                    border: const Border(top: BorderSide(color: borderColor)),
+border: Border(top: BorderSide(color: borderColor)),
                   ),
                   child: Row(
                     children: [
                       IconButton(
                         icon: Icon(
-                          _isMicMuted ? Icons.mic_off : Icons.mic,
-                          color: _isMicMuted ? Colors.redAccent : const Color(0xFF107C41),
+                          bottomMicIcon,
+                          color: bottomMicColor,
                         ),
                         onPressed: _toggleMic,
                       ),
@@ -1440,7 +1804,8 @@ color: cardBg,
                           ),
                           child: TextField(
                             controller: _msgController,
-                            style: const TextStyle(color: primaryBrown, fontSize: 13),
+                            style: const TextStyle(
+                                color: primaryBrown, fontSize: 13),
                             decoration: const InputDecoration(
                               hintText: "Say Hello...",
                               hintStyle: TextStyle(color: Colors.black38),
@@ -1465,7 +1830,8 @@ color: cardBg,
                         ),
                       ),
                       IconButton(
-                        icon: const Icon(Icons.sports_esports, color: accentGold),
+                        icon:
+                            const Icon(Icons.sports_esports, color: accentGold),
                         onPressed: () {
                           showModalBottomSheet(
                             context: context,
@@ -1474,7 +1840,8 @@ color: cardBg,
                               padding: const EdgeInsets.all(20.0),
                               decoration: const BoxDecoration(
                                 color: bgColor,
-                                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                                borderRadius: BorderRadius.vertical(
+                                    top: Radius.circular(24)),
                               ),
                               child: Column(
                                 mainAxisSize: MainAxisSize.min,
@@ -1483,73 +1850,96 @@ color: cardBg,
                                     child: Container(
                                       width: 44,
                                       height: 4,
-                                      decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(2)),
+                                      decoration: BoxDecoration(
+                                          color: Colors.black26,
+                                          borderRadius:
+                                              BorderRadius.circular(2)),
                                     ),
                                   ),
                                   const SizedBox(height: 16),
                                   const Text(
                                     "Select Mini-Game",
                                     style: TextStyle(
-                                      color: primaryBrown,
-                                      fontWeight: FontWeight.bold,
 
-fontSize: 17,
+color: primaryBrown,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 17,
                                     ),
                                   ),
                                   const SizedBox(height: 16),
                                   Container(
-                                    decoration: BoxDecoration(color: cardBg, borderRadius: BorderRadius.circular(16), border: Border.all(color: borderColor)),
+                                    decoration: BoxDecoration(
+                                        color: cardBg,
+                                        borderRadius: BorderRadius.circular(16),
+                                        border: Border.all(color: borderColor)),
                                     child: Column(
                                       children: [
                                         ListTile(
                                           leading: const CircleAvatar(
                                             backgroundColor: bgColor,
-                                            child: Text("🎰", style: TextStyle(fontSize: 20)),
+                                            child: Text("🎰",
+                                                style: TextStyle(fontSize: 20)),
                                           ),
                                           title: const Text(
                                             "Lucky Spin Wheel",
-                                            style: TextStyle(color: primaryBrown, fontWeight: FontWeight.bold, fontSize: 13),
+                                            style: TextStyle(
+                                                color: primaryBrown,
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 13),
                                           ),
-                                          trailing: const Icon(Icons.chevron_right, color: primaryBrown),
+                                          trailing: const Icon(
+                                              Icons.chevron_right,
+                                              color: primaryBrown),
                                           onTap: () {
                                             Navigator.pop(context);
                                             showModalBottomSheet(
                                               context: context,
                                               isScrollControlled: true,
-                                              backgroundColor: Colors.transparent,
+                                              backgroundColor:
+                                                  Colors.transparent,
                                               builder: (_) => LuckyWheelDialog(
                                                 currentCoins: _currentCoins,
                                                 onCoinsUpdated: (newCoins) {
-                                                  setState(() => _currentCoins = newCoins);
+                                                  setState(() =>
+                                                      _currentCoins = newCoins);
                                                   widget.onCoinUpdate(newCoins);
                                                 },
                                               ),
                                             );
                                           },
                                         ),
-                                        const Divider(height: 1, color: borderColor),
+                                        const Divider(
+                                            height: 1, color: borderColor),
                                         ListTile(
                                           leading: const CircleAvatar(
                                             backgroundColor: bgColor,
-                                            child: Text("🃏", style: TextStyle(fontSize: 20)),
+                                            child: Text("🃏",
+                                                style: TextStyle(fontSize: 20)),
                                           ),
                                           title: const Text(
                                             "Teen Patti (3 Cards)",
-                                            style: TextStyle(color: primaryBrown, fontWeight: FontWeight.bold, fontSize: 13),
-                                          ),
-                                          trailing: const Icon(Icons.chevron_right, color: primaryBrown),
+                                            style: TextStyle(
+                                                color: primaryBrown,
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 13),
+
+),
+                                          trailing: const Icon(
+                                              Icons.chevron_right,
+                                              color: primaryBrown),
                                           onTap: () {
                                             Navigator.pop(context);
                                             showModalBottomSheet(
                                               context: context,
                                               isScrollControlled: true,
-                                              backgroundColor: Colors.transparent,
+                                              backgroundColor:
+                                                  Colors.transparent,
                                               builder: (_) => TeenPattiDialog(
                                                 currentCoins: _currentCoins,
                                                 onCoinsUpdated: (newCoins) {
-                                                  setState(() => _currentCoins = newCoins);
-
-widget.onCoinUpdate(newCoins);
+                                                  setState(() =>
+                                                      _currentCoins = newCoins);
+                                                  widget.onCoinUpdate(newCoins);
                                                 },
                                               ),
                                             );
@@ -1565,11 +1955,13 @@ widget.onCoinUpdate(newCoins);
                         },
                       ),
                       IconButton(
-                        icon: const Icon(Icons.card_giftcard, color: accentGold),
+                        icon:
+                            const Icon(Icons.card_giftcard, color: accentGold),
                         onPressed: _openGiftSheet,
                       ),
                       IconButton(
-                        icon: const Icon(Icons.grid_view_rounded, color: primaryBrown),
+                        icon: const Icon(Icons.grid_view_rounded,
+                            color: primaryBrown),
                         onPressed: () {
                           showModalBottomSheet(
                             context: context,
@@ -1593,18 +1985,25 @@ widget.onCoinUpdate(newCoins);
                                           _seats[idx] = null;
                                           _seatUids[idx] = null;
                                         });
-                                        await FirebaseFirestore.instance.collection('rooms').doc(channelName).set({
+                                        await FirebaseFirestore.instance
+                                            .collection('rooms')
+                                            .doc(channelName)
+                                            .set({
                                           'seats': _seats,
                                           'seatUids': _seatUids,
                                         }, SetOptions(merge: true));
-                                      },
+
+},
                                       onUpdateSettings: (newSet) {
                                         setState(() {
                                           _roomSettings = newSet;
                                           _activeSeatCount = newSet.seatCount;
-                                          _seats = List.filled(_activeSeatCount, null);
-                                          _seatUids = List.filled(_activeSeatCount, null);
-                                          _seatGiftsCount = List.filled(_activeSeatCount, 0);
+                                          _seats = List.filled(
+                                              _activeSeatCount, null);
+                                          _seatUids = List.filled(
+                                              _activeSeatCount, null);
+                                          _seatGiftsCount =
+                                              List.filled(_activeSeatCount, 0);
                                         });
                                       },
                                     ),
@@ -1621,7 +2020,6 @@ widget.onCoinUpdate(newCoins);
               ],
             ),
           ),
-          
           if (_activeComboData != null)
             Positioned(
               left: 16,
@@ -1629,8 +2027,8 @@ widget.onCoinUpdate(newCoins);
               child: Row(
                 children: [
                   Container(
-
-padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
                       color: cardBg,
                       borderRadius: BorderRadius.circular(30),
@@ -1649,7 +2047,8 @@ padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                         const CircleAvatar(
                           radius: 16,
                           backgroundColor: bgColor,
-                          child: Icon(Icons.person, color: primaryBrown, size: 20),
+                          child:
+                              Icon(Icons.person, color: primaryBrown, size: 20),
                         ),
                         const SizedBox(width: 8),
                         Column(
@@ -1683,7 +2082,8 @@ padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     ),
                   ),
                   const SizedBox(width: 8),
-                  ScaleTransition(
+
+ScaleTransition(
                     scale: _comboScaleAnimation,
                     child: Text(
                       "x${_activeComboData!.comboCount}",
@@ -1698,8 +2098,7 @@ padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 ],
               ),
             ),
-
-          if (_isPlayingVideo && _videoController != null && _videoController!.value.isInitialized)
+          if (showVideoOverlay)
             Positioned.fill(
               child: IgnorePointer(
                 ignoring: true,
@@ -1720,12 +2119,23 @@ padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
 
   Widget _buildHostSeat() {
     final isTaken = _seats[0] != null;
-    final bool isHostMyActiveMic = _mySeatIndex == 0 && !_isMicMuted;
-    final bool isSpeaking =
-        isHostMyActiveMic ? true : _speakingSeatIndices.contains(0);
+    bool isSpeaking = _speakingSeatIndices.contains(0);
+    if (_mySeatIndex == 0) {
+      if (!_isMicMuted) {
+        isSpeaking = true;
+      }
+    }
     final hostGifts = _seatGiftsCount[0];
 
-return GestureDetector(
+    Widget hostCenterIcon =
+        const Icon(Icons.chair, color: accentGold, size: 30);
+    String hostLabel = "Host (1)";
+    if (isTaken) {
+      hostCenterIcon = const Icon(Icons.person, color: accentGold, size: 34);
+      hostLabel = _seats[0]!;
+    }
+
+    return GestureDetector(
       onTap: () => _handleSeatTap(0),
       child: Column(
         children: [
@@ -1733,6 +2143,20 @@ return GestureDetector(
             animation: _pulseController,
             builder: (context, _) {
               final pulse = _pulseController.value;
+              Color ringColor = accentGold;
+              double ringWidth = 2.0;
+              Color glowColor = accentGold.withOpacity(0.25);
+
+              if (_isAllSeatsTargeted) {
+                ringColor = accentGold;
+                ringWidth = 3.0;
+                glowColor = accentGold.withOpacity(0.5);
+              } else if (isSpeaking) {
+                ringColor = const Color(0xFF107C41);
+                ringWidth = 2.5 + pulse * 1.5;
+                glowColor = const Color(0xFF107C41).withOpacity(0.4);
+              }
+
               return Container(
                 width: 72,
                 height: 72,
@@ -1740,34 +2164,26 @@ return GestureDetector(
                   shape: BoxShape.circle,
                   color: cardBg,
                   border: Border.all(
-                    color: _isAllSeatsTargeted
-                        ? accentGold
-                        : (isSpeaking ? const Color(0xFF107C41) : accentGold),
-                    width: _isAllSeatsTargeted ? 3.0 : (isSpeaking ? (2.5 + pulse * 1.5) : 2),
+                    color: ringColor,
+                    width: ringWidth,
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: _isAllSeatsTargeted
-                          ? accentGold.withOpacity(0.5)
-                          : (isSpeaking
-                              ? const Color(0xFF107C41).withOpacity(0.4)
-                              : accentGold.withOpacity(0.25)),
+                      color: glowColor,
                       blurRadius: 10 + (pulse * 6),
                       spreadRadius: 2,
                     ),
                   ],
                 ),
                 child: Center(
-                  child: isTaken
-                      ? const Icon(Icons.person, color: accentGold, size: 34)
-                      : const Icon(Icons.chair, color: accentGold, size: 30),
+                  child: hostCenterIcon,
                 ),
               );
             },
           ),
           const SizedBox(height: 4),
           Text(
-            isTaken ? _seats[0]! : "Host (1)",
+            hostLabel,
             style: const TextStyle(
               color: primaryBrown,
               fontSize: 12,
@@ -1784,7 +2200,10 @@ return GestureDetector(
               ),
               child: Text(
                 "$hostGifts",
-                style: const TextStyle(color: accentGold, fontSize: 9, fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                    color: accentGold,
+                    fontSize: 9,
+                    fontWeight: FontWeight.bold),
               ),
             ),
         ],
