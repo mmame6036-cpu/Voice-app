@@ -16,6 +16,7 @@ import 'agency_screen.dart';
 import 'coin_seller_screen.dart';
 import 'support_screen.dart';
 import 'admin_dashboard_screen.dart';
+import 'account_settings_screen.dart';
 import '../widgets/lucky_island_dialog.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -80,20 +81,44 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  void _openAccountSettings({
+    required String currentName,
+    required String? avatarUrl,
+    required int numericId,
+  }) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AccountSettingsScreen(
+          currentName: currentName,
+          currentAvatarUrl: avatarUrl,
+          numericId: numericId,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final String uid = _currentUser?.uid ?? "";
 
+    Stream<DocumentSnapshot>? userStream;
+    if (uid.isNotEmpty) {
+      userStream =
+          FirebaseFirestore.instance.collection('users').doc(uid).snapshots();
+    }
+
     return Scaffold(
       backgroundColor: const Color(0xFFF6F8FA),
-      body: StreamBuilder<DocumentSnapshot>(
-        stream: uid.isNotEmpty
-            ? FirebaseFirestore.instance.collection('users').doc(uid).snapshots()
-            : null,
+      body: StreamBuilder(
+        stream: userStream,
         builder: (context, snapshot) {
-          final rawData = (snapshot.hasData && snapshot.data!.exists)
-              ? snapshot.data!.data()
-              : null;
+          DocumentSnapshot? docSnap;
+          if (snapshot.hasData) {
+            docSnap = snapshot.data as DocumentSnapshot?;
+          }
+          final rawData =
+              (docSnap != null && docSnap.exists) ? docSnap.data() : null;
           final Map userData = rawData is Map ? rawData : {};
 
           final String displayName = (userData['name'] ??
@@ -103,11 +128,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
               .toString();
 
           final int numericId = (userData['numericId'] as num?)?.toInt() ?? 0;
-          final String displayId = numericId != 0
-              ? numericId.toString()
-              : (uid.length >= 6
-                  ? uid.substring(0, 6).toUpperCase()
-                  : (uid.isEmpty ? "000000" : uid));
+          String displayId = "000000";
+          if (numericId != 0) {
+            displayId = numericId.toString();
+          } else if (uid.length >= 6) {
+            displayId = uid.substring(0, 6).toUpperCase();
+          } else if (uid.isNotEmpty) {
+            displayId = uid;
+          }
 
           final int firestoreCoins =
               (userData['coins'] as num?)?.toInt() ?? _coins;
@@ -115,7 +143,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               (userData['points'] as num?)?.toDouble() ??
               0.0;
 
-          final int followedCount =
+final int followedCount =
               (userData['followedCount'] as num?)?.toInt() ?? 0;
           final int followingCount =
               (userData['followingCount'] as num?)?.toInt() ?? 0;
@@ -124,12 +152,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
           final int wealthLevel =
               (userData['wealthLevel'] as num?)?.toInt() ?? 0;
-
-final int charmLevel =
+          final int charmLevel =
               (userData['charmLevel'] as num?)?.toInt() ?? 0;
           final int chatLevel = (userData['chatLevel'] as num?)?.toInt() ?? 0;
           final String? agencyId = userData['agencyId']?.toString();
           final String? avatarUrl = userData['avatarUrl']?.toString();
+
+          bool hasAgency = false;
+          if (agencyId != null) {
+            if (agencyId.isNotEmpty) {
+              hasAgency = true;
+            }
+          }
 
           bool isAdmin = userData['isAdmin'] == true;
           if (numericId == 100001) {
@@ -147,15 +181,16 @@ final int charmLevel =
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               child: Column(
                 children: [
-                  // 1. User Header Section
+                  // 1. User Header Section (Tapping opens Edit Profile & Settings)
                   _buildHeaderSection(
                     name: displayName,
                     displayId: displayId,
+                    numericId: numericId,
                     avatarUrl: avatarUrl,
                     wealthLevel: wealthLevel,
                     charmLevel: charmLevel,
                     chatLevel: chatLevel,
-                    hasAgency: agencyId != null && agencyId.isNotEmpty,
+                    hasAgency: hasAgency,
                     followed: followedCount,
                     following: followingCount,
                     friends: friendsCount,
@@ -184,10 +219,12 @@ final int charmLevel =
                       coins: firestoreCoins, numericId: numericId),
                   const SizedBox(height: 14),
 
-                  // 6. Creator, Business & Admin Section
+                  // 6. Creator, Business, Settings & Admin Section
                   _buildBusinessSection(
                     numericId: numericId,
                     isAdmin: isAdmin,
+                    currentName: displayName,
+                    avatarUrl: avatarUrl,
                   ),
                   const SizedBox(height: 24),
                 ],
@@ -203,6 +240,7 @@ final int charmLevel =
   Widget _buildHeaderSection({
     required String name,
     required String displayId,
+    required int numericId,
     required String? avatarUrl,
     required int wealthLevel,
     required int charmLevel,
@@ -212,106 +250,121 @@ final int charmLevel =
     required int following,
     required int friends,
   }) {
-    return Column(
-      children: [
-        Row(
-          children: [
-            Container(
-              width: 68,
-              height: 68,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: const LinearGradient(
-                  colors: [Color(0xFFFFDF9E), Color(0xFFF3BA2F)],
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.08),
-                    blurRadius: 8,
-                    offset: const Offset(0, 3),
-                  ),
-                ],
-              ),
-              padding: const EdgeInsets.all(2.5),
-              child: CircleAvatar(
-                backgroundColor: Colors.white,
-                backgroundImage:
-                    avatarUrl != null ? NetworkImage(avatarUrl) : null,
-                child: avatarUrl == null
+    ImageProvider? avatarImg;
+    if (avatarUrl != null) {
+      if (avatarUrl.isNotEmpty) {
+        avatarImg = NetworkImage(avatarUrl);
+      }
+    }
 
-? const Icon(Icons.person,
-                        size: 36, color: Color(0xFFC7CBD1))
-                    : null,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    name,
-                    style: const TextStyle(
-                      fontSize: 16.5,
-                      fontWeight: FontWeight.w900,
-                      color: Color(0xFF1D2129),
+return Column(
+      children: [
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => _openAccountSettings(
+            currentName: name,
+            avatarUrl: avatarUrl,
+            numericId: numericId,
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 68,
+                height: 68,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFFFFDF9E), Color(0xFFF3BA2F)],
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.08),
+                      blurRadius: 8,
+                      offset: const Offset(0, 3),
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 4),
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 4,
-                    children: [
-                      _buildLevelTag(Icons.shield, "$wealthLevel",
-                          const Color(0xFF38D5C5)),
-                      _buildLevelTag(Icons.arrow_upward, "$charmLevel",
-                          const Color(0xFF81D774)),
-                      _buildLevelTag(Icons.auto_awesome, "$chatLevel",
-                          const Color(0xFFB57DE5)),
-                      if (hasAgency)
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 6, vertical: 1.5),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF5AB6FF),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: const Text(
-                            "AGENCY",
-                            style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 9,
-                                fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  GestureDetector(
-                    onTap: () => _copyId(displayId),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
+                  ],
+                ),
+                padding: const EdgeInsets.all(2.5),
+                child: CircleAvatar(
+                  backgroundColor: Colors.white,
+                  backgroundImage: avatarImg,
+                  child: avatarImg == null
+                      ? const Icon(Icons.person,
+                          size: 36, color: Color(0xFFC7CBD1))
+                      : null,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      name,
+                      style: const TextStyle(
+                        fontSize: 16.5,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFF1D2129),
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 4),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
                       children: [
-                        Text(
-                          "ID:$displayId",
-                          style: const TextStyle(
-                              fontSize: 11.5,
-                              color: Color(0xFF86909C),
-                              fontWeight: FontWeight.w600),
-                        ),
-                        const SizedBox(width: 4),
-                        const Icon(Icons.copy,
-                            size: 11, color: Color(0xFF86909C)),
+                        _buildLevelTag(Icons.shield, "$wealthLevel",
+                            const Color(0xFF38D5C5)),
+                        _buildLevelTag(Icons.arrow_upward, "$charmLevel",
+                            const Color(0xFF81D774)),
+                        _buildLevelTag(Icons.auto_awesome, "$chatLevel",
+                            const Color(0xFFB57DE5)),
+                        if (hasAgency)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 1.5),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF5AB6FF),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: const Text(
+                              "AGENCY",
+                              style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.bold),
+                            ),
+                          ),
                       ],
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 4),
+                    GestureDetector(
+                      onTap: () => _copyId(displayId),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            "ID:$displayId",
+                            style: const TextStyle(
+                                fontSize: 11.5,
+                                color: Color(0xFF86909C),
+                                fontWeight: FontWeight.w600),
+
+),
+                          const SizedBox(width: 4),
+                          const Icon(Icons.copy,
+                              size: 11, color: Color(0xFF86909C)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            const Icon(Icons.chevron_right, color: Color(0xFFC9CDD4), size: 22),
-          ],
+              const Icon(Icons.chevron_right,
+                  color: Color(0xFFC9CDD4), size: 22),
+            ],
+          ),
         ),
         const SizedBox(height: 16),
         Row(
@@ -348,7 +401,7 @@ final int charmLevel =
     );
   }
 
-Widget _buildStatItem(String count, String label) {
+  Widget _buildStatItem(String count, String label) {
     return Column(
       children: [
         Text(
@@ -426,7 +479,8 @@ Widget _buildStatItem(String count, String label) {
 
   // 3. Coins & Points Card
   Widget _buildAssetsCard({
-    required int coins,
+
+required int coins,
     required double points,
     required int numericId,
   }) {
@@ -471,8 +525,7 @@ Widget _buildStatItem(String count, String label) {
                             fontWeight: FontWeight.w600),
                       ),
                       SizedBox(width: 4),
-
-Icon(Icons.chevron_right,
+                      Icon(Icons.chevron_right,
                           size: 14, color: Color(0xFF86909C)),
                     ],
                   ),
@@ -541,7 +594,7 @@ Icon(Icons.chevron_right,
     );
   }
 
-  // 4. Main 8 Features Grid
+// 4. Main 8 Features Grid
   Widget _buildMainFeaturesGrid({required int coins, required int numericId}) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 14),
@@ -584,8 +637,7 @@ Icon(Icons.chevron_right,
             icon: Icons.storefront,
             color: const Color(0xFFFF4D4F),
             label: "Store",
-
-onTap: () => Navigator.push(
+            onTap: () => Navigator.push(
               context,
               MaterialPageRoute(
                 builder: (_) => StoreScreen(
@@ -655,7 +707,8 @@ onTap: () => Navigator.push(
             userUid: _currentUser?.uid ?? "",
             onCoinsRecharged: _updateCoins,
           ),
-        ),
+
+),
       ),
       child: Container(
         width: double.infinity,
@@ -707,10 +760,12 @@ onTap: () => Navigator.push(
     );
   }
 
-// 6. Creator, Business & Admin Section
+  // 6. Creator, Business, Settings & Admin Section
   Widget _buildBusinessSection({
     required int numericId,
     required bool isAdmin,
+    required String currentName,
+    required String? avatarUrl,
   }) {
     final List<Widget> items = [
       _buildItemTile(
@@ -750,6 +805,16 @@ onTap: () => Navigator.push(
         onTap: () => Navigator.push(context,
             MaterialPageRoute(builder: (_) => const SupportScreen())),
       ),
+      _buildItemTile(
+        icon: Icons.settings,
+        color: const Color(0xFF595959),
+        label: "Settings",
+        onTap: () => _openAccountSettings(
+          currentName: currentName,
+          avatarUrl: avatarUrl,
+          numericId: numericId,
+        ),
+      ),
       if (isAdmin)
         _buildItemTile(
           icon: Icons.admin_panel_settings,
@@ -765,7 +830,8 @@ onTap: () => Navigator.push(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
-          BoxShadow(
+
+BoxShadow(
             color: Colors.black.withOpacity(0.03),
             blurRadius: 10,
             offset: const Offset(0, 3),
