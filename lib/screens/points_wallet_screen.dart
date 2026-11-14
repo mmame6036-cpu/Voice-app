@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -13,12 +14,14 @@ class _PointsWalletScreenState extends State<PointsWalletScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final User? _user = FirebaseAuth.instance.currentUser;
+  StreamSubscription? _userSub;
 
-  int _totalDiamonds = 0;
-  int _frozenDiamonds = 0;
+  int _totalPoints = 0;
+  int _frozenPoints = 0;
   int _userCoins = 0;
   String _userDisplayName = "User";
   int _userNumericId = 0;
+  bool _usesLegacyDiamonds = false;
 
   static const int pointsPerUsd = 10000;
 
@@ -30,7 +33,8 @@ class _PointsWalletScreenState extends State<PointsWalletScreen>
 
   // Cash out state
   final TextEditingController _cashOutController = TextEditingController();
-  final TextEditingController _accountNumberController = TextEditingController();
+  final TextEditingController _accountNumberController =
+      TextEditingController();
   dynamic _selectedMethod;
   double _calculatedUsd = 0.0;
   bool _isSubmittingWithdraw = false;
@@ -41,7 +45,8 @@ class _PointsWalletScreenState extends State<PointsWalletScreen>
 
   // Transfer state
   final TextEditingController _targetIdController = TextEditingController();
-  final TextEditingController _transferAmountController = TextEditingController();
+  final TextEditingController _transferAmountController =
+      TextEditingController();
   String? _verifiedUserName;
   String? _verifiedUserUid;
   bool _isCheckingUser = false;
@@ -97,27 +102,58 @@ class _PointsWalletScreenState extends State<PointsWalletScreen>
   }
 
   void _listenToUserData() {
-    if (_user == null) return;
-    FirebaseFirestore.instance
+    final user = _user;
+    if (user == null) return;
+
+    _userSub = FirebaseFirestore.instance
         .collection('users')
-        .doc(_user!.uid)
+        .doc(user.uid)
         .snapshots()
         .listen((doc) {
-      if (doc.exists && mounted) {
-        final data = doc.data()!;
-        setState(() {
-          _totalDiamonds = (data['diamonds'] as num?)?.toInt() ?? 0;
-          _frozenDiamonds = (data['frozenDiamonds'] as num?)?.toInt() ?? 0;
-          _userCoins = (data['coins'] as num?)?.toInt() ?? 0;
-          _userDisplayName = data['name']?.toString() ?? "User";
-          _userNumericId = (data['numericId'] as num?)?.toInt() ?? 0;
-        });
+      if (!doc.exists) return;
+      if (!mounted) return;
+
+      final raw = doc.data();
+      if (raw == null) return;
+      final Map data = raw is Map ? raw : {};
+
+      int pts = (data['points'] as num?)?.toInt() ?? 0;
+      int legacyDmnds = (data['diamonds'] as num?)?.toInt() ?? 0;
+      bool useLegacy = false;
+
+      if (pts == 0) {
+        if (legacyDmnds > 0) {
+          pts = legacyDmnds;
+          useLegacy = true;
+        }
       }
+
+      int frozen = (data['frozenPoints'] as num?)?.toInt() ?? 0;
+      if (frozen == 0) {
+        frozen = (data['frozenDiamonds'] as num?)?.toInt() ?? 0;
+      }
+
+      String nameVal = "User";
+      if (data['name'] != null) {
+        nameVal = data['name'].toString();
+      } else if (data['nickname'] != null) {
+        nameVal = data['nickname'].toString();
+      }
+
+setState(() {
+        _totalPoints = pts;
+        _frozenPoints = frozen;
+        _usesLegacyDiamonds = useLegacy;
+        _userCoins = (data['coins'] as num?)?.toInt() ?? 0;
+        _userDisplayName = nameVal;
+        _userNumericId = (data['numericId'] as num?)?.toInt() ?? 0;
+      });
     });
   }
 
   @override
   void dispose() {
+    _userSub?.cancel();
     _tabController.dispose();
     _cashOutController.dispose();
     _accountNumberController.dispose();
@@ -129,9 +165,10 @@ class _PointsWalletScreenState extends State<PointsWalletScreen>
 
   // Submit Withdraw Request to Firestore
   Future<void> _submitWithdrawRequest() async {
-    if (_user == null) return;
+    final user = _user;
+    if (user == null) return;
 
-if (_selectedMethod == null) {
+    if (_selectedMethod == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Please select a payment method")),
       );
@@ -141,7 +178,9 @@ if (_selectedMethod == null) {
     final accountDetail = _accountNumberController.text.trim();
     if (accountDetail.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Please enter your ${_selectedMethod['name']} account details")),
+        SnackBar(
+            content: Text(
+                "Please enter your ${_selectedMethod['name']} account details")),
       );
       return;
     }
@@ -149,12 +188,13 @@ if (_selectedMethod == null) {
     final points = int.tryParse(_cashOutController.text.trim()) ?? 0;
     if (points < pointsPerUsd) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Minimum withdrawal is 10,000 Points (\$1 USD)")),
+        const SnackBar(
+            content: Text("Minimum withdrawal is 10,000 Points (\$1 USD)")),
       );
       return;
     }
 
-    if (points > _totalDiamonds) {
+    if (points > _totalPoints) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Insufficient points balance")),
       );
@@ -167,26 +207,36 @@ if (_selectedMethod == null) {
       final double usdAmount = points / pointsPerUsd;
       final batch = FirebaseFirestore.instance.batch();
 
-      // 1. Deduct points from user's balance and move to frozen or decrement
-      final userRef = FirebaseFirestore.instance.collection('users').doc(_user!.uid);
-      batch.update(userRef, {
-        'diamonds': FieldValue.increment(-points),
-        'frozenDiamonds': FieldValue.increment(points),
-      });
+      final userRef =
+          FirebaseFirestore.instance.collection('users').doc(user.uid);
 
-      // 2. Create the withdrawal record in 'withdraw_requests'
-      final requestRef = FirebaseFirestore.instance.collection('withdraw_requests').doc();
+      if (_usesLegacyDiamonds) {
+        batch.update(userRef, {
+          'diamonds': FieldValue.increment(-points),
+          'frozenDiamonds': FieldValue.increment(points),
+        });
+      } else {
+        batch.update(userRef, {
+          'points': FieldValue.increment(-points),
+          'frozenPoints': FieldValue.increment(points),
+        });
+      }
+
+      final requestRef =
+          FirebaseFirestore.instance.collection('withdraw_requests').doc();
       batch.set(requestRef, {
         'requestId': requestRef.id,
-        'uid': _user!.uid,
+        'userUid': user.uid,
+        'uid': user.uid,
         'userNumericId': _userNumericId,
         'userName': _userDisplayName,
         'points': points,
         'usdAmount': usdAmount,
         'method': _selectedMethod['name'],
         'currency': _selectedMethod['currency'],
+        'account': accountDetail,
         'accountDetails': accountDetail,
-        'status': 'pending', // pending, approved, rejected
+        'status': 'PENDING',
         'createdAt': FieldValue.serverTimestamp(),
       });
 
@@ -204,22 +254,27 @@ if (_selectedMethod == null) {
           context: context,
           builder: (ctx) => AlertDialog(
             backgroundColor: cardColor,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
             title: const Row(
               children: [
                 Icon(Icons.check_circle, color: primaryPurple),
                 SizedBox(width: 8),
-                Text("Request Submitted", style: TextStyle(color: textDark, fontSize: 16)),
+                Text("Request Submitted",
+                    style: TextStyle(color: textDark, fontSize: 16)),
               ],
             ),
             content: Text(
               "Your withdrawal request of $points Points (\$${usdAmount.toStringAsFixed(2)} USD) via ${requestRef.id} has been submitted for admin review.",
-              style: const TextStyle(color: textMuted, fontSize: 13),
+
+style: const TextStyle(color: textMuted, fontSize: 13),
             ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
-                child: const Text("OK", style: TextStyle(color: primaryPurple, fontWeight: FontWeight.bold)),
+                child: const Text("OK",
+                    style: TextStyle(
+                        color: primaryPurple, fontWeight: FontWeight.bold)),
               ),
             ],
           ),
@@ -253,10 +308,15 @@ if (_selectedMethod == null) {
           .limit(1)
           .get();
 
-if (querySnapshot.docs.isNotEmpty) {
+      if (querySnapshot.docs.isNotEmpty) {
         final doc = querySnapshot.docs.first;
+        final docData = doc.data();
+        String foundName = "User ${docData['numericId']}";
+        if (docData['name'] != null) {
+          foundName = docData['name'].toString();
+        }
         setState(() {
-          _verifiedUserName = doc.data()['name']?.toString() ?? "User ${doc.data()['numericId']}";
+          _verifiedUserName = foundName;
           _verifiedUserUid = doc.id;
         });
       } else {
@@ -278,9 +338,19 @@ if (querySnapshot.docs.isNotEmpty) {
   }
 
   Future<void> _executeTransfer() async {
+    final user = _user;
+    if (user == null) return;
+
     if (_verifiedUserUid == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Please verify User ID first")),
+      );
+      return;
+    }
+
+    if (_verifiedUserUid == user.uid) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Cannot transfer points to yourself")),
       );
       return;
     }
@@ -293,9 +363,9 @@ if (querySnapshot.docs.isNotEmpty) {
       return;
     }
 
-    if (amount > _totalDiamonds) {
+    if (amount > _totalPoints) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Insufficient diamonds balance")),
+        const SnackBar(content: Text("Insufficient points balance")),
       );
       return;
     }
@@ -305,18 +375,26 @@ if (querySnapshot.docs.isNotEmpty) {
 
     try {
       final batch = FirebaseFirestore.instance.batch();
-      final senderRef = FirebaseFirestore.instance.collection('users').doc(_user!.uid);
-      final receiverRef = FirebaseFirestore.instance.collection('users').doc(_verifiedUserUid);
+      final senderRef =
+          FirebaseFirestore.instance.collection('users').doc(user.uid);
+      final receiverRef =
+          FirebaseFirestore.instance.collection('users').doc(_verifiedUserUid);
 
-      batch.update(senderRef, {'diamonds': FieldValue.increment(-amount)});
-      batch.update(receiverRef, {'diamonds': FieldValue.increment(received)});
+      if (_usesLegacyDiamonds) {
+        batch.update(senderRef, {'diamonds': FieldValue.increment(-amount)});
+      } else {
+        batch.update(senderRef, {'points': FieldValue.increment(-amount)});
+      }
+      batch.update(receiverRef, {'points': FieldValue.increment(received)});
 
       await batch.commit();
 
       _transferAmountController.clear();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Successfully transferred $received points (Fee: $fee)")),
+          SnackBar(
+              content: Text(
+                  "Successfully transferred $received points (Fee: $fee)")),
         );
       }
     } catch (e) {
@@ -329,10 +407,13 @@ if (querySnapshot.docs.isNotEmpty) {
   }
 
   Future<void> _executeExchange() async {
-    final points = int.tryParse(_exchangeController.text.trim()) ?? 0;
+    final user = _user;
+    if (user == null) return;
+
+final points = int.tryParse(_exchangeController.text.trim()) ?? 0;
     if (points <= 0) return;
 
-    if (points > _totalDiamonds) {
+    if (points > _totalPoints) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Insufficient points")),
       );
@@ -342,17 +423,28 @@ if (querySnapshot.docs.isNotEmpty) {
     final coinsToAdd = ((points / 10000) * 9000).round();
 
     try {
-      await FirebaseFirestore.instance.collection('users').doc(_user!.uid).update({
-        'diamonds': FieldValue.increment(-points),
-        'coins': FieldValue.increment(coinsToAdd),
-      });
+      final userRef =
+          FirebaseFirestore.instance.collection('users').doc(user.uid);
+      if (_usesLegacyDiamonds) {
+        await userRef.update({
+          'diamonds': FieldValue.increment(-points),
+          'coins': FieldValue.increment(coinsToAdd),
+        });
+      } else {
+        await userRef.update({
+          'points': FieldValue.increment(-points),
+          'coins': FieldValue.increment(coinsToAdd),
+        });
+      }
 
       _exchangeController.clear();
       setState(() => _calculatedCoins = 0);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Exchanged $points points for $coinsToAdd coins!")),
+          SnackBar(
+              content:
+                  Text("Exchanged $points points for $coinsToAdd coins!")),
         );
       }
     } catch (e) {
@@ -377,8 +469,7 @@ if (querySnapshot.docs.isNotEmpty) {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-
-children: [
+          children: [
             Center(
               child: Container(
                 width: 44,
@@ -412,7 +503,8 @@ children: [
 
                   return Container(
                     margin: const EdgeInsets.only(bottom: 12),
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 12),
                     decoration: BoxDecoration(
                       color: cardColor,
                       borderRadius: BorderRadius.circular(16),
@@ -426,7 +518,8 @@ children: [
                         ),
                         const SizedBox(width: 12),
                         Expanded(
-                          child: Column(
+
+child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
@@ -440,7 +533,8 @@ children: [
                               const SizedBox(height: 2),
                               Text(
                                 "$methodCurrency • $methodFee",
-                                style: const TextStyle(color: textMuted, fontSize: 11),
+                                style: const TextStyle(
+                                    color: textMuted, fontSize: 11),
                               ),
                             ],
                           ),
@@ -449,15 +543,19 @@ children: [
                           style: ElevatedButton.styleFrom(
                             backgroundColor: primaryPurple,
                             foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16)),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 8),
                             elevation: 0,
                           ),
                           onPressed: () {
                             setState(() => _selectedMethod = method);
                             Navigator.pop(ctx);
                           },
-                          child: const Text("Select", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                          child: const Text("Select",
+                              style: TextStyle(
+                                  fontSize: 12, fontWeight: FontWeight.bold)),
                         ),
                       ],
                     ),
@@ -471,7 +569,7 @@ children: [
     );
   }
 
-@override
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: shiroBg,
@@ -484,7 +582,8 @@ children: [
         ),
         title: const Text(
           "Points Wallet",
-          style: TextStyle(color: textDark, fontSize: 18, fontWeight: FontWeight.bold),
+          style: TextStyle(
+              color: textDark, fontSize: 18, fontWeight: FontWeight.bold),
         ),
         centerTitle: true,
       ),
@@ -514,13 +613,17 @@ children: [
                     SizedBox(width: 8),
                     Text(
                       "Available Points",
-                      style: TextStyle(color: textMuted, fontSize: 13, fontWeight: FontWeight.w600),
+                      style: TextStyle(
+                          color: textMuted,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600),
                     ),
                   ],
                 ),
-                const SizedBox(height: 12),
+
+const SizedBox(height: 12),
                 Text(
-                  "$_totalDiamonds",
+                  "$_totalPoints",
                   style: const TextStyle(
                     color: textDark,
                     fontSize: 34,
@@ -530,7 +633,7 @@ children: [
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  "Frozen Points: $_frozenDiamonds (Pending admin review)",
+                  "Frozen Points: $_frozenPoints (Pending admin review)",
                   style: const TextStyle(color: textMuted, fontSize: 11.5),
                 ),
               ],
@@ -544,7 +647,8 @@ children: [
               indicatorWeight: 3,
               labelColor: primaryPurple,
               unselectedLabelColor: textMuted,
-              labelStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+              labelStyle:
+                  const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
               tabs: const [
                 Tab(text: "Cash out"),
                 Tab(text: "Exchange"),
@@ -568,12 +672,27 @@ children: [
   }
 
   Widget _buildCashOutTab() {
-    final String chosenMethodName = _selectedMethod != null
-        ? _selectedMethod['name'].toString()
-        : "Select Payment Method";
-    final String accountHint = _selectedMethod != null
-        ? _selectedMethod['accountLabel'].toString()
-        : "Account details (Select method first)";
+    String chosenMethodName = "Select Payment Method";
+    String accountHint = "Account details (Select method first)";
+    if (_selectedMethod != null) {
+      chosenMethodName = _selectedMethod['name'].toString();
+      accountHint = _selectedMethod['accountLabel'].toString();
+    }
+
+    VoidCallback? withdrawAction = _submitWithdrawRequest;
+    Widget withdrawLabel = const Text(
+      "Withdraw Cash",
+      style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+    );
+
+    if (_isSubmittingWithdraw) {
+      withdrawAction = null;
+      withdrawLabel = const SizedBox(
+        width: 20,
+        height: 20,
+        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.2),
+      );
+    }
 
     return ListView(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -582,8 +701,7 @@ children: [
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-
-color: cardColor,
+            color: cardColor,
             borderRadius: BorderRadius.circular(18),
             border: Border.all(color: Colors.black12),
           ),
@@ -593,9 +711,14 @@ color: cardColor,
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text("Payment Method", style: TextStyle(color: textMuted, fontSize: 13, fontWeight: FontWeight.w600)),
+                  const Text("Payment Method",
+                      style: TextStyle(
+                          color: textMuted,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600)),
                   IconButton(
-                    icon: const Icon(Icons.arrow_forward_ios, color: textDark, size: 14),
+                    icon: const Icon(Icons.arrow_forward_ios,
+                        color: textDark, size: 14),
                     onPressed: _openPaymentMethodSheet,
                   ),
                 ],
@@ -607,11 +730,16 @@ color: cardColor,
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Icon(Icons.account_balance, color: primaryPurple, size: 20),
-                      const SizedBox(width: 8),
+                      const Icon(Icons.account_balance,
+                          color: primaryPurple, size: 20),
+
+const SizedBox(width: 8),
                       Text(
                         chosenMethodName,
-                        style: const TextStyle(color: primaryPurple, fontSize: 13.5, fontWeight: FontWeight.bold),
+                        style: const TextStyle(
+                            color: primaryPurple,
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.bold),
                       ),
                     ],
                   ),
@@ -622,15 +750,22 @@ color: cardColor,
                 const SizedBox(height: 6),
                 Text(
                   "Enter ${_selectedMethod['name']} Account:",
-                  style: const TextStyle(color: textMuted, fontSize: 12, fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                      color: textMuted,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 6),
                 TextField(
                   controller: _accountNumberController,
-                  style: const TextStyle(color: textDark, fontSize: 15, fontWeight: FontWeight.w600),
+                  style: const TextStyle(
+                      color: textDark,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600),
                   decoration: InputDecoration(
                     hintText: accountHint,
-                    hintStyle: const TextStyle(color: Colors.black38, fontSize: 13),
+                    hintStyle:
+                        const TextStyle(color: Colors.black38, fontSize: 13),
                     isDense: true,
                     contentPadding: const EdgeInsets.symmetric(vertical: 8),
                     border: InputBorder.none,
@@ -653,7 +788,11 @@ color: cardColor,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text("Points Amount", style: TextStyle(color: textMuted, fontSize: 13, fontWeight: FontWeight.w600)),
+              const Text("Points Amount",
+                  style: TextStyle(
+                      color: textMuted,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600)),
               const SizedBox(height: 8),
               Row(
                 children: [
@@ -661,41 +800,51 @@ color: cardColor,
                     child: TextField(
                       controller: _cashOutController,
                       keyboardType: TextInputType.number,
-                      style: const TextStyle(color: textDark, fontSize: 20, fontWeight: FontWeight.bold),
+                      style: const TextStyle(
+                          color: textDark,
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold),
                       decoration: const InputDecoration(
                         hintText: "Min. 10,000",
-                        hintStyle: TextStyle(color: Colors.black26, fontSize: 14),
+                        hintStyle:
+                            TextStyle(color: Colors.black26, fontSize: 14),
                         border: InputBorder.none,
                       ),
                       onChanged: (val) {
                         final p = int.tryParse(val) ?? 0;
                         setState(() {
-
-_calculatedUsd = p / pointsPerUsd;
+                          _calculatedUsd = p / pointsPerUsd;
                         });
                       },
                     ),
                   ),
                   TextButton(
                     onPressed: () {
-                      _cashOutController.text = "$_totalDiamonds";
+                      _cashOutController.text = "$_totalPoints";
                       setState(() {
-                        _calculatedUsd = _totalDiamonds / pointsPerUsd;
+                        _calculatedUsd = _totalPoints / pointsPerUsd;
                       });
                     },
-                    child: const Text("All", style: TextStyle(color: primaryPurple, fontWeight: FontWeight.bold)),
+                    child: const Text("All",
+                        style: TextStyle(
+                            color: primaryPurple, fontWeight: FontWeight.bold)),
                   ),
                 ],
               ),
               const Divider(color: Colors.black12),
-              Row(
+
+Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
                     "Equivalent: \$${_calculatedUsd.toStringAsFixed(2)} USD",
-                    style: const TextStyle(color: textDark, fontSize: 12, fontWeight: FontWeight.bold),
+                    style: const TextStyle(
+                        color: textDark,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold),
                   ),
-                  const Text("1 USD = 10,000 Points", style: TextStyle(color: textMuted, fontSize: 11)),
+                  const Text("1 USD = 10,000 Points",
+                      style: TextStyle(color: textMuted, fontSize: 11)),
                 ],
               ),
             ],
@@ -711,17 +860,12 @@ _calculatedUsd = p / pointsPerUsd;
             style: ElevatedButton.styleFrom(
               backgroundColor: primaryPurple,
               foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(25)),
               elevation: 2,
             ),
-            onPressed: _isSubmittingWithdraw ? null : _submitWithdrawRequest,
-            child: _isSubmittingWithdraw
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.2),
-                  )
-                : const Text("Withdraw Cash", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+            onPressed: withdrawAction,
+            child: withdrawLabel,
           ),
         ),
       ],
@@ -745,15 +889,21 @@ _calculatedUsd = p / pointsPerUsd;
               const Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text("Exchange Points to Coins", style: TextStyle(color: textDark, fontSize: 13.5, fontWeight: FontWeight.bold)),
-                  Text("Rate: 10,000 Pts = 9,000 Coins", style: TextStyle(color: textMuted, fontSize: 11)),
+                  Text("Exchange Points to Coins",
+                      style: TextStyle(
+                          color: textDark,
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.bold)),
+                  Text("Rate: 10,000 Pts = 9,000 Coins",
+                      style: TextStyle(color: textMuted, fontSize: 11)),
                 ],
               ),
               const SizedBox(height: 12),
               TextField(
                 controller: _exchangeController,
                 keyboardType: TextInputType.number,
-                style: const TextStyle(color: textDark, fontSize: 20, fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                    color: textDark, fontSize: 20, fontWeight: FontWeight.bold),
                 decoration: const InputDecoration(
                   hintText: "Enter points amount",
                   hintStyle: TextStyle(color: Colors.black26, fontSize: 14),
@@ -767,14 +917,17 @@ _calculatedUsd = p / pointsPerUsd;
                 },
               ),
               const Divider(color: Colors.black12),
-
-Row(
+              Row(
                 children: [
-                  const Icon(Icons.monetization_on, color: Colors.amber, size: 18),
+                  const Icon(Icons.monetization_on,
+                      color: Colors.amber, size: 18),
                   const SizedBox(width: 6),
                   Text(
                     "You will receive: $_calculatedCoins Coins",
-                    style: const TextStyle(color: textDark, fontSize: 13, fontWeight: FontWeight.bold),
+                    style: const TextStyle(
+                        color: textDark,
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold),
                   ),
                 ],
               ),
@@ -788,12 +941,15 @@ Row(
           child: ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: primaryPurple,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
+
+foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(25)),
               elevation: 2,
             ),
             onPressed: _executeExchange,
-            child: const Text("Confirm Exchange", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+            child: const Text("Confirm Exchange",
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
           ),
         ),
       ],
@@ -801,6 +957,21 @@ Row(
   }
 
   Widget _buildTransferTab() {
+    VoidCallback? checkAction = _checkTargetUser;
+    Widget checkLabel = const Text(
+      "Check",
+      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+    );
+
+    if (_isCheckingUser) {
+      checkAction = null;
+      checkLabel = const SizedBox(
+        width: 14,
+        height: 14,
+        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+      );
+    }
+
     return ListView(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       children: [
@@ -814,7 +985,11 @@ Row(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text("Recipient User ID", style: TextStyle(color: textMuted, fontSize: 13, fontWeight: FontWeight.w600)),
+              const Text("Recipient User ID",
+                  style: TextStyle(
+                      color: textMuted,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600)),
               const SizedBox(height: 6),
               Row(
                 children: [
@@ -822,10 +997,14 @@ Row(
                     child: TextField(
                       controller: _targetIdController,
                       keyboardType: TextInputType.number,
-                      style: const TextStyle(color: textDark, fontSize: 18, fontWeight: FontWeight.bold),
+                      style: const TextStyle(
+                          color: textDark,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold),
                       decoration: const InputDecoration(
                         hintText: "Enter numeric User ID",
-                        hintStyle: TextStyle(color: Colors.black26, fontSize: 14),
+                        hintStyle:
+                            TextStyle(color: Colors.black26, fontSize: 14),
                         border: InputBorder.none,
                       ),
                     ),
@@ -835,13 +1014,13 @@ Row(
                       backgroundColor: primaryPurple,
                       foregroundColor: Colors.white,
                       elevation: 0,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14)),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 8),
                     ),
-                    onPressed: _isCheckingUser ? null : _checkTargetUser,
-                    child: _isCheckingUser
-                        ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                        : const Text("Check", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                    onPressed: checkAction,
+                    child: checkLabel,
                   ),
                 ],
               ),
@@ -850,18 +1029,26 @@ Row(
                   padding: const EdgeInsets.only(top: 4.0),
                   child: Text(
                     "Verified Name: $_verifiedUserName",
-                    style: const TextStyle(color: primaryPurple, fontSize: 12, fontWeight: FontWeight.bold),
+                    style: const TextStyle(
+                        color: primaryPurple,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold),
                   ),
                 ),
               const Divider(color: Colors.black12),
               const SizedBox(height: 6),
-              const Text("Transfer Points (Fee: 2%)", style: TextStyle(color: textMuted, fontSize: 13, fontWeight: FontWeight.w600)),
-
-const SizedBox(height: 6),
+              const Text("Transfer Points (Fee: 2%)",
+                  style: TextStyle(
+                      color: textMuted,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600)),
+              const SizedBox(height: 6),
               TextField(
                 controller: _transferAmountController,
-                keyboardType: TextInputType.number,
-                style: const TextStyle(color: textDark, fontSize: 18, fontWeight: FontWeight.bold),
+
+keyboardType: TextInputType.number,
+                style: const TextStyle(
+                    color: textDark, fontSize: 18, fontWeight: FontWeight.bold),
                 decoration: const InputDecoration(
                   hintText: "Enter points to send",
                   hintStyle: TextStyle(color: Colors.black26, fontSize: 14),
@@ -887,11 +1074,13 @@ const SizedBox(height: 6),
             style: ElevatedButton.styleFrom(
               backgroundColor: primaryPurple,
               foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(25)),
               elevation: 2,
             ),
             onPressed: _executeTransfer,
-            child: const Text("Send Transfer", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+            child: const Text("Send Transfer",
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
           ),
         ),
       ],
