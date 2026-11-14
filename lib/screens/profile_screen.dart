@@ -15,7 +15,6 @@ import 'host_center_screen.dart';
 import 'agency_screen.dart';
 import 'coin_seller_screen.dart';
 import 'support_screen.dart';
-import 'admin_dashboard_screen.dart';
 import 'account_settings_screen.dart';
 import '../widgets/lucky_island_dialog.dart';
 
@@ -74,13 +73,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  void _openAdminDashboard() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const AdminDashboardScreen()),
-    );
-  }
-
   void _openAccountSettings({
     required String currentName,
     required String? avatarUrl,
@@ -100,9 +92,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final String uid = _currentUser?.uid ?? "";
+    String uid = "";
+    if (_currentUser != null) {
+      uid = _currentUser!.uid;
+    }
 
-    Stream<DocumentSnapshot>? userStream;
+    Stream? userStream;
     if (uid.isNotEmpty) {
       userStream =
           FirebaseFirestore.instance.collection('users').doc(uid).snapshots();
@@ -117,15 +112,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
           if (snapshot.hasData) {
             docSnap = snapshot.data as DocumentSnapshot?;
           }
-          final rawData =
-              (docSnap != null && docSnap.exists) ? docSnap.data() : null;
+
+          Object? rawData;
+          if (docSnap != null) {
+            if (docSnap.exists) {
+              rawData = docSnap.data();
+            }
+          }
           final Map userData = rawData is Map ? rawData : {};
 
-          final String displayName = (userData['name'] ??
-                  userData['nickname'] ??
-                  _currentUser?.displayName ??
-                  "User")
-              .toString();
+          String fallbackName = "User";
+          if (_currentUser != null) {
+            if (_currentUser!.displayName != null) {
+              if (_currentUser!.displayName!.isNotEmpty) {
+                fallbackName = _currentUser!.displayName!;
+              }
+            }
+          }
+
+          final String displayName =
+              (userData['name'] ?? userData['nickname'] ?? fallbackName)
+                  .toString();
 
           final int numericId = (userData['numericId'] as num?)?.toInt() ?? 0;
           String displayId = "000000";
@@ -137,13 +144,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
             displayId = uid;
           }
 
-          final int firestoreCoins =
+final int firestoreCoins =
               (userData['coins'] as num?)?.toInt() ?? _coins;
           final double points = (userData['diamonds'] as num?)?.toDouble() ??
               (userData['points'] as num?)?.toDouble() ??
               0.0;
 
-final int followedCount =
+          final int followedCount =
               (userData['followedCount'] as num?)?.toInt() ?? 0;
           final int followingCount =
               (userData['followingCount'] as num?)?.toInt() ?? 0;
@@ -165,23 +172,12 @@ final int followedCount =
             }
           }
 
-          bool isAdmin = userData['isAdmin'] == true;
-          if (numericId == 100001) {
-            isAdmin = true;
-          }
-          if (userData['role'] == 'admin') {
-            isAdmin = true;
-          }
-          if (userData['role'] == 'super_admin') {
-            isAdmin = true;
-          }
-
           return SafeArea(
             child: SingleChildScrollView(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               child: Column(
                 children: [
-                  // 1. User Header Section (Tapping opens Edit Profile & Settings)
+                  // 1. User Header Section
                   _buildHeaderSection(
                     name: displayName,
                     displayId: displayId,
@@ -219,10 +215,9 @@ final int followedCount =
                       coins: firestoreCoins, numericId: numericId),
                   const SizedBox(height: 14),
 
-                  // 6. Creator, Business, Settings & Admin Section
+                  // 6. Creator, Business & Settings Section
                   _buildBusinessSection(
                     numericId: numericId,
-                    isAdmin: isAdmin,
                     currentName: displayName,
                     avatarUrl: avatarUrl,
                   ),
@@ -251,9 +246,16 @@ final int followedCount =
     required int friends,
   }) {
     ImageProvider? avatarImg;
+    Widget? avatarPlaceholder = const Icon(
+      Icons.person,
+      size: 36,
+      color: Color(0xFFC7CBD1),
+    );
+
     if (avatarUrl != null) {
       if (avatarUrl.isNotEmpty) {
         avatarImg = NetworkImage(avatarUrl);
+        avatarPlaceholder = null;
       }
     }
 
@@ -288,10 +290,7 @@ return Column(
                 child: CircleAvatar(
                   backgroundColor: Colors.white,
                   backgroundImage: avatarImg,
-                  child: avatarImg == null
-                      ? const Icon(Icons.person,
-                          size: 36, color: Color(0xFFC7CBD1))
-                      : null,
+                  child: avatarPlaceholder,
                 ),
               ),
               const SizedBox(width: 12),
@@ -350,11 +349,11 @@ return Column(
                                 fontSize: 11.5,
                                 color: Color(0xFF86909C),
                                 fontWeight: FontWeight.w600),
-
-),
+                          ),
                           const SizedBox(width: 4),
                           const Icon(Icons.copy,
-                              size: 11, color: Color(0xFF86909C)),
+
+size: 11, color: Color(0xFF86909C)),
                         ],
                       ),
                     ),
@@ -479,12 +478,16 @@ return Column(
 
   // 3. Coins & Points Card
   Widget _buildAssetsCard({
-
-required int coins,
+    required int coins,
     required double points,
     required int numericId,
   }) {
-    return Container(
+    String currentUid = "";
+    if (_currentUser != null) {
+      currentUid = _currentUser!.uid;
+    }
+
+return Container(
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -507,7 +510,7 @@ required int coins,
                   builder: (_) => WalletScreen(
                     currentCoins: coins,
                     userNumericId: numericId,
-                    userUid: _currentUser?.uid ?? "",
+                    userUid: currentUid,
                     onCoinsRecharged: _updateCoins,
                   ),
                 ),
@@ -594,9 +597,14 @@ required int coins,
     );
   }
 
-// 4. Main 8 Features Grid
+  // 4. Main 8 Features Grid
   Widget _buildMainFeaturesGrid({required int coins, required int numericId}) {
-    return Container(
+    String currentUid = "";
+    if (_currentUser != null) {
+      currentUid = _currentUser!.uid;
+    }
+
+return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 14),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -627,7 +635,7 @@ required int coins,
                 builder: (_) => WalletScreen(
                   currentCoins: coins,
                   userNumericId: numericId,
-                  userUid: _currentUser?.uid ?? "",
+                  userUid: currentUid,
                   onCoinsRecharged: _updateCoins,
                 ),
               ),
@@ -697,6 +705,11 @@ required int coins,
   // 5. Promo Carousel Banner
   Widget _buildPromoRechargeBanner(
       {required int coins, required int numericId}) {
+    String currentUid = "";
+    if (_currentUser != null) {
+      currentUid = _currentUser!.uid;
+    }
+
     return GestureDetector(
       onTap: () => Navigator.push(
         context,
@@ -704,14 +717,14 @@ required int coins,
           builder: (_) => WalletScreen(
             currentCoins: coins,
             userNumericId: numericId,
-            userUid: _currentUser?.uid ?? "",
+            userUid: currentUid,
             onCoinsRecharged: _updateCoins,
           ),
-
-),
+        ),
       ),
       child: Container(
-        width: double.infinity,
+
+width: double.infinity,
         height: 104,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(18),
@@ -760,14 +773,13 @@ required int coins,
     );
   }
 
-  // 6. Creator, Business, Settings & Admin Section
+  // 6. Creator, Business & Settings Section
   Widget _buildBusinessSection({
     required int numericId,
-    required bool isAdmin,
     required String currentName,
     required String? avatarUrl,
   }) {
-    final List<Widget> items = [
+    final List items = [
       _buildItemTile(
         icon: Icons.stars_rounded,
         color: const Color(0xFF7E22CE),
@@ -815,13 +827,6 @@ required int coins,
           numericId: numericId,
         ),
       ),
-      if (isAdmin)
-        _buildItemTile(
-          icon: Icons.admin_panel_settings,
-          color: const Color(0xFFF3BA2F),
-          label: "Admin Panel",
-          onTap: _openAdminDashboard,
-        ),
     ];
 
     return Container(
@@ -830,8 +835,7 @@ required int coins,
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
-
-BoxShadow(
+          BoxShadow(
             color: Colors.black.withOpacity(0.03),
             blurRadius: 10,
             offset: const Offset(0, 3),
@@ -845,12 +849,12 @@ BoxShadow(
         mainAxisSpacing: 14,
         crossAxisSpacing: 4,
         childAspectRatio: 0.9,
-        children: items,
+        children: List.from(items),
       ),
     );
   }
 
-  Widget _buildItemTile({
+Widget _buildItemTile({
     required IconData icon,
     required Color color,
     required String label,
