@@ -64,7 +64,8 @@ class _MessagesScreenState extends State<MessagesScreen> {
         .orderBy('timestamp', descending: true)
         .snapshots()
         .listen((snap) {
-      if (!mounted || snap.docs.isEmpty) return;
+      if (!mounted) return;
+      if (snap.docs.isEmpty) return;
       int unread = 0;
       for (final d in snap.docs) {
         if (d.data()['unread'] == true) unread++;
@@ -85,7 +86,8 @@ class _MessagesScreenState extends State<MessagesScreen> {
         .limit(10)
         .snapshots()
         .listen((snap) {
-      if (!mounted || snap.docs.isEmpty) return;
+      if (!mounted) return;
+      if (snap.docs.isEmpty) return;
       final latest = snap.docs.first.data();
       setState(() {
         _latestOfficialSubtitle =
@@ -99,7 +101,9 @@ class _MessagesScreenState extends State<MessagesScreen> {
         .doc(_uid)
         .snapshots()
         .listen((doc) {
-      if (!mounted  !doc.exists  doc.data() == null) return;
+      if (!mounted) return;
+      if (!doc.exists) return;
+      if (doc.data() == null) return;
       final data = doc.data()!;
       setState(() {
         _latestSupportSubtitle =
@@ -127,7 +131,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
     return "$m-$d $h:$min";
   }
 
-  Future<void> _markAllAsRead() async {
+Future<void> _markAllAsRead() async {
     setState(() {
       _unreadSystemCount = 0;
       _unreadOfficialCount = 0;
@@ -137,7 +141,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
       _unreadFollowerCount = 0;
     });
 
-try {
+    try {
       final db = FirebaseFirestore.instance;
       final sysSnap = await db
           .collection('users')
@@ -249,7 +253,8 @@ try {
         'bgColor': const Color(0xFF26A69A),
         'title': 'Customer Service',
         'subtitle': _latestSupportSubtitle,
-        'time': _latestSupportTime,
+
+'time': _latestSupportTime,
         'unread': _unreadSupportCount,
         'onTap': () async {
           setState(() => _unreadSupportCount = 0);
@@ -263,13 +268,14 @@ try {
       },
     ];
 
-final filteredChannels = channels.where((ch) {
+    final filteredChannels = channels.where((ch) {
       if (!_showAll && (ch['unread'] as int) == 0) return false;
       if (_searchQuery.isNotEmpty) {
         final q = _searchQuery.toLowerCase();
         final t = ch['title'].toString().toLowerCase();
         final s = ch['subtitle'].toString().toLowerCase();
-        return t.contains(q) || s.contains(q);
+        if (t.contains(q)) return true;
+        return s.contains(q);
       }
       return true;
     }).toList();
@@ -356,7 +362,8 @@ final filteredChannels = channels.where((ch) {
                           onPressed: () {
                             setState(() {
                               _isSearching = !_isSearching;
-                              if (!_isSearching) {
+
+if (!_isSearching) {
                                 _searchQuery = '';
                                 _searchController.clear();
                               }
@@ -367,8 +374,7 @@ final filteredChannels = channels.where((ch) {
                     ),
                   ),
                   if (_isSearching)
-
-Padding(
+                    Padding(
                       padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
                       child: TextField(
                         controller: _searchController,
@@ -442,7 +448,8 @@ Padding(
                       ],
                     ),
                   ),
-                  const Divider(height: 1, color: Color(0xFFEEEEEE)),
+
+const Divider(height: 1, color: Color(0xFFEEEEEE)),
                   Expanded(
                     child: filteredChannels.isEmpty
                         ? Center(
@@ -450,8 +457,7 @@ Padding(
                               _showAll
                                   ? 'No matching messages'
                                   : 'No unread messages',
-
-style: const TextStyle(
+                              style: const TextStyle(
                                   color: Colors.black45, fontSize: 14),
                             ),
                           )
@@ -548,7 +554,8 @@ style: const TextStyle(
                           ),
                           overflow: TextOverflow.ellipsis,
                         ),
-                      ),
+
+),
                       const SizedBox(width: 5),
                       const Icon(Icons.verified,
                           color: Color(0xFF29B6F6), size: 17),
@@ -558,8 +565,7 @@ style: const TextStyle(
                     const SizedBox(height: 4),
                     Text(
                       subtitle,
-
-style: const TextStyle(
+                      style: const TextStyle(
                         color: Colors.black45,
                         fontSize: 13.5,
                       ),
@@ -683,8 +689,7 @@ class _SystemMessageScreenState extends State<SystemMessageScreen> {
   final List _defaultSystemMessages = [
     {
       'title': 'WELCOME to NILE Live!',
-
-'time': '08-10 19:29:14',
+      'time': '08-10 19:29:14',
       'body':
           'Welcome to NILE Live Voice Party! Enjoy 30-seat live voice lounges, exciting mini-games like Ocean Hunt, and daily host rewards. Never share your OTP code or password with anyone.',
       'icon': Icons.verified_user,
@@ -790,12 +795,12 @@ class _SystemMessageScreenState extends State<SystemMessageScreen> {
                   borderRadius: BorderRadius.circular(14),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.03),
+
+color: Colors.black.withOpacity(0.03),
                       blurRadius: 8,
                       offset: const Offset(0, 3),
                     ),
-
-],
+                  ],
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1143,7 +1148,12 @@ Icon(Icons.verified, color: Color(0xFF29B6F6), size: 16),
                   .orderBy('timestamp', descending: false)
                   .snapshots(),
               builder: (context, snapshot) {
-                if (!snapshot.hasData || snapshot.data == null) {
+                if (!snapshot.hasData) {
+                  return const Center(
+                    child: CircularProgressIndicator(color: Color(0xFF26A69A)),
+                  );
+                }
+                if (snapshot.data == null) {
                   return const Center(
                     child: CircularProgressIndicator(color: Color(0xFF26A69A)),
                   );
@@ -1212,12 +1222,12 @@ Icon(Icons.verified, color: Color(0xFF29B6F6), size: 16),
               itemCount: _quickFaqs.length,
               separatorBuilder: (_, __) => const SizedBox(width: 8),
               itemBuilder: (context, index) {
-                final faq = _quickFaqs[index];
+
+final faq = _quickFaqs[index];
                 return ActionChip(
                   backgroundColor: const Color(0xFFE0F7FA),
                   label: Text(
-
-faq['q'].toString(),
+                    faq['q'].toString(),
                     style: const TextStyle(
                       color: Color(0xFF00838F),
                       fontSize: 12,
@@ -1318,14 +1328,14 @@ class NoticeDetailScreen extends StatelessWidget {
         elevation: 0.5,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios, color: Colors.black, size: 18),
-          onPressed: () => Navigator.pop(context),
+
+onPressed: () => Navigator.pop(context),
         ),
       ),
       body: ListView.builder(
         padding: const EdgeInsets.all(14),
         itemCount: notices.length,
-
-itemBuilder: (context, index) {
+        itemBuilder: (context, index) {
           final item = notices[index];
           return Card(
             margin: const EdgeInsets.only(bottom: 12),
