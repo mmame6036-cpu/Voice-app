@@ -28,68 +28,60 @@ jobs:
       - name: Compress Gift MP4 Assets
         run: |
           sudo apt-get update && sudo apt-get install -y ffmpeg
-          for f in assets/svga/*.mp4; do
-            [ -f "$f" ] || continue
-            ffmpeg -y -i "$f" -vf "scale='trunc(min(480,iw)/2)*2':-2" -c:v libx264 -crf 28 -preset veryfast -c:a aac -b:a 64k -movflags +faststart "${f}.tmp.mp4" && mv "${f}.tmp.mp4" "$f" || rm -f "${f}.tmp.mp4"
-          done
+          for f in assets/svga/*.mp4; do [ -f "$f" ] && ffmpeg -y -i "$f" -vf "scale='trunc(min(480,iw)/2)*2':-2" -c:v libx264 -crf 28 -preset veryfast -c:a aac -b:a 64k -movflags +faststart "${f}.tmp.mp4" && mv "${f}.tmp.mp4" "$f" || rm -f "${f}.tmp.mp4"; done
 
       - name: Backup Firebase Config
-        run: |
-          find . -name "*google-services*.json" -exec cp {} /tmp/google-services.json \; || true
+        run: find . -name "*google-services*.json" -exec cp {} /tmp/google-services.json \; || true
 
       - name: Recreate Android Platform
         run: |
           rm -rf android
           flutter create . --platforms=android --org=com.nile --project-name=voiceapp
-          printf '%s\n' \
-            'distributionBase=GRADLE_USER_HOME' \
-            'distributionPath=wrapper/dists' \
-            'distributionUrl=https\://services.gradle.org/distributions/gradle-7.6.3-bin.zip' \
-            'zipStoreBase=GRADLE_USER_HOME' \
-            'zipStorePath=wrapper/dists' > android/gradle/wrapper/gradle-wrapper.properties
+          echo 'distributionBase=GRADLE_USER_HOME' > android/gradle/wrapper/gradle-wrapper.properties
+          echo 'distributionPath=wrapper/dists' >> android/gradle/wrapper/gradle-wrapper.properties
+          echo 'distributionUrl=https\://services.gradle.org/distributions/gradle-7.6.3-bin.zip' >> android/gradle/wrapper/gradle-wrapper.properties
+          echo 'zipStoreBase=GRADLE_USER_HOME' >> android/gradle/wrapper/gradle-wrapper.properties
+          echo 'zipStorePath=wrapper/dists' >> android/gradle/wrapper/gradle-wrapper.properties
 
       - name: Restore Firebase Config and App Name
         run: |
           mkdir -p android/app
           cp /tmp/google-services.json android/app/google-services.json || cp google-services.json android/app/google-services.json
-          printf '%s\n' \
-            'buildscript {' \
-            '    repositories { google(); mavenCentral() }' \
-            '    dependencies {' \
-            '        classpath "com.android.tools.build:gradle:7.3.0"' \
-            '        classpath "com.google.gms:google-services:4.4.1"' \
-            '    }' \
-            '}' \
-            'allprojects {' \
-            '    repositories { google(); mavenCentral() }' \
-            '}' \
-            'rootProject.buildDir = "../build"' \
-            'subprojects { project.buildDir = "${rootProject.buildDir}/${project.name}" }' \
-            'subprojects { project.evaluationDependsOn(":app") }' \
-            'tasks.register("clean", Delete) { delete rootProject.buildDir }' > android/build.gradle
+          echo 'buildscript {' > android/build.gradle
+          echo '    repositories { google(); mavenCentral() }' >> android/build.gradle
+          echo '    dependencies {' >> android/build.gradle
+          echo '        classpath "com.android.tools.build:gradle:7.3.0"' >> android/build.gradle
+          echo '        classpath "com.google.gms:google-services:4.4.1"' >> android/build.gradle
+          echo '    }' >> android/build.gradle
+          echo '}' >> android/build.gradle
+          echo 'allprojects { repositories { google(); mavenCentral() } }' >> android/build.gradle
+          echo 'rootProject.buildDir = "../build"' >> android/build.gradle
+          echo 'subprojects { project.buildDir = "${rootProject.buildDir}/${project.name}" }' >> android/build.gradle
+          echo 'subprojects { project.evaluationDependsOn(":app") }' >> android/build.gradle
+          echo 'tasks.register("clean", Delete) { delete rootProject.buildDir }' >> android/build.gradle
           echo 'apply plugin: "com.google.gms.google-services"' >> android/app/build.gradle
           sed -i 's/android:label="voiceapp"/android:label="NILE Live"/' android/app/src/main/AndroidManifest.xml
-          sed -i 's/<application/<uses-permission android:name="android.permission.INTERNET"\/> <uses-permission android:name="android.permission.RECORD_AUDIO"\/> <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"\/> <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"\/> <application/' android/app/src/main/AndroidManifest.xml
+          sed -i 's|<application|<uses-permission android:name="android.permission.RECORD_AUDIO"/><uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/><uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/><application|' android/app/src/main/AndroidManifest.xml
 
       - name: Configure Gradle Settings
         run: |
           mkdir -p ~/.gradle
-          printf '%s\n' \
-            'allprojects {' \
-            '    buildscript { repositories { google(); mavenCentral() } }' \
-            '    repositories { google(); mavenCentral() }' \
-            '    afterEvaluate { project ->' \
-            '        if (project.hasProperty("android")) {' \
-            '            android {' \
-            '                compileSdkVersion 34' \
-            '                defaultConfig { minSdkVersion 23; targetSdkVersion 34 }' \
-            '            }' \
-            '        }' \
-            '    }' \
-            '}' > ~/.gradle/init.gradle
+          echo 'allprojects {' > ~/.gradle/init.gradle
+          echo '    buildscript { repositories { google(); mavenCentral() } }' >> ~/.gradle/init.gradle
+          echo '    repositories { google(); mavenCentral() }' >> ~/.gradle/init.gradle
+          echo '    afterEvaluate { project ->' >> ~/.gradle/init.gradle
 
-          - name: Restore Permanent Keystore
-          run: |
+          echo '        if (project.hasProperty("android")) {' >> ~/.gradle/init.gradle
+          echo '            android {' >> ~/.gradle/init.gradle
+          echo '                compileSdkVersion 34' >> ~/.gradle/init.gradle
+          echo '                defaultConfig { minSdkVersion 23; targetSdkVersion 34 }' >> ~/.gradle/init.gradle
+          echo '            }' >> ~/.gradle/init.gradle
+          echo '        }' >> ~/.gradle/init.gradle
+          echo '    }' >> ~/.gradle/init.gradle
+          echo '}' >> ~/.gradle/init.gradle
+
+      - name: Restore Permanent Keystore
+        run: |
           mkdir -p ~/.android
           rm -f ~/.android/debug.keystore
           keytool -genkeypair -alias androiddebugkey -keypass android -keystore ~/.android/debug.keystore -storepass android -dname "CN=Android Debug,O=Android,C=US" -validity 10000 -keyalg RSA -keysize 2048
