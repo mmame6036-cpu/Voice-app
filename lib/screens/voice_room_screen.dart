@@ -12,7 +12,6 @@ import '../services/agora_service.dart';
 import '../widgets/gift_dialog.dart';
 import '../widgets/fullscreen_gift_animator.dart';
 import '../widgets/room_tools_sheet.dart';
-import 'wallet_screen.dart';
 
 class RoomChatMessage {
   final String id;
@@ -31,6 +30,7 @@ class RoomChatMessage {
 class CenterFlyingGift {
   final String id;
   final String asset;
+  final String icon;
   final int targetSeatIndex;
   final bool isAll;
   final AnimationController controller;
@@ -39,6 +39,7 @@ class CenterFlyingGift {
   CenterFlyingGift({
     required this.id,
     required this.asset,
+    this.icon = "🎁",
     required this.targetSeatIndex,
     required this.isAll,
     required this.controller,
@@ -81,6 +82,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
 
   final AgoraService _agoraService = AgoraService();
   final User? _currentUser = FirebaseAuth.instance.currentUser;
+  final Random _random = Random();
   IO.Socket? _socket;
   final AudioPlayer _audioPlayer = AudioPlayer();
 
@@ -107,7 +109,10 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
   int _comboCount = 0;
   Timer? _comboTimer;
   late AnimationController _comboRingController;
-  Map? _lastSentGiftConfig;
+  Map<String, dynamic>? _lastSentGiftConfig;
+
+  String? _luckyWinToast;
+  Timer? _luckyWinToastTimer;
 
   String? _entryBannerText;
   late AnimationController _entryMarqueeController;
@@ -186,6 +191,17 @@ int _getColsForSeats(int count) {
     _entryMarqueeController.forward();
   }
 
+  void _showCompactWinBadge(int wonCoins) {
+    if (wonCoins <= 0 || !mounted) return;
+    _luckyWinToastTimer?.cancel();
+    setState(() {
+      _luckyWinToast = "+$wonCoins Coins Won!";
+    });
+    _luckyWinToastTimer = Timer(const Duration(seconds: 2), () {
+      if (mounted) setState(() => _luckyWinToast = null);
+    });
+  }
+
   void _startRocketBannerRotation() {
     _rocketBannerTimer?.cancel();
     _rocketBannerTimer = Timer.periodic(const Duration(seconds: 6), (timer) {
@@ -238,18 +254,31 @@ int _getColsForSeats(int count) {
       if (!mounted) return;
 
       final data = snapshot.data()!;
-      if (data.containsKey('seatGifts') && data['seatGifts'] is List) {
-        final List incoming = data['seatGifts'];
-        setState(() {
+      setState(() {
+        if (data.containsKey('seatMap') && data['seatMap'] is Map) {
+          final Map incomingMap = data['seatMap'];
+          for (int i = 0; i < 30; i++) {
+            final val = incomingMap['$i'];
+            _seats[i] = (val is String && val.isNotEmpty) ? val : null;
+            if (_seats[i] == null) {
+              _seatGifts[i] = 0;
+            }
+          }
+          final myIdx = _seats.indexOf(widget.userName);
+          _mySeatIndex = myIdx != -1 ? myIdx : null;
+        }
+
+        if (data.containsKey('seatGifts') && data['seatGifts'] is List) {
+          final List incoming = data['seatGifts'];
           for (int i = 0; i < incoming.length && i < 30; i++) {
             _seatGifts[i] = (incoming[i] as num).toInt();
           }
-        });
-      }
+        }
+      });
     });
   }
 
-  void _playCoinSound() async {
+void _playCoinSound() async {
     try {
       final AudioPlayer player = AudioPlayer();
       await player.setPlayerMode(PlayerMode.mediaPlayer);
@@ -273,8 +302,7 @@ int _getColsForSeats(int count) {
         _messages.removeAt(0);
       }
     });
-
-WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_chatScrollController.hasClients) {
         _chatScrollController.animateTo(
           _chatScrollController.position.maxScrollExtent,
@@ -297,12 +325,39 @@ WidgetsBinding.instance.addPostFrameCallback((_) {
     } catch (_) {}
   }
 
+  Future<void> _syncSeatToFirestore({
+    required int seatIndex,
+    int? oldSeatIndex,
+    required bool isLeaving,
+  }) async {
+    try {
+      final Map<String, dynamic> seatUpdates = {};
+      if (isLeaving) {
+        seatUpdates['$seatIndex'] = FieldValue.delete();
+      } else {
+        if (oldSeatIndex != null && oldSeatIndex != seatIndex) {
+          seatUpdates['$oldSeatIndex'] = FieldValue.delete();
+        }
+        seatUpdates['$seatIndex'] = widget.userName;
+      }
+
+      await FirebaseFirestore.instance
+          .collection('rooms')
+          .doc(widget.roomId)
+          .set({
+        'seatMap': seatUpdates,
+        'seatGifts': _seatGifts,
+        'lastUpdated': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    } catch (_) {}
+  }
+
   void _connectSocket() {
     try {
       _socket = IO.io(
         _serverUrl,
         IO.OptionBuilder()
-            .setTransports(['websocket'])
+            .setTransports(['websocket', 'polling'])
             .enableAutoConnect()
             .build(),
       );
@@ -331,14 +386,12 @@ WidgetsBinding.instance.addPostFrameCallback((_) {
           if (data['seats'] != null) {
             final List incomingSeats = data['seats'];
             for (int i = 0; i < incomingSeats.length && i < 30; i++) {
-              _seats[i] = incomingSeats[i] as String?;
-              if (_seats[i] == null) {
-                _seatGifts[i] = 0;
+              final sUser = incomingSeats[i] as String?;
+              if (sUser != null && sUser.isNotEmpty) {
+                _seats[i] = sUser;
               }
               if (_seats[i] == widget.userName) {
                 _mySeatIndex = i;
-                _agoraService.switchRole(isSpeaker: true);
-                _agoraService.setMicrophoneMute(false);
               }
             }
           }
@@ -361,7 +414,7 @@ WidgetsBinding.instance.addPostFrameCallback((_) {
             }
           }
 
-          if (data['seats'] != null) {
+if (data['seats'] != null) {
             final List incomingSeats = data['seats'];
             for (int i = 0; i < incomingSeats.length && i < 30; i++) {
               _seats[i] = incomingSeats[i] as String?;
@@ -383,13 +436,9 @@ WidgetsBinding.instance.addPostFrameCallback((_) {
           if (user == widget.userName) {
             _mySeatIndex = index;
             _isMuted = false;
-            _agoraService.switchRole(isSpeaker: true);
-            _agoraService.setMicrophoneMute(false);
           } else if (_mySeatIndex == index && user != widget.userName) {
             _mySeatIndex = null;
             _isMuted = true;
-            _agoraService.switchRole(isSpeaker: false);
-            _agoraService.setMicrophoneMute(true);
           }
         });
         _saveRoomGiftsToFirestore();
@@ -399,20 +448,22 @@ WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         if (data == null) return;
         final sender = data['senderName'] ?? "Someone";
-        final isAll = data['isAll'] ?? false;
+        final isAll = data['isAll'] == true;
+        final isLucky = data['isLucky'] == true;
         final giftName = data['giftName'] ?? "Gift";
         final giftCost = (data['giftCost'] as num?)?.toInt() ?? 0;
-        final giftAsset = data['giftAsset'] ?? 'assets/images/wikimediaimages-candy-2201920.jpg';
+        final giftAsset = (data['giftAsset'] ?? "").toString();
+        final giftIcon = (data['giftIcon'] ?? "🎁").toString();
 
-final List targets = (data['targetSeats'] as List?) ?? [];
+        final List targets = (data['targetSeats'] as List?) ?? [];
         final targetIndex = (data['targetSeatIndex'] as num?)?.toInt() ?? 0;
 
-        if (giftCost >= 500) {
+        if (!isLucky && giftCost >= 500) {
           _fullscreenAnimStreamController.add(
             FullscreenGiftEvent(
               giftId: "",
               giftName: giftName,
-              asset: giftAsset.toString(),
+              asset: giftAsset,
               senderName: sender,
             ),
           );
@@ -424,7 +475,7 @@ final List targets = (data['targetSeats'] as List?) ?? [];
               for (int i = 0; i < _totalSeats; i++) {
                 if (_seats[i] != null) {
                   _seatGifts[i] += giftCost;
-                  _triggerCenterGiftAnimation(giftAsset.toString(), i, isToAll: true);
+                  _triggerCenterGiftAnimation(giftAsset, i, icon: giftIcon, isToAll: true);
                 }
               }
             } else if (targets.isNotEmpty) {
@@ -432,27 +483,29 @@ final List targets = (data['targetSeats'] as List?) ?? [];
                 final idx = (t as num).toInt();
                 if (idx >= 0 && idx < 30 && _seats[idx] != null) {
                   _seatGifts[idx] += giftCost;
-                  _triggerCenterGiftAnimation(giftAsset.toString(), idx);
+                  _triggerCenterGiftAnimation(giftAsset, idx, icon: giftIcon);
                 }
               }
             } else {
               if (_seats[targetIndex] != null) {
                 _seatGifts[targetIndex] += giftCost;
-                _triggerCenterGiftAnimation(giftAsset.toString(), targetIndex);
+                _triggerCenterGiftAnimation(giftAsset, targetIndex, icon: giftIcon);
               }
             }
           });
           _saveRoomGiftsToFirestore();
         }
 
-        _addChatMessage(
-          RoomChatMessage(
-            id: "${DateTime.now().microsecondsSinceEpoch}_$sender",
-            sender: "System",
-            message: isAll ? "$sender sent $giftName to All Mics!" : "$sender sent $giftName!",
-            isSystem: true,
-          ),
-        );
+        if (!isLucky) {
+          _addChatMessage(
+            RoomChatMessage(
+              id: "${DateTime.now().microsecondsSinceEpoch}_$sender",
+              sender: "System",
+              message: isAll ? "$sender sent $giftName to All Mics!" : "$sender sent $giftName!",
+              isSystem: true,
+            ),
+          );
+        }
       });
 
       _socket!.on('chat_message_received', (data) {
@@ -477,7 +530,8 @@ final List targets = (data['targetSeats'] as List?) ?? [];
     required bool isPublisher,
   }) async {
     try {
-      final role = isPublisher ? "publisher" : "subscriber";
+
+final role = isPublisher ? "publisher" : "subscriber";
       final uri = Uri.parse(
           "$_serverUrl/rtcToken?channelName=$channelName&uid=$uid&role=$role");
       final response = await http.get(uri).timeout(const Duration(seconds: 12));
@@ -490,51 +544,58 @@ final List targets = (data['targetSeats'] as List?) ?? [];
   }
 
   Future<void> _setupAgora() async {
-    final status = await Permission.microphone.request();
-    if (!status.isGranted && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Microphone permission required")),
-      );
-    }
+    try {
+      final status = await Permission.microphone.request();
+      if (!status.isGranted && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Microphone permission required")),
+        );
+      }
 
-    await _agoraService.initEngine(
-      onUserJoined: (uid) {},
-      onUserOffline: (uid) {},
-      onVolumeChanged: (speakers) {
-        if (!mounted) return;
-        setState(() {
-          _speakingSeatIndices.clear();
-          for (var speaker in speakers) {
-            final vol = speaker.volume ?? 0;
-            if (vol > 4) {
-              bool isMe = speaker.uid == 0;
-              if (speaker.uid == widget.userNumericId) isMe = true;
-              if (isMe && _mySeatIndex != null && !_isMuted && !_seatMutes[_mySeatIndex!]) {
-                _speakingSeatIndices.add(_mySeatIndex!);
+      await _agoraService.initEngine(
+        onUserJoined: (uid) {},
+        onUserOffline: (uid) {},
+        onVolumeChanged: (speakers) {
+          if (!mounted) return;
+          setState(() {
+            _speakingSeatIndices.clear();
+            for (var speaker in speakers) {
+              final vol = speaker.volume ?? 0;
+              if (vol > 4) {
+                bool isMe = speaker.uid == 0;
+                if (speaker.uid == widget.userNumericId) isMe = true;
+                if (isMe && _mySeatIndex != null && !_isMuted && !_seatMutes[_mySeatIndex!]) {
+                  _speakingSeatIndices.add(_mySeatIndex!);
+                }
               }
             }
-          }
-        });
-      },
-    );
+          });
+        },
+      );
 
-    final dynamicToken = await _fetchToken(
-      channelName: widget.roomId,
-      uid: widget.userNumericId,
-      isPublisher: true,
-    );
+      final dynamicToken = await _fetchToken(
+        channelName: widget.roomId,
+        uid: widget.userNumericId,
+        isPublisher: true,
+      );
 
-    await _agoraService.joinRoom(
-      channelId: widget.roomId,
-      uid: widget.userNumericId,
-      token: dynamicToken,
-      isSpeaker: true,
-    );
+      await _agoraService.joinRoom(
+        channelId: widget.roomId,
+        uid: widget.userNumericId,
+        token: dynamicToken,
+        isSpeaker: true,
+      );
+    } catch (_) {}
 
-if (mounted) setState(() => _isConnecting = false);
+    if (mounted) setState(() => _isConnecting = false);
   }
 
-  void _triggerCenterGiftAnimation(String asset, int targetSeatIndex, {bool isToAll = false}) {
+  void _triggerCenterGiftAnimation(
+    String asset,
+    int targetSeatIndex, {
+    String icon = "🎁",
+    bool isToAll = false,
+  }) {
     final controller = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 900),
@@ -548,6 +609,7 @@ if (mounted) setState(() => _isConnecting = false);
     final giftItem = CenterFlyingGift(
       id: "${DateTime.now().microsecondsSinceEpoch}_${Random().nextInt(9999)}_$targetSeatIndex",
       asset: asset,
+      icon: icon,
       targetSeatIndex: targetSeatIndex,
       isAll: isToAll,
       controller: controller,
@@ -569,36 +631,90 @@ if (mounted) setState(() => _isConnecting = false);
   }
 
   void _handleSeatTap(int index) async {
+    // 1. Leave seat if tapping own seat
     if (_mySeatIndex == index) {
-      _socket?.emit('seat_action', {
-        'roomId': widget.roomId,
-        'seatIndex': index,
-        'userName': widget.userName,
-        'isLeaving': true,
+      setState(() {
+        _seats[index] = null;
+        _seatGifts[index] = 0;
+        _speakingSeatIndices.remove(index);
+        _mySeatIndex = null;
+        _isMuted = true;
       });
-      _agoraService.switchRole(isSpeaker: false);
-      _agoraService.setMicrophoneMute(true);
+
+      try {
+        _agoraService.switchRole(isSpeaker: false);
+        _agoraService.setMicrophoneMute(true);
+      } catch (_) {}
+
+      _syncSeatToFirestore(seatIndex: index, isLeaving: true);
+
+      if (_socket != null && _socket!.connected) {
+        _socket!.emit('seat_action', {
+          'roomId': widget.roomId,
+          'seatIndex': index,
+          'userName': widget.userName,
+          'isLeaving': true,
+        });
+      }
       return;
     }
 
+    // 2. Check if occupied by another user
     if (_seats[index] != null && _seats[index] != widget.userName) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Seat occupied")),
+        const SnackBar(content: Text("ይህ ወንበር ተይዟል (Seat occupied)")),
       );
       return;
     }
 
+// 3. Request microphone permission
     final status = await Permission.microphone.request();
-    if (!status.isGranted) return;
+    if (!status.isGranted) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("ወንበር ላይ ለመውጣት የማይክሮፎን ፈቃድ ይፍቀዱ")),
+        );
+      }
+      return;
+    }
 
-    _socket?.emit('seat_action', {
-      'roomId': widget.roomId,
-      'seatIndex': index,
-      'userName': widget.userName,
-      'isLeaving': false,
+    // 4. Immediately seat user locally (0ms delay)
+    final int? oldIndex = _seats.indexOf(widget.userName) != -1
+        ? _seats.indexOf(widget.userName)
+        : _mySeatIndex;
+
+    setState(() {
+      if (oldIndex != null && oldIndex != index) {
+        _seatGifts[index] = _seatGifts[oldIndex];
+        _seatGifts[oldIndex] = 0;
+        _seats[oldIndex] = null;
+        _speakingSeatIndices.remove(oldIndex);
+      }
+      _seats[index] = widget.userName;
+      _mySeatIndex = index;
+      _isMuted = false;
+      _seatMutes[index] = false;
     });
-    _agoraService.switchRole(isSpeaker: true);
-    _agoraService.setMicrophoneMute(false);
+
+    try {
+      _agoraService.switchRole(isSpeaker: true);
+      _agoraService.setMicrophoneMute(false);
+    } catch (_) {}
+
+    _syncSeatToFirestore(
+      seatIndex: index,
+      oldSeatIndex: oldIndex,
+      isLeaving: false,
+    );
+
+    if (_socket != null && _socket!.connected) {
+      _socket!.emit('seat_action', {
+        'roomId': widget.roomId,
+        'seatIndex': index,
+        'userName': widget.userName,
+        'isLeaving': false,
+      });
+    }
   }
 
   void _toggleMute() {
@@ -609,7 +725,9 @@ if (mounted) setState(() => _isConnecting = false);
         if (_isMuted) _speakingSeatIndices.remove(_mySeatIndex!);
       }
     });
-    _agoraService.setMicrophoneMute(_isMuted);
+    try {
+      _agoraService.setMicrophoneMute(_isMuted);
+    } catch (_) {}
   }
 
   void _changeSeatCount(int newCount) {
@@ -658,23 +776,89 @@ if (mounted) setState(() => _isConnecting = false);
     });
   }
 
+  int _rollLuckyWin(int unitPrice) {
+    int roll = _random.nextInt(1000) + 1;
+    if (roll <= 2) return unitPrice * 500;
+    if (roll <= 10) return unitPrice * 100;
+    if (roll <= 30) return unitPrice * 50;
+    if (roll <= 90) return unitPrice * 10;
+    if (roll <= 210) return unitPrice * 5;
+    return 0;
+  }
+
   void _onComboTapped() {
     if (_lastSentGiftConfig == null) return;
-    setState(() {
-      _comboCount += 1;
-    });
 
     final config = _lastSentGiftConfig!;
-    final giftCost = config['cost'] as int;
+    final bool isLucky = config['isLucky'] == true;
+    final List<int> targets = List<int>.from(config['targetSeats']);
+    final bool isAll = config['isAll'] == true;
+    final int unitPrice = (config['unitPrice'] as num).toInt();
+    final int sendCost = isLucky ? unitPrice : (config['cost'] as num).toInt();
+    final int seatCount = isAll
+        ? _seats.where((s) => s != null).length
+        : targets.length;
+    final int totalSpend = sendCost * max(1, seatCount);
+
+    if (_myCoins < totalSpend) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Insufficient coins balance!")),
+      );
+      return;
+    }
+
+    final int nextCombo = _comboCount + 1;
+    setState(() {
+      _comboCount = nextCombo;
+    });
+
+int wonCoins = 0;
+    if (isLucky) {
+      for (int i = 0; i < max(1, seatCount); i++) {
+        wonCoins += _rollLuckyWin(unitPrice);
+      }
+      if (wonCoins > 0 || (nextCombo % 5 == 0)) {
+        _playCoinSound();
+      }
+      if (wonCoins > 0) {
+        _showCompactWinBadge(wonCoins);
+      }
+    } else {
+      _playCoinSound();
+    }
+
+    final int netChange = -totalSpend + wonCoins;
+    FirebaseFirestore.instance.collection('users').doc(_resolvedUid).set({
+      'coins': FieldValue.increment(netChange),
+      'wealthExp': FieldValue.increment(totalSpend),
+    }, SetOptions(merge: true)).catchError((_) {});
+
+    final double rate = isLucky ? 0.04 : 0.70;
+    final int ptsPerSeat = max(1, (sendCost * rate).round());
+    final List<int> activeTargets = isAll
+        ? [for (int i = 0; i < _totalSeats; i++) if (_seats[i] != null) i]
+        : targets;
+
+    for (final seatIdx in activeTargets) {
+      if (seatIdx >= 0 && seatIdx < 30 && _seats[seatIdx] != null) {
+        final targetUid = _seats[seatIdx] == widget.userName ? _resolvedUid : _seats[seatIdx]!;
+        FirebaseFirestore.instance.collection('users').doc(targetUid).set({
+          'points': FieldValue.increment(ptsPerSeat),
+          'charmExp': FieldValue.increment(ptsPerSeat),
+        }, SetOptions(merge: true)).catchError((_) {});
+      }
+    }
 
     _executeMultiSeatSend(
-      targetSeats: List<int>.from(config['targetSeats']),
-      isAll: config['isAll'],
-      cost: giftCost,
+      targetSeats: targets,
+      isAll: isAll,
+      cost: sendCost,
+      unitPrice: unitPrice,
       name: config['name'],
       asset: config['asset'],
       icon: config['icon'] ?? "🎁",
-      isLucky: config['isLucky'] ?? false,
+      isLucky: isLucky,
+      wonCoins: wonCoins,
       fromCombo: true,
     );
 
@@ -694,7 +878,7 @@ if (mounted) setState(() => _isConnecting = false);
       }
     }
 
-final GiftSendResult? result = await showModalBottomSheet(
+    final GiftSendResult? result = await showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
@@ -711,27 +895,19 @@ final GiftSendResult? result = await showModalBottomSheet(
     );
 
     if (result != null) {
-      _playCoinSound();
+      final bool isLucky = result.gift.isLucky;
+      final String playAsset = result.gift.playAsset;
 
-      final double rate = result.gift.isLucky ? 0.04 : 0.70;
-      final int pointsToAdd = max(1, (result.totalCost * rate).round());
-
-      for (final seatIdx in result.targetSeatIndices) {
-        if (seatIdx < _seats.length && _seats[seatIdx] != null) {
-          final targetUid = _seats[seatIdx] == widget.userName ? _resolvedUid : _seats[seatIdx]!;
-          FirebaseFirestore.instance.collection('users').doc(targetUid).set({
-            'points': FieldValue.increment(pointsToAdd),
-            'charmExp': FieldValue.increment(pointsToAdd),
-          }, SetOptions(merge: true)).catchError((_) {});
+      if (isLucky) {
+        if (result.wonCoins > 0) {
+          _showCompactWinBadge(result.wonCoins);
         }
-      }
-
-      if (result.rawGiftCostPerSeat >= 500) {
+      } else {
         _fullscreenAnimStreamController.add(
           FullscreenGiftEvent(
             giftId: result.gift.id,
             giftName: "${result.gift.name} x${result.multiplier}",
-            asset: result.gift.imageAsset,
+            asset: playAsset,
             senderName: widget.userName,
           ),
         );
@@ -741,12 +917,13 @@ final GiftSendResult? result = await showModalBottomSheet(
         targetSeats: result.targetSeatIndices,
         isAll: result.isAll,
         cost: result.rawGiftCostPerSeat,
+        unitPrice: result.gift.price,
         name: "${result.gift.name} x${result.multiplier}",
-        asset: result.gift.imageAsset,
+        asset: playAsset,
         icon: result.gift.icon,
-        isLucky: result.gift.isLucky,
+        isLucky: isLucky,
         wonCoins: result.wonCoins,
-        luckyMultiplier: result.gift.isLucky ? result.multiplier : 0,
+        luckyMultiplier: isLucky ? result.multiplier : 0,
         fromCombo: false,
       );
     }
@@ -756,6 +933,7 @@ final GiftSendResult? result = await showModalBottomSheet(
     required List<int> targetSeats,
     required bool isAll,
     required int cost,
+    required int unitPrice,
     required String name,
     required String asset,
     String icon = "🎁",
@@ -766,24 +944,31 @@ final GiftSendResult? result = await showModalBottomSheet(
   }) {
     if (targetSeats.isEmpty && !isAll) return;
 
+    final bool isFifthMilestone = isLucky && fromCombo && (_comboCount % 5 == 0);
+    final int burstCount = isFifthMilestone ? 3 : 1;
+
     setState(() {
       if (!fromCombo) {
         _comboCount = 1;
         _showComboButton = true;
       }
 
-      if (isAll) {
+if (isAll) {
         for (int i = 0; i < _totalSeats; i++) {
           if (_seats[i] != null) {
             _seatGifts[i] += cost;
-            _triggerCenterGiftAnimation(asset, i, isToAll: true);
+            for (int b = 0; b < burstCount; b++) {
+              _triggerCenterGiftAnimation(asset, i, icon: icon, isToAll: true);
+            }
           }
         }
       } else {
         for (final seatIdx in targetSeats) {
           if (seatIdx >= 0 && seatIdx < 30 && _seats[seatIdx] != null) {
             _seatGifts[seatIdx] += cost;
-            _triggerCenterGiftAnimation(asset, seatIdx);
+            for (int b = 0; b < burstCount; b++) {
+              _triggerCenterGiftAnimation(asset, seatIdx, icon: icon);
+            }
           }
         }
       }
@@ -795,6 +980,7 @@ final GiftSendResult? result = await showModalBottomSheet(
       'targetSeats': targetSeats,
       'isAll': isAll,
       'cost': cost,
+      'unitPrice': unitPrice,
       'name': name,
       'asset': asset,
       'icon': icon,
@@ -824,12 +1010,12 @@ final GiftSendResult? result = await showModalBottomSheet(
   @override
   void dispose() {
     _rocketBannerTimer?.cancel();
+    _luckyWinToastTimer?.cancel();
     _walletSubscription?.cancel();
     _pointsSubscription?.cancel();
     _roomLiveSubscription?.cancel();
     _comboRingController.dispose();
-
-_entryMarqueeController.dispose();
+    _entryMarqueeController.dispose();
     _comboTimer?.cancel();
     _audioPlayer.dispose();
     _fullscreenAnimStreamController.close();
@@ -859,6 +1045,7 @@ _entryMarqueeController.dispose();
     final bool isCrownSeat = index >= 1 && index <= 6;
 
     return GestureDetector(
+      behavior: HitTestBehavior.opaque,
       onTap: () => _handleSeatTap(index),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -890,7 +1077,8 @@ _entryMarqueeController.dispose();
                 width: seatDimension,
                 height: seatDimension,
                 decoration: BoxDecoration(
-                  shape: BoxShape.circle,
+
+shape: BoxShape.circle,
                   gradient: const LinearGradient(
                     colors: [kGoldBlackTop, kGoldBlackBottom],
                     begin: Alignment.topLeft,
@@ -933,8 +1121,7 @@ _entryMarqueeController.dispose();
                     padding: EdgeInsets.all(seatDimension * 0.05),
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-
-color: isMuted ? Colors.redAccent : const Color(0xFF107C41),
+                      color: isMuted ? Colors.redAccent : const Color(0xFF107C41),
                       border: Border.all(color: kShiroBg, width: 1.2),
                     ),
                     child: Icon(
@@ -998,6 +1185,9 @@ color: isMuted ? Colors.redAccent : const Color(0xFF107C41),
     final int rowCount = (_totalSeats / crossAxis).ceil();
     final size = MediaQuery.of(context).size;
 
+final int comboTier = (_comboCount ~/ 5) + 1;
+    final double comboScale = (1.0 + ((comboTier - 1) * 0.08)).clamp(1.0, 1.45);
+
     return Scaffold(
       backgroundColor: kShiroBg,
       appBar: AppBar(
@@ -1042,8 +1232,7 @@ color: isMuted ? Colors.redAccent : const Color(0xFF107C41),
                 const Icon(Icons.stars, color: kGoldBright, size: 12),
                 const SizedBox(width: 4),
                 Text(
-
-"$_myPoints",
+                  "$_myPoints",
                   style: const TextStyle(
                     color: kGoldBright,
                     fontSize: 11,
@@ -1102,7 +1291,8 @@ color: isMuted ? Colors.redAccent : const Color(0xFF107C41),
                 userName: widget.userName,
                 isHost: true,
                 isVoiceOn: !_isMuted,
-                onToggleVoice: _toggleMute,
+
+onToggleVoice: _toggleMute,
               );
             },
           ),
@@ -1143,8 +1333,7 @@ color: isMuted ? Colors.redAccent : const Color(0xFF107C41),
                         padding: const EdgeInsets.symmetric(
                             horizontal: 6.0, vertical: 2.0),
                         child: Column(
-
-children: List.generate(rowCount, (r) {
+                          children: List.generate(rowCount, (r) {
                             return Expanded(
                               child: Row(
                                 children: List.generate(crossAxis, (c) {
@@ -1190,7 +1379,8 @@ children: List.generate(rowCount, (r) {
                         ),
                       ],
                       border: Border.all(color: kGoldBorder, width: 1.2),
-                    ),
+
+),
                     child: Row(
                       children: [
                         const Icon(Icons.rocket_launch, color: kGoldBright, size: 18),
@@ -1230,8 +1420,7 @@ children: List.generate(rowCount, (r) {
                   child: Container(
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-
-child: ListView.builder(
+                    child: ListView.builder(
                       controller: _chatScrollController,
                       physics: const BouncingScrollPhysics(),
                       padding: const EdgeInsets.only(bottom: 6),
@@ -1270,7 +1459,8 @@ child: ListView.builder(
                                   TextSpan(
                                     text: "${item.sender}: ",
                                     style: const TextStyle(
-                                      color: kBlackText,
+
+color: kBlackText,
                                       fontWeight: FontWeight.w900,
                                       fontSize: 12,
                                     ),
@@ -1311,8 +1501,7 @@ child: ListView.builder(
                         child: IconButton(
                           icon: Icon(
                             _isMuted ? Icons.mic_off : Icons.mic,
-
-color: _mySeatIndex != null
+                            color: _mySeatIndex != null
                                 ? (_isMuted ? Colors.redAccent : kGoldBright)
                                 : kSubBlack,
                             size: 24,
@@ -1355,7 +1544,8 @@ color: _mySeatIndex != null
                         ),
                         child: IconButton(
                           icon: const Icon(Icons.send_rounded, color: kGoldBright, size: 20),
-                          onPressed: _sendMessage,
+
+onPressed: _sendMessage,
                         ),
                       ),
                       const SizedBox(width: 6),
@@ -1375,6 +1565,31 @@ color: _mySeatIndex != null
               ],
             ),
 
+            if (_luckyWinToast != null)
+              Positioned(
+                top: 12,
+                left: 0,
+                right: 0,
+                child: Center(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: kGoldBlackBottom,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: kGoldBright, width: 1.4),
+                    ),
+                    child: Text(
+                      _luckyWinToast!,
+                      style: const TextStyle(
+                        color: kGoldBright,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
             if (_entryBannerText != null)
               Positioned(
                 bottom: 75,
@@ -1391,14 +1606,7 @@ color: _mySeatIndex != null
                         ),
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(color: kGoldBright, width: 1.2),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.35),
-                            blurRadius: 8,
-                          ),
-                        ],
-
-),
+                      ),
                       child: Text(
                         _entryBannerText!,
                         style: const TextStyle(
@@ -1419,7 +1627,7 @@ color: _mySeatIndex != null
                   final t = gift.flightAnimation.value;
 
                   final centerX = size.width * 0.5;
-                  final centerY = size.height * 0.45;
+                  final centerY = size.height * 0.42;
 
                   final col = gift.targetSeatIndex % crossAxis;
                   final row = gift.targetSeatIndex ~/ crossAxis;
@@ -1431,27 +1639,33 @@ color: _mySeatIndex != null
 
                   final currentX = centerX + (targetX - centerX) * t;
                   final currentY = centerY + (targetY - centerY) * t;
+                  final scale = 1.45 - (0.85 * t);
 
-                  final scale = 1.4 - (0.85 * t);
+                  final bool isImageAsset = gift.asset.isNotEmpty &&
+                      !gift.asset.toLowerCase().endsWith('.mp4');
 
-                  return Positioned(
+return Positioned(
                     left: currentX - 35,
                     top: currentY - 35,
                     child: Opacity(
                       opacity: (1.0 - (t * 0.25)).clamp(0.0, 1.0),
                       child: Transform.scale(
                         scale: scale.clamp(0.4, 1.8),
-                        child: Image.asset(
-                          gift.asset,
-                          width: 70,
-                          height: 70,
-                          fit: BoxFit.contain,
-                          errorBuilder: (c, e, s) => const Icon(
-                            Icons.card_giftcard,
-                            color: kGoldBright,
-                            size: 45,
-                          ),
-                        ),
+                        child: isImageAsset
+                            ? Image.asset(
+                                gift.asset,
+                                width: 68,
+                                height: 68,
+                                fit: BoxFit.contain,
+                                errorBuilder: (c, e, s) => Text(
+                                  gift.icon,
+                                  style: const TextStyle(fontSize: 44),
+                                ),
+                              )
+                            : Text(
+                                gift.icon,
+                                style: const TextStyle(fontSize: 44),
+                              ),
                       ),
                     ),
                   );
@@ -1467,58 +1681,64 @@ color: _mySeatIndex != null
               Positioned(
                 bottom: 65,
                 right: 20,
-                child: GestureDetector(
-                  onTap: _onComboTapped,
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      SizedBox(
-                        width: 74,
-                        height: 74,
-                        child: AnimatedBuilder(
-                          animation: _comboRingController,
-                          builder: (context, child) {
-                            return CircularProgressIndicator(
-                              value: 1.0 - _comboRingController.value,
-                              strokeWidth: 3.5,
-                              color: kGoldBright,
-                              backgroundColor: Colors.black26,
-                            );
-                          },
-                        ),
-                      ),
-                      Container(
-                        width: 62,
-                        height: 62,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: const LinearGradient(
-                            colors: [kGoldBlackTop, kGoldBlackBottom],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-
-),
-                          border: Border.all(color: kGoldBright, width: 1.5),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.45),
-                              blurRadius: 10,
-                              spreadRadius: 1,
-                            ),
-                          ],
-                        ),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Text(
-                              "Combo",
-                              style: TextStyle(
+                child: Transform.scale(
+                  scale: comboScale,
+                  child: GestureDetector(
+                    onTap: _onComboTapped,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        SizedBox(
+                          width: 74,
+                          height: 74,
+                          child: AnimatedBuilder(
+                            animation: _comboRingController,
+                            builder: (context, child) {
+                              return CircularProgressIndicator(
+                                value: 1.0 - _comboRingController.value,
+                                strokeWidth: 3.5,
                                 color: kGoldBright,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 12,
-                              ),
+                                backgroundColor: Colors.black26,
+                              );
+                            },
+                          ),
+                        ),
+                        Container(
+                          width: 62,
+                          height: 62,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            gradient: LinearGradient(
+                              colors: comboTier >= 2
+                                  ? [const Color(0xFFB71C1C), const Color(0xFF4A0E0E)]
+                                  : [kGoldBlackTop, kGoldBlackBottom],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
                             ),
-                            if (_comboCount > 1)
+                            border: Border.all(
+                              color: kGoldBright,
+                              width: comboTier >= 2 ? 2.2 : 1.5,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.45),
+                                blurRadius: 10,
+                                spreadRadius: 1,
+                              ),
+                            ],
+                          ),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                comboTier >= 2 ? "LV.$comboTier" : "Combo",
+                                style: const TextStyle(
+
+color: kGoldBright,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 11,
+                                ),
+                              ),
                               Text(
                                 "x$_comboCount",
                                 style: const TextStyle(
@@ -1527,10 +1747,11 @@ color: _mySeatIndex != null
                                   fontSize: 13,
                                 ),
                               ),
-                          ],
+                            ],
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -1539,4 +1760,4 @@ color: _mySeatIndex != null
       ),
     );
   }
-}
+} 
