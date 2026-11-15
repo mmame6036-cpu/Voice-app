@@ -1,7 +1,7 @@
 {
   "name": "nile-token-server",
   "version": "2.0.0",
-  "description": "NILE Live Agora Token, Payment & Web Admin Server",
+  "description": "NILE Live Agora Token, Payment and Web Admin Server",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
