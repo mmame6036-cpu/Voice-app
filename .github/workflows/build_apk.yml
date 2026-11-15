@@ -25,6 +25,27 @@ jobs:
           channel: 'stable'
           cache: true
 
+      - name: Compress Gift MP4 Assets
+        run: |
+          command -v ffmpeg >/dev/null 2>&1 || (sudo apt-get update && sudo apt-get install -y ffmpeg)
+          if [ -d "assets/svga" ]; then
+            for f in assets/svga/*.mp4; do
+              [ -f "$f" ] || continue
+              tmp="${f%.mp4}_opt.mp4"
+              if ffmpeg -y -i "$f" -vf "scale='trunc(min(480,iw)/2)*2':-2" -c:v libx264 -crf 28 -preset veryfast -c:a aac -b:a 64k -movflags +faststart "$tmp" >/dev/null 2>&1; then
+                orig_size=$(stat -c%s "$f")
+                new_size=$(stat -c%s "$tmp")
+                if [ "$new_size" -lt "$orig_size" ]; then
+                  mv "$tmp" "$f"
+                else
+                  rm -f "$tmp"
+                fi
+              else
+                rm -f "$tmp"
+              fi
+            done
+          fi
+
       - name: Backup Firebase Config
         run: |
           find . -name "*google-services*.json" -exec cp {} /tmp/google-services.json \; || true
@@ -33,14 +54,12 @@ jobs:
         run: |
           rm -rf android
           flutter create . --platforms=android --org=com.nile --project-name=voiceapp
-
-          cat << 'EOF' > android/gradle/wrapper/gradle-wrapper.properties
-          distributionBase=GRADLE_USER_HOME
-          distributionPath=wrapper/dists
-          distributionUrl=https\://services.gradle.org/distributions/gradle-7.6.3-bin.zip
-          zipStoreBase=GRADLE_USER_HOME
-          zipStorePath=wrapper/dists
-          EOF
+          printf '%s\n' \
+            'distributionBase=GRADLE_USER_HOME' \
+            'distributionPath=wrapper/dists' \
+            'distributionUrl=https\://services.gradle.org/distributions/gradle-7.6.3-bin.zip' \
+            'zipStoreBase=GRADLE_USER_HOME' \
+            'zipStorePath=wrapper/dists' > android/gradle/wrapper/gradle-wrapper.properties
 
       - name: Restore Firebase Config and Setup Plugins
         run: |
@@ -56,103 +75,104 @@ jobs:
             exit 1
           fi
 
-          cat << 'EOF' > android/build.gradle
-          buildscript {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-              dependencies {
-                  classpath "com.android.tools.build:gradle:7.3.0"
-                  classpath "com.google.gms:google-services:4.4.1"
-              }
-          }
-
-          allprojects {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          }
-
-          rootProject.buildDir = '../build'
-          subprojects {
-              project.buildDir = "${rootProject.buildDir}/${project.name}"
-          }
-          subprojects {
-              project.evaluationDependsOn(':app')
-          }
-
-          tasks.register("clean", Delete) {
-              delete rootProject.buildDir
-          }
-          EOF
+          printf '%s\n' \
+            'buildscript {' \
+            '    repositories {' \
+            '        google()' \
+            '        mavenCentral()' \
+            '    }' \
+            '    dependencies {' \
+            '        classpath "com.android.tools.build:gradle:7.3.0"' \
+            '        classpath "com.google.gms:google-services:4.4.1"' \
+            '    }' \
+            '}' \
+            'allprojects {' \
+            '    repositories {' \
+            '        google()' \
+            '        mavenCentral()' \
+            '    }' \
+            '}' \
+            'rootProject.buildDir = "../build"' \
+            'subprojects {' \
+            '    project.buildDir = "${rootProject.buildDir}/${project.name}"' \
+            '}' \
+            'subprojects {' \
+            '    project.evaluationDependsOn(":app")' \
+            '}' \
+            'tasks.register("clean", Delete) {' \
+            '    delete rootProject.buildDir' \
+            '}' > android/build.gradle
 
           echo 'apply plugin: "com.google.gms.google-services"' >> android/app/build.gradle
+
+          printf '%s\n' \
+            '-keep class io.agora.** { *; }' \
+            '-keep class com.google.** { *; }' \
+            '-keep class io.socket.** { *; }' \
+            '-dontwarn io.agora.**' \
+            '-dontwarn com.google.**' > android/app/proguard-rules.pro
+
+          sed -i 's/signingConfig signingConfigs.debug/signingConfig signingConfigs.debug\n            minifyEnabled true\n            shrinkResources true\n            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"/' android/app/build.gradle
 
       - name: Configure Gradle Settings
         run: |
           mkdir -p ~/.gradle
-          cat << 'EOF' > ~/.gradle/init.gradle
-          allprojects {
-              buildscript {
-                  repositories {
-                      google()
-                      mavenCentral()
-                  }
-              }
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-              afterEvaluate { project ->
-                  if (project.hasProperty("android")) {
-                      android {
-                          compileSdkVersion 34
-                          defaultConfig {
-                              minSdkVersion 23
-                              targetSdkVersion 34
-                          }
-                      }
-                  }
-              }
-          }
-          EOF
+          printf '%s\n' \
+            'allprojects {' \
+            '    buildscript {' \
+            '        repositories {' \
+            '            google()' \
+            '            mavenCentral()' \
+            '        }' \
+            '    }' \
+            '    repositories {' \
+            '        google()' \
+            '        mavenCentral()' \
+            '    }' \
+            '    afterEvaluate { project ->' \
+            '        if (project.hasProperty("android")) {' \
+            '            android {' \
+            '                compileSdkVersion 34' \
+            '                defaultConfig {' \
+            '                    minSdkVersion 23' \
+            '                    targetSdkVersion 34' \
+            '                }' \
+            '            }' \
+            '        }' \
+            '    }' \
+            '}' > ~/.gradle/init.gradle
 
-          cat << 'EOF' > android/app/src/main/AndroidManifest.xml
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <uses-permission android:name="android.permission.INTERNET"/>
-              <uses-permission android:name="android.permission.RECORD_AUDIO"/>
-              <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
-
-               <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
-              <application
-                  android:label="NILE Live"
-                  android:name="${applicationName}"
-                  android:icon="@mipmap/ic_launcher">
-                  <activity
-                      android:name=".MainActivity"
-                      android:exported="true"
-                      android:launchMode="singleTop"
-                      android:theme="@style/LaunchTheme"
-                      android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
-                      android:hardwareAccelerated="true"
-                      android:windowSoftInputMode="adjustResize">
-                      <meta-data
-                        android:name="io.flutter.embedding.android.NormalTheme"
-                        android:resource="@style/NormalTheme"
-                        />
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN"/>
-                          <category android:name="android.intent.category.LAUNCHER"/>
-                      </intent-filter>
-                  </activity>
-                  <meta-data
-                      android:name="flutterEmbedding"
-                      android:value="2" />
-              </application>
-          </manifest>
-          EOF
+          printf '%s\n' \
+            '<manifest xmlns:android="http://schemas.android.com/apk/res/android">' \
+            '    <uses-permission android:name="android.permission.INTERNET"/>' \
+            '    <uses-permission android:name="android.permission.RECORD_AUDIO"/>' \
+            '    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>' \
+            '    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>' \
+            '    <application' \
+            '        android:label="NILE Live"' \
+            '        android:name="${applicationName}"' \
+            '        android:icon="@mipmap/ic_launcher">' \
+            '        <activity' \
+            '            android:name=".MainActivity"' \
+            '            android:exported="true"' \
+            '            android:launchMode="singleTop"' \
+            '            android:theme="@style/LaunchTheme"' \
+            '            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"' \
+            '            android:hardwareAccelerated="true"' \
+            '            android:windowSoftInputMode="adjustResize">' \
+            '            <meta-data' \
+            '                android:name="io.flutter.embedding.android.NormalTheme"' \
+            '                android:resource="@style/NormalTheme" />' \
+            '            <intent-filter>' \
+            '                <action android:name="android.intent.action.MAIN"/>' \
+            '                <category android:name="android.category.LAUNCHER"/>' \
+            '            </intent-filter>' \
+            '        </activity>' \
+            '        <meta-data' \
+            '            android:name="flutterEmbedding"' \
+            '            android:value="2" />' \
+            '    </application>' \
+            '</manifest>' > android/app/src/main/AndroidManifest.xml
 
       - name: Restore Permanent Keystore
         run: |
@@ -164,12 +184,16 @@ jobs:
         run: flutter pub get
 
       - name: Build Split Release APKs
-        run: flutter build apk --release --split-per-abi
+        run: flutter build apk --release --split-per-abi --tree-shake-icons --split-debug-info=build/app/outputs/symbols
 
-      - name: Upload Release APKs
+      - name: Upload 64-bit APK (Recommended)
         uses: actions/upload-artifact@v4
         with:
-          name: nile-live-release-apks
-          path: |
-            build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
-            build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
+          name: nile-live-arm64-apk
+          path: build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+
+      - name: Upload 32-bit APK (Older Phones)
+        uses: actions/upload-artifact@v4
+        with:
+          name: nile-live-armv7-apk
+          path: build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
