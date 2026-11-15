@@ -126,8 +126,8 @@ jobs:
           open(p, "w").write(s.replace(t, r, 1))
           '
 
-           - name: Configure Gradle Settings
-        run: |
+              - name: Configure Gradle Settings
+            run: |
           mkdir -p ~/.gradle
           cat << 'EOF' > ~/.gradle/init.gradle
           allprojects {
