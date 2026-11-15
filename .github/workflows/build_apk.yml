@@ -63,9 +63,9 @@ jobs:
           zipStorePath=wrapper/dists
           EOF
 
-      - name: Restore Firebase Config and Setup Plugins
-        run: |
-          mkdir -p android/app
+           - name: Restore Firebase Config and Setup Plugins
+              run: |
+            mkdir -p android/app
           if [ -f /tmp/google-services.json ]; then
             cp /tmp/google-services.json android/app/google-services.json
           elif [ -f google-services.json ]; then
