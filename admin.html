@@ -11,9 +11,7 @@ body{background:#F5EFEB;color:#1A1A1A;padding-bottom:30px}
 .top h1{font-size:17px;color:#D49B42}
 .b{padding:6px 11px;border:none;border-radius:8px;font-weight:bold;cursor:pointer;font-size:12px}
 .g{background:#107C41;color:#fff}.r{background:#D32F2F;color:#fff}.d{background:#4A3528;color:#fff}.y{background:#D49B42;color:#1A1A1A}
-.box{max-width:360px;margin:60px auto;background:#fff;padding:24px;border-radius:16px;border:1px solid #E2D6C5;text-align:center}
-.box input{width:100%;padding:11px;margin:12px 0;border-radius:8px;border:1px solid #DDD4C2;font-size:14px}
-.wrap{max-width:1000px;margin:16px auto;padding:0 12px;display:none}
+.wrap{max-width:1000px;margin:16px auto;padding:0 12px}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:10px;margin-bottom:14px}
 .stat{background:#fff;padding:12px;border-radius:12px;border:1px solid #E2D6C5}
 .tabs{display:flex;gap:6px;overflow-x:auto;margin-bottom:12px}
@@ -29,15 +27,10 @@ th,td{text-align:left;padding:7px 5px;border-bottom:1px solid #EFE6DE}
 <body>
 <div class="top">
   <h1>NILE Live Admin</h1>
-  <div id="nav" style="display:none"><button class="b y" onclick="loadAll()">Refresh</button> <button class="b r" onclick="out()">Logout</button></div>
+  <button class="b y" onclick="loadAll()">Refresh</button>
 </div>
-<div id="lBox" class="box">
-  <h3>Admin Login</h3>
-  <input type="password" id="pw" placeholder="Admin Password"/>
-  <button class="b d" style="width:100%;padding:11px" onclick="doLogin()">Unlock Dashboard</button>
-  <p id="msg" style="color:#D32F2F;font-size:12px;margin-top:10px"></p>
-</div>
-<div id="dBox" class="wrap">
+<div class="wrap">
+  <p id="msg" style="color:#D32F2F;font-size:13px;font-weight:bold;margin-bottom:10px"></p>
   <div class="grid">
     <div class="stat"><small>Revenue</small><h3 style="color:#107C41" id="s1">$0</h3></div>
     <div class="stat"><small>User Coins</small><h3 id="s2">0</h3></div>
@@ -59,37 +52,28 @@ th,td{text-align:left;padding:7px 5px;border-bottom:1px solid #EFE6DE}
   </div>
   <div id="p-usr" style="display:none">
     <div class="card"><b>Users & Hosts</b><div class="row"><input id="qUsr" placeholder="Search ID or Name..." oninput="drawUsers()"/></div><table><thead><tr><th>Name</th><th>ID</th><th>Coins</th><th>Pts</th><th>Face</th><th>Status</th><th>Controls</th></tr></thead><tbody id="tb4"></tbody></table></div>
-
-</div>
+  </div>
   <div id="p-agn" style="display:none">
     <div class="card"><b>Create Agency</b><div class="row"><input id="aId" placeholder="Agency ID"/><input id="aName" placeholder="Name"/><input id="aOwn" type="number" placeholder="Owner ID"/><button class="b g" onclick="mkAgn()">Create</button></div></div>
-    <div class="card"><b>Agencies</b><table><thead><tr><th>ID</th><th>Name</th><th>Owner</th><th>Hosts</th><th>Withdrawn</th></tr></thead><tbody id="tb5"></tbody></table></div>
+
+<div class="card"><b>Agencies</b><table><thead><tr><th>ID</th><th>Name</th><th>Owner</th><th>Hosts</th><th>Withdrawn</th></tr></thead><tbody id="tb5"></tbody></table></div>
   </div>
 </div>
 <script>
-var PASS=localStorage.getItem('nile_p');if(!PASS){PASS='';}
 var DATA={userOrders:[],sellerOrders:[],withdrawals:[],users:[],agencies:[]};
 function sv(v,d){if(v===undefined)return d;if(v===null)return d;if(v==='')return d;return String(v);}
 function nv(v){var n=Number(sv(v,'0'));if(isNaN(n))return 0;return n;}
 function g(id){return document.getElementById(id);}
-async function doLogin(){
-  var v=g('pw').value.trim(),m=g('msg');if(v===''){m.innerText='Enter password';return;}m.innerText='Checking...';
-  try{
-    var r=await fetch('/api/admin/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:v})});
-    if(r.ok){PASS=v;localStorage.setItem('nile_p',PASS);await loadAll();}else{m.innerText='Wrong password!';}
-  }catch(e){m.innerText='Error: '+e.message;}
-}
-function out(){localStorage.removeItem('nile_p');location.reload();}
 function tab(id,el){
   var ts=document.querySelectorAll('.tab');for(var i=0;i<ts.length;i++){ts[i].classList.remove('on');}el.classList.add('on');
   var ps=['ord','wdr','usr','agn'];for(var j=0;j<ps.length;j++){g('p-'+ps[j]).style.display='none';}g('p-'+id).style.display='block';
 }
 async function loadAll(){
-  var m=g('msg');
+  var m=g('msg');m.innerText='Loading data...';
   try{
-    var r=await fetch('/api/admin/overview',{headers:{'x-admin-password':PASS}});var d=await r.json();
+    var r=await fetch('/api/admin/overview');var d=await r.json();
     if(!r.ok){m.innerText=sv(d.error,'Load failed');return;}
-    m.innerText='';DATA=d;g('lBox').style.display='none';g('dBox').style.display='block';g('nav').style.display='block';
+    m.innerText='';DATA=d;
     g('s1').innerText='$'+nv(d.stats.totalRevenueUsd);g('s2').innerText=nv(d.stats.totalUserCoins);
     g('s3').innerText=nv(d.stats.totalUnpaidPoints);g('s4').innerText=nv(d.stats.totalUsers)+' / '+nv(d.stats.totalAgencies);
     drawAll();
@@ -107,8 +91,7 @@ function drawAll(){
   g('tb3').innerHTML=DATA.withdrawals.map(function(x){
     var a='-';if(x.status==='PENDING'){a='<button class="b g" onclick="wdr(\''+x.id+'\',\'PAID\')">Paid</button> <button class="b r" onclick="wdr(\''+x.id+'\',\'REJECT\')">Reject</button>';}
     return '<tr><td>'+sv(x.userName,'Host')+'</td><td>'+sv(x.method,'')+'</td><td>'+sv(x.account,'')+'</td><td>'+nv(x.points)+'</td><td>$'+nv(x.usdAmount)+'</td><td>'+x.status+'</td><td>'+a+'</td></tr>';
-
-}).join('');
+  }).join('');
   drawUsers();
   g('tb5').innerHTML=DATA.agencies.map(function(a){
     return '<tr><td>'+sv(a.agencyId,a.id)+'</td><td>'+sv(a.name,'')+'</td><td>'+sv(a.ownerNumericId,'-')+'</td><td>'+nv(a.totalHosts)+'</td><td>'+nv(a.withdrawnCommissionPoints)+'</td></tr>';
@@ -120,19 +103,20 @@ function drawUsers(){
   g('tb4').innerHTML=list.slice(0,50).map(function(u){
     var fc='No';if(u.isFaceVerified){fc='Yes';}var st='ACTIVE',bn='Ban';if(u.isBanned){st='BANNED';bn='Unban';}
     return '<tr><td>'+sv(u.name,'User')+'</td><td>'+sv(u.numericId,'-')+'</td><td>'+nv(u.coins)+'</td><td>'+nv(u.points)+'</td><td>'+fc+'</td><td>'+st+'</td><td><button class="b y" onclick="addC(\''+u.uid+'\')">+Coins</button> <button class="b d" onclick="ctl(\''+u.uid+'\',{toggleFace:true})">Face</button> <button class="b r" onclick="ctl(\''+u.uid+'\',{toggleBan:true})">'+bn+'</button></td></tr>';
-  }).join('');
+
+}).join('');
 }
-async function act(u,ref,a){if(!confirm(a+' '+ref+'?'))return;await fetch(u,{method:'POST',headers:{'Content-Type':'application/json','x-admin-password':PASS},body:JSON.stringify({orderRef:ref,action:a})});loadAll();}
-async function wdr(id,a){if(!confirm(a+' withdrawal?'))return;await fetch('/api/admin/withdrawal',{method:'POST',headers:{'Content-Type':'application/json','x-admin-password':PASS},body:JSON.stringify({requestId:id,action:a})});loadAll();}
+async function act(u,ref,a){if(!confirm(a+' '+ref+'?'))return;await fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({orderRef:ref,action:a})});loadAll();}
+async function wdr(id,a){if(!confirm(a+' withdrawal?'))return;await fetch('/api/admin/withdrawal',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({requestId:id,action:a})});loadAll();}
 async function addC(uid){var n=parseInt(sv(prompt('Coins (+ or -):'),'0'),10);if(!n)return;await ctl(uid,{addCoins:n});}
-async function ctl(uid,obj){var b=Object.assign({uid:uid},obj);await fetch('/api/admin/user-control',{method:'POST',headers:{'Content-Type':'application/json','x-admin-password':PASS},body:JSON.stringify(b)});loadAll();}
+async function ctl(uid,obj){var b=Object.assign({uid:uid},obj);await fetch('/api/admin/user-control',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});loadAll();}
 async function mkAgn(){
   var id=g('aId').value.trim(),nm=g('aName').value.trim(),ow=g('aOwn').value.trim();
   if(id==='')return alert('Enter Agency ID');if(nm==='')return alert('Enter Agency Name');
-  await fetch('/api/admin/create-agency',{method:'POST',headers:{'Content-Type':'application/json','x-admin-password':PASS},body:JSON.stringify({agencyId:id,agencyName:nm,ownerNumericId:ow})});
+  await fetch('/api/admin/create-agency',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({agencyId:id,agencyName:nm,ownerNumericId:ow})});
   g('aId').value='';g('aName').value='';g('aOwn').value='';loadAll();
 }
-if(PASS!==''){loadAll();}
+loadAll();
 </script>
 </body>
 </html>
