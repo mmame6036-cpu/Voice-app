@@ -323,18 +323,46 @@ if (_currentUser != null) {
 
   void _startMicMinutesTracking() {
     _micTrackerTimer?.cancel();
-    _micTrackerTimer = Timer.periodic(const Duration(minutes: 1), (timer) {
-      if (_currentUser != null) {
-        if (_mySeatIndex != null) {
-          if (!_isMicMuted) {
-            FirebaseFirestore.instance
-                .collection('users')
-                .doc(_currentUser!.uid)
-                .set({
-              'todayMicMinutes': FieldValue.increment(1),
-            }, SetOptions(merge: true));
-          }
+    _micTrackerTimer = Timer.periodic(const Duration(minutes: 1), (timer) async {
+      final user = _currentUser;
+      if (user == null) return;
+      if (_mySeatIndex == null) return;
+      if (_isMicMuted) return;
+
+      final userRef = FirebaseFirestore.instance.collection('users').doc(user.uid);
+      final snap = await userRef.get();
+      if (!snap.exists) return;
+      final data = snap.data() ?? {};
+
+      if (data['isFaceVerified'] != true) return;
+
+      final now = DateTime.now();
+      final String todayKey =
+          "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+
+      String lastMicDate = "";
+      if (data['lastMicDate'] != null) {
+        lastMicDate = data['lastMicDate'].toString();
+      }
+
+      if (lastMicDate != todayKey) {
+        int crownInit = 0;
+        if (_mySeatIndex == 0) {
+          crownInit = 1;
         }
+        await userRef.set({
+          'lastMicDate': todayKey,
+          'todayMicMinutes': 1,
+          'todayCrownMinutes': crownInit,
+        }, SetOptions(merge: true));
+      } else {
+        final Map<String, dynamic> incData = {
+          'todayMicMinutes': FieldValue.increment(1),
+        };
+        if (_mySeatIndex == 0) {
+          incData['todayCrownMinutes'] = FieldValue.increment(1);
+        }
+        await userRef.set(incData, SetOptions(merge: true));
       }
     });
   }
