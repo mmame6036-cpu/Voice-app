@@ -12,6 +12,7 @@ import '../services/agora_service.dart';
 import '../widgets/gift_dialog.dart';
 import '../widgets/fullscreen_gift_animator.dart';
 import '../widgets/room_tools_sheet.dart';
+import 'wallet_screen.dart';
 
 class RoomChatMessage {
   final String id;
@@ -33,7 +34,7 @@ class CenterFlyingGift {
   final int targetSeatIndex;
   final bool isAll;
   final AnimationController controller;
-  final Animation flightAnimation;
+  final Animation<double> flightAnimation;
 
   CenterFlyingGift({
     required this.id,
@@ -83,15 +84,15 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
   IO.Socket? _socket;
   final AudioPlayer _audioPlayer = AudioPlayer();
 
-  final StreamController _fullscreenAnimStreamController =
+  final StreamController<FullscreenGiftEvent> _fullscreenAnimStreamController =
       StreamController.broadcast();
 
   bool _isMuted = false;
   int? _mySeatIndex;
   int _totalSeats = 30;
-  late List _seats;
-  late List _seatGifts;
-  late List _seatMutes;
+  late List<String?> _seats;
+  late List<int> _seatGifts;
+  late List<bool> _seatMutes;
   bool _isConnecting = true;
 
   int _myCoins = 0;
@@ -100,7 +101,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
   StreamSubscription? _pointsSubscription;
   StreamSubscription? _roomLiveSubscription;
 
-  final List _activeFlyingGifts = [];
+  final List<CenterFlyingGift> _activeFlyingGifts = [];
 
   bool _showComboButton = false;
   int _comboCount = 0;
@@ -110,12 +111,12 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
 
   String? _entryBannerText;
   late AnimationController _entryMarqueeController;
-  late dynamic _entryMarqueeAnimation;
+  late Animation<Offset> _entryMarqueeAnimation;
 
-  final Set _speakingSeatIndices = {};
-  final List _allowedSeatOptions = [6, 12, 20, 25, 30];
+  final Set<int> _speakingSeatIndices = {};
+  final List<int> _allowedSeatOptions = [6, 12, 20, 25, 30];
 
-  final List _messages = [];
+  final List<RoomChatMessage> _messages = [];
   final TextEditingController _chatController = TextEditingController();
   final ScrollController _chatScrollController = ScrollController();
 
@@ -130,7 +131,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
     return "user_guest_id";
   }
 
-  int _getColsForSeats(int count) {
+int _getColsForSeats(int count) {
     if (count <= 6) return 3;
     if (count <= 12) return 4;
     if (count <= 20) return 5;
@@ -138,7 +139,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
     return 6;
   }
 
-@override
+  @override
   void initState() {
     super.initState();
     _seats = List.filled(30, null);
@@ -272,7 +273,8 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
         _messages.removeAt(0);
       }
     });
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+
+WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_chatScrollController.hasClients) {
         _chatScrollController.animateTo(
           _chatScrollController.position.maxScrollExtent,
@@ -283,7 +285,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
     });
   }
 
-Future<void> _saveRoomGiftsToFirestore() async {
+  Future<void> _saveRoomGiftsToFirestore() async {
     try {
       await FirebaseFirestore.instance
           .collection('rooms')
@@ -397,15 +399,15 @@ Future<void> _saveRoomGiftsToFirestore() async {
         if (!mounted) return;
         if (data == null) return;
         final sender = data['senderName'] ?? "Someone";
-        final isAll = data['isAll'] == true;
+        final isAll = data['isAll'] ?? false;
         final giftName = data['giftName'] ?? "Gift";
         final giftCost = (data['giftCost'] as num?)?.toInt() ?? 0;
         final giftAsset = data['giftAsset'] ?? 'assets/images/wikimediaimages-candy-2201920.jpg';
 
-        final List targets = (data['targetSeats'] as List?) ?? [];
+final List targets = (data['targetSeats'] as List?) ?? [];
         final targetIndex = (data['targetSeatIndex'] as num?)?.toInt() ?? 0;
 
-if (giftCost >= 500) {
+        if (giftCost >= 500) {
           _fullscreenAnimStreamController.add(
             FullscreenGiftEvent(
               giftId: "",
@@ -421,7 +423,7 @@ if (giftCost >= 500) {
             if (isAll) {
               for (int i = 0; i < _totalSeats; i++) {
                 if (_seats[i] != null) {
-                  _seatGifts[i] = (_seatGifts[i] as num).toInt() + giftCost;
+                  _seatGifts[i] += giftCost;
                   _triggerCenterGiftAnimation(giftAsset.toString(), i, isToAll: true);
                 }
               }
@@ -429,13 +431,13 @@ if (giftCost >= 500) {
               for (var t in targets) {
                 final idx = (t as num).toInt();
                 if (idx >= 0 && idx < 30 && _seats[idx] != null) {
-                  _seatGifts[idx] = (_seatGifts[idx] as num).toInt() + giftCost;
+                  _seatGifts[idx] += giftCost;
                   _triggerCenterGiftAnimation(giftAsset.toString(), idx);
                 }
               }
             } else {
               if (_seats[targetIndex] != null) {
-                _seatGifts[targetIndex] = (_seatGifts[targetIndex] as num).toInt() + giftCost;
+                _seatGifts[targetIndex] += giftCost;
                 _triggerCenterGiftAnimation(giftAsset.toString(), targetIndex);
               }
             }
@@ -463,7 +465,7 @@ if (giftCost >= 500) {
           id: "${DateTime.now().microsecondsSinceEpoch}",
           sender: sender,
           message: data['message'] ?? '',
-          isSystem: data['isSystem'] == true,
+          isSystem: data['isSystem'] ?? false,
         ));
       });
     } catch (_) {}
@@ -507,7 +509,7 @@ if (giftCost >= 500) {
             if (vol > 4) {
               bool isMe = speaker.uid == 0;
               if (speaker.uid == widget.userNumericId) isMe = true;
-              if (isMe && _mySeatIndex != null && !_isMuted && _seatMutes[_mySeatIndex!] != true) {
+              if (isMe && _mySeatIndex != null && !_isMuted && !_seatMutes[_mySeatIndex!]) {
                 _speakingSeatIndices.add(_mySeatIndex!);
               }
             }
@@ -529,10 +531,10 @@ if (giftCost >= 500) {
       isSpeaker: true,
     );
 
-    if (mounted) setState(() => _isConnecting = false);
+if (mounted) setState(() => _isConnecting = false);
   }
 
-void _triggerCenterGiftAnimation(String asset, int targetSeatIndex, {bool isToAll = false}) {
+  void _triggerCenterGiftAnimation(String asset, int targetSeatIndex, {bool isToAll = false}) {
     final controller = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 900),
@@ -559,7 +561,7 @@ void _triggerCenterGiftAnimation(String asset, int targetSeatIndex, {bool isToAl
     controller.forward().then((_) {
       if (mounted) {
         setState(() {
-          _activeFlyingGifts.removeWhere((g) => (g as CenterFlyingGift).id == giftItem.id);
+          _activeFlyingGifts.removeWhere((g) => g.id == giftItem.id);
         });
         controller.dispose();
       }
@@ -574,12 +576,6 @@ void _triggerCenterGiftAnimation(String asset, int targetSeatIndex, {bool isToAl
         'userName': widget.userName,
         'isLeaving': true,
       });
-      setState(() {
-        _seats[index] = null;
-        _seatGifts[index] = 0;
-        _mySeatIndex = null;
-        _isMuted = true;
-      });
       _agoraService.switchRole(isSpeaker: false);
       _agoraService.setMicrophoneMute(true);
       return;
@@ -587,24 +583,13 @@ void _triggerCenterGiftAnimation(String asset, int targetSeatIndex, {bool isToAl
 
     if (_seats[index] != null && _seats[index] != widget.userName) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Seat ${index + 1} is occupied by ${_seats[index]}")),
+        const SnackBar(content: Text("Seat occupied")),
       );
       return;
     }
 
     final status = await Permission.microphone.request();
     if (!status.isGranted) return;
-
-    setState(() {
-      if (_mySeatIndex != null && _mySeatIndex! < 30) {
-        _seatGifts[index] = _seatGifts[_mySeatIndex!];
-        _seatGifts[_mySeatIndex!] = 0;
-        _seats[_mySeatIndex!] = null;
-      }
-      _seats[index] = widget.userName;
-      _mySeatIndex = index;
-      _isMuted = false;
-    });
 
     _socket?.emit('seat_action', {
       'roomId': widget.roomId,
@@ -680,16 +665,16 @@ void _triggerCenterGiftAnimation(String asset, int targetSeatIndex, {bool isToAl
     });
 
     final config = _lastSentGiftConfig!;
-    final int giftCost = (config['cost'] as num).toInt();
+    final giftCost = config['cost'] as int;
 
-_executeMultiSeatSend(
-      targetSeats: List.from(config['targetSeats'] ?? []),
-      isAll: config['isAll'] == true,
+    _executeMultiSeatSend(
+      targetSeats: List<int>.from(config['targetSeats']),
+      isAll: config['isAll'],
       cost: giftCost,
-      name: config['name'] as String,
-      asset: config['asset'] as String,
-      icon: (config['icon'] ?? "🎁") as String,
-      isLucky: config['isLucky'] == true,
+      name: config['name'],
+      asset: config['asset'],
+      icon: config['icon'] ?? "🎁",
+      isLucky: config['isLucky'] ?? false,
       fromCombo: true,
     );
 
@@ -709,7 +694,7 @@ _executeMultiSeatSend(
       }
     }
 
-    final rawResult = await showModalBottomSheet(
+final GiftSendResult? result = await showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
@@ -724,8 +709,6 @@ _executeMultiSeatSend(
         },
       ),
     );
-
-    final GiftSendResult? result = rawResult is GiftSendResult ? rawResult : null;
 
     if (result != null) {
       _playCoinSound();
@@ -770,7 +753,7 @@ _executeMultiSeatSend(
   }
 
   void _executeMultiSeatSend({
-    required List targetSeats,
+    required List<int> targetSeats,
     required bool isAll,
     required int cost,
     required String name,
@@ -792,15 +775,14 @@ _executeMultiSeatSend(
       if (isAll) {
         for (int i = 0; i < _totalSeats; i++) {
           if (_seats[i] != null) {
-            _seatGifts[i] = (_seatGifts[i] as num).toInt() + cost;
+            _seatGifts[i] += cost;
             _triggerCenterGiftAnimation(asset, i, isToAll: true);
           }
         }
       } else {
-        for (final rawIdx in targetSeats) {
-          final int seatIdx = (rawIdx as num).toInt();
+        for (final seatIdx in targetSeats) {
           if (seatIdx >= 0 && seatIdx < 30 && _seats[seatIdx] != null) {
-            _seatGifts[seatIdx] = (_seatGifts[seatIdx] as num).toInt() + cost;
+            _seatGifts[seatIdx] += cost;
             _triggerCenterGiftAnimation(asset, seatIdx);
           }
         }
@@ -821,7 +803,7 @@ _executeMultiSeatSend(
 
     _startComboTimer();
 
-if (_socket != null && _socket!.connected) {
+    if (_socket != null && _socket!.connected) {
       _socket!.emit('send_gift', {
         'roomId': widget.roomId,
         'senderName': widget.userName,
@@ -846,12 +828,13 @@ if (_socket != null && _socket!.connected) {
     _pointsSubscription?.cancel();
     _roomLiveSubscription?.cancel();
     _comboRingController.dispose();
-    _entryMarqueeController.dispose();
+
+_entryMarqueeController.dispose();
     _comboTimer?.cancel();
     _audioPlayer.dispose();
     _fullscreenAnimStreamController.close();
-    for (var item in _activeFlyingGifts) {
-      (item as CenterFlyingGift).controller.dispose();
+    for (var g in _activeFlyingGifts) {
+      g.controller.dispose();
     }
     _socket?.disconnect();
     _socket?.dispose();
@@ -863,15 +846,15 @@ if (_socket != null && _socket!.connected) {
 
   Widget _buildSingleSeat({
     required int index,
-    required double circleSize,
+    required double seatDimension,
     required double nameFontSize,
     required double badgeFontSize,
   }) {
-    final String? occupier = _seats[index] as String?;
-    final bool isOccupied = occupier != null;
-    final bool isSpeaking = _speakingSeatIndices.contains(index);
-    final bool isMuted = _seatMutes[index] == true;
-    final int giftsCount = (_seatGifts[index] as num).toInt();
+    final occupier = _seats[index];
+    final isOccupied = occupier != null;
+    final isSpeaking = _speakingSeatIndices.contains(index);
+    final isMuted = _seatMutes[index];
+    final giftsCount = _seatGifts[index];
     final bool isHostSeat = index == 0;
     final bool isCrownSeat = index >= 1 && index <= 6;
 
@@ -887,25 +870,25 @@ if (_socket != null && _socket!.connected) {
             children: [
               if (isHostSeat && isOccupied)
                 Positioned(
-                  top: -circleSize * 0.28,
-                  child: Icon(
-                    Icons.workspace_premium,
-                    color: const Color(0xFFB87300),
-                    size: circleSize * 0.38,
+                  top: -seatDimension * 0.32,
+                  child: Image.asset(
+                    'assets/images/wikimediaimages-candy-2201920.jpg',
+                    width: seatDimension * 0.72,
+                    errorBuilder: (c, e, s) => const SizedBox.shrink(),
                   ),
                 ),
               if (isCrownSeat && isOccupied)
                 Positioned(
-                  top: -circleSize * 0.25,
-                  child: Icon(
-                    Icons.favorite,
-                    color: Colors.redAccent,
-                    size: circleSize * 0.32,
+                  top: -seatDimension * 0.28,
+                  child: Image.asset(
+                    'assets/images/weekly_lovers_heart_value.webp',
+                    width: seatDimension * 0.58,
+                    errorBuilder: (c, e, s) => const SizedBox.shrink(),
                   ),
                 ),
               Container(
-                width: circleSize,
-                height: circleSize,
+                width: seatDimension,
+                height: seatDimension,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   gradient: const LinearGradient(
@@ -914,7 +897,9 @@ if (_socket != null && _socket!.connected) {
                     end: Alignment.bottomRight,
                   ),
                   border: Border.all(
-                    color: isSpeaking ? const Color(0xFF00B8D4) : kGoldBorder,
+                    color: isSpeaking
+                        ? const Color(0xFF00B8D4)
+                        : (isOccupied ? kGoldBright : kGoldBorder),
                     width: isSpeaking ? 2.6 : (isOccupied ? 2.0 : 1.3),
                   ),
                   boxShadow: [
@@ -926,18 +911,17 @@ if (_socket != null && _socket!.connected) {
                       )
                     else
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.22),
+                        color: Colors.black.withOpacity(0.25),
                         blurRadius: 4,
                         offset: const Offset(0, 2),
                       ),
                   ],
                 ),
                 child: Center(
-
-child: Icon(
+                  child: Icon(
                     isOccupied ? Icons.person : Icons.chair_rounded,
                     color: isOccupied ? kGoldBright : kGoldBorder,
-                    size: circleSize * 0.48,
+                    size: seatDimension * 0.46,
                   ),
                 ),
               ),
@@ -946,15 +930,16 @@ child: Icon(
                   bottom: -2,
                   right: -2,
                   child: Container(
-                    padding: EdgeInsets.all(circleSize * 0.055),
+                    padding: EdgeInsets.all(seatDimension * 0.05),
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: isMuted ? Colors.redAccent : const Color(0xFF107C41),
+
+color: isMuted ? Colors.redAccent : const Color(0xFF107C41),
                       border: Border.all(color: kShiroBg, width: 1.2),
                     ),
                     child: Icon(
                       isMuted ? Icons.mic_off : Icons.mic,
-                      size: (circleSize * 0.22).clamp(9.0, 15.0),
+                      size: (seatDimension * 0.22).clamp(9.0, 15.0),
                       color: Colors.white,
                     ),
                   ),
@@ -976,27 +961,30 @@ child: Icon(
             ),
           ),
           Container(
-            margin: const EdgeInsets.only(top: 1.5),
+            margin: const EdgeInsets.only(top: 1.0),
             padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
             decoration: BoxDecoration(
               color: (giftsCount > 0 && isOccupied) ? kGoldBlackBottom : kShiroCard,
               borderRadius: BorderRadius.circular(8),
               border: Border.all(color: kGoldBorder, width: 0.8),
             ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text("🎁", style: TextStyle(fontSize: badgeFontSize * 0.92)),
-                const SizedBox(width: 2),
-                Text(
-                  isOccupied ? "$giftsCount" : "0",
-                  style: TextStyle(
-                    color: (giftsCount > 0 && isOccupied) ? kGoldBright : kBlackText,
-                    fontSize: badgeFontSize,
-                    fontWeight: FontWeight.bold,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text("🎁", style: TextStyle(fontSize: badgeFontSize * 0.92)),
+                  const SizedBox(width: 2),
+                  Text(
+                    isOccupied ? "$giftsCount" : "0",
+                    style: TextStyle(
+                      color: (giftsCount > 0 && isOccupied) ? kGoldBright : kBlackText,
+                      fontSize: badgeFontSize,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ],
@@ -1043,8 +1031,7 @@ child: Icon(
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             margin: const EdgeInsets.symmetric(vertical: 12),
-
-decoration: BoxDecoration(
+            decoration: BoxDecoration(
               color: kGoldBlackBottom,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: kGoldBorder, width: 1.2),
@@ -1052,10 +1039,11 @@ decoration: BoxDecoration(
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.stars, color: kGoldBright, size: 13),
+                const Icon(Icons.stars, color: kGoldBright, size: 12),
                 const SizedBox(width: 4),
                 Text(
-                  "$_myPoints",
+
+"$_myPoints",
                   style: const TextStyle(
                     color: kGoldBright,
                     fontSize: 11,
@@ -1090,12 +1078,12 @@ decoration: BoxDecoration(
               ),
             ),
             color: kGoldBlackTop,
-            onSelected: (val) => _changeSeatCount((val as num).toInt()),
+            onSelected: (int count) => _changeSeatCount(count),
             itemBuilder: (context) => _allowedSeatOptions
-                .map((count) => PopupMenuItem(
+                .map((int count) => PopupMenuItem(
                       value: count,
                       child: Text(
-                        "$count Seats (Full Screen)",
+                        "$count Seats Layout",
                         style: TextStyle(
                           color: count == _totalSeats ? kGoldBright : Colors.white,
                           fontWeight: FontWeight.bold,
@@ -1133,29 +1121,30 @@ decoration: BoxDecoration(
                   flex: 6,
                   child: LayoutBuilder(
                     builder: (context, constraints) {
-                      final double areaW = constraints.maxWidth - 12;
-                      final double areaH = constraints.maxHeight - 4;
+                      final double areaW = constraints.maxWidth - 12.0;
+                      final double areaH = constraints.maxHeight - 4.0;
                       final double cellW = areaW / crossAxis;
                       final double cellH = areaH / rowCount;
 
                       final double nameFontSize =
-                          (cellH * 0.135).clamp(9.0, 14.5);
+                          (cellH * 0.13).clamp(8.5, 15.0);
                       final double badgeFontSize =
-                          (cellH * 0.115).clamp(7.5, 12.5);
+                          (cellH * 0.11).clamp(7.5, 13.0);
                       final double reservedLabelH =
                           nameFontSize + badgeFontSize + 14.0;
 
                       final double maxByHeight =
-                          (cellH - reservedLabelH).clamp(32.0, 118.0);
+                          (cellH - reservedLabelH).clamp(28.0, 125.0);
                       final double maxByWidth =
-                          (cellW * 0.68).clamp(32.0, 118.0);
-                      final double circleSize = min(maxByHeight, maxByWidth);
+                          (cellW * 0.72).clamp(28.0, 125.0);
+                      final double seatDimension = min(maxByHeight, maxByWidth);
 
-return Padding(
+                      return Padding(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 6.0, vertical: 2.0),
                         child: Column(
-                          children: List.generate(rowCount, (r) {
+
+children: List.generate(rowCount, (r) {
                             return Expanded(
                               child: Row(
                                 children: List.generate(crossAxis, (c) {
@@ -1167,7 +1156,7 @@ return Padding(
                                     child: Center(
                                       child: _buildSingleSeat(
                                         index: seatIdx,
-                                        circleSize: circleSize,
+                                        seatDimension: seatDimension,
                                         nameFontSize: nameFontSize,
                                         badgeFontSize: badgeFontSize,
                                       ),
@@ -1184,20 +1173,27 @@ return Padding(
                 ),
 
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 3),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
                   child: Container(
-                    height: 34,
+                    height: 36,
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
                     decoration: BoxDecoration(
                       gradient: const LinearGradient(
                         colors: [kGoldBlackTop, kGoldBlackBottom],
                       ),
                       borderRadius: BorderRadius.circular(18),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.25),
+                          blurRadius: 6,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
                       border: Border.all(color: kGoldBorder, width: 1.2),
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.rocket_launch, color: kGoldBright, size: 17),
+                        const Icon(Icons.rocket_launch, color: kGoldBright, size: 18),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
@@ -1234,14 +1230,14 @@ return Padding(
                   child: Container(
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-                    child: ListView.builder(
 
-controller: _chatScrollController,
+child: ListView.builder(
+                      controller: _chatScrollController,
                       physics: const BouncingScrollPhysics(),
                       padding: const EdgeInsets.only(bottom: 6),
                       itemCount: _messages.length,
                       itemBuilder: (context, index) {
-                        final item = _messages[index] as RoomChatMessage;
+                        final item = _messages[index];
                         return Align(
                           alignment: Alignment.centerLeft,
                           child: Container(
@@ -1283,7 +1279,6 @@ controller: _chatScrollController,
                                     text: item.message,
                                     style: const TextStyle(
                                       color: kBlackText,
-                                      fontWeight: FontWeight.w500,
                                       fontSize: 12,
                                     ),
                                   ),
@@ -1315,12 +1310,12 @@ controller: _chatScrollController,
                         ),
                         child: IconButton(
                           icon: Icon(
+                            _isMuted ? Icons.mic_off : Icons.mic,
 
-_isMuted ? Icons.mic_off : Icons.mic,
-                            color: _mySeatIndex != null
+color: _mySeatIndex != null
                                 ? (_isMuted ? Colors.redAccent : kGoldBright)
                                 : kSubBlack,
-                            size: 22,
+                            size: 24,
                           ),
                           onPressed: _mySeatIndex != null ? _toggleMute : null,
                         ),
@@ -1396,7 +1391,14 @@ _isMuted ? Icons.mic_off : Icons.mic,
                         ),
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(color: kGoldBright, width: 1.2),
-                      ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.35),
+                            blurRadius: 8,
+                          ),
+                        ],
+
+),
                       child: Text(
                         _entryBannerText!,
                         style: const TextStyle(
@@ -1410,14 +1412,14 @@ _isMuted ? Icons.mic_off : Icons.mic,
                 ),
               ),
 
-..._activeFlyingGifts.map((item) {
-              final gift = item as CenterFlyingGift;
+            ..._activeFlyingGifts.map((gift) {
               return AnimatedBuilder(
                 animation: gift.controller,
                 builder: (context, child) {
                   final t = gift.flightAnimation.value;
+
                   final centerX = size.width * 0.5;
-                  final centerY = size.height * 0.42;
+                  final centerY = size.height * 0.45;
 
                   final col = gift.targetSeatIndex % crossAxis;
                   final row = gift.targetSeatIndex ~/ crossAxis;
@@ -1429,6 +1431,7 @@ _isMuted ? Icons.mic_off : Icons.mic,
 
                   final currentX = centerX + (targetX - centerX) * t;
                   final currentY = centerY + (targetY - centerY) * t;
+
                   final scale = 1.4 - (0.85 * t);
 
                   return Positioned(
@@ -1457,13 +1460,13 @@ _isMuted ? Icons.mic_off : Icons.mic,
             }),
 
             FullscreenGiftAnimator(
-              giftStream: _fullscreenAnimStreamController.stream.cast(),
+              giftStream: _fullscreenAnimStreamController.stream,
             ),
 
             if (_showComboButton)
               Positioned(
-                bottom: 68,
-                right: 18,
+                bottom: 65,
+                right: 20,
                 child: GestureDetector(
                   onTap: _onComboTapped,
                   child: Stack(
@@ -1493,8 +1496,16 @@ _isMuted ? Icons.mic_off : Icons.mic,
                             colors: [kGoldBlackTop, kGoldBlackBottom],
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
-                          ),
+
+),
                           border: Border.all(color: kGoldBright, width: 1.5),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.45),
+                              blurRadius: 10,
+                              spreadRadius: 1,
+                            ),
+                          ],
                         ),
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
@@ -1502,8 +1513,7 @@ _isMuted ? Icons.mic_off : Icons.mic,
                             const Text(
                               "Combo",
                               style: TextStyle(
-
-color: kGoldBright,
+                                color: kGoldBright,
                                 fontWeight: FontWeight.bold,
                                 fontSize: 12,
                               ),
