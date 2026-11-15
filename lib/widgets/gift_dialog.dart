@@ -81,7 +81,7 @@ class _GiftDialogState extends State<GiftDialog> {
   int _selectedMultiplier = 1;
   final List<int> _multipliers = const [1, 3, 7, 10, 30, 50, 77, 100];
 
-  int _selectedCategoryIndex = 0; // Hot Tab default
+  int _selectedCategoryIndex = 0;
   int _selectedGiftIndex = 0;
 
   static const Color goldColor = Color(0xFFFFD700);
@@ -96,26 +96,22 @@ class _GiftDialogState extends State<GiftDialog> {
   ];
 
   final List<GiftItem> _allGifts = const [
-    // ==========================================
     // 1. HOT CATEGORY (1,000 - 15,000 Coins)
-    // ==========================================
-    GiftItem(id: "svga2", name: "Golden Rose", icon: "🌹", price: 1000, imageAsset: "", animationAsset: "assets/svga/svga2.mp4", category: GiftCategory.hot),
-    GiftItem(id: "svga3", name: "Royal Crown", icon: "👑", price: 1500, imageAsset: "", animationAsset: "assets/svga/svga3.mp4", category: GiftCategory.hot),
-    GiftItem(id: "svga4", name: "Magic Perfume", icon: "🧴", price: 2000, imageAsset: "", animationAsset: "assets/svga/svga4.mp4", category: GiftCategory.hot),
-    GiftItem(id: "svga6", name: "Crystal Ring", icon: "💍", price: 3000, imageAsset: "", animationAsset: "assets/svga/svga6.mp4", category: GiftCategory.hot),
-    GiftItem(id: "svga7", name: "Starlight Harp", icon: "🎵", price: 4000, imageAsset: "", animationAsset: "assets/svga/svga7.mp4", category: GiftCategory.hot),
-    GiftItem(id: "svga9", name: "Fire Phoenix", icon: "🔥", price: 5000, imageAsset: "", animationAsset: "assets/svga/svga9.mp4", category: GiftCategory.hot),
-    GiftItem(id: "svga10", name: "Diamond Chest", icon: "💎", price: 6500, imageAsset: "", animationAsset: "assets/svga/svga10.mp4", category: GiftCategory.hot),
+    GiftItem(id: "svga2", name: "Golden Rose", icon: "🌹", price: 1000, imageAsset: "assets/images/svga2.jpg", animationAsset: "assets/svga/svga2.mp4", category: GiftCategory.hot),
+    GiftItem(id: "svga3", name: "Royal Crown", icon: "👑", price: 1500, imageAsset: "assets/images/svga3.jpg", animationAsset: "assets/svga/svga3.mp4", category: GiftCategory.hot),
+    GiftItem(id: "svga4", name: "Magic Perfume", icon: "🧴", price: 2000, imageAsset: "assets/images/svga4.jpg", animationAsset: "assets/svga/svga4.mp4", category: GiftCategory.hot),
+    GiftItem(id: "svga6", name: "Crystal Ring", icon: "💍", price: 3000, imageAsset: "assets/images/svga6.jpg", animationAsset: "assets/svga/svga6.mp4", category: GiftCategory.hot),
+    GiftItem(id: "svga7", name: "Starlight Harp", icon: "🎵", price: 4000, imageAsset: "assets/images/svga7.jpg", animationAsset: "assets/svga/svga7.mp4", category: GiftCategory.hot),
+    GiftItem(id: "svga9", name: "Fire Phoenix", icon: "🔥", price: 5000, imageAsset: "assets/images/svga9.jpg", animationAsset: "assets/svga/svga9.mp4", category: GiftCategory.hot),
+    GiftItem(id: "svga10", name: "Diamond Chest", icon: "💎", price: 6500, imageAsset: "assets/images/svga10.jpg", animationAsset: "assets/svga/svga10.mp4", category: GiftCategory.hot),
 
-GiftItem(id: "svga11", name: "Golden Eagle", icon: "🦅", price: 8000, imageAsset: "", animationAsset: "assets/svga/svga11.mp4", category: GiftCategory.hot),
-    GiftItem(id: "svga12", name: "Royal Carriage", icon: "🎠", price: 10000, imageAsset: "", animationAsset: "assets/svga/svga12.mp4", category: GiftCategory.hot),
-    GiftItem(id: "svga13", name: "Blue Dragon", icon: "🐉", price: 12000, imageAsset: "", animationAsset: "assets/svga/svga13.mp4", category: GiftCategory.hot),
-    GiftItem(id: "svga14", name: "Victory Trophy", icon: "🏆", price: 13500, imageAsset: "", animationAsset: "assets/svga/svga14.mp4", category: GiftCategory.hot),
-    GiftItem(id: "svga15", name: "Magic Lamp", icon: "🪔", price: 15000, imageAsset: "", animationAsset: "assets/svga/svga15.mp4", category: GiftCategory.hot),
+GiftItem(id: "svga11", name: "Golden Eagle", icon: "🦅", price: 8000, imageAsset: "assets/images/svga11.jpg", animationAsset: "assets/svga/svga11.mp4", category: GiftCategory.hot),
+    GiftItem(id: "svga12", name: "Royal Carriage", icon: "🎠", price: 10000, imageAsset: "assets/images/svga12.jpg", animationAsset: "assets/svga/svga12.mp4", category: GiftCategory.hot),
+    GiftItem(id: "svga13", name: "Blue Dragon", icon: "🐉", price: 12000, imageAsset: "assets/images/svga13.jpg", animationAsset: "assets/svga/svga13.mp4", category: GiftCategory.hot),
+    GiftItem(id: "svga14", name: "Victory Trophy", icon: "🏆", price: 13500, imageAsset: "assets/images/svga14.jpg", animationAsset: "assets/svga/svga14.mp4", category: GiftCategory.hot),
+    GiftItem(id: "svga15", name: "Magic Lamp", icon: "🪔", price: 15000, imageAsset: "assets/images/svga15.jpg", animationAsset: "assets/svga/svga15.mp4", category: GiftCategory.hot),
 
-    // ==========================================
-    // 2. LUCKY CATEGORY (Existing Lucky Gifts)
-    // ==========================================
+    // 2. LUCKY CATEGORY
     GiftItem(id: "ke1", name: "ke1", icon: "🔑", price: 10, imageAsset: "assets/images/ke1.jpg", category: GiftCategory.lucky),
     GiftItem(id: "ke2", name: "ke2", icon: "🔑", price: 20, imageAsset: "assets/images/ke2.jpg", category: GiftCategory.lucky),
     GiftItem(id: "ke3", name: "ke3", icon: "👑", price: 30, imageAsset: "assets/images/ke3.jpg", category: GiftCategory.lucky),
@@ -137,37 +133,34 @@ GiftItem(id: "svga11", name: "Golden Eagle", icon: "🦅", price: 8000, imageAss
     GiftItem(id: "ke19", name: "ke19", icon: "🦋", price: 960, imageAsset: "assets/images/ke19.jpg", category: GiftCategory.lucky),
     GiftItem(id: "prism_diamond", name: "Prism Diamond", icon: "💎", price: 1000, imageAsset: "assets/images/Prism Diamond.jpg", category: GiftCategory.lucky),
 
-    // ==========================================
     // 3. LUXURY CATEGORY (20,000 - 500,000 Coins)
-    // ==========================================
-    GiftItem(id: "svga27", name: "Gold Supercar", icon: "🏎️", price: 20000, imageAsset: "", animationAsset: "assets/svga/svga27.mp4", category: GiftCategory.luxury),
+    GiftItem(id: "svga27", name: "Gold Supercar", icon: "🏎️", price: 20000, imageAsset: "assets/images/svga27.jpg", animationAsset: "assets/svga/svga27.mp4", category: GiftCategory.luxury),
 
-GiftItem(id: "svga29", name: "VIP Helicopter", icon: "🚁", price: 35000, imageAsset: "", animationAsset: "assets/svga/svga29.mp4", category: GiftCategory.luxury),
-    GiftItem(id: "svga30", name: "Luxury Yacht", icon: "🛥️", price: 50000, imageAsset: "", animationAsset: "assets/svga/svga30.mp4", category: GiftCategory.luxury),
-    GiftItem(id: "svga31", name: "Golden Lion", icon: "🦁", price: 75000, imageAsset: "", animationAsset: "assets/svga/svga31.mp4", category: GiftCategory.luxury),
-    GiftItem(id: "svga32", name: "Private Jet", icon: "✈️", price: 100000, imageAsset: "", animationAsset: "assets/svga/svga32.mp4", category: GiftCategory.luxury),
-    GiftItem(id: "svga33", name: "Space Rocket", icon: "🚀", price: 150000, imageAsset: "", animationAsset: "assets/svga/svga33.mp4", category: GiftCategory.luxury),
-    GiftItem(id: "svga34", name: "Imperial Throne", icon: "👑", price: 200000, imageAsset: "", animationAsset: "assets/svga/svga34.mp4", category: GiftCategory.luxury),
-    GiftItem(id: "svga35", name: "Nile Palace", icon: "🏛️", price: 250000, imageAsset: "", animationAsset: "assets/svga/svga35.mp4", category: GiftCategory.luxury),
-    GiftItem(id: "svga36", name: "Celestial Dragon", icon: "🐲", price: 300000, imageAsset: "", animationAsset: "assets/svga/svga36.mp4", category: GiftCategory.luxury),
-    GiftItem(id: "svga37", name: "Golden Phoenix", icon: "🦅", price: 380000, imageAsset: "", animationAsset: "assets/svga/svga37.mp4", category: GiftCategory.luxury),
-    GiftItem(id: "svga39", name: "Universe Crown", icon: "💫", price: 450000, imageAsset: "", animationAsset: "assets/svga/svga39.mp4", category: GiftCategory.luxury),
-    GiftItem(id: "svga40", name: "NILE Legend", icon: "🌟", price: 500000, imageAsset: "", animationAsset: "assets/svga/svga40.mp4", category: GiftCategory.luxury),
+GiftItem(id: "svga29", name: "VIP Helicopter", icon: "🚁", price: 35000, imageAsset: "assets/images/svga29.jpg", animationAsset: "assets/svga/svga29.mp4", category: GiftCategory.luxury),
+    GiftItem(id: "svga30", name: "Luxury Yacht", icon: "🛥️", price: 50000, imageAsset: "assets/images/svga30.jpg", animationAsset: "assets/svga/svga30.mp4", category: GiftCategory.luxury),
+    GiftItem(id: "svga31", name: "Golden Lion", icon: "🦁", price: 75000, imageAsset: "assets/images/svga31.jpg", animationAsset: "assets/svga/svga31.mp4", category: GiftCategory.luxury),
+    GiftItem(id: "svga32", name: "Private Jet", icon: "✈️", price: 100000, imageAsset: "assets/images/svga32.jpg", animationAsset: "assets/svga/svga32.mp4", category: GiftCategory.luxury),
+    GiftItem(id: "svga33", name: "Space Rocket", icon: "🚀", price: 150000, imageAsset: "assets/images/svga33.jpg", animationAsset: "assets/svga/svga33.mp4", category: GiftCategory.luxury),
+    GiftItem(id: "svga34", name: "Imperial Throne", icon: "👑", price: 200000, imageAsset: "assets/images/svga34.jpg", animationAsset: "assets/svga/svga34.mp4", category: GiftCategory.luxury),
+    GiftItem(id: "svga35", name: "Nile Palace", icon: "🏛️", price: 250000, imageAsset: "assets/images/svga35.jpg", animationAsset: "assets/svga/svga35.mp4", category: GiftCategory.luxury),
+    GiftItem(id: "svga36", name: "Celestial Dragon", icon: "🐲", price: 300000, imageAsset: "assets/images/svga36.jpg", animationAsset: "assets/svga/svga36.mp4", category: GiftCategory.luxury),
+    GiftItem(id: "svga37", name: "Golden Phoenix", icon: "🦅", price: 380000, imageAsset: "assets/images/svga37.jpg", animationAsset: "assets/svga/svga37.mp4", category: GiftCategory.luxury),
+    GiftItem(id: "svga39", name: "Universe Crown", icon: "💫", price: 450000, imageAsset: "assets/images/svga39.jpg", animationAsset: "assets/svga/svga39.mp4", category: GiftCategory.luxury),
+    GiftItem(id: "svga40", name: "NILE Legend", icon: "🌟", price: 500000, imageAsset: "assets/images/svga40.jpg", animationAsset: "assets/svga/svga40.mp4", category: GiftCategory.luxury),
 
-    // ==========================================
     // 4. INTIMACY CATEGORY (2,000 - 80,000 Coins)
-    // ==========================================
-    GiftItem(id: "svga16", name: "Sweet Heart", icon: "💖", price: 2000, imageAsset: "", animationAsset: "assets/svga/svga16.mp4", category: GiftCategory.intimacy),
-    GiftItem(id: "svga17", name: "Love Bear", icon: "🧸", price: 3500, imageAsset: "", animationAsset: "assets/svga/svga17.mp4", category: GiftCategory.intimacy),
-    GiftItem(id: "svga18", name: "Cupid Arrow", icon: "💘", price: 5000, imageAsset: "", animationAsset: "assets/svga/svga18.mp4", category: GiftCategory.intimacy),
-    GiftItem(id: "svga19", name: "Twin Swans", icon: "🦢", price: 8000, imageAsset: "", animationAsset: "assets/svga/svga19.mp4", category: GiftCategory.intimacy),
-    GiftItem(id: "svga20", name: "Romantic Boat", icon: "⛵", price: 12000, imageAsset: "", animationAsset: "assets/svga/svga20.mp4", category: GiftCategory.intimacy),
-    GiftItem(id: "svga21", name: "Love Balloon", icon: "🎈", price: 18000, imageAsset: "", animationAsset: "assets/svga/svga21.mp4", category: GiftCategory.intimacy),
-    GiftItem(id: "svga22", name: "Diamond Chain", icon: "📿", price: 25000, imageAsset: "", animationAsset: "assets/svga/svga22.mp4", category: GiftCategory.intimacy),
-    GiftItem(id: "svga23", name: "Eternal Kiss", icon: "💋", price: 35000, imageAsset: "", animationAsset: "assets/svga/svga23.mp4", category: GiftCategory.intimacy),
-    GiftItem(id: "svga24", name: "Crystal Castle", icon: "🏰", price: 50000, imageAsset: "", animationAsset: "assets/svga/svga24.mp4", category: GiftCategory.intimacy),
-    GiftItem(id: "svga25", name: "Starry Proposal", icon: "🌠", price: 65000, imageAsset: "", animationAsset: "assets/svga/svga25.mp4", category: GiftCategory.intimacy),
-    GiftItem(id: "svfa26", name: "Royal Wedding", icon: "👰", price: 80000, imageAsset: "", animationAsset: "assets/svga/svfa26.mp4", category: GiftCategory.intimacy),
+    GiftItem(id: "svga16", name: "Sweet Heart", icon: "💖", price: 2000, imageAsset: "assets/images/svga16.jpg", animationAsset: "assets/svga/svga16.mp4", category: GiftCategory.intimacy),
+    GiftItem(id: "svga17", name: "Love Bear", icon: "🧸", price: 3500, imageAsset: "assets/images/svga17.jpg", animationAsset: "assets/svga/svga17.mp4", category: GiftCategory.intimacy),
+    GiftItem(id: "svga18", name: "Cupid Arrow", icon: "💘", price: 5000, imageAsset: "assets/images/svga18.jpg", animationAsset: "assets/svga/svga18.mp4", category: GiftCategory.intimacy),
+    GiftItem(id: "svga19", name: "Twin Swans", icon: "🦢", price: 8000, imageAsset: "assets/images/svga19.jpg", animationAsset: "assets/svga/svga19.mp4", category: GiftCategory.intimacy),
+    GiftItem(id: "svga20", name: "Romantic Boat", icon: "⛵", price: 12000, imageAsset: "assets/images/svga20.jpg", animationAsset: "assets/svga/svga20.mp4", category: GiftCategory.intimacy),
+    GiftItem(id: "svga21", name: "Love Balloon", icon: "🎈", price: 18000, imageAsset: "assets/images/svga21.jpg", animationAsset: "assets/svga/svga21.mp4", category: GiftCategory.intimacy),
+    GiftItem(id: "svga22", name: "Diamond Chain", icon: "📿", price: 25000, imageAsset: "assets/images/svga22.jpg", animationAsset: "assets/svga/svga22.mp4", category: GiftCategory.intimacy),
+    GiftItem(id: "svga23", name: "Eternal Kiss", icon: "💋", price: 35000, imageAsset: "assets/images/svga23.jpg", animationAsset: "assets/svga/svga23.mp4", category: GiftCategory.intimacy),
+    GiftItem(id: "svga24", name: "Crystal Castle", icon: "🏰", price: 50000, imageAsset: "assets/images/svga24.jpg", animationAsset: "assets/svga/svga24.mp4", category: GiftCategory.intimacy),
+
+GiftItem(id: "svga25", name: "Starry Proposal", icon: "🌠", price: 65000, imageAsset: "assets/images/svga25.jpg", animationAsset: "assets/svga/svga25.mp4", category: GiftCategory.intimacy),
+    GiftItem(id: "svfa26", name: "Royal Wedding", icon: "👰", price: 80000, imageAsset: "assets/images/svfa26.jpg", animationAsset: "assets/svga/svfa26.mp4", category: GiftCategory.intimacy),
   ];
 
   List<GiftItem> get _currentCategoryGifts {
@@ -175,7 +168,7 @@ GiftItem(id: "svga29", name: "VIP Helicopter", icon: "🚁", price: 35000, image
     return _allGifts.where((g) => g.category == currentCat).toList();
   }
 
-List get _userList {
+  List get _userList {
     if (widget.activeUsers is List) {
       return widget.activeUsers as List;
     }
@@ -250,7 +243,6 @@ List get _userList {
   int get _effectiveMultiplier {
     final currentGifts = _currentCategoryGifts;
     if (currentGifts.isEmpty || _selectedGiftIndex >= currentGifts.length) return 1;
-    // Lucky gifts always send 1 time per tap
     if (currentGifts[_selectedGiftIndex].isLucky) return 1;
     return _selectedMultiplier;
   }
@@ -301,22 +293,19 @@ List get _userList {
       int wonCoins = 0;
       int maxMultiplier = 0;
 
-      if (selectedGift.isLucky) {
+if (selectedGift.isLucky) {
         int totalUnits = sendMult * _selectedSeatIndices.length;
         for (int i = 0; i < totalUnits; i++) {
           int mult = _calculateLuckyMultiplier();
           if (mult > 0) {
             maxMultiplier = max(maxMultiplier, mult);
-
-wonCoins += selectedGift.price * mult;
+            wonCoins += selectedGift.price * mult;
           }
         }
-        // For Lucky gifts: play coin sound ONLY when a win bursts
         if (wonCoins > 0) {
           _playFiveWinSound();
         }
       } else {
-        // For standard gifts: play sound on send
         _playFiveWinSound();
       }
 
@@ -425,7 +414,7 @@ wonCoins += selectedGift.price * mult;
     }
   }
 
-  @override
+@override
   Widget build(BuildContext context) {
     final totalCost = _calculateTotalPrice;
     final currentGifts = _currentCategoryGifts;
@@ -434,7 +423,7 @@ wonCoins += selectedGift.price * mult;
         : null;
     final int activeMult = _effectiveMultiplier;
 
-return Container(
+    return Container(
       height: 480,
       decoration: const BoxDecoration(
         color: darkBg,
@@ -514,13 +503,13 @@ return Container(
                               child: Text(
                                 "$seatNum",
                                 style: TextStyle(
-                                  color: isSelected
+
+color: isSelected
                                       ? goldColor
                                       : (isOccupied ? Colors.white : Colors.white24),
                                   fontSize: 10,
                                   fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-
-),
+                                ),
                               ),
                             ),
                           ),
@@ -576,7 +565,7 @@ return Container(
             ),
           ),
 
-          // Gifts Grid
+          // Clean Gifts Grid (No rectangular boxes, only the gift itself)
           Expanded(
             child: GridView.builder(
               padding: const EdgeInsets.all(8),
@@ -594,45 +583,31 @@ return Container(
                 return GestureDetector(
                   onTap: () => setState(() => _selectedGiftIndex = index),
                   child: Container(
-                    decoration: BoxDecoration(
-                      color: isSelected ? goldColor.withOpacity(0.14) : cardBg.withOpacity(0.55),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: isSelected ? goldColor : Colors.white10,
-                        width: isSelected ? 1.4 : 0.8,
-                      ),
-                    ),
+                    color: Colors.transparent,
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Container(
-                          width: 52,
-                          height: 52,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            color: Colors.black26,
                             boxShadow: isSelected
                                 ? [
                                     BoxShadow(
                                       color: goldColor.withOpacity(0.45),
-
-blurRadius: 12,
-                                      spreadRadius: 1,
+                                      blurRadius: 16,
+                                      spreadRadius: 2,
                                     ),
-                                  ]
+
+]
                                 : null,
                           ),
-                          child: Center(
-                            child: gift.imageAsset.isNotEmpty
-                                ? Image.asset(
-                                    gift.imageAsset,
-                                    width: 48,
-                                    height: 48,
-                                    fit: BoxFit.contain,
-                                    errorBuilder: (ctx, err, stack) =>
-                                        Text(gift.icon, style: const TextStyle(fontSize: 28)),
-                                  )
-                                : Text(gift.icon, style: const TextStyle(fontSize: 28)),
+                          child: Image.asset(
+                            gift.imageAsset,
+                            width: 62,
+                            height: 62,
+                            fit: BoxFit.contain,
+                            errorBuilder: (ctx, err, stack) =>
+                                Text(gift.icon, style: const TextStyle(fontSize: 36)),
                           ),
                         ),
                         const SizedBox(height: 4),
@@ -705,8 +680,7 @@ blurRadius: 12,
                                 "x$m",
                                 style: const TextStyle(
                                   color: Colors.white,
-
-fontWeight: FontWeight.bold,
+                                  fontWeight: FontWeight.bold,
                                 ),
                               ),
                             ))
@@ -715,7 +689,8 @@ fontWeight: FontWeight.bold,
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
                         color: Colors.white.withOpacity(0.08),
-                        borderRadius: BorderRadius.circular(12),
+
+borderRadius: BorderRadius.circular(12),
                         border: Border.all(color: Colors.white24),
                       ),
                       child: Row(
