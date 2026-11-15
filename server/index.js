@@ -84,22 +84,10 @@ const BINANCE_PAY_ID = firstValid([
   '1059643208',
 ]);
 
-const ADMIN_PASSWORD = firstValid([
-  process.env.ADMIN_PASSWORD,
-  'NileAdmin2026',
-]);
-
 const memoryOrders = new Map();
 
+// Direct access without password
 function requireAdmin(req, res, next) {
-  const pass = firstValid([
-    req.headers['x-admin-password'],
-    req.query.password,
-    '',
-  ]);
-  if (pass !== ADMIN_PASSWORD) {
-    return res.status(401).json({ error: 'Unauthorized: Invalid Admin Password' });
-  }
   next();
 }
 
@@ -118,7 +106,6 @@ app.get('/', (req, res) => {
   });
 });
 
-// Serve admin.html from server/ or root folder
 app.get('/admin', (req, res) => {
   const candidatePaths = [
     path.join(__dirname, 'admin.html'),
@@ -161,7 +148,7 @@ function generateAgoraToken(req, res) {
     ]);
     const roleStr = String(roleRaw).toLowerCase();
 
-let role = RtcRole.PUBLISHER;
+    let role = RtcRole.PUBLISHER;
     if (roleStr === 'audience') {
       role = RtcRole.SUBSCRIBER;
     } else if (roleStr === 'subscriber') {
@@ -177,7 +164,7 @@ let role = RtcRole.PUBLISHER;
       return res.status(500).json({ error: 'Agora APP_CERTIFICATE missing on server' });
     }
 
-    const expirationTimeInSeconds = 3600 * 24;
+const expirationTimeInSeconds = 3600 * 24;
     const currentTimestamp = Math.floor(Date.now() / 1000);
     const privilegeExpiredTs = currentTimestamp + expirationTimeInSeconds;
 
@@ -298,7 +285,7 @@ app.post(
         isPaid = true;
       }
 
-if (isPaid) {
+      if (isPaid) {
         return res.json({
           success: true,
           verified: true,
@@ -319,17 +306,6 @@ if (isPaid) {
 );
 
 // 5. Admin API Endpoints
-app.post('/api/admin/login', (req, res) => {
-  let body = {};
-  if (req.body) {
-    body = req.body;
-  }
-  if (body.password === ADMIN_PASSWORD) {
-    return res.json({ success: true });
-  }
-  return res.status(401).json({ success: false, error: 'Incorrect password' });
-});
-
 app.get('/api/admin/overview', requireAdmin, async (req, res) => {
   if (!db) {
     return res.status(500).json({ error: 'Firebase not connected. Check serviceAccountKey.json.' });
@@ -432,7 +408,7 @@ app.post('/api/admin/user-order', requireAdmin, async (req, res) => {
       return res.status(400).json({ error: 'Order already processed' });
     }
 
-if (action === 'APPROVE') {
+    if (action === 'APPROVE') {
       let targetUid = firstValid([order.uid, '']);
       if (targetUid === '') {
         if (order.numericId) {
@@ -458,7 +434,7 @@ if (action === 'APPROVE') {
         );
       }
 
-      await batch.commit();
+await batch.commit();
       memoryOrders.set(orderRef, Object.assign({}, order, { status: 'PAID' }));
       return res.json({ success: true, status: 'PAID' });
     } else {
@@ -558,8 +534,7 @@ app.post('/api/admin/withdrawal', requireAdmin, async (req, res) => {
       }
 
       if (isAgencyComm) {
-
-const agRef = db.collection('agencies').doc(reqData.agencyId);
+        const agRef = db.collection('agencies').doc(reqData.agencyId);
         batch.update(agRef, {
           withdrawnCommissionPoints: FieldValue.increment(-refundPts),
         });
@@ -589,7 +564,7 @@ app.post('/api/admin/user-control', requireAdmin, async (req, res) => {
   }
   const uid = body.uid;
 
-  try {
+try {
     const userRef = db.collection('users').doc(uid);
     const snap = await userRef.get();
     if (!snap.exists) return res.status(404).json({ error: 'User not found' });
