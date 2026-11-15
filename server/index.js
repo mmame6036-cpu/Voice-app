@@ -66,7 +66,7 @@ du();
 g('t5').innerHTML=D.agencies.map(a=>'<tr><td>'+sv(a.agencyId,a.id)+'</td><td>'+sv(a.name,'')+'</td><td>'+sv(a.ownerNumericId,'-')+'</td><td>'+nv(a.totalHosts)+'</td></tr>').join('');}
 function du(){var q=sv(g('q').value,'').toLowerCase();g('t4').innerHTML=D.users.filter(u=>{var a=sv(u.numericId,'').indexOf(q)!==-1;var b=sv(u.name,'').toLowerCase().indexOf(q)!==-1;return a?true:b;}).slice(0,100).map(u=>'<tr><td>'+sv(u.name,'User')+'</td><td>'+sv(u.numericId,'-')+'</td><td>'+nv(u.coins)+'</td><td>'+nv(u.points)+'</td><td>'+(u.isFaceVerified?'Yes':'No')+'</td><td><button class="b y" onclick="ad(\\''+u.uid+'\\')">+Coins</button> <button class="b d" onclick="ct(\\''+u.uid+'\\',{toggleFace:true})">Face</button> <button class="b r" onclick="ct(\\''+u.uid+'\\',{toggleBan:true})">'+(u.isBanned?'Unban':'Ban')+'</button></td></tr>').join('');}
 
-async function rst(){if(!confirm('Reset ALL Coins, Points & Orders to 0?'))return;g('m').innerText='Resetting all to 0...';await fetch('/api/admin/reset-all',{method:'POST'});load();}
+async function rst(){if(!confirm('Delete ALL test users, agencies & reset all to 0/0?'))return;g('m').innerText='Clearing everything to 0...';await fetch('/api/admin/reset-all',{method:'POST'});load();}
 async function ac(u,ref,a){if(!confirm(a+'?'))return;await fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({orderRef:ref,action:a})});load();}
 async function wd(id,a){if(!confirm(a+'?'))return;await fetch('/api/admin/withdrawal',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({requestId:id,action:a})});load();}
 async function ad(uid){var n=parseInt(sv(prompt('Coins:'),'0'),10);if(n)await ct(uid,{addCoins:n});}
@@ -134,16 +134,13 @@ app.get('/api/admin/overview', async (req, res) => {
 app.post('/api/admin/reset-all', async (req, res) => {
   if (!db) return res.status(500).json({ error: 'Firebase not connected' });
   try {
-    const [uS, bS, sS, wS, aS] = await Promise.all([db.collection('users').get(), db.collection('binance_orders').get(), db.collection('coin_recharges').get(), db.collection('withdraw_requests').get(), db.collection('agencies').get()]);
-    const ops = [];
-    uS.forEach(doc => ops.push({ t: 'u', r: doc.ref, d: { coins: 0, points: 0 } }));
-    bS.forEach(doc => ops.push({ t: 'd', r: doc.ref }));
-    sS.forEach(doc => ops.push({ t: 'd', r: doc.ref }));
-    wS.forEach(doc => ops.push({ t: 'd', r: doc.ref }));
-    aS.forEach(doc => ops.push({ t: 'u', r: doc.ref, d: { withdrawnCommissionPoints: 0, bonusCommissionPoints: 0 } }));
-    for (let i = 0; i < ops.length; i += 400) {
+    const cols = ['users', 'agencies', 'binance_orders', 'coin_recharges', 'withdraw_requests'];
+    const snaps = await Promise.all(cols.map(c => db.collection(c).get()));
+    const refs = [];
+    snaps.forEach(s => s.forEach(doc => refs.push(doc.ref)));
+    for (let i = 0; i < refs.length; i += 400) {
       const b = db.batch();
-      ops.slice(i, i + 400).forEach(o => { if (o.t === 'u') b.update(o.r, o.d); else b.delete(o.r); });
+      refs.slice(i, i + 400).forEach(r => b.delete(r));
       await b.commit();
     }
     mem.clear();
