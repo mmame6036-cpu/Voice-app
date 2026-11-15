@@ -240,11 +240,14 @@ GiftItem(id: "svga25", name: "Starry Proposal", icon: "🌠", price: 65000, imag
     });
   }
 
+  // Multiplier is ONLY active under Lucky
   int get _effectiveMultiplier {
     final currentGifts = _currentCategoryGifts;
     if (currentGifts.isEmpty || _selectedGiftIndex >= currentGifts.length) return 1;
-    if (currentGifts[_selectedGiftIndex].isLucky) return 1;
-    return _selectedMultiplier;
+    if (currentGifts[_selectedGiftIndex].isLucky) {
+      return _selectedMultiplier;
+    }
+    return 1;
   }
 
   int get _calculateTotalPrice {
@@ -289,11 +292,11 @@ GiftItem(id: "svga25", name: "Starry Proposal", icon: "🌠", price: 65000, imag
 
     setState(() => _isSending = true);
 
-    try {
+try {
       int wonCoins = 0;
       int maxMultiplier = 0;
 
-if (selectedGift.isLucky) {
+      if (selectedGift.isLucky) {
         int totalUnits = sendMult * _selectedSeatIndices.length;
         for (int i = 0; i < totalUnits; i++) {
           int mult = _calculateLuckyMultiplier();
@@ -638,7 +641,7 @@ color: isSelected
             ),
           ),
 
-          // Bottom control bar
+          // Bottom control bar (Multiplier shown ONLY under Lucky)
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: const BoxDecoration(
@@ -668,7 +671,7 @@ color: isSelected
                     style: const TextStyle(color: Colors.white38, fontSize: 10),
                   ),
                 const Spacer(),
-                if (selectedGift != null && !selectedGift.isLucky) ...[
+                if (selectedGift != null && selectedGift.isLucky) ...[
                   PopupMenuButton<int>(
                     color: const Color(0xFF281E48),
                     initialValue: _selectedMultiplier,
@@ -688,9 +691,9 @@ color: isSelected
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.08),
 
-borderRadius: BorderRadius.circular(12),
+color: Colors.white.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(12),
                         border: Border.all(color: Colors.white24),
                       ),
                       child: Row(
