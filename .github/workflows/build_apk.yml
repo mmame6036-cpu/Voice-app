@@ -25,18 +25,10 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Extract Gift Thumbnails and Compress MP4
+      - name: Compress Gift MP4 Assets
         run: |
           sudo apt-get update && sudo apt-get install -y ffmpeg
-          mkdir -p assets/images
-          for f in assets/svga/*.mp4; do
-            [ -f "$f" ] || continue
-            base=$(basename "$f" .mp4)
-            out="assets/images/${base}.jpg"
-            ffmpeg -y -ss 0.8 -i "$f" -vframes 1 -q:v 2 "$out" >/dev/null 2>&1 || true
-            [ -f "$out" ]  ffmpeg -y -i "$f" -vframes 1 -q:v 2 "$out" >/dev/null 2>&1  true
-            ffmpeg -y -i "$f" -vf "scale='trunc(min(480,iw)/2)*2':-2" -c:v libx264 -crf 28 -preset veryfast -c:a aac -b:a 64k -movflags +faststart "${f}.tmp.mp4" && mv "${f}.tmp.mp4" "$f" || rm -f "${f}.tmp.mp4"
-          done
+          for f in assets/svga/*.mp4; do [ -f "$f" ] && ffmpeg -y -i "$f" -vf "scale='trunc(min(480,iw)/2)*2':-2" -c:v libx264 -crf 28 -preset veryfast -c:a aac -b:a 64k -movflags +faststart "${f}.tmp.mp4" && mv "${f}.tmp.mp4" "$f" || rm -f "${f}.tmp.mp4"; done
 
       - name: Backup Firebase Config
         run: find . -name "*google-services*.json" -exec cp {} /tmp/google-services.json \; || true
@@ -71,12 +63,13 @@ jobs:
           sed -i 's/android:label="voiceapp"/android:label="NILE Live"/' android/app/src/main/AndroidManifest.xml
           sed -i 's|<application|<uses-permission android:name="android.permission.INTERNET"/><uses-permission android:name="android.permission.RECORD_AUDIO"/><uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/><uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/><application|' android/app/src/main/AndroidManifest.xml
 
-           - name: Configure Gradle Settings
-          run: |
+      - name: Configure Gradle Settings
+        run: |
           mkdir -p ~/.gradle
           echo 'allprojects {' > ~/.gradle/init.gradle
           echo '    buildscript { repositories { google(); mavenCentral() } }' >> ~/.gradle/init.gradle
           echo '    repositories { google(); mavenCentral() }' >> ~/.gradle/init.gradle
+
           echo '    afterEvaluate { project ->' >> ~/.gradle/init.gradle
           echo '        if (project.hasProperty("android")) {' >> ~/.gradle/init.gradle
           echo '            android {' >> ~/.gradle/init.gradle
