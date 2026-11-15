@@ -33,7 +33,7 @@ class CenterFlyingGift {
   final int targetSeatIndex;
   final bool isAll;
   final AnimationController controller;
-  final Animation<double> flightAnimation;
+  final Animation flightAnimation;
 
   CenterFlyingGift({
     required this.id,
@@ -83,15 +83,15 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
   IO.Socket? _socket;
   final AudioPlayer _audioPlayer = AudioPlayer();
 
-  final StreamController<FullscreenGiftEvent> _fullscreenAnimStreamController =
-      StreamController<FullscreenGiftEvent>.broadcast();
+  final StreamController _fullscreenAnimStreamController =
+      StreamController.broadcast();
 
   bool _isMuted = false;
   int? _mySeatIndex;
   int _totalSeats = 30;
-  late List<String?> _seats;
-  late List<int> _seatGifts;
-  late List<bool> _seatMutes;
+  late List _seats;
+  late List _seatGifts;
+  late List _seatMutes;
   bool _isConnecting = true;
 
   int _myCoins = 0;
@@ -100,22 +100,22 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
   StreamSubscription? _pointsSubscription;
   StreamSubscription? _roomLiveSubscription;
 
-  final List<CenterFlyingGift> _activeFlyingGifts = [];
+  final List _activeFlyingGifts = [];
 
   bool _showComboButton = false;
   int _comboCount = 0;
   Timer? _comboTimer;
   late AnimationController _comboRingController;
-  Map<String, dynamic>? _lastSentGiftConfig;
+  Map? _lastSentGiftConfig;
 
   String? _entryBannerText;
   late AnimationController _entryMarqueeController;
-  late Animation<Offset> _entryMarqueeAnimation;
+  late dynamic _entryMarqueeAnimation;
 
-  final Set<int> _speakingSeatIndices = {};
-  final List<int> _allowedSeatOptions = [6, 12, 20, 25, 30];
+  final Set _speakingSeatIndices = {};
+  final List _allowedSeatOptions = [6, 12, 20, 25, 30];
 
-  final List<RoomChatMessage> _messages = [];
+  final List _messages = [];
   final TextEditingController _chatController = TextEditingController();
   final ScrollController _chatScrollController = ScrollController();
 
@@ -130,7 +130,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
     return "user_guest_id";
   }
 
-int _getColsForSeats(int count) {
+  int _getColsForSeats(int count) {
     if (count <= 6) return 3;
     if (count <= 12) return 4;
     if (count <= 20) return 5;
@@ -138,7 +138,7 @@ int _getColsForSeats(int count) {
     return 6;
   }
 
-  @override
+@override
   void initState() {
     super.initState();
     _seats = List.filled(30, null);
@@ -154,7 +154,7 @@ int _getColsForSeats(int count) {
       vsync: this,
       duration: const Duration(milliseconds: 3200),
     );
-    _entryMarqueeAnimation = Tween<Offset>(
+    _entryMarqueeAnimation = Tween(
       begin: const Offset(1.3, 0.0),
       end: const Offset(-1.3, 0.0),
     ).animate(CurvedAnimation(
@@ -271,8 +271,7 @@ int _getColsForSeats(int count) {
       if (_messages.length > 80) {
         _messages.removeAt(0);
       }
-
-});
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_chatScrollController.hasClients) {
         _chatScrollController.animateTo(
@@ -284,7 +283,7 @@ int _getColsForSeats(int count) {
     });
   }
 
-  Future<void> _saveRoomGiftsToFirestore() async {
+Future<void> _saveRoomGiftsToFirestore() async {
     try {
       await FirebaseFirestore.instance
           .collection('rooms')
@@ -398,15 +397,15 @@ int _getColsForSeats(int count) {
         if (!mounted) return;
         if (data == null) return;
         final sender = data['senderName'] ?? "Someone";
-        final isAll = data['isAll'] ?? false;
+        final isAll = data['isAll'] == true;
         final giftName = data['giftName'] ?? "Gift";
         final giftCost = (data['giftCost'] as num?)?.toInt() ?? 0;
         final giftAsset = data['giftAsset'] ?? 'assets/images/wikimediaimages-candy-2201920.jpg';
 
-final List targets = (data['targetSeats'] as List?) ?? [];
+        final List targets = (data['targetSeats'] as List?) ?? [];
         final targetIndex = (data['targetSeatIndex'] as num?)?.toInt() ?? 0;
 
-        if (giftCost >= 500) {
+if (giftCost >= 500) {
           _fullscreenAnimStreamController.add(
             FullscreenGiftEvent(
               giftId: "",
@@ -422,7 +421,7 @@ final List targets = (data['targetSeats'] as List?) ?? [];
             if (isAll) {
               for (int i = 0; i < _totalSeats; i++) {
                 if (_seats[i] != null) {
-                  _seatGifts[i] += giftCost;
+                  _seatGifts[i] = (_seatGifts[i] as num).toInt() + giftCost;
                   _triggerCenterGiftAnimation(giftAsset.toString(), i, isToAll: true);
                 }
               }
@@ -430,13 +429,13 @@ final List targets = (data['targetSeats'] as List?) ?? [];
               for (var t in targets) {
                 final idx = (t as num).toInt();
                 if (idx >= 0 && idx < 30 && _seats[idx] != null) {
-                  _seatGifts[idx] += giftCost;
+                  _seatGifts[idx] = (_seatGifts[idx] as num).toInt() + giftCost;
                   _triggerCenterGiftAnimation(giftAsset.toString(), idx);
                 }
               }
             } else {
               if (_seats[targetIndex] != null) {
-                _seatGifts[targetIndex] += giftCost;
+                _seatGifts[targetIndex] = (_seatGifts[targetIndex] as num).toInt() + giftCost;
                 _triggerCenterGiftAnimation(giftAsset.toString(), targetIndex);
               }
             }
@@ -464,7 +463,7 @@ final List targets = (data['targetSeats'] as List?) ?? [];
           id: "${DateTime.now().microsecondsSinceEpoch}",
           sender: sender,
           message: data['message'] ?? '',
-          isSystem: data['isSystem'] ?? false,
+          isSystem: data['isSystem'] == true,
         ));
       });
     } catch (_) {}
@@ -481,7 +480,7 @@ final List targets = (data['targetSeats'] as List?) ?? [];
           "$_serverUrl/rtcToken?channelName=$channelName&uid=$uid&role=$role");
       final response = await http.get(uri).timeout(const Duration(seconds: 12));
       if (response.statusCode == 200) {
-        final Map<String, dynamic> data = jsonDecode(response.body);
+        final Map data = jsonDecode(response.body);
         return data['token'] as String?;
       }
     } catch (_) {}
@@ -508,7 +507,7 @@ final List targets = (data['targetSeats'] as List?) ?? [];
             if (vol > 4) {
               bool isMe = speaker.uid == 0;
               if (speaker.uid == widget.userNumericId) isMe = true;
-              if (isMe && _mySeatIndex != null && !_isMuted && !_seatMutes[_mySeatIndex!]) {
+              if (isMe && _mySeatIndex != null && !_isMuted && _seatMutes[_mySeatIndex!] != true) {
                 _speakingSeatIndices.add(_mySeatIndex!);
               }
             }
@@ -530,10 +529,10 @@ final List targets = (data['targetSeats'] as List?) ?? [];
       isSpeaker: true,
     );
 
-if (mounted) setState(() => _isConnecting = false);
+    if (mounted) setState(() => _isConnecting = false);
   }
 
-  void _triggerCenterGiftAnimation(String asset, int targetSeatIndex, {bool isToAll = false}) {
+void _triggerCenterGiftAnimation(String asset, int targetSeatIndex, {bool isToAll = false}) {
     final controller = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 900),
@@ -560,7 +559,7 @@ if (mounted) setState(() => _isConnecting = false);
     controller.forward().then((_) {
       if (mounted) {
         setState(() {
-          _activeFlyingGifts.removeWhere((g) => g.id == giftItem.id);
+          _activeFlyingGifts.removeWhere((g) => (g as CenterFlyingGift).id == giftItem.id);
         });
         controller.dispose();
       }
@@ -681,16 +680,16 @@ if (mounted) setState(() => _isConnecting = false);
     });
 
     final config = _lastSentGiftConfig!;
-    final giftCost = config['cost'] as int;
+    final int giftCost = (config['cost'] as num).toInt();
 
 _executeMultiSeatSend(
-      targetSeats: List<int>.from(config['targetSeats']),
-      isAll: config['isAll'],
+      targetSeats: List.from(config['targetSeats'] ?? []),
+      isAll: config['isAll'] == true,
       cost: giftCost,
-      name: config['name'],
-      asset: config['asset'],
-      icon: config['icon'] ?? "🎁",
-      isLucky: config['isLucky'] ?? false,
+      name: config['name'] as String,
+      asset: config['asset'] as String,
+      icon: (config['icon'] ?? "🎁") as String,
+      isLucky: config['isLucky'] == true,
       fromCombo: true,
     );
 
@@ -710,7 +709,7 @@ _executeMultiSeatSend(
       }
     }
 
-    final result = await showModalBottomSheet<GiftSendResult>(
+    final rawResult = await showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
@@ -725,6 +724,8 @@ _executeMultiSeatSend(
         },
       ),
     );
+
+    final GiftSendResult? result = rawResult is GiftSendResult ? rawResult : null;
 
     if (result != null) {
       _playCoinSound();
@@ -769,7 +770,7 @@ _executeMultiSeatSend(
   }
 
   void _executeMultiSeatSend({
-    required List<int> targetSeats,
+    required List targetSeats,
     required bool isAll,
     required int cost,
     required String name,
@@ -791,14 +792,15 @@ _executeMultiSeatSend(
       if (isAll) {
         for (int i = 0; i < _totalSeats; i++) {
           if (_seats[i] != null) {
-            _seatGifts[i] += cost;
+            _seatGifts[i] = (_seatGifts[i] as num).toInt() + cost;
             _triggerCenterGiftAnimation(asset, i, isToAll: true);
           }
         }
       } else {
-        for (final seatIdx in targetSeats) {
+        for (final rawIdx in targetSeats) {
+          final int seatIdx = (rawIdx as num).toInt();
           if (seatIdx >= 0 && seatIdx < 30 && _seats[seatIdx] != null) {
-            _seatGifts[seatIdx] += cost;
+            _seatGifts[seatIdx] = (_seatGifts[seatIdx] as num).toInt() + cost;
             _triggerCenterGiftAnimation(asset, seatIdx);
           }
         }
@@ -848,8 +850,8 @@ if (_socket != null && _socket!.connected) {
     _comboTimer?.cancel();
     _audioPlayer.dispose();
     _fullscreenAnimStreamController.close();
-    for (var g in _activeFlyingGifts) {
-      g.controller.dispose();
+    for (var item in _activeFlyingGifts) {
+      (item as CenterFlyingGift).controller.dispose();
     }
     _socket?.disconnect();
     _socket?.dispose();
@@ -865,11 +867,11 @@ if (_socket != null && _socket!.connected) {
     required double nameFontSize,
     required double badgeFontSize,
   }) {
-    final occupier = _seats[index];
-    final isOccupied = occupier != null;
-    final isSpeaking = _speakingSeatIndices.contains(index);
-    final isMuted = _seatMutes[index];
-    final giftsCount = _seatGifts[index];
+    final String? occupier = _seats[index] as String?;
+    final bool isOccupied = occupier != null;
+    final bool isSpeaking = _speakingSeatIndices.contains(index);
+    final bool isMuted = _seatMutes[index] == true;
+    final int giftsCount = (_seatGifts[index] as num).toInt();
     final bool isHostSeat = index == 0;
     final bool isCrownSeat = index >= 1 && index <= 6;
 
@@ -931,10 +933,10 @@ if (_socket != null && _socket!.connected) {
                   ],
                 ),
                 child: Center(
-                  child: Icon(
-                    isOccupied ? Icons.person : Icons.chair_rounded,
 
-color: isOccupied ? kGoldBright : kGoldBorder,
+child: Icon(
+                    isOccupied ? Icons.person : Icons.chair_rounded,
+                    color: isOccupied ? kGoldBright : kGoldBorder,
                     size: circleSize * 0.48,
                   ),
                 ),
@@ -1041,10 +1043,10 @@ color: isOccupied ? kGoldBright : kGoldBorder,
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             margin: const EdgeInsets.symmetric(vertical: 12),
-            decoration: BoxDecoration(
-              color: kGoldBlackBottom,
 
-borderRadius: BorderRadius.circular(12),
+decoration: BoxDecoration(
+              color: kGoldBlackBottom,
+              borderRadius: BorderRadius.circular(12),
               border: Border.all(color: kGoldBorder, width: 1.2),
             ),
             child: Row(
@@ -1064,7 +1066,7 @@ borderRadius: BorderRadius.circular(12),
             ),
           ),
           const SizedBox(width: 4),
-          PopupMenuButton<int>(
+          PopupMenuButton(
             icon: Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
@@ -1088,9 +1090,9 @@ borderRadius: BorderRadius.circular(12),
               ),
             ),
             color: kGoldBlackTop,
-            onSelected: _changeSeatCount,
+            onSelected: (val) => _changeSeatCount((val as num).toInt()),
             itemBuilder: (context) => _allowedSeatOptions
-                .map((count) => PopupMenuItem<int>(
+                .map((count) => PopupMenuItem(
                       value: count,
                       child: Text(
                         "$count Seats (Full Screen)",
@@ -1127,7 +1129,6 @@ borderRadius: BorderRadius.circular(12),
           children: [
             Column(
               children: [
-                // ሙሉ 30 ወንበር እና 6/12/20/25/30 ሲቀያየር ሙሉ እስክሪን የሚሞላ ክፍል
                 Expanded(
                   flex: 6,
                   child: LayoutBuilder(
@@ -1182,7 +1183,6 @@ return Padding(
                   ),
                 ),
 
-                // Super Rocket Banner
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 3),
                   child: Container(
@@ -1229,20 +1229,19 @@ return Padding(
                   ),
                 ),
 
-                // Chat Messages List (ጥቁር ጽሑፍ በሽሮ ካርድ ላይ)
                 Expanded(
                   flex: 3,
                   child: Container(
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                    child: ListView.builder(
 
-child: ListView.builder(
-                      controller: _chatScrollController,
+controller: _chatScrollController,
                       physics: const BouncingScrollPhysics(),
                       padding: const EdgeInsets.only(bottom: 6),
                       itemCount: _messages.length,
                       itemBuilder: (context, index) {
-                        final item = _messages[index];
+                        final item = _messages[index] as RoomChatMessage;
                         return Align(
                           alignment: Alignment.centerLeft,
                           child: Container(
@@ -1298,7 +1297,6 @@ child: ListView.builder(
                   ),
                 ),
 
-                // Bottom Chat & Mic Bar
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: const BoxDecoration(
@@ -1315,10 +1313,10 @@ child: ListView.builder(
                           shape: BoxShape.circle,
                           color: _mySeatIndex != null ? kGoldBlackBottom : Colors.black12,
                         ),
-
-child: IconButton(
+                        child: IconButton(
                           icon: Icon(
-                            _isMuted ? Icons.mic_off : Icons.mic,
+
+_isMuted ? Icons.mic_off : Icons.mic,
                             color: _mySeatIndex != null
                                 ? (_isMuted ? Colors.redAccent : kGoldBright)
                                 : kSubBlack,
@@ -1401,8 +1399,7 @@ child: IconButton(
                       ),
                       child: Text(
                         _entryBannerText!,
-
-style: const TextStyle(
+                        style: const TextStyle(
                           color: kGoldBright,
                           fontSize: 11.5,
                           fontWeight: FontWeight.bold,
@@ -1413,7 +1410,8 @@ style: const TextStyle(
                 ),
               ),
 
-            ..._activeFlyingGifts.map((gift) {
+..._activeFlyingGifts.map((item) {
+              final gift = item as CenterFlyingGift;
               return AnimatedBuilder(
                 animation: gift.controller,
                 builder: (context, child) {
@@ -1459,7 +1457,7 @@ style: const TextStyle(
             }),
 
             FullscreenGiftAnimator(
-              giftStream: _fullscreenAnimStreamController.stream,
+              giftStream: _fullscreenAnimStreamController.stream.cast(),
             ),
 
             if (_showComboButton)
@@ -1497,15 +1495,15 @@ style: const TextStyle(
                             end: Alignment.bottomRight,
                           ),
                           border: Border.all(color: kGoldBright, width: 1.5),
-
-),
+                        ),
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             const Text(
                               "Combo",
                               style: TextStyle(
-                                color: kGoldBright,
+
+color: kGoldBright,
                                 fontWeight: FontWeight.bold,
                                 fontSize: 12,
                               ),
