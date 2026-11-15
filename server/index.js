@@ -39,15 +39,15 @@ const PAY_ID = pick(process.env.BINANCE_PAY_ID, '1059643208');
 const mem = new Map();
 
 const HTML = `<!DOCTYPE html><html><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>NILE Admin</title>
-<style>*{box-sizing:border-box;margin:0;padding:0;font-family:sans-serif}body{background:#F5EFEB;color:#1A1A1A;padding:10px}.top{background:#3E2723;color:#fff;padding:12px;border-radius:10px;display:flex;justify-content:space-between;margin-bottom:10px}.b{padding:6px 10px;border:none;border-radius:7px;font-weight:bold;cursor:pointer;font-size:12px}.g{background:#107C41;color:#fff}.r{background:#D32F2F;color:#fff}.d{background:#4A3528;color:#fff}.y{background:#D49B42}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-bottom:10px}.card{background:#fff;padding:12px;border-radius:10px;border:1px solid #E2D6C5;margin-bottom:10px;overflow-x:auto}.tabs{display:flex;gap:6px;margin-bottom:10px}.tab{padding:7px 12px;border-radius:14px;background:#E8DFD8;font-weight:bold;font-size:12px;cursor:pointer}.tab.on{background:#3E2723;color:#fff}table{width:100%;border-collapse:collapse;font-size:12px;margin-top:6px}th,td{text-align:left;padding:6px;border-bottom:1px solid #EFE6DE}input{padding:7px;border-radius:7px;border:1px solid #DDD4C2;margin:3px}</style></head>
-<body><div class="top"><b style="color:#D49B42">NILE Live Admin</b><button class="b y" onclick="load()">Refresh</button></div>
+<style>*{box-sizing:border-box;margin:0;padding:0;font-family:sans-serif}body{background:#F5EFEB;color:#1A1A1A;padding:10px}.top{background:#3E2723;color:#fff;padding:12px;border-radius:10px;display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}.b{padding:6px 10px;border:none;border-radius:7px;font-weight:bold;cursor:pointer;font-size:12px}.g{background:#107C41;color:#fff}.r{background:#D32F2F;color:#fff}.d{background:#4A3528;color:#fff}.y{background:#D49B42}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-bottom:10px}.card{background:#fff;padding:12px;border-radius:10px;border:1px solid #E2D6C5;margin-bottom:10px;overflow-x:auto}.tabs{display:flex;gap:6px;margin-bottom:10px}.tab{padding:7px 12px;border-radius:14px;background:#E8DFD8;font-weight:bold;font-size:12px;cursor:pointer}.tab.on{background:#3E2723;color:#fff}table{width:100%;border-collapse:collapse;font-size:12px;margin-top:6px}th,td{text-align:left;padding:6px;border-bottom:1px solid #EFE6DE}input{padding:7px;border-radius:7px;border:1px solid #DDD4C2;margin:3px}</style></head>
+<body><div class="top"><b style="color:#D49B42">NILE Live Admin</b><div><button class="b r" onclick="rst()">Reset All 0</button> <button class="b y" onclick="load()">Refresh</button></div></div>
 <p id="m" style="color:red;font-weight:bold;margin-bottom:8px"></p>
 <div class="grid"><div class="card"><small>Revenue</small><h3 id="s1">$0</h3></div><div class="card"><small>Coins</small><h3 id="s2">0</h3></div><div class="card"><small>Points</small><h3 id="s3">0</h3></div><div class="card"><small>Users/Agencies</small><h3 id="s4">0/0</h3></div></div>
 <div class="tabs"><div class="tab on" onclick="tb('ord',this)">Orders</div><div class="tab" onclick="tb('wdr',this)">Withdrawals</div><div class="tab" onclick="tb('usr',this)">Users</div><div class="tab" onclick="tb('agn',this)">Agencies</div></div>
 <div id="p-ord"><div class="card"><b>User Orders</b><table><thead><tr><th>Ref</th><th>ID</th><th>Coins</th><th>USD</th><th>Status</th><th>Act</th></tr></thead><tbody id="t1"></tbody></table></div>
 <div class="card"><b>Seller Orders</b><table><thead><tr><th>Ref</th><th>Seller</th><th>Coins</th><th>USD</th><th>Status</th><th>Act</th></tr></thead><tbody id="t2"></tbody></table></div></div>
-<div id="p-wdr" style="display:none"><div class="card"><b>Withdrawals</b><table><thead><tr><th>User</th><th>Method</th><th>Account</th><th>Pts</th><th>USD</th><th>Status</th><th>Act</th></tr></thead><tbody id="t3"></tbody></table></div></div>
 
+<div id="p-wdr" style="display:none"><div class="card"><b>Withdrawals</b><table><thead><tr><th>User</th><th>Method</th><th>Account</th><th>Pts</th><th>USD</th><th>Status</th><th>Act</th></tr></thead><tbody id="t3"></tbody></table></div></div>
 <div id="p-usr" style="display:none"><div class="card"><b>Users</b><br><input id="q" placeholder="Search..." oninput="du()"><table><thead><tr><th>Name</th><th>ID</th><th>Coins</th><th>Pts</th><th>Face</th><th>Act</th></tr></thead><tbody id="t4"></tbody></table></div></div>
 <div id="p-agn" style="display:none"><div class="card"><b>New Agency</b><br><input id="ai" placeholder="ID"><input id="an" placeholder="Name"><input id="ao" placeholder="Owner ID"><button class="b g" onclick="ma()">Create</button></div>
 <div class="card"><b>Agencies</b><table><thead><tr><th>ID</th><th>Name</th><th>Owner</th><th>Hosts</th></tr></thead><tbody id="t5"></tbody></table></div></div>
@@ -64,8 +64,9 @@ g('t2').innerHTML=D.sellerOrders.map(o=>'<tr><td>'+o.orderRef+'</td><td>'+sv(o.s
 g('t3').innerHTML=D.withdrawals.map(x=>'<tr><td>'+sv(x.userName,'Host')+'</td><td>'+sv(x.method,'')+'</td><td>'+sv(x.account,'')+'</td><td>'+nv(x.points)+'</td><td>$'+nv(x.usdAmount)+'</td><td>'+x.status+'</td><td>'+(x.status==='PENDING'?'<button class="b g" onclick="wd(\\''+x.id+'\\',\\'PAID\\')">Paid</button> <button class="b r" onclick="wd(\\''+x.id+'\\',\\'REJECT\\')">No</button>':'-')+'</td></tr>').join('');
 du();
 g('t5').innerHTML=D.agencies.map(a=>'<tr><td>'+sv(a.agencyId,a.id)+'</td><td>'+sv(a.name,'')+'</td><td>'+sv(a.ownerNumericId,'-')+'</td><td>'+nv(a.totalHosts)+'</td></tr>').join('');}
-function du(){var q=sv(g('q').value,'').toLowerCase();g('t4').innerHTML=D.users.filter(u=>{var a=sv(u.numericId,'').indexOf(q)!==-1;var b=sv(u.name,'').toLowerCase().indexOf(q)!==-1;return a?true:b;}).slice(0,50).map(u=>'<tr><td>'+sv(u.name,'User')+'</td><td>'+sv(u.numericId,'-')+'</td><td>'+nv(u.coins)+'</td><td>'+nv(u.points)+'</td><td>'+(u.isFaceVerified?'Yes':'No')+'</td><td><button class="b y" onclick="ad(\\''+u.uid+'\\')">+Coins</button> <button class="b d" onclick="ct(\\''+u.uid+'\\',{toggleFace:true})">Face</button> <button class="b r" onclick="ct(\\''+u.uid+'\\',{toggleBan:true})">'+(u.isBanned?'Unban':'Ban')+'</button></td></tr>').join('');}
+function du(){var q=sv(g('q').value,'').toLowerCase();g('t4').innerHTML=D.users.filter(u=>{var a=sv(u.numericId,'').indexOf(q)!==-1;var b=sv(u.name,'').toLowerCase().indexOf(q)!==-1;return a?true:b;}).slice(0,100).map(u=>'<tr><td>'+sv(u.name,'User')+'</td><td>'+sv(u.numericId,'-')+'</td><td>'+nv(u.coins)+'</td><td>'+nv(u.points)+'</td><td>'+(u.isFaceVerified?'Yes':'No')+'</td><td><button class="b y" onclick="ad(\\''+u.uid+'\\')">+Coins</button> <button class="b d" onclick="ct(\\''+u.uid+'\\',{toggleFace:true})">Face</button> <button class="b r" onclick="ct(\\''+u.uid+'\\',{toggleBan:true})">'+(u.isBanned?'Unban':'Ban')+'</button></td></tr>').join('');}
 
+async function rst(){if(!confirm('Reset ALL Coins, Points & Orders to 0?'))return;g('m').innerText='Resetting all to 0...';await fetch('/api/admin/reset-all',{method:'POST'});load();}
 async function ac(u,ref,a){if(!confirm(a+'?'))return;await fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({orderRef:ref,action:a})});load();}
 async function wd(id,a){if(!confirm(a+'?'))return;await fetch('/api/admin/withdrawal',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({requestId:id,action:a})});load();}
 async function ad(uid){var n=parseInt(sv(prompt('Coins:'),'0'),10);if(n)await ct(uid,{addCoins:n});}
@@ -116,8 +117,7 @@ app.post(['/verify-payment', '/api/verify-payment', '/binance/verify', '/api/bin
 });
 
 app.get('/api/admin/overview', async (req, res) => {
-
-if (!db) return res.status(500).json({ error: 'Firebase not connected' });
+  if (!db) return res.status(500).json({ error: 'Firebase not connected' });
   try {
     const [uS, bS, sS, wS, aS] = await Promise.all([db.collection('users').limit(200).get(), db.collection('binance_orders').limit(100).get(), db.collection('coin_recharges').limit(100).get(), db.collection('withdraw_requests').limit(100).get(), db.collection('agencies').limit(100).get()]);
     let rev = 0, coins = 0, pts = 0;
@@ -128,6 +128,26 @@ if (!db) return res.status(500).json({ error: 'Firebase not connected' });
     wS.forEach(doc => withdrawals.push(Object.assign({ id: doc.id }, doc.data())));
     aS.forEach(doc => agencies.push(Object.assign({ id: doc.id }, doc.data())));
     res.json({ stats: { totalRevenueUsd: rev, totalUserCoins: coins, totalUnpaidPoints: pts, totalUsers: users.length, totalAgencies: agencies.length }, userOrders, sellerOrders, withdrawals, users, agencies });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/admin/reset-all', async (req, res) => {
+  if (!db) return res.status(500).json({ error: 'Firebase not connected' });
+  try {
+    const [uS, bS, sS, wS, aS] = await Promise.all([db.collection('users').get(), db.collection('binance_orders').get(), db.collection('coin_recharges').get(), db.collection('withdraw_requests').get(), db.collection('agencies').get()]);
+    const ops = [];
+    uS.forEach(doc => ops.push({ t: 'u', r: doc.ref, d: { coins: 0, points: 0 } }));
+    bS.forEach(doc => ops.push({ t: 'd', r: doc.ref }));
+    sS.forEach(doc => ops.push({ t: 'd', r: doc.ref }));
+    wS.forEach(doc => ops.push({ t: 'd', r: doc.ref }));
+    aS.forEach(doc => ops.push({ t: 'u', r: doc.ref, d: { withdrawnCommissionPoints: 0, bonusCommissionPoints: 0 } }));
+    for (let i = 0; i < ops.length; i += 400) {
+      const b = db.batch();
+      ops.slice(i, i + 400).forEach(o => { if (o.t === 'u') b.update(o.r, o.d); else b.delete(o.r); });
+      await b.commit();
+    }
+    mem.clear();
+    res.json({ success: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -183,8 +203,7 @@ app.post('/api/admin/user-control', async (req, res) => {
 });
 
 app.post('/api/admin/create-agency', async (req, res) => {
-
-const { agencyId, agencyName, ownerNumericId } = pick(req.body, {});
+  const { agencyId, agencyName, ownerNumericId } = pick(req.body, {});
   await db.collection('agencies').doc(agencyId).set({ agencyId, name: agencyName, ownerNumericId: Number(pick(ownerNumericId, 0)), commissionRate: 0.15, totalHosts: 0, withdrawnCommissionPoints: 0, createdAt: FV.serverTimestamp() });
   res.json({ success: true });
 });
