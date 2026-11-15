@@ -70,7 +70,7 @@ jobs:
           echo '    buildscript { repositories { google(); mavenCentral() } }' >> ~/.gradle/init.gradle
           echo '    repositories { google(); mavenCentral() }' >> ~/.gradle/init.gradle
 
-echo '    afterEvaluate { project ->' >> ~/.gradle/init.gradle
+          echo '    afterEvaluate { project ->' >> ~/.gradle/init.gradle
           echo '        if (project.hasProperty("android")) {' >> ~/.gradle/init.gradle
           echo '            android {' >> ~/.gradle/init.gradle
           echo '                compileSdkVersion 34' >> ~/.gradle/init.gradle
