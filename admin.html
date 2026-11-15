@@ -67,7 +67,7 @@
     <div class="tabs">
       <div class="tab active" onclick="switchTab('orders', this)">1. Coin Orders</div>
       <div class="tab" onclick="switchTab('withdrawals', this)">2. Withdrawals</div>
-      <div class="tab" onclick="switchTab('users', this)">3. Users & Hosts</div>
+      <div class="tab" onclick="switchTab('users', this)">3. Users and Hosts</div>
       <div class="tab" onclick="switchTab('agencies', this)">4. Agencies</div>
     </div>
 
@@ -80,7 +80,7 @@
         </table>
       </div>
       <div class="card">
-        <h2>Coin Seller Wholesale Orders (Binance & Telebirr USD)</h2>
+        <h2>Coin Seller Wholesale Orders (Binance and Telebirr USD)</h2>
         <table>
           <thead><tr><th>Order Ref</th><th>Seller</th><th>Method</th><th>Coins</th><th>Amount</th><th>Status</th><th>Action</th></tr></thead>
           <tbody id="sellerOrdersBody"></tbody>
@@ -90,9 +90,9 @@
 
     <div id="tab-withdrawals" class="hidden">
       <div class="card">
-        <h2>Host & Agency Payout Requests</h2>
+        <h2>Host and Agency Payout Requests</h2>
         <table>
-          <thead><tr><th>User / Agency</th><th>Type</th><th>Method & Account</th><th>Points</th><th>Payout</th><th>Status</th><th>Action</th></tr></thead>
+          <thead><tr><th>User / Agency</th><th>Type</th><th>Method and Account</th><th>Points</th><th>Payout</th><th>Status</th><th>Action</th></tr></thead>
           <tbody id="withdrawalsBody"></tbody>
         </table>
       </div>
@@ -100,7 +100,7 @@
 
     <div id="tab-users" class="hidden">
       <div class="card">
-        <h2>Users & Host Verification Control</h2>
+        <h2>Users and Host Verification Control</h2>
         <div class="search-bar">
           <input type="text" id="userSearchInput" placeholder="Search by Numeric ID or Name..." oninput="renderUsers()" />
         </div>
@@ -132,31 +132,54 @@
   </div>
 
   <script>
-    var adminPass = localStorage.getItem('nile_admin_pass') || '';
+    function valOr(v, fallback) {
+      if (v === undefined) return fallback;
+      if (v === null) return fallback;
+      if (v === '') return fallback;
+      return v;
+    }
+
+    var savedPass = localStorage.getItem('nile_admin_pass');
+    var adminPass = valOr(savedPass, '');
     var globalData = { userOrders: [], sellerOrders: [], withdrawals: [], users: [], agencies: [] };
 
-    if (adminPass) {
+    if (adminPass !== '') {
       loadData();
     }
 
     async function login() {
-      var input = document.getElementById('adminPassInput').value.trim();
-      if (!input) return;
-      var res = await fetch('/api/admin/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: input })
-      });
-      if (res.ok) {
-        adminPass = input;
-        localStorage.setItem('nile_admin_pass', adminPass);
-        loadData();
-      } else {
-        document.getElementById('loginErr').innerText = 'Wrong password!';
+      var errEl = document.getElementById('loginErr');
+
+var input = document.getElementById('adminPassInput').value.trim();
+      if (input === '') {
+        errEl.innerText = 'Please enter password first.';
+        return;
+      }
+      errEl.style.color = '#5C564D';
+      errEl.innerText = 'Checking password...';
+
+      try {
+        var res = await fetch('/api/admin/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: input })
+        });
+        if (res.ok) {
+          adminPass = input;
+          localStorage.setItem('nile_admin_pass', adminPass);
+          errEl.innerText = '';
+          loadData();
+        } else {
+          errEl.style.color = '#D32F2F';
+          errEl.innerText = 'Wrong password! Check ADMIN_PASSWORD in Render.';
+        }
+      } catch (e) {
+        errEl.style.color = '#D32F2F';
+        errEl.innerText = 'Connection error: ' + e.message;
       }
     }
 
-function logout() {
+    function logout() {
       localStorage.removeItem('nile_admin_pass');
       location.reload();
     }
@@ -171,235 +194,4 @@ function logout() {
       for (var j = 0; j < ids.length; j++) {
         document.getElementById('tab-' + ids[j]).classList.add('hidden');
       }
-      document.getElementById('tab-' + name).classList.remove('hidden');
-    }
-
-    async function loadData() {
-      var res = await fetch('/api/admin/overview', {
-        headers: { 'x-admin-password': adminPass }
-      });
-      if (!res.ok) {
-        localStorage.removeItem('nile_admin_pass');
-        return;
-      }
-      var data = await res.json();
-      globalData = data;
-
-      document.getElementById('loginView').classList.add('hidden');
-      document.getElementById('dashboardView').classList.remove('hidden');
-      document.getElementById('topActions').classList.remove('hidden');
-
-      document.getElementById('statRev').innerText = '$' + Number(data.stats.totalRevenueUsd || 0).toLocaleString();
-      document.getElementById('statCoins').innerText = Number(data.stats.totalUserCoins || 0).toLocaleString();
-      document.getElementById('statPoints').innerText = Number(data.stats.totalUnpaidPoints || 0).toLocaleString();
-      document.getElementById('statCounts').innerText = data.stats.totalUsers + ' / ' + data.stats.totalAgencies;
-
-      renderOrders();
-      renderWithdrawals();
-      renderUsers();
-      renderAgencies();
-    }
-
-    function badgeHtml(status) {
-      if (status === 'PAID' || status === 'APPROVED') return '<span class="badge badge-paid">' + status + '</span>';
-      if (status === 'REJECTED') return '<span class="badge badge-rejected">REJECTED</span>';
-      return '<span class="badge badge-pending">PENDING</span>';
-    }
-
-    function renderOrders() {
-      var uBody = document.getElementById('userOrdersBody');
-      if (!globalData.userOrders.length) {
-        uBody.innerHTML = '<tr><td colspan="6">No user orders yet.</td></tr>';
-      } else {
-        uBody.innerHTML = globalData.userOrders.map(function(o) {
-          var actions = '-';
-          if (o.status === 'PENDING') {
-            actions = '<button class="btn btn-green" data-ref="' + o.orderRef + '" data-act="APPROVE" onclick="handleUserOrder(this)">Approve</button> ' +
-                      '<button class="btn btn-red" data-ref="' + o.orderRef + '" data-act="REJECT" onclick="handleUserOrder(this)">Reject</button>';
-          }
-          return '<tr>' +
-            '<td><b>' + o.orderRef + '</b></td>' +
-            '<td>' + (o.numericId || '-') + '</td>' +
-            '<td style="color:#107C41; font-weight:bold;">+' + Number(o.coins || 0).toLocaleString() + '</td>' +
-            '<td>$' + (o.usdAmount || 0) + '</td>' +
-            '<td>' + badgeHtml(o.status) + '</td>' +
-            '<td>' + actions + '</td>' +
-          '</tr>';
-        }).join('');
-      }
-
-      var sBody = document.getElementById('sellerOrdersBody');
-      if (!globalData.sellerOrders.length) {
-        sBody.innerHTML = '<tr><td colspan="7">No seller wholesale orders yet.</td></tr>';
-      } else {
-        sBody.innerHTML = globalData.sellerOrders.map(function(o) {
-          var actions = '-';
-          if (o.status === 'PENDING') {
-            actions = '<button class="btn btn-green" data-ref="' + o.orderRef + '" data-act="APPROVE" onclick="handleSellerOrder(this)">Approve</button> ' +
-                      '<button class="btn btn-red" data-ref="' + o.orderRef + '" data-act="REJECT" onclick="handleSellerOrder(this)">Reject</button>';
-          }
-          return '<tr>' +
-
-'<td><b>' + o.orderRef + '</b></td>' +
-            '<td>' + (o.sellerName  '') + ' (' + (o.sellerNumericId  '') + ')</td>' +
-            '<td>' + (o.paymentMethod || '') + '</td>' +
-            '<td style="color:#107C41; font-weight:bold;">+' + Number(o.coins || 0).toLocaleString() + '</td>' +
-            '<td>$' + (o.usdAmount || 0) + ' USD</td>' +
-            '<td>' + badgeHtml(o.status) + '</td>' +
-            '<td>' + actions + '</td>' +
-          '</tr>';
-        }).join('');
-      }
-    }
-
-    function renderWithdrawals() {
-      var wBody = document.getElementById('withdrawalsBody');
-      if (!globalData.withdrawals.length) {
-        wBody.innerHTML = '<tr><td colspan="7">No withdrawal requests yet.</td></tr>';
-      } else {
-        wBody.innerHTML = globalData.withdrawals.map(function(w) {
-          var actions = '-';
-          if (w.status === 'PENDING') {
-            actions = '<button class="btn btn-green" data-id="' + w.id + '" data-act="PAID" onclick="handleWithdrawal(this)">Mark Paid</button> ' +
-                      '<button class="btn btn-red" data-id="' + w.id + '" data-act="REJECT" onclick="handleWithdrawal(this)">Reject</button>';
-          }
-          return '<tr>' +
-            '<td><b>' + (w.userName  'Host') + '</b><br/><small>ID: ' + (w.userNumericId  '') + '</small></td>' +
-            '<td>' + (w.type || 'HOST_PAYOUT') + '</td>' +
-            '<td><b>' + (w.method  '') + '</b><br/>' + (w.account  w.accountDetails || '') + '</td>' +
-            '<td>' + Number(w.points || 0).toLocaleString() + '</td>' +
-            '<td style="color:#107C41; font-weight:bold;">$' + Number(w.usdAmount  0).toFixed(2) + ' (' + (w.currency  'USD') + ')</td>' +
-            '<td>' + badgeHtml(w.status) + '</td>' +
-            '<td>' + actions + '</td>' +
-          '</tr>';
-        }).join('');
-      }
-    }
-
-    function renderUsers() {
-      var q = (document.getElementById('userSearchInput').value || '').toLowerCase();
-      var filtered = globalData.users.filter(function(u) {
-        return String(u.numericId  '').indexOf(q) !== -1  String(u.name || '').toLowerCase().indexOf(q) !== -1;
-      });
-      var body = document.getElementById('usersBody');
-      body.innerHTML = filtered.slice(0, 50).map(function(u) {
-        var faceText = u.isFaceVerified ? 'Yes' : 'No';
-        var statusBadge = u.isBanned
-          ? '<span class="badge badge-rejected">BANNED</span>'
-          : '<span class="badge badge-paid">ACTIVE</span>';
-        var banLabel = u.isBanned ? 'Unban' : 'Ban';
-        return '<tr>' +
-          '<td><b>' + (u.name || 'User') + '</b></td>' +
-          '<td>' + (u.numericId || '-') + '</td>' +
-          '<td style="color:#107C41; font-weight:bold;">' + Number(u.coins || 0).toLocaleString() + '</td>' +
-          '<td>' + Number(u.points || 0).toLocaleString() + '</td>' +
-          '<td>' + faceText + '</td>' +
-          '<td>' + statusBadge + '</td>' +
-          '<td>' +
-            '<button class="btn btn-gold" data-uid="' + u.uid + '" data-num="' + (u.numericId || '') + '" onclick="handleAddCoins(this)">+Coins</button> ' +
-            '<button class="btn btn-dark" data-uid="' + u.uid + '" onclick="handleToggleFace(this)">Face</button> ' +
-            '<button class="btn btn-red" data-uid="' + u.uid + '" onclick="handleToggleBan(this)">' + banLabel + '</button>' +
-          '</td>' +
-        '</tr>';
-      }).join('');
-    }
-
-    function renderAgencies() {
-      var body = document.getElementById('agenciesBody');
-      if (!globalData.agencies.length) {
-        body.innerHTML = '<tr><td colspan="5">No agencies created yet.</td></tr>';
-      } else {
-        body.innerHTML = globalData.agencies.map(function(a) {
-          return '<tr>' +
-            '<td><b>' + (a.agencyId || a.id) + '</b></td>' +
-
-'<td>' + (a.name || '') + '</td>' +
-            '<td>' + (a.ownerNumericId || '-') + '</td>' +
-            '<td>' + (a.totalHosts || 0) + '</td>' +
-            '<td>' + Number(a.withdrawnCommissionPoints || 0).toLocaleString() + '</td>' +
-          '</tr>';
-        }).join('');
-      }
-    }
-
-    async function handleUserOrder(btn) {
-      var orderRef = btn.getAttribute('data-ref');
-      var action = btn.getAttribute('data-act');
-      if (!confirm(action + ' order ' + orderRef + '?')) return;
-      await fetch('/api/admin/user-order', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPass },
-        body: JSON.stringify({ orderRef: orderRef, action: action })
-      });
-      loadData();
-    }
-
-    async function handleSellerOrder(btn) {
-      var orderRef = btn.getAttribute('data-ref');
-      var action = btn.getAttribute('data-act');
-      if (!confirm(action + ' wholesale order ' + orderRef + '?')) return;
-      await fetch('/api/admin/seller-order', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPass },
-        body: JSON.stringify({ orderRef: orderRef, action: action })
-      });
-      loadData();
-    }
-
-    async function handleWithdrawal(btn) {
-      var requestId = btn.getAttribute('data-id');
-      var action = btn.getAttribute('data-act');
-      if (!confirm(action + ' this withdrawal request?')) return;
-      await fetch('/api/admin/withdrawal', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPass },
-        body: JSON.stringify({ requestId: requestId, action: action })
-      });
-      loadData();
-    }
-
-    async function handleAddCoins(btn) {
-      var uid = btn.getAttribute('data-uid');
-      var numId = btn.getAttribute('data-num');
-      var val = prompt('Enter coins to add (or negative to deduct) for ID ' + numId + ':');
-      var num = parseInt(val || '0', 10);
-      if (!num) return;
-      await controlUser(uid, { addCoins: num });
-    }
-
-    async function handleToggleFace(btn) {
-      await controlUser(btn.getAttribute('data-uid'), { toggleFace: true });
-    }
-
-    async function handleToggleBan(btn) {
-      await controlUser(btn.getAttribute('data-uid'), { toggleBan: true });
-    }
-
-    async function controlUser(uid, payload) {
-      var body = Object.assign({ uid: uid }, payload);
-      await fetch('/api/admin/user-control', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPass },
-        body: JSON.stringify(body)
-      });
-      loadData();
-    }
-
-    async function createAgency() {
-      var agencyId = document.getElementById('newAgId').value.trim();
-      var agencyName = document.getElementById('newAgName').value.trim();
-      var ownerNumericId = document.getElementById('newAgOwner').value.trim();
-      if (!agencyId || !agencyName) return alert('Enter Agency ID and Name');
-      await fetch('/api/admin/create-agency', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPass },
-        body: JSON.stringify({ agencyId: agencyId, agencyName: agencyName, ownerNumericId: ownerNumericId })
-      });
-      document.getElementById('newAgId').value = '';
-      document.getElementById('newAgName').value = '';
-      document.getElementById('newAgOwner').value = '';
-      loadData();
-    }
-  </script>
-</body>
-</html>
+      document.getElementById('tab-' + name).classList.
