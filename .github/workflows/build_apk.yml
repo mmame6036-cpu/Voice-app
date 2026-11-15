@@ -61,7 +61,7 @@ jobs:
           echo 'tasks.register("clean", Delete) { delete rootProject.buildDir }' >> android/build.gradle
           echo 'apply plugin: "com.google.gms.google-services"' >> android/app/build.gradle
           sed -i 's/android:label="voiceapp"/android:label="NILE Live"/' android/app/src/main/AndroidManifest.xml
-          sed -i 's|<application|<uses-permission android:name="android.permission.RECORD_AUDIO"/><uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/><uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/><application|' android/app/src/main/AndroidManifest.xml
+          sed -i 's|<application|<uses-permission android:name="android.permission.INTERNET"/><uses-permission android:name="android.permission.RECORD_AUDIO"/><uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/><uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/><application|' android/app/src/main/AndroidManifest.xml
 
       - name: Configure Gradle Settings
         run: |
@@ -69,8 +69,8 @@ jobs:
           echo 'allprojects {' > ~/.gradle/init.gradle
           echo '    buildscript { repositories { google(); mavenCentral() } }' >> ~/.gradle/init.gradle
           echo '    repositories { google(); mavenCentral() }' >> ~/.gradle/init.gradle
-          echo '    afterEvaluate { project ->' >> ~/.gradle/init.gradle
 
+echo '    afterEvaluate { project ->' >> ~/.gradle/init.gradle
           echo '        if (project.hasProperty("android")) {' >> ~/.gradle/init.gradle
           echo '            android {' >> ~/.gradle/init.gradle
           echo '                compileSdkVersion 34' >> ~/.gradle/init.gradle
@@ -80,19 +80,19 @@ jobs:
           echo '    }' >> ~/.gradle/init.gradle
           echo '}' >> ~/.gradle/init.gradle
 
-      - name: Restore Permanent Keystore
-        run: |
-          mkdir -p ~/.android
-          rm -f ~/.android/debug.keystore
-          keytool -genkeypair -alias androiddebugkey -keypass android -keystore ~/.android/debug.keystore -storepass android -dname "CN=Android Debug,O=Android,C=US" -validity 10000 -keyalg RSA -keysize 2048
-
       - name: Get Dependencies
         run: flutter pub get
 
       - name: Build Split Release APKs
         run: flutter build apk --release --split-per-abi --tree-shake-icons
 
-      - name: Upload 64-bit APK
+      - name: Upload 32-bit APK (Tablet & Older Phones)
+        uses: actions/upload-artifact@v4
+        with:
+          name: nile-live-armv7-apk
+          path: build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
+
+      - name: Upload 64-bit APK (Modern Phones)
         uses: actions/upload-artifact@v4
         with:
           name: nile-live-arm64-apk
