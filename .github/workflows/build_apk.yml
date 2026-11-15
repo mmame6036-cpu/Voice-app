@@ -118,16 +118,10 @@ jobs:
           -dontwarn io.agora.**
           EOF
 
-          python3 -c '
-          p = "android/app/build.gradle"
-          s = open(p).read()
-          t = "signingConfig signingConfigs.debug"
-          r = t + "\n            minifyEnabled true\n            shrinkResources true\n            proguardFiles getDefaultProguardFile(\"proguard-android-optimize.txt\"), \"proguard-rules.pro\""
-          open(p, "w").write(s.replace(t, r, 1))
-          '
+          sed -i 's/signingConfig signingConfigs.debug/signingConfig signingConfigs.debug\n            minifyEnabled true\n            shrinkResources true\n            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"/' android/app/build.gradle
 
-              - name: Configure Gradle Settings
-            run: |
+           - name: Configure Gradle Settings
+        run: |
           mkdir -p ~/.gradle
           cat << 'EOF' > ~/.gradle/init.gradle
           allprojects {
@@ -179,7 +173,6 @@ jobs:
                         />
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN"/>
-                          <category android:name="android.category.category.LAUNCHER"/>
                           <category android:name="android.intent.category.LAUNCHER"/>
                       </intent-filter>
                   </activity>
