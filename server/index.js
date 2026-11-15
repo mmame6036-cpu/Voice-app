@@ -3,22 +3,49 @@ const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
 const admin = require('firebase-admin');
-const { RtcTokenBuilder, RtcRole } = require('agora-token');
+const agoraToken = require('agora-token');
+const RtcTokenBuilder = agoraToken.RtcTokenBuilder;
+const RtcRole = agoraToken.RtcRole;
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
+function firstValid(items) {
+  for (let i = 0; i < items.length; i++) {
+    const val = items[i];
+    if (val !== undefined) {
+      if (val !== null) {
+        if (val !== '') {
+          return val;
+        }
+      }
+    }
+  }
+  return '';
+}
+
 // 1. Initialize Firebase Admin
 let db = null;
 try {
   let serviceAccount = null;
-  if (fs.existsSync('/etc/secrets/serviceAccountKey.json')) {
-    serviceAccount = JSON.parse(fs.readFileSync('/etc/secrets/serviceAccountKey.json', 'utf8'));
-  } else if (fs.existsSync('./serviceAccountKey.json')) {
-    serviceAccount = JSON.parse(fs.readFileSync('./serviceAccountKey.json', 'utf8'));
-  } else if (process.env.FIREBASE_SERVICE_ACCOUNT) {
-    serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+  const secretPaths = [
+    '/etc/secrets/serviceAccountKey.json',
+    path.join(__dirname, 'serviceAccountKey.json'),
+    path.join(__dirname, '..', 'serviceAccountKey.json'),
+  ];
+
+  for (let i = 0; i < secretPaths.length; i++) {
+    if (fs.existsSync(secretPaths[i])) {
+      serviceAccount = JSON.parse(fs.readFileSync(secretPaths[i], 'utf8'));
+      break;
+    }
+  }
+
+  if (!serviceAccount) {
+    if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+      serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+    }
   }
 
   if (serviceAccount) {
@@ -35,19 +62,37 @@ try {
 }
 
 // 2. Configuration
-const APP_ID = process.env.AGORAApp_ID  process.env.AGORA_APP_ID  '';
-const APP_CERTIFICATE =
-  process.env.AGORA_APP_CERTIFICATE ||
-  process.env.AGORAApp_Certificate ||
-  process.env.AGORA_CERTIFICATE ||
-  '';
-const BINANCE_PAY_ID = process.env.BINANCE_PAY_ID || '1059643208';
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'NileAdmin2026';
+const APP_ID = firstValid([
+  process.env.AGORAApp_ID,
+  process.env.AGORA_APP_ID,
+  '',
+]);
+
+const APP_CERTIFICATE = firstValid([
+  process.env.AGORA_APP_CERTIFICATE,
+  process.env.AGORAApp_Certificate,
+  process.env.AGORA_CERTIFICATE,
+  '',
+]);
+
+const BINANCE_PAY_ID = firstValid([
+  process.env.BINANCE_PAY_ID,
+  '1059643208',
+]);
+
+const ADMIN_PASSWORD = firstValid([
+  process.env.ADMIN_PASSWORD,
+  'NileAdmin2026',
+]);
 
 const memoryOrders = new Map();
 
 function requireAdmin(req, res, next) {
-  const pass = req.headers['x-admin-password']  req.query.password  '';
+  const pass = firstValid([
+    req.headers['x-admin-password'],
+    req.query.password,
+    '',
+  ]);
   if (pass !== ADMIN_PASSWORD) {
     return res.status(401).json({ error: 'Unauthorized: Invalid Admin Password' });
   }
@@ -55,42 +100,77 @@ function requireAdmin(req, res, next) {
 }
 
 app.get('/', (req, res) => {
+  let hasAgora = false;
+  if (APP_ID !== '') {
+    if (APP_CERTIFICATE !== '') {
+      hasAgora = true;
+    }
+  }
   res.json({
     status: 'NILE Live Server Running',
     firebaseConnected: Boolean(db),
-    agoraConfigured: Boolean(APP_ID && APP_CERTIFICATE),
+    agoraConfigured: hasAgora,
     adminDashboard: '/admin',
   });
 });
 
-// Serve standalone admin.html
+// Serve admin.html from server/ or root folder
 app.get('/admin', (req, res) => {
-  const htmlPath = path.join(__dirname, 'admin.html');
-  if (fs.existsSync(htmlPath)) {
-    return res.sendFile(htmlPath);
+  const candidatePaths = [
+    path.join(__dirname, 'admin.html'),
+    path.join(__dirname, '..', 'admin.html'),
+  ];
+  for (let i = 0; i < candidatePaths.length; i++) {
+    if (fs.existsSync(candidatePaths[i])) {
+      return res.sendFile(candidatePaths[i]);
+    }
   }
-  return res.status(404).send('admin.html not found. Please add admin.html to GitHub repository.');
+  return res.status(404).send('admin.html not found.');
 });
 
 // 3. Agora RTC Voice Token Endpoints
 function generateAgoraToken(req, res) {
   try {
-    const body = req.body || {};
-    const channelName =
-      req.query.channelName ||
-      req.query.channel ||
-      req.params.channel ||
-      body.channelName ||
-      'habesha_vip_room';
-    const uid = parseInt(req.query.uid  req.params.uid  body.uid || '0', 10);
-    const roleStr = String(req.query.role  req.params.role  body.role || 'publisher').toLowerCase();
+    let body = {};
+    if (req.body) {
+      body = req.body;
+    }
+    const channelName = firstValid([
+      req.query.channelName,
+      req.query.channel,
+      req.params.channel,
+      body.channelName,
+      'habesha_vip_room',
+    ]);
+    const uidRaw = firstValid([
+      req.query.uid,
+      req.params.uid,
+      body.uid,
+      '0',
+    ]);
+    const uid = parseInt(String(uidRaw), 10);
+    const roleRaw = firstValid([
+      req.query.role,
+      req.params.role,
+      body.role,
+      'publisher',
+    ]);
+    const roleStr = String(roleRaw).toLowerCase();
+
     let role = RtcRole.PUBLISHER;
-    if (roleStr === 'audience'  roleStr === 'subscriber'  roleStr === '2') {
+    if (roleStr === 'audience') {
+      role = RtcRole.SUBSCRIBER;
+    } else if (roleStr === 'subscriber') {
+      role = RtcRole.SUBSCRIBER;
+    } else if (roleStr === '2') {
       role = RtcRole.SUBSCRIBER;
     }
 
-    if (!APP_ID || !APP_CERTIFICATE) {
-      return res.status(500).json({ error: 'Agora credentials missing on server' });
+if (APP_ID === '') {
+      return res.status(500).json({ error: 'Agora APP_ID missing on server' });
+    }
+    if (APP_CERTIFICATE === '') {
+      return res.status(500).json({ error: 'Agora APP_CERTIFICATE missing on server' });
     }
 
     const expirationTimeInSeconds = 3600 * 24;
@@ -107,7 +187,12 @@ function generateAgoraToken(req, res) {
       privilegeExpiredTs
     );
 
-    return res.json({ token, rtcToken: token, channelName, uid });
+    return res.json({
+      token: token,
+      rtcToken: token,
+      channelName: channelName,
+      uid: uid,
+    });
   } catch (e) {
     return res.status(500).json({ error: e.message });
   }
@@ -117,16 +202,18 @@ app.get(['/token', '/rtcToken', '/getToken', '/rtc/:channel/:role/:tokentype/:ui
 app.post(['/token', '/rtcToken', '/getToken'], generateAgoraToken);
 
 // 4. User Binance Pay Endpoints
-
 app.post(
   ['/create-order', '/api/create-order', '/binance/create-order', '/api/binance/create-order'],
   async (req, res) => {
     try {
-      const body = req.body || {};
-      const resolvedUid = body.userUid  body.uid  '';
-      const resolvedNumId = body.numericId  body.userNumericId  '100000';
-      const resolvedCoins = parseInt(body.coins || '0', 10);
-      const resolvedUsd = parseFloat(body.usdAmount  body.amount  '0');
+      let body = {};
+      if (req.body) {
+        body = req.body;
+      }
+      const resolvedUid = firstValid([body.userUid, body.uid, '']);
+      const resolvedNumId = firstValid([body.numericId, body.userNumericId, '100000']);
+      const resolvedCoins = parseInt(String(firstValid([body.coins, '0'])), 10);
+      const resolvedUsd = parseFloat(String(firstValid([body.usdAmount, body.amount, '0'])));
 
       const orderRef = 'BNB_' + resolvedNumId + '_' + Date.now();
       const orderData = {
@@ -172,13 +259,19 @@ app.post(
   ['/verify-payment', '/api/verify-payment', '/binance/verify', '/api/binance/verify', '/verify-order', '/api/verify-order'],
   async (req, res) => {
     try {
-      const body = req.body || {};
-      const orderRef = body.orderRef;
-      if (!orderRef) {
+      let body = {};
+      if (req.body) {
+        body = req.body;
+      }
+      const orderRef = firstValid([body.orderRef, '']);
+      if (orderRef === '') {
         return res.status(400).json({ success: false, message: 'Order Ref is required.' });
       }
 
-      let order = memoryOrders.get(orderRef) || null;
+      let order = null;
+      if (memoryOrders.has(orderRef)) {
+        order = memoryOrders.get(orderRef);
+      }
 
       if (db) {
         const docSnap = await db.collection('binance_orders').doc(orderRef).get();
@@ -194,7 +287,14 @@ app.post(
         });
       }
 
-      if (order.status === 'PAID' || order.status === 'APPROVED') {
+      let isPaid = false;
+      if (order.status === 'PAID') {
+        isPaid = true;
+      } else if (order.status === 'APPROVED') {
+        isPaid = true;
+      }
+
+      if (isPaid) {
         return res.json({
           success: true,
           verified: true,
@@ -203,7 +303,7 @@ app.post(
         });
       }
 
-      return res.status(400).json({
+return res.status(400).json({
         success: false,
         verified: false,
         message: 'Payment not confirmed yet. Please wait 1 minute or contact support with Order Ref.',
@@ -216,7 +316,10 @@ app.post(
 
 // 5. Admin API Endpoints
 app.post('/api/admin/login', (req, res) => {
-  const body = req.body || {};
+  let body = {};
+  if (req.body) {
+    body = req.body;
+  }
   if (body.password === ADMIN_PASSWORD) {
     return res.json({ success: true });
   }
@@ -247,19 +350,21 @@ app.get('/api/admin/overview', requireAdmin, async (req, res) => {
     let totalUserCoins = 0;
     let totalUnpaidPoints = 0;
 
-const users = [];
+    const users = [];
     usersSnap.forEach((doc) => {
       const d = doc.data();
-      totalUserCoins += Number(d.coins || 0);
-      totalUnpaidPoints += Number(d.points || 0);
+      totalUserCoins += Number(firstValid([d.coins, 0]));
+      totalUnpaidPoints += Number(firstValid([d.points, 0]));
       users.push(Object.assign({ uid: doc.id }, d));
     });
 
     const userOrders = [];
     bnbSnap.forEach((doc) => {
       const d = doc.data();
-      if (d.status === 'PAID' || d.status === 'APPROVED') {
-        totalRevenueUsd += Number(d.usdAmount || 0);
+      if (d.status === 'PAID') {
+        totalRevenueUsd += Number(firstValid([d.usdAmount, 0]));
+      } else if (d.status === 'APPROVED') {
+        totalRevenueUsd += Number(firstValid([d.usdAmount, 0]));
       }
       userOrders.push(Object.assign({ id: doc.id }, d));
     });
@@ -267,8 +372,10 @@ const users = [];
     const sellerOrders = [];
     sellerSnap.forEach((doc) => {
       const d = doc.data();
-      if (d.status === 'PAID' || d.status === 'APPROVED') {
-        totalRevenueUsd += Number(d.usdAmount || 0);
+      if (d.status === 'PAID') {
+        totalRevenueUsd += Number(firstValid([d.usdAmount, 0]));
+      } else if (d.status === 'APPROVED') {
+        totalRevenueUsd += Number(firstValid([d.usdAmount, 0]));
       }
       sellerOrders.push(Object.assign({ id: doc.id }, d));
     });
@@ -304,7 +411,10 @@ const users = [];
 
 app.post('/api/admin/user-order', requireAdmin, async (req, res) => {
   if (!db) return res.status(500).json({ error: 'Firebase not connected' });
-  const body = req.body || {};
+  let body = {};
+  if (req.body) {
+    body = req.body;
+  }
   const orderRef = body.orderRef;
   const action = body.action;
 
@@ -319,10 +429,15 @@ app.post('/api/admin/user-order', requireAdmin, async (req, res) => {
     }
 
     if (action === 'APPROVE') {
-      let targetUid = order.uid;
-      if (!targetUid && order.numericId) {
-        const uq = await db.collection('users').where('numericId', '==', Number(order.numericId)).limit(1).get();
-        if (!uq.empty) targetUid = uq.docs[0].id;
+
+let targetUid = firstValid([order.uid, '']);
+      if (targetUid === '') {
+        if (order.numericId) {
+          const uq = await db.collection('users').where('numericId', '==', Number(order.numericId)).limit(1).get();
+          if (!uq.empty) {
+            targetUid = uq.docs[0].id;
+          }
+        }
       }
 
       const batch = db.batch();
@@ -331,11 +446,11 @@ app.post('/api/admin/user-order', requireAdmin, async (req, res) => {
         approvedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 
-      if (targetUid) {
+      if (targetUid !== '') {
         const userDoc = db.collection('users').doc(targetUid);
         batch.set(
           userDoc,
-          { coins: admin.firestore.FieldValue.increment(Number(order.coins || 0)) },
+          { coins: admin.firestore.FieldValue.increment(Number(firstValid([order.coins, 0]))) },
           { merge: true }
         );
       }
@@ -355,7 +470,10 @@ app.post('/api/admin/user-order', requireAdmin, async (req, res) => {
 
 app.post('/api/admin/seller-order', requireAdmin, async (req, res) => {
   if (!db) return res.status(500).json({ error: 'Firebase not connected' });
-  const body = req.body || {};
+  let body = {};
+  if (req.body) {
+    body = req.body;
+  }
   const orderRef = body.orderRef;
   const action = body.action;
 
@@ -376,11 +494,11 @@ app.post('/api/admin/seller-order', requireAdmin, async (req, res) => {
         approvedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 
-if (order.uid) {
+      if (order.uid) {
         const sellerDoc = db.collection('users').doc(order.uid);
         batch.set(
           sellerDoc,
-          { coins: admin.firestore.FieldValue.increment(Number(order.coins || 0)) },
+          { coins: admin.firestore.FieldValue.increment(Number(firstValid([order.coins, 0]))) },
           { merge: true }
         );
       }
@@ -398,7 +516,10 @@ if (order.uid) {
 
 app.post('/api/admin/withdrawal', requireAdmin, async (req, res) => {
   if (!db) return res.status(500).json({ error: 'Firebase not connected' });
-  const body = req.body || {};
+  let body = {};
+  if (req.body) {
+    body = req.body;
+  }
   const requestId = body.requestId;
   const action = body.action;
 
@@ -425,18 +546,27 @@ app.post('/api/admin/withdrawal', requireAdmin, async (req, res) => {
         rejectedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 
-      const refundPts = Number(reqData.points || 0);
-      if (reqData.type === 'AGENCY_COMMISSION' && reqData.agencyId) {
+      const refundPts = Number(firstValid([reqData.points, 0]));
+      let isAgencyComm = false;
+      if (reqData.type === 'AGENCY_COMMISSION') {
+        if (reqData.agencyId) {
+          isAgencyComm = true;
+        }
+      }
+
+if (isAgencyComm) {
         const agRef = db.collection('agencies').doc(reqData.agencyId);
         batch.update(agRef, {
           withdrawnCommissionPoints: admin.firestore.FieldValue.increment(-refundPts),
         });
-      } else if (reqData.userUid || reqData.uid) {
-        const targetUid = reqData.userUid || reqData.uid;
-        const uRef = db.collection('users').doc(targetUid);
-        batch.update(uRef, {
-          points: admin.firestore.FieldValue.increment(refundPts),
-        });
+      } else {
+        const targetUid = firstValid([reqData.userUid, reqData.uid, '']);
+        if (targetUid !== '') {
+          const uRef = db.collection('users').doc(targetUid);
+          batch.update(uRef, {
+            points: admin.firestore.FieldValue.increment(refundPts),
+          });
+        }
       }
 
       await batch.commit();
@@ -449,7 +579,10 @@ app.post('/api/admin/withdrawal', requireAdmin, async (req, res) => {
 
 app.post('/api/admin/user-control', requireAdmin, async (req, res) => {
   if (!db) return res.status(500).json({ error: 'Firebase not connected' });
-  const body = req.body || {};
+  let body = {};
+  if (req.body) {
+    body = req.body;
+  }
   const uid = body.uid;
 
   try {
@@ -460,8 +593,10 @@ app.post('/api/admin/user-control', requireAdmin, async (req, res) => {
     const data = snap.data();
     const updates = {};
 
-    if (typeof body.addCoins === 'number' && body.addCoins !== 0) {
-      updates.coins = admin.firestore.FieldValue.increment(body.addCoins);
+    if (typeof body.addCoins === 'number') {
+      if (body.addCoins !== 0) {
+        updates.coins = admin.firestore.FieldValue.increment(body.addCoins);
+      }
     }
     if (body.toggleFace) {
       updates.isFaceVerified = !data.isFaceVerified;
@@ -479,29 +614,35 @@ app.post('/api/admin/user-control', requireAdmin, async (req, res) => {
 
 app.post('/api/admin/create-agency', requireAdmin, async (req, res) => {
   if (!db) return res.status(500).json({ error: 'Firebase not connected' });
-  const body = req.body || {};
-  const agencyId = body.agencyId;
-  const agencyName = body.agencyName;
-  const ownerNumericId = body.ownerNumericId;
+  let body = {};
+  if (req.body) {
+    body = req.body;
+  }
+  const agencyId = firstValid([body.agencyId, '']);
+  const agencyName = firstValid([body.agencyName, '']);
+  const ownerNumericId = firstValid([body.ownerNumericId, '']);
 
   try {
-    if (!agencyId || !agencyName) {
-      return res.status(400).json({ error: 'Agency ID and Name are required' });
+    if (agencyId === '') {
+      return res.status(400).json({ error: 'Agency ID is required' });
+    }
+    if (agencyName === '') {
+      return res.status(400).json({ error: 'Agency Name is required' });
     }
 
     let ownerUid = '';
-    if (ownerNumericId) {
+    if (ownerNumericId !== '') {
       const uq = await db.collection('users').where('numericId', '==', Number(ownerNumericId)).limit(1).get();
       if (!uq.empty) {
         ownerUid = uq.docs[0].id;
       }
     }
 
-await db.collection('agencies').doc(agencyId).set({
+    await db.collection('agencies').doc(agencyId).set({
       agencyId: agencyId,
       name: agencyName,
       ownerUid: ownerUid,
-      ownerNumericId: Number(ownerNumericId || 0),
+      ownerNumericId: Number(firstValid([ownerNumericId, 0])),
       commissionRate: 0.15,
       totalHosts: 0,
       withdrawnCommissionPoints: 0,
@@ -515,7 +656,7 @@ await db.collection('agencies').doc(agencyId).set({
   }
 });
 
-const PORT = process.env.PORT || 3000;
+const PORT = firstValid([process.env.PORT, 3000]);
 app.listen(PORT, () => {
   console.log('NILE Live Server running on port ' + PORT);
 });
