@@ -21,7 +21,7 @@ function pick(a, b, c, d) {
 
 let db = null;
 try {
-  const ps = ['/etc/secrets/serviceAccountKey.json', path.join(dirname, 'serviceAccountKey.json'), path.join(dirname, '..', 'serviceAccountKey.json')];
+  const ps = ['/etc/secrets/serviceAccountKey.json', path.join(process.cwd(), 'serviceAccountKey.json')];
   for (let i = 0; i < ps.length; i++) {
     if (fs.existsSync(ps[i])) {
       const sa = JSON.parse(fs.readFileSync(ps[i], 'utf8'));
