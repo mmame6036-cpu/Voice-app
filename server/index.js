@@ -2,7 +2,9 @@ const express = require('express');
 const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
-const admin = require('firebase-admin');
+const firebaseApp = require('firebase-admin/app');
+const firebaseFirestore = require('firebase-admin/firestore');
+const FieldValue = firebaseFirestore.FieldValue;
 const agoraToken = require('agora-token');
 const RtcTokenBuilder = agoraToken.RtcTokenBuilder;
 const RtcRole = agoraToken.RtcRole;
@@ -49,10 +51,12 @@ try {
   }
 
   if (serviceAccount) {
-    admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount),
-    });
-    db = admin.firestore();
+    if (firebaseApp.getApps().length === 0) {
+      firebaseApp.initializeApp({
+        credential: firebaseApp.cert(serviceAccount),
+      });
+    }
+    db = firebaseFirestore.getFirestore();
     console.log('Firebase Admin initialized successfully.');
   } else {
     console.warn('WARNING: serviceAccountKey.json not found.');
@@ -157,7 +161,7 @@ function generateAgoraToken(req, res) {
     ]);
     const roleStr = String(roleRaw).toLowerCase();
 
-    let role = RtcRole.PUBLISHER;
+let role = RtcRole.PUBLISHER;
     if (roleStr === 'audience') {
       role = RtcRole.SUBSCRIBER;
     } else if (roleStr === 'subscriber') {
@@ -166,7 +170,7 @@ function generateAgoraToken(req, res) {
       role = RtcRole.SUBSCRIBER;
     }
 
-if (APP_ID === '') {
+    if (APP_ID === '') {
       return res.status(500).json({ error: 'Agora APP_ID missing on server' });
     }
     if (APP_CERTIFICATE === '') {
@@ -239,7 +243,7 @@ app.post(
           binancePayId: orderData.binancePayId,
           status: orderData.status,
           createdAt: orderData.createdAt,
-          timestamp: admin.firestore.FieldValue.serverTimestamp(),
+          timestamp: FieldValue.serverTimestamp(),
         });
       }
 
@@ -294,7 +298,7 @@ app.post(
         isPaid = true;
       }
 
-      if (isPaid) {
+if (isPaid) {
         return res.json({
           success: true,
           verified: true,
@@ -303,7 +307,7 @@ app.post(
         });
       }
 
-return res.status(400).json({
+      return res.status(400).json({
         success: false,
         verified: false,
         message: 'Payment not confirmed yet. Please wait 1 minute or contact support with Order Ref.',
@@ -428,9 +432,8 @@ app.post('/api/admin/user-order', requireAdmin, async (req, res) => {
       return res.status(400).json({ error: 'Order already processed' });
     }
 
-    if (action === 'APPROVE') {
-
-let targetUid = firstValid([order.uid, '']);
+if (action === 'APPROVE') {
+      let targetUid = firstValid([order.uid, '']);
       if (targetUid === '') {
         if (order.numericId) {
           const uq = await db.collection('users').where('numericId', '==', Number(order.numericId)).limit(1).get();
@@ -443,14 +446,14 @@ let targetUid = firstValid([order.uid, '']);
       const batch = db.batch();
       batch.update(orderRefDoc, {
         status: 'PAID',
-        approvedAt: admin.firestore.FieldValue.serverTimestamp(),
+        approvedAt: FieldValue.serverTimestamp(),
       });
 
       if (targetUid !== '') {
         const userDoc = db.collection('users').doc(targetUid);
         batch.set(
           userDoc,
-          { coins: admin.firestore.FieldValue.increment(Number(firstValid([order.coins, 0]))) },
+          { coins: FieldValue.increment(Number(firstValid([order.coins, 0]))) },
           { merge: true }
         );
       }
@@ -491,14 +494,14 @@ app.post('/api/admin/seller-order', requireAdmin, async (req, res) => {
       const batch = db.batch();
       batch.update(docRef, {
         status: 'PAID',
-        approvedAt: admin.firestore.FieldValue.serverTimestamp(),
+        approvedAt: FieldValue.serverTimestamp(),
       });
 
       if (order.uid) {
         const sellerDoc = db.collection('users').doc(order.uid);
         batch.set(
           sellerDoc,
-          { coins: admin.firestore.FieldValue.increment(Number(firstValid([order.coins, 0]))) },
+          { coins: FieldValue.increment(Number(firstValid([order.coins, 0]))) },
           { merge: true }
         );
       }
@@ -536,14 +539,14 @@ app.post('/api/admin/withdrawal', requireAdmin, async (req, res) => {
     if (action === 'PAID') {
       await docRef.update({
         status: 'PAID',
-        paidAt: admin.firestore.FieldValue.serverTimestamp(),
+        paidAt: FieldValue.serverTimestamp(),
       });
       return res.json({ success: true, status: 'PAID' });
     } else {
       const batch = db.batch();
       batch.update(docRef, {
         status: 'REJECTED',
-        rejectedAt: admin.firestore.FieldValue.serverTimestamp(),
+        rejectedAt: FieldValue.serverTimestamp(),
       });
 
       const refundPts = Number(firstValid([reqData.points, 0]));
@@ -554,17 +557,18 @@ app.post('/api/admin/withdrawal', requireAdmin, async (req, res) => {
         }
       }
 
-if (isAgencyComm) {
-        const agRef = db.collection('agencies').doc(reqData.agencyId);
+      if (isAgencyComm) {
+
+const agRef = db.collection('agencies').doc(reqData.agencyId);
         batch.update(agRef, {
-          withdrawnCommissionPoints: admin.firestore.FieldValue.increment(-refundPts),
+          withdrawnCommissionPoints: FieldValue.increment(-refundPts),
         });
       } else {
         const targetUid = firstValid([reqData.userUid, reqData.uid, '']);
         if (targetUid !== '') {
           const uRef = db.collection('users').doc(targetUid);
           batch.update(uRef, {
-            points: admin.firestore.FieldValue.increment(refundPts),
+            points: FieldValue.increment(refundPts),
           });
         }
       }
@@ -595,7 +599,7 @@ app.post('/api/admin/user-control', requireAdmin, async (req, res) => {
 
     if (typeof body.addCoins === 'number') {
       if (body.addCoins !== 0) {
-        updates.coins = admin.firestore.FieldValue.increment(body.addCoins);
+        updates.coins = FieldValue.increment(body.addCoins);
       }
     }
     if (body.toggleFace) {
@@ -647,7 +651,7 @@ app.post('/api/admin/create-agency', requireAdmin, async (req, res) => {
       totalHosts: 0,
       withdrawnCommissionPoints: 0,
       bonusCommissionPoints: 0,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: FieldValue.serverTimestamp(),
     });
 
     return res.json({ success: true });
