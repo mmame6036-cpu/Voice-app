@@ -25,10 +25,15 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Compress Gift MP4 Assets
+      - name: Extract Gift Images
         run: |
-          sudo apt-get update && sudo apt-get install -y ffmpeg
-          for f in assets/svga/*.mp4; do [ -f "$f" ] && ffmpeg -y -i "$f" -vf "scale='trunc(min(480,iw)/2)*2':-2" -c:v libx264 -crf 28 -preset veryfast -c:a aac -b:a 64k -movflags +faststart "${f}.tmp.mp4" && mv "${f}.tmp.mp4" "$f" || rm -f "${f}.tmp.mp4"; done
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+          mkdir -p assets/images
+          for f in assets/svga/*.mp4; do
+            n=$(basename "$f" .mp4)
+            ffmpeg -y -i "$f" -vframes 1 "assets/images/$n.jpg" || true
+          done
 
       - name: Backup Firebase Config
         run: find . -name "*google-services*.json" -exec cp {} /tmp/google-services.json \; || true
@@ -69,8 +74,8 @@ jobs:
           echo 'allprojects {' > ~/.gradle/init.gradle
           echo '    buildscript { repositories { google(); mavenCentral() } }' >> ~/.gradle/init.gradle
           echo '    repositories { google(); mavenCentral() }' >> ~/.gradle/init.gradle
-
           echo '    afterEvaluate { project ->' >> ~/.gradle/init.gradle
+
           echo '        if (project.hasProperty("android")) {' >> ~/.gradle/init.gradle
           echo '            android {' >> ~/.gradle/init.gradle
           echo '                compileSdkVersion 34' >> ~/.gradle/init.gradle
