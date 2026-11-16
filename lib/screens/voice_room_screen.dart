@@ -1,10 +1,131 @@
+import 'dart:convert';
+import 'package:flutter/foundation.dart';
+import 'package:agora_rtc_engine/agora_rtc_engine.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:http/http.dart' as http;
+
+class AgoraService extends ChangeNotifier {
+  static final AgoraService _instance = AgoraService._internal();
+  factory AgoraService() => _instance;
+  AgoraService._internal();
+
+  static const String appId = "d00a25d96dfc44cc866cd8f41c496b36";
+  static const String tokenServerBaseUrl = "https://nile-token-server.onrender.com";
+
+  RtcEngine? _engine;
+  RtcEngine? get engine => _engine;
+
+  bool _isInRoom = false;
+  bool _isChannelJoined = false;
+  bool _isMinimized = false;
+  bool _isMicMuted = true;
+  String _currentRoomTitle = "";
+  String _currentChannelId = "";
+  int _currentUid = 0;
+  int _currentSeatCount = 30;
+  String _lastError = "";
+
+  bool get isInRoom => _isInRoom;
+  bool get isChannelJoined => _isChannelJoined;
+  bool get isMinimized => _isMinimized;
+  bool get isMicMuted => _isMicMuted;
+  String get currentRoomTitle => _currentRoomTitle;
+  String get currentChannelId => _currentChannelId;
+  int get currentSeatCount => _currentSeatCount;
+  String get lastError => _lastError;
+
+  Function(int uid)? onUserJoinedCallback;
+  Function(int uid)? onUserOfflineCallback;
+  Function(List<AudioVolumeInfo> speakers)? onVolumeChangedCallback;
+  Function(String errorMessage)? onErrorCallback;
+
+  Future<String> _fetchPublisherToken({
+    required String channelId,
+    required int uid,
+  }) async {
+    final uri = Uri.parse(
+      "$tokenServerBaseUrl/rtcToken?channelName=$channelId&uid=$uid&role=publisher",
+    );
+
+    for (int attempt = 0; attempt < 2; attempt++) {
+      try {
+        final response = await http.get(uri).timeout(const Duration(seconds: 40));
+        if (response.statusCode == 200) {
+          final decoded = jsonDecode(response.body);
+          if (decoded is Map && decoded['token'] != null) {
+            final t = decoded['token'].toString().trim();
+            if (t.isNotEmpty) return t;
+          }
+        }
+      } catch (e) {
+        _lastError = "Token fetch error: $e";
+        debugPrint(_lastError);
+      }
+    }
+    return "";
+  }
+
+  Future<void> initEngine({
+    required Function(int uid) onUserJoined,
+    required Function(int uid) onUserOffline,
+    required Function(List<AudioVolumeInfo> speakers) onVolumeChanged,
+    Function(String errorMessage)? onError,
+  }) async {
+    onUserJoinedCallback = onUserJoined;
+    onUserOfflineCallback = onUserOffline;
+    onVolumeChangedCallback = onVolumeChanged;
+    if (onError != null) onErrorCallback = onError;
+
+    if (_engine != null) return;
+
+    await Permission.microphone.request();
+
+    _engine = createAgoraRtcEngine();
+
+    await _engine!.initialize(const RtcEngineContext(
+      appId: appId,
+      channelProfile: ChannelProfileType.channelProfileLiveBroadcasting,
+    ));
+
+    _engine!.registerEventHandler(
+      RtcEngineEventHandler(
+        onJoinChannelSuccess: (RtcConnection connection, int elapsed) {
+          _isChannelJoined = true;
+          _engine?.setEnableSpeakerphone(true);
+          notifyListeners();
+        },
+        onLeaveChannel: (RtcConnection connection, RtcStats stats) {
+          _isChannelJoined = false;
+          notifyListeners();
+        },
+        onUserJoined: (RtcConnection connection, int remoteUid, int elapsed) {
+          onUserJoinedCallback?.call(remoteUid);
+        },
+        onUserOffline: (RtcConnection connection, int remoteUid, UserOfflineReasonType reason) {
+          onUserOfflineCallback?.call(remoteUid);
+        },
+        onAudioVolumeIndication: (
+          RtcConnection connection,
+          List<AudioVolumeInfo> speakers,
+          int totalVolume,
+          int speakerNumber,
+        ) {
+          onVolumeChangedCallback?.call(speakers);
+        },
+        onError: (ErrorCodeType err, String msg) {
+          _lastError = "Agora error $err: $msg";
+          debugPrint(_lastError);
+          onErrorCallback?.call(_lastError);
+        },
+      ),
+    );
+
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'package:audioplayers/audioplayers.dart';
 import '../services/agora_service.dart';
 import '../widgets/gift_dialog.dart';
@@ -81,7 +202,6 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
   final AgoraService _agoraService = AgoraService();
   final User? _currentUser = FirebaseAuth.instance.currentUser;
   final Random _random = Random();
-  IO.Socket? _socket;
   final AudioPlayer _audioPlayer = AudioPlayer();
 
   final StreamController<FullscreenGiftEvent> _fullscreenAnimStreamController =
@@ -91,6 +211,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
   int? _mySeatIndex;
   int _totalSeats = 30;
   late List<String?> _seats;
+  late List<String?> _seatUids;
   late List<int> _seatGifts;
   late List<bool> _seatMutes;
   bool _isConnecting = true;
@@ -100,6 +221,14 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
   int _myPoints = 0;
   StreamSubscription? _walletSubscription;
   StreamSubscription? _pointsSubscription;
+  StreamSubscription? _roomLiveSubscription;
+  StreamSubscription? _eventsSubscription;
+  StreamSubscription? _chatSubscription;
+  Timer? _heartbeatTimer;
+
+  final Set<String> _processedEventIds = {};
+  final Set<String> _processedChatIds = {};
+  late final int _sessionStartMs;
 
   final List<CenterFlyingGift> _activeFlyingGifts = [];
 
@@ -123,18 +252,18 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
   final TextEditingController _chatController = TextEditingController();
   final ScrollController _chatScrollController = ScrollController();
 
-  final String _serverUrl = "https://nile-token-server.onrender.com";
-
   int _currentRocketLevel = 1;
   Timer? _rocketBannerTimer;
 
-  String get _resolvedUid {
+String get _resolvedUid {
     if (_currentUser != null) return _currentUser!.uid;
-    if (widget.userUid.isNotEmpty) return widget.userUid;
-    return "user_guest_id";
+    if (widget.userUid.isNotEmpty && widget.userUid != "user_guest_id") {
+      return widget.userUid;
+    }
+    return "guest_${widget.userNumericId}";
   }
 
-int _getColsForSeats(int count) {
+  int _getColsForSeats(int count) {
     if (count <= 6) return 3;
     if (count <= 12) return 4;
     if (count <= 20) return 5;
@@ -145,7 +274,9 @@ int _getColsForSeats(int count) {
   @override
   void initState() {
     super.initState();
+    _sessionStartMs = DateTime.now().millisecondsSinceEpoch;
     _seats = List.filled(30, null);
+    _seatUids = List.filled(30, null);
     _seatGifts = List.filled(30, 0);
     _seatMutes = List.filled(30, false);
 
@@ -175,8 +306,25 @@ int _getColsForSeats(int count) {
     _startRocketBannerRotation();
     _initWalletSync();
     _initPointsSync();
+    _initRoomLiveSync();
+    _startSeatHeartbeat();
     _setupAgora();
-    _connectSocket();
+    _announceEntry();
+  }
+
+  void _announceEntry() {
+    _triggerEntryNotice(widget.userName);
+    FirebaseFirestore.instance
+        .collection('rooms')
+        .doc(widget.roomId)
+        .collection('messages')
+        .add({
+      'sender': 'System',
+      'senderUid': _resolvedUid,
+      'message': '${widget.userName} joined the room',
+      'isSystem': true,
+      'ts': DateTime.now().millisecondsSinceEpoch,
+    }).catchError((_) {});
   }
 
   void _triggerEntryNotice(String name) {
@@ -240,6 +388,179 @@ int _getColsForSeats(int count) {
     });
   }
 
+  // Heartbeat keeps only active live users on seats; stale ghost seats auto-expire in 25s
+  void _startSeatHeartbeat() {
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+
+if (_hasCleanedUp || !mounted) return;
+      if (_mySeatIndex != null) {
+        final idx = _mySeatIndex!;
+        FirebaseFirestore.instance
+            .collection('rooms')
+            .doc(widget.roomId)
+            .set({
+          'activeSeats': {
+            '$idx': {
+              'uid': _resolvedUid,
+              'name': widget.userName,
+              'numericId': widget.userNumericId,
+              'isMuted': _isMuted,
+              'updatedAt': DateTime.now().millisecondsSinceEpoch,
+            }
+          }
+        }, SetOptions(merge: true)).catchError((_) {});
+      }
+    });
+  }
+
+  void _initRoomLiveSync() {
+    final roomRef = FirebaseFirestore.instance.collection('rooms').doc(widget.roomId);
+
+    // 1. Live active seats listener (ignores old ghost seatMap)
+    _roomLiveSubscription = roomRef.snapshots().listen((snapshot) {
+      if (!mounted || _hasCleanedUp) return;
+      final nowMs = DateTime.now().millisecondsSinceEpoch;
+      final Map<String, dynamic> activeMap = {};
+      final Map<String, dynamic> staleCleanup = {};
+
+      if (snapshot.exists && snapshot.data() != null) {
+        final data = snapshot.data()!;
+        if (data['activeSeats'] is Map) {
+          final raw = data['activeSeats'] as Map;
+          raw.forEach((key, value) {
+            if (value is Map) {
+              final int updatedAt = (value['updatedAt'] as num?)?.toInt() ?? 0;
+              final String uid = (value['uid'] ?? '').toString();
+              // Expire any seat not updated within 25 seconds (ghost cleanup)
+              if (uid.isNotEmpty && (nowMs - updatedAt) < 25000) {
+                activeMap[key.toString()] = value;
+              } else {
+                staleCleanup[key.toString()] = FieldValue.delete();
+              }
+            }
+          });
+        }
+      }
+
+      if (staleCleanup.isNotEmpty) {
+        roomRef.set({'activeSeats': staleCleanup}, SetOptions(merge: true)).catchError((_) {});
+      }
+
+      setState(() {
+        int? foundMySeat;
+        for (int i = 0; i < 30; i++) {
+          final entry = activeMap['$i'];
+          if (entry is Map) {
+            final uid = (entry['uid'] ?? '').toString();
+            final name = (entry['name'] ?? 'User').toString();
+            final muted = entry['isMuted'] == true;
+            _seats[i] = name;
+            _seatUids[i] = uid;
+            _seatMutes[i] = muted;
+            if (uid == _resolvedUid) {
+              foundMySeat = i;
+            }
+          } else {
+            // Preserve local optimistic seat if we just tapped it
+            if (_mySeatIndex == i && _seatUids[i] == _resolvedUid) {
+              foundMySeat = i;
+            } else {
+              _seats[i] = null;
+              _seatUids[i] = null;
+              _seatGifts[i] = 0;
+              _seatMutes[i] = false;
+              _speakingSeatIndices.remove(i);
+            }
+          }
+        }
+        _mySeatIndex = foundMySeat;
+      });
+    });
+
+    // 2. Live chat messages listener
+    _chatSubscription = roomRef
+        .collection('messages')
+        .orderBy('ts', descending: false)
+        .limitToLast(30)
+        .snapshots()
+        .listen((snap) {
+      if (!mounted) return;
+      for (final doc in snap.docs) {
+        if (_processedChatIds.contains(doc.id)) continue;
+        _processedChatIds.add(doc.id);
+        final d = doc.data();
+        final int ts = (d['ts'] as num?)?.toInt() ?? 0;
+        if (ts < _sessionStartMs - 5000) continue;
+        final senderUid = (d['senderUid'] ?? '').toString();
+        if (senderUid == _resolvedUid) continue;
+
+        _addChatMessage(RoomChatMessage(
+          id: doc.id,
+          sender: (d['sender'] ?? 'User').toString(),
+          message: (d['message'] ?? '').toString(),
+          isSystem: d['isSystem'] == true,
+        ));
+      }
+    });
+
+// 3. Live gifts broadcast listener across devices
+    _eventsSubscription = roomRef
+        .collection('events')
+        .orderBy('createdAt', descending: true)
+        .limit(10)
+        .snapshots()
+        .listen((snap) {
+      if (!mounted) return;
+      for (final doc in snap.docs) {
+        if (_processedEventIds.contains(doc.id)) continue;
+        _processedEventIds.add(doc.id);
+
+        final d = doc.data();
+        if (d['type'] != 'gift') continue;
+        final Timestamp? createdTs = d['createdAt'] as Timestamp?;
+        if (createdTs != null &&
+            createdTs.millisecondsSinceEpoch < _sessionStartMs - 3000) {
+          continue;
+        }
+
+        final String senderId = (d['senderId'] ?? '').toString();
+        if (senderId == _resolvedUid) continue;
+
+        final String giftName = (d['giftName'] ?? 'Gift').toString();
+        final String giftIcon = (d['giftIcon'] ?? '🎁').toString();
+        final String asset = (d['imageAsset'] ?? '').toString();
+        final bool isLucky = d['isLucky'] == true;
+        final int totalCost = (d['totalCost'] as num?)?.toInt() ?? 0;
+        final List seats = (d['seats'] as List?) ?? [];
+        final int perSeatCost = seats.isNotEmpty
+            ? (totalCost ~/ seats.length)
+            : totalCost;
+
+        if (!isLucky && perSeatCost >= 500) {
+          _fullscreenAnimStreamController.add(
+            FullscreenGiftEvent(
+              giftId: (d['giftId'] ?? '').toString(),
+              giftName: giftName,
+              asset: asset,
+              senderName: "VIP",
+            ),
+          );
+        }
+
+        setState(() {
+          for (final s in seats) {
+            final idx = (s as num).toInt();
+            if (idx >= 0 && idx < 30 && _seats[idx] != null) {
+              _seatGifts[idx] += perSeatCost;
+              _triggerCenterGiftAnimation(asset, idx, icon: giftIcon);
+            }
+          }
+        });
+      }
+    });
+  }
+
   void _playCoinSound() async {
     try {
       final AudioPlayer player = AudioPlayer();
@@ -275,184 +596,6 @@ int _getColsForSeats(int count) {
     });
   }
 
-  void _connectSocket() {
-    try {
-      _socket = IO.io(
-        _serverUrl,
-        IO.OptionBuilder()
-            .setTransports(['websocket', 'polling'])
-            .enableAutoConnect()
-            .build(),
-      );
-
-      _socket!.connect();
-
-_socket!.onConnect((_) {
-        _socket!.emit('join_room', {
-          'roomId': widget.roomId,
-          'userName': widget.userName,
-          'hostName': widget.hostName,
-        });
-
-        // If user already tapped a seat before socket connected, register it now
-        if (_mySeatIndex != null) {
-          _socket!.emit('seat_action', {
-            'roomId': widget.roomId,
-            'seatIndex': _mySeatIndex,
-            'userName': widget.userName,
-            'isLeaving': false,
-          });
-        }
-      });
-
-      _socket!.on('user_joined_room', (data) {
-        if (!mounted || data == null) return;
-        final joinedName = data['userName'] ?? "New User";
-        _triggerEntryNotice(joinedName);
-      });
-
-      _socket!.on('room_state_sync', (data) {
-        if (!mounted || data == null) return;
-        setState(() {
-          if (data['seats'] != null && data['seats'] is List) {
-            final List incomingSeats = data['seats'];
-            for (int i = 0; i < 30; i++) {
-              final sUser = (i < incomingSeats.length) ? incomingSeats[i] as String? : null;
-              if (_mySeatIndex == i) {
-                _seats[i] = widget.userName;
-              } else {
-                _seats[i] = (sUser != null && sUser.isNotEmpty) ? sUser : null;
-                if (_seats[i] == null) {
-                  _seatGifts[i] = 0;
-                  _speakingSeatIndices.remove(i);
-                }
-              }
-            }
-            final myIdx = _seats.indexOf(widget.userName);
-            _mySeatIndex = myIdx != -1 ? myIdx : null;
-          }
-        });
-      });
-
-      _socket!.on('seat_state_updated', (data) {
-        if (!mounted || data == null) return;
-        final int index = (data['seatIndex'] as num).toInt();
-        final String? user = data['userName'] as String?;
-
-        setState(() {
-          if (user != null) {
-            final oldIndex = _seats.indexOf(user);
-            if (oldIndex != -1 && oldIndex != index) {
-              _seatGifts[index] = _seatGifts[oldIndex];
-              _seatGifts[oldIndex] = 0;
-              _seats[oldIndex] = null;
-              _speakingSeatIndices.remove(oldIndex);
-            }
-          }
-
-          if (data['seats'] != null && data['seats'] is List) {
-            final List incomingSeats = data['seats'];
-            for (int i = 0; i < 30; i++) {
-              final val = (i < incomingSeats.length) ? incomingSeats[i] as String? : null;
-              _seats[i] = (val != null && val.isNotEmpty) ? val : null;
-              if (_seats[i] == null) {
-                _seatGifts[i] = 0;
-                _speakingSeatIndices.remove(i);
-              }
-            }
-          } else if (index >= 0 && index < 30) {
-            _seats[index] = (user != null && user.isNotEmpty) ? user : null;
-            if (_seats[index] == null) {
-              _seatGifts[index] = 0;
-              _speakingSeatIndices.remove(index);
-            }
-          }
-
-          final foundMe = _seats.indexOf(widget.userName);
-          if (foundMe != -1) {
-            _mySeatIndex = foundMe;
-          } else {
-            _mySeatIndex = null;
-            _isMuted = true;
-          }
-        });
-      });
-
-      _socket!.on('gift_broadcast', (data) {
-        if (!mounted || data == null) return;
-        final sender = data['senderName'] ?? "Someone";
-        final isAll = data['isAll'] == true;
-        final isLucky = data['isLucky'] == true;
-        final giftName = data['giftName'] ?? "Gift";
-        final giftCost = (data['giftCost'] as num?)?.toInt() ?? 0;
-        final giftAsset = (data['giftAsset'] ?? "").toString();
-        final giftIcon = (data['giftIcon'] ?? "🎁").toString();
-
-        final List targets = (data['targetSeats'] as List?) ?? [];
-        final targetIndex = (data['targetSeatIndex'] as num?)?.toInt() ?? 0;
-
-if (!isLucky && giftCost >= 500) {
-          _fullscreenAnimStreamController.add(
-            FullscreenGiftEvent(
-              giftId: "",
-              giftName: giftName,
-              asset: giftAsset,
-              senderName: sender,
-            ),
-          );
-        }
-
-        if (sender != widget.userName) {
-          setState(() {
-            if (isAll) {
-              for (int i = 0; i < _totalSeats; i++) {
-                if (_seats[i] != null) {
-                  _seatGifts[i] += giftCost;
-                  _triggerCenterGiftAnimation(giftAsset, i, icon: giftIcon, isToAll: true);
-                }
-              }
-            } else if (targets.isNotEmpty) {
-              for (var t in targets) {
-                final idx = (t as num).toInt();
-                if (idx >= 0 && idx < 30 && _seats[idx] != null) {
-                  _seatGifts[idx] += giftCost;
-                  _triggerCenterGiftAnimation(giftAsset, idx, icon: giftIcon);
-                }
-              }
-            } else if (targetIndex >= 0 && targetIndex < 30 && _seats[targetIndex] != null) {
-              _seatGifts[targetIndex] += giftCost;
-              _triggerCenterGiftAnimation(giftAsset, targetIndex, icon: giftIcon);
-            }
-          });
-        }
-
-        if (!isLucky) {
-          _addChatMessage(
-            RoomChatMessage(
-              id: "${DateTime.now().microsecondsSinceEpoch}_$sender",
-              sender: "System",
-              message: isAll ? "$sender sent $giftName to All Mics!" : "$sender sent $giftName!",
-              isSystem: true,
-            ),
-          );
-        }
-      });
-
-      _socket!.on('chat_message_received', (data) {
-        if (!mounted || data == null) return;
-        final sender = data['sender'] ?? 'User';
-        if (sender == widget.userName) return;
-
-        _addChatMessage(RoomChatMessage(
-          id: "${DateTime.now().microsecondsSinceEpoch}",
-          sender: sender,
-          message: data['message'] ?? '',
-          isSystem: data['isSystem'] ?? false,
-        ));
-      });
-    } catch (_) {}
-  }
-
   Future<void> _setupAgora() async {
     try {
       await Permission.microphone.request();
@@ -474,7 +617,8 @@ if (!isLucky && giftCost >= 500) {
                   for (int i = 0; i < _totalSeats; i++) {
                     if (_seats[i] != null && i != _mySeatIndex) {
                       _speakingSeatIndices.add(i);
-                      break;
+
+break;
                     }
                   }
                 }
@@ -518,7 +662,7 @@ if (!isLucky && giftCost >= 500) {
       duration: const Duration(milliseconds: 900),
     );
 
-final animation = CurvedAnimation(
+    final animation = CurvedAnimation(
       parent: controller,
       curve: Curves.fastOutSlowIn,
     );
@@ -548,31 +692,30 @@ final animation = CurvedAnimation(
   }
 
   void _handleSeatTap(int index) async {
+    final roomRef = FirebaseFirestore.instance.collection('rooms').doc(widget.roomId);
+
     // 1. Leave seat immediately if tapping own seat
     if (_mySeatIndex == index) {
       setState(() {
         _seats[index] = null;
+        _seatUids[index] = null;
         _seatGifts[index] = 0;
+        _seatMutes[index] = false;
         _speakingSeatIndices.remove(index);
         _mySeatIndex = null;
         _isMuted = true;
       });
 
-      if (_socket != null && _socket!.connected) {
-        _socket!.emit('seat_action', {
-          'roomId': widget.roomId,
-          'seatIndex': index,
-          'userName': widget.userName,
-          'isLeaving': true,
-        });
-      }
+      roomRef.set({
+        'activeSeats': {'$index': FieldValue.delete()}
+      }, SetOptions(merge: true)).catchError((_) {});
 
       await _agoraService.switchRole(isSpeaker: false);
       return;
     }
 
-    // 2. Check if occupied by another user
-    if (_seats[index] != null && _seats[index] != widget.userName) {
+    // 2. Check if occupied by another active user
+    if (_seats[index] != null && _seatUids[index] != _resolvedUid) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("ይህ ወንበር ተይዟል (Seat occupied)")),
       );
@@ -591,33 +734,40 @@ final animation = CurvedAnimation(
     }
 
     // 4. Seat user immediately
-    final int? oldIndex = _seats.indexOf(widget.userName) != -1
-        ? _seats.indexOf(widget.userName)
-        : _mySeatIndex;
+    final int? oldIndex = _mySeatIndex;
 
     setState(() {
       if (oldIndex != null && oldIndex != index) {
         _seatGifts[index] = _seatGifts[oldIndex];
         _seatGifts[oldIndex] = 0;
         _seats[oldIndex] = null;
+        _seatUids[oldIndex] = null;
+        _seatMutes[oldIndex] = false;
         _speakingSeatIndices.remove(oldIndex);
       }
       _seats[index] = widget.userName;
+      _seatUids[index] = _resolvedUid;
       _mySeatIndex = index;
       _isMuted = false;
       _seatMutes[index] = false;
     });
 
-    if (_socket != null && _socket!.connected) {
-      _socket!.emit('seat_action', {
-        'roomId': widget.roomId,
-        'seatIndex': index,
-        'userName': widget.userName,
-        'isLeaving': false,
-      });
+    final Map<String, dynamic> seatUpdates = {
+      '$index': {
+        'uid': _resolvedUid,
+        'name': widget.userName,
+        'numericId': widget.userNumericId,
+        'isMuted': false,
+        'updatedAt': DateTime.now().millisecondsSinceEpoch,
+      }
+    };
+    if (oldIndex != null && oldIndex != index) {
+      seatUpdates['$oldIndex'] = FieldValue.delete();
     }
 
-    await _agoraService.switchRole(isSpeaker: true);
+    roomRef.set({'activeSeats': seatUpdates}, SetOptions(merge: true)).catchError((_) {});
+
+await _agoraService.switchRole(isSpeaker: true);
     await _agoraService.setMicrophoneMute(false);
   }
 
@@ -629,6 +779,25 @@ final animation = CurvedAnimation(
         if (_isMuted) _speakingSeatIndices.remove(_mySeatIndex!);
       }
     });
+
+    if (_mySeatIndex != null) {
+      final idx = _mySeatIndex!;
+      FirebaseFirestore.instance
+          .collection('rooms')
+          .doc(widget.roomId)
+          .set({
+        'activeSeats': {
+          '$idx': {
+            'uid': _resolvedUid,
+            'name': widget.userName,
+            'numericId': widget.userNumericId,
+            'isMuted': _isMuted,
+            'updatedAt': DateTime.now().millisecondsSinceEpoch,
+          }
+        }
+      }, SetOptions(merge: true)).catchError((_) {});
+    }
+
     await _agoraService.setMicrophoneMute(_isMuted);
   }
 
@@ -652,13 +821,17 @@ final animation = CurvedAnimation(
       isSystem: false,
     ));
 
-    if (_socket != null && _socket!.connected) {
-      _socket!.emit('send_chat', {
-        'roomId': widget.roomId,
-        'sender': widget.userName,
-        'message': text,
-      });
-    }
+    FirebaseFirestore.instance
+        .collection('rooms')
+        .doc(widget.roomId)
+        .collection('messages')
+        .add({
+      'sender': widget.userName,
+      'senderUid': _resolvedUid,
+      'message': text,
+      'isSystem': false,
+      'ts': DateTime.now().millisecondsSinceEpoch,
+    }).catchError((_) {});
 
     _chatController.clear();
   }
@@ -668,7 +841,7 @@ final animation = CurvedAnimation(
     _comboRingController.reset();
     _comboRingController.forward();
 
-_comboTimer = Timer(const Duration(seconds: 3), () {
+    _comboTimer = Timer(const Duration(seconds: 3), () {
       if (mounted) {
         setState(() {
           _showComboButton = false;
@@ -735,7 +908,7 @@ _comboTimer = Timer(const Duration(seconds: 3), () {
       'wealthExp': FieldValue.increment(totalSpend),
     }, SetOptions(merge: true)).catchError((_) {});
 
-    final double rate = isLucky ? 0.04 : 0.70;
+final double rate = isLucky ? 0.04 : 0.70;
     final int ptsPerSeat = max(1, (sendCost * rate).round());
     final List<int> activeTargets = isAll
         ? [for (int i = 0; i < _totalSeats; i++) if (_seats[i] != null) i]
@@ -743,13 +916,29 @@ _comboTimer = Timer(const Duration(seconds: 3), () {
 
     for (final seatIdx in activeTargets) {
       if (seatIdx >= 0 && seatIdx < 30 && _seats[seatIdx] != null) {
-        final targetUid = _seats[seatIdx] == widget.userName ? _resolvedUid : _seats[seatIdx]!;
+        final targetUid = _seatUids[seatIdx] ?? _resolvedUid;
         FirebaseFirestore.instance.collection('users').doc(targetUid).set({
           'points': FieldValue.increment(ptsPerSeat),
           'charmExp': FieldValue.increment(ptsPerSeat),
         }, SetOptions(merge: true)).catchError((_) {});
       }
     }
+
+    FirebaseFirestore.instance
+        .collection('rooms')
+        .doc(widget.roomId)
+        .collection('events')
+        .add({
+      'type': 'gift',
+      'senderId': _resolvedUid,
+      'giftName': config['name'],
+      'giftIcon': config['icon'] ?? '🎁',
+      'imageAsset': config['asset'],
+      'seats': activeTargets,
+      'totalCost': totalSpend,
+      'isLucky': isLucky,
+      'createdAt': FieldValue.serverTimestamp(),
+    }).catchError((_) {});
 
     _executeMultiSeatSend(
       targetSeats: targets,
@@ -773,7 +962,7 @@ _comboTimer = Timer(const Duration(seconds: 3), () {
       if (_seats[i] != null) {
         seatedList.add({
           'seatIndex': i,
-          'uid': _seats[i] == widget.userName ? _resolvedUid : _seats[i]!,
+          'uid': _seatUids[i] ?? _resolvedUid,
           'name': _seats[i]!,
           'avatar': '',
         });
@@ -800,7 +989,7 @@ _comboTimer = Timer(const Duration(seconds: 3), () {
       final bool isLucky = result.gift.isLucky;
       final String playAsset = result.gift.playAsset;
 
-if (isLucky) {
+      if (isLucky) {
         if (result.wonCoins > 0) {
           _showCompactWinBadge(result.wonCoins);
         }
@@ -855,7 +1044,7 @@ if (isLucky) {
         _showComboButton = true;
       }
 
-      if (isAll) {
+if (isAll) {
         for (int i = 0; i < _totalSeats; i++) {
           if (_seats[i] != null) {
             _seatGifts[i] += cost;
@@ -888,46 +1077,24 @@ if (isLucky) {
     };
 
     _startComboTimer();
-
-    if (_socket != null && _socket!.connected) {
-      _socket!.emit('send_gift', {
-        'roomId': widget.roomId,
-        'senderName': widget.userName,
-        'targetSeats': targetSeats,
-        'isAll': isAll,
-        'giftName': name,
-        'giftCost': cost,
-        'giftAsset': asset,
-        'giftIcon': icon,
-        'comboCount': _comboCount,
-        'isLucky': isLucky,
-        'wonCoins': wonCoins,
-        'luckyMultiplier': luckyMultiplier,
-      });
-    }
   }
 
   void _cleanupAndLeave() {
     if (_hasCleanedUp) return;
     _hasCleanedUp = true;
+    _heartbeatTimer?.cancel();
 
-    if (_socket != null && _socket!.connected) {
-      if (_mySeatIndex != null) {
-        _socket!.emit('seat_action', {
-          'roomId': widget.roomId,
-          'seatIndex': _mySeatIndex,
-          'userName': widget.userName,
-          'isLeaving': true,
-        });
+    final roomRef = FirebaseFirestore.instance.collection('rooms').doc(widget.roomId);
+    final Map<String, dynamic> removeSeats = {};
+    for (int i = 0; i < 30; i++) {
+      if (_seatUids[i] == _resolvedUid || _mySeatIndex == i) {
+        removeSeats['$i'] = FieldValue.delete();
       }
-      _socket!.emit('leave_room', {
-        'roomId': widget.roomId,
-        'userName': widget.userName,
-      });
+    }
+    if (removeSeats.isNotEmpty) {
+      roomRef.set({'activeSeats': removeSeats}, SetOptions(merge: true)).catchError((_) {});
     }
 
-    _socket?.disconnect();
-    _socket?.dispose();
     _agoraService.leaveRoom();
   }
 
@@ -938,6 +1105,9 @@ if (isLucky) {
     _luckyWinToastTimer?.cancel();
     _walletSubscription?.cancel();
     _pointsSubscription?.cancel();
+    _roomLiveSubscription?.cancel();
+    _eventsSubscription?.cancel();
+    _chatSubscription?.cancel();
     _comboRingController.dispose();
     _entryMarqueeController.dispose();
     _comboTimer?.cancel();
@@ -951,7 +1121,7 @@ if (isLucky) {
     super.dispose();
   }
 
-Widget _buildSingleSeat({
+  Widget _buildSingleSeat({
     required int index,
     required double seatDimension,
     required double nameFontSize,
@@ -996,7 +1166,8 @@ Widget _buildSingleSeat({
                 ),
               Container(
                 width: seatDimension,
-                height: seatDimension,
+
+height: seatDimension,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   gradient: const LinearGradient(
@@ -1047,8 +1218,7 @@ Widget _buildSingleSeat({
                     child: Icon(
                       isMuted ? Icons.mic_off : Icons.mic,
                       size: (seatDimension * 0.22).clamp(9.0, 15.0),
-
-color: Colors.white,
+                      color: Colors.white,
                     ),
                   ),
                 ),
@@ -1100,7 +1270,7 @@ color: Colors.white,
     );
   }
 
-  @override
+@override
   Widget build(BuildContext context) {
     final int crossAxis = _getColsForSeats(_totalSeats);
     final int rowCount = (_totalSeats / crossAxis).ceil();
@@ -1158,8 +1328,7 @@ color: Colors.white,
                   const SizedBox(width: 4),
                   Text(
                     "$_myPoints",
-
-style: const TextStyle(
+                    style: const TextStyle(
                       color: kGoldBright,
                       fontSize: 11,
                       fontWeight: FontWeight.bold,
@@ -1202,7 +1371,8 @@ style: const TextStyle(
                           style: TextStyle(
                             color: count == _totalSeats ? kGoldBright : Colors.white,
                             fontWeight: FontWeight.bold,
-                          ),
+
+),
                         ),
                       ))
                   .toList(),
@@ -1257,7 +1427,7 @@ style: const TextStyle(
                             (cellW * 0.72).clamp(28.0, 125.0);
                         final double seatDimension = min(maxByHeight, maxByWidth);
 
-return Padding(
+                        return Padding(
                           padding: const EdgeInsets.symmetric(
                               horizontal: 6.0, vertical: 2.0),
                           child: Column(
@@ -1292,7 +1462,8 @@ return Padding(
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
                     child: Container(
-                      height: 36,
+
+height: 36,
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
                       decoration: BoxDecoration(
                         gradient: const LinearGradient(
@@ -1342,7 +1513,7 @@ return Padding(
                     ),
                   ),
 
-Expanded(
+                  Expanded(
                     flex: 3,
                     child: Container(
                       width: double.infinity,
@@ -1370,7 +1541,8 @@ Expanded(
                                 ),
                               ),
                               child: RichText(
-                                text: TextSpan(
+
+text: TextSpan(
                                   children: [
                                     if (item.isSystem)
                                       const WidgetSpan(
@@ -1419,8 +1591,7 @@ Expanded(
                     ),
                     child: Row(
                       children: [
-
-Container(
+                        Container(
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             color: _mySeatIndex != null ? kGoldBlackBottom : Colors.black12,
@@ -1450,7 +1621,8 @@ Container(
                               style: const TextStyle(
                                 color: kBlackText,
                                 fontSize: 13,
-                                fontWeight: FontWeight.w600,
+
+fontWeight: FontWeight.w600,
                               ),
                               decoration: const InputDecoration(
                                 hintText: "Say something...",
@@ -1502,8 +1674,7 @@ Container(
                       decoration: BoxDecoration(
                         color: kGoldBlackBottom,
                         borderRadius: BorderRadius.circular(16),
-
-border: Border.all(color: kGoldBright, width: 1.4),
+                        border: Border.all(color: kGoldBright, width: 1.4),
                       ),
                       child: Text(
                         _luckyWinToast!,
@@ -1547,7 +1718,7 @@ border: Border.all(color: kGoldBright, width: 1.4),
                   ),
                 ),
 
-              ..._activeFlyingGifts.map((gift) {
+..._activeFlyingGifts.map((gift) {
                 return AnimatedBuilder(
                   animation: gift.controller,
                   builder: (context, child) {
@@ -1600,7 +1771,7 @@ border: Border.all(color: kGoldBright, width: 1.4),
                 );
               }),
 
-FullscreenGiftAnimator(
+              FullscreenGiftAnimator(
                 giftStream: _fullscreenAnimStreamController.stream,
               ),
 
@@ -1636,7 +1807,8 @@ FullscreenGiftAnimator(
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
                               gradient: LinearGradient(
-                                colors: comboTier >= 2
+
+colors: comboTier >= 2
                                     ? [const Color(0xFFB71C1C), const Color(0xFF4A0E0E)]
                                     : [kGoldBlackTop, kGoldBlackBottom],
                                 begin: Alignment.topLeft,
