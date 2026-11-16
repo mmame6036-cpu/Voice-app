@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -15,53 +16,105 @@ class AgencyScreen extends StatefulWidget {
   State<AgencyScreen> createState() => _AgencyScreenState();
 }
 
-class _AgencyScreenState extends State<AgencyScreen>
-    with SingleTickerProviderStateMixin {
+class _AgencyScreenState extends State<AgencyScreen> {
   final User? _currentUser = FirebaseAuth.instance.currentUser;
-  late TabController _tabController;
   final TextEditingController _agencyNameController = TextEditingController();
   final TextEditingController _hostIdController = TextEditingController();
   final TextEditingController _payoutAccountController = TextEditingController();
+
   bool _isLoading = false;
   bool _isCreatingAgency = false;
   String _selectedPayoutMethod = "Binance Pay (USDT)";
 
-  static const double _agencyCommissionRate = 0.15;
   static const int _pointsPerUsd = 10000;
 
-  static const Color shiroBg = Color(0xFFF7F4EB);
-  static const Color shiroCard = Color(0xFFEFE9DA);
-  static const Color whiteCard = Color(0xFFFFFFFF);
-  static const Color textBlack = Color(0xFF1A1A1A);
-  static const Color textMuted = Color(0xFF5C564D);
-  static const Color accentBrown = Color(0xFF3E2723);
-  static const Color accentGold = Color(0xFFD49B42);
-  static const Color accentGreen = Color(0xFF107C41);
-  static const Color borderShiro = Color(0xFFDDD4C2);
+  static const Color kBgColor = Color(0xFFF3F6F8);
+  static const Color kTealGreen = Color(0xFF00C875);
+  static const Color kCyanBlue = Color(0xFF00B4D8);
+  static const Color kMintCardStart = Color(0xFFDDF7EE);
+  static const Color kMintCardEnd = Color(0xFFE2F4FC);
+  static const Color kOverviewTileBg = Color(0xFFEEF9F6);
+  static const Color kTextDark = Color(0xFF182026);
+  static const Color kTextMuted = Color(0xFF7A869A);
+  static const Color kCoralRed = Color(0xFFFF5252);
 
-  @override
-  void initState() {
-    super.initState();
-    _tabController = TabController(length: 2, vsync: this);
-  }
+  final List> _tiers = const [
+    {'min': 0, 'max': 2000000, 'rate': 0.04, 'nextRate': 0.08},
+    {'min': 2000000, 'max': 5000000, 'rate': 0.08, 'nextRate': 0.12},
+    {'min': 5000000, 'max': 15000000, 'rate': 0.12, 'nextRate': 0.15},
+    {'min': 15000000, 'max': 50000000, 'rate': 0.15, 'nextRate': 0.20},
+    {'min': 50000000, 'max': 100000000, 'rate': 0.20, 'nextRate': 0.25},
+  ];
 
   @override
   void dispose() {
-    _tabController.dispose();
     _agencyNameController.dispose();
     _hostIdController.dispose();
     _payoutAccountController.dispose();
     super.dispose();
   }
 
-  void _copyAgencyId(String agencyId) {
-    Clipboard.setData(ClipboardData(text: agencyId));
+  String _fmtNum(num val, {int decimals = 1}) {
+    final double d = val.toDouble();
+    final bool isWhole = d == d.roundToDouble() && decimals == 0;
+    final String fixed = isWhole ? d.toInt().toString() : d.toStringAsFixed(decimals);
+    final parts = fixed.split('.');
+    final reg = RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))');
+    final formattedInt = parts[0].replaceAllMapped(reg, (m) => '${m[1]},');
+    if (parts.length > 1 && decimals > 0) {
+      if (parts[1] == '0') return formattedInt;
+      return '$formattedInt.${parts[1]}';
+    }
+    return formattedInt;
+  }
+
+  Map<String, dynamic> _getTierForPoints(int points) {
+    for (final t in _tiers) {
+      if (points < (t['max'] as int)) {
+        return t;
+      }
+    }
+    return _tiers.last;
+  }
+
+  void _copyText(String value, String label) {
+    Clipboard.setData(ClipboardData(text: value));
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text("Agency ID $agencyId copied to clipboard")),
+      SnackBar(
+        content: Text("$label copied: $value"),
+        backgroundColor: kTextDark,
+        duration: const Duration(seconds: 2),
+      ),
     );
   }
 
-  Future<void> _addHostToAgency(String agencyId, String agencyName) async {
+  Widget _coinBadge() {
+    return Container(
+      width: 17,
+      height: 17,
+      decoration: const BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: LinearGradient(
+          colors: [Color(0xFF00D2FF), Color(0xFF00C875)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: const Center(
+        child: Text(
+          "N",
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 10,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _addHostToAgency(
+      BuildContext sheetCtx, String agencyId, String agencyName) async {
     final enteredId = int.tryParse(_hostIdController.text.trim());
     if (enteredId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -70,7 +123,7 @@ class _AgencyScreenState extends State<AgencyScreen>
       return;
     }
 
-    setState(() => _isLoading = true);
+setState(() => _isLoading = true);
     try {
       final userQuery = await FirebaseFirestore.instance
           .collection('users')
@@ -92,11 +145,7 @@ class _AgencyScreenState extends State<AgencyScreen>
 
       final targetUserDoc = userQuery.docs.first;
       final targetData = targetUserDoc.data();
-
-      String existingAgency = "";
-      if (targetData['agencyId'] != null) {
-        existingAgency = targetData['agencyId'].toString();
-      }
+      final String existingAgency = (targetData['agencyId'] ?? '').toString();
 
       if (existingAgency.isNotEmpty) {
         if (mounted) {
@@ -121,8 +170,7 @@ class _AgencyScreenState extends State<AgencyScreen>
 
       final hostRef =
           FirebaseFirestore.instance.collection('hosts').doc(targetUserDoc.id);
-
-batch.set(
+      batch.set(
         hostRef,
         {
           'agencyId': agencyId,
@@ -142,12 +190,12 @@ batch.set(
       await batch.commit();
 
       _hostIdController.clear();
+      if (sheetCtx.mounted) Navigator.pop(sheetCtx);
       if (mounted) {
-        Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text("Host successfully added to your agency!"),
-            backgroundColor: accentGreen,
+            backgroundColor: kTealGreen,
           ),
         );
       }
@@ -213,103 +261,777 @@ batch.set(
     }
   }
 
-  void _showAddHostDialog(String agencyId, String agencyName) {
-    showDialog(
-      context: context,
-      builder: (ctx) {
-        VoidCallback? addAction = () => _addHostToAgency(agencyId, agencyName);
-        if (_isLoading) {
-          addAction = null;
-        }
+  void _showInviteHostSheet(String agencyId, String agencyName) {
 
-        return AlertDialog(
-          backgroundColor: shiroBg,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-            side: const BorderSide(color: borderShiro, width: 1.2),
+showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.only(
+          left: 20,
+          right: 20,
+          top: 20,
+          bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: kTealGreen.withOpacity(0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.person_add_alt_1, color: kTealGreen),
+                ),
+                const SizedBox(width: 10),
+                const Text(
+                  "Invite Host",
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: kTextDark,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: kOverviewTileBg,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          "Agency Invite Code",
+                          style: TextStyle(fontSize: 12, color: kTextMuted),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          agencyId,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: kTextDark,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: kTealGreen,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                    ),
+                    onPressed: () => _copyText(agencyId, "Agency ID"),
+                    icon: const Icon(Icons.copy, size: 15),
+                    label: const Text("Copy ID"),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              "Bind Host Directly by User Numeric ID:",
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+                color: kTextDark,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _hostIdController,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(
+                      hintText: "e.g. 100069",
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 12,
+
+),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: kTealGreen,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 14,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  onPressed: _isLoading
+                      ? null
+                      : () => _addHostToAgency(ctx, agencyId, agencyName),
+                  child: const Text(
+                    "Add Host",
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showInviteAgencySheet(String parentAgencyId) {
+    final subIdCtrl = TextEditingController();
+    final subNameCtrl = TextEditingController();
+    final subOwnerCtrl = TextEditingController();
+    bool creating = false;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) => Padding(
+          padding: EdgeInsets.only(
+            left: 20,
+            right: 20,
+            top: 20,
+            bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
           ),
-          title: const Row(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(Icons.person_add_alt_1, color: accentBrown, size: 22),
-              SizedBox(width: 8),
-              Text(
-                "Recruit New Host",
-                style: TextStyle(
-                  color: textBlack,
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: kCyanBlue.withOpacity(0.12),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.group_add, color: kCyanBlue),
+                  ),
+                  const SizedBox(width: 10),
+                  const Text(
+                    "Invite Agency",
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: kTextDark,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: kMintCardEnd,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        "Parent Agency ID: $parentAgencyId",
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: kTextDark,
+                        ),
+                      ),
+                    ),
+                    TextButton.icon(
+                      onPressed: () =>
+                          _copyText(parentAgencyId, "Parent Agency ID"),
+                      icon: const Icon(Icons.copy, size: 15, color: kCyanBlue),
+                      label: const Text(
+                        "Copy",
+                        style: TextStyle(
+
+color: kCyanBlue,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: subIdCtrl,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: "Sub-Agency ID",
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: subNameCtrl,
+                decoration: InputDecoration(
+                  labelText: "Sub-Agency Name",
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: subOwnerCtrl,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: "Sub-Agent Numeric ID",
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: kCyanBlue,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                  onPressed: creating
+                      ? null
+                      : () async {
+                          final sid = subIdCtrl.text.trim();
+                          final sname = subNameCtrl.text.trim();
+                          final sowner =
+                              int.tryParse(subOwnerCtrl.text.trim()) ?? 0;
+                          if (sid.isEmpty || sname.isEmpty) return;
+                          setModalState(() => creating = true);
+                          try {
+                            await FirebaseFirestore.instance
+                                .collection('agencies')
+                                .doc(sid)
+                                .set({
+                              'agencyId': sid,
+                              'name': sname,
+                              'ownerNumericId': sowner,
+                              'parentAgencyId': parentAgencyId,
+                              'commissionRate': 0.04,
+                              'totalHosts': 0,
+                              'withdrawnCommissionPoints': 0,
+                              'bonusCommissionPoints': 0,
+                              'createdAt': FieldValue.serverTimestamp(),
+                            }, SetOptions(merge: true));
+                            if (ctx.mounted) Navigator.pop(ctx);
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text("Sub-agency $sname linked!"),
+                                  backgroundColor: kCyanBlue,
+                                ),
+                              );
+                            }
+                          } finally {
+                            if (ctx.mounted) {
+                              setModalState(() => creating = false);
+
+}
+                          }
+                        },
+                  child: const Text(
+                    "Link Sub-Agency",
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
                 ),
               ),
             ],
           ),
-          content: Column(
+        ),
+      ),
+    );
+  }
+
+  void _showEditNameDialog(String agencyId, String currentName) {
+    final ctrl = TextEditingController(text: currentName);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: const Text(
+          "Edit Agency Name",
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        content: TextField(
+          controller: ctrl,
+          decoration: InputDecoration(
+            hintText: "Enter agency name",
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Cancel"),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: kTealGreen,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () async {
+              final val = ctrl.text.trim();
+              if (val.isNotEmpty) {
+                await FirebaseFirestore.instance
+                    .collection('agencies')
+                    .doc(agencyId)
+                    .update({'name': val});
+              }
+              if (ctx.mounted) Navigator.pop(ctx);
+            },
+            child: const Text("Save"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAgencyTagSheet(String agencyId, List<String> currentTags) {
+    final allTags = [
+      "VIP Voice",
+      "PK Champions",
+      "Music & Party",
+      "24/7 Active",
+      "Top Recruiters",
+    ];
+    final selected = Set<String>.from(currentTags);
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) => Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                "Enter Host's User Numeric ID:",
-                style: TextStyle(color: textMuted, fontSize: 12),
-              ),
-              const SizedBox(height: 10),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                decoration: BoxDecoration(
-
-color: whiteCard,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: borderShiro),
+                "Agency Tag",
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: kTextDark,
                 ),
-                child: TextField(
-                  controller: _hostIdController,
-                  keyboardType: TextInputType.number,
-                  style: const TextStyle(
-                    color: textBlack,
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold,
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                "Choose up to 2 tags for your agency badge:",
+                style: TextStyle(fontSize: 12.5, color: kTextMuted),
+              ),
+              const SizedBox(height: 14),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: allTags.map((tag) {
+                  final isOn = selected.contains(tag);
+                  return FilterChip(
+                    label: Text(tag),
+                    selected: isOn,
+                    selectedColor: kTealGreen.withOpacity(0.2),
+                    checkmarkColor: kTealGreen,
+                    onSelected: (val) {
+                      setModalState(() {
+                        if (val && selected.length < 2) {
+                          selected.add(tag);
+                        } else {
+                          selected.remove(tag);
+                        }
+                      });
+                    },
+                  );
+                }).toList(),
+
+),
+              const SizedBox(height: 18),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: kTealGreen,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 13),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
                   ),
-                  decoration: const InputDecoration(
-                    hintText: "e.g. 100058",
-                    hintStyle: TextStyle(color: Colors.black38, fontSize: 13),
-                    border: InputBorder.none,
+                  onPressed: () async {
+                    await FirebaseFirestore.instance
+                        .collection('agencies')
+                        .doc(agencyId)
+                        .update({'tags': selected.toList()});
+                    if (ctx.mounted) Navigator.pop(ctx);
+                  },
+                  child: const Text(
+                    "Save Tag",
+                    style: TextStyle(fontWeight: FontWeight.bold),
                   ),
                 ),
               ),
             ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text("Cancel", style: TextStyle(color: textMuted)),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: accentBrown,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
-              ),
-              onPressed: addAction,
-              child: const Text(
-                "Add Host",
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-            ),
-          ],
-        );
-      },
+        ),
+      ),
     );
   }
 
-  void _showAgencyPayoutDialog({
+  void _showRulesSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              "Commission Rules",
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: kTextDark,
+              ),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              "10,000 Points = \$1.00 USD • Minimum Payout: \$10.00 USD",
+              style: TextStyle(fontSize: 12.5, color: kTextMuted),
+            ),
+            const SizedBox(height: 12),
+            ..._tiers.map((t) {
+              final minStr = _fmtNum(t['min'] as int, decimals: 0);
+              final maxStr = _fmtNum(t['max'] as int, decimals: 0);
+              final pct = ((t['rate'] as double) * 100).round();
+              return Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: kOverviewTileBg,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      "$minStr – $maxStr pts",
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: kTextDark,
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: kTealGreen,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        "$pct%",
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
+          ],
+        ),
+      ),
+    );
+  }
+
+void _showHostsSheet(
+      String agencyId, String agencyName, List<QueryDocumentSnapshot> hosts) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      builder: (ctx) => DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.6,
+        maxChildSize: 0.85,
+        builder: (_, scrollCtrl) => Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    "Host Number (${hosts.length})",
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: kTextDark,
+                    ),
+                  ),
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: kTealGreen,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                    ),
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      _showInviteHostSheet(agencyId, agencyName);
+                    },
+                    icon: const Icon(Icons.add, size: 16),
+                    label: const Text("Invite Host"),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              if (hosts.isEmpty)
+                const Expanded(
+                  child: Center(
+                    child: Text(
+                      "No hosts recruited yet.",
+                      style: TextStyle(color: kTextMuted),
+                    ),
+                  ),
+                )
+              else
+                Expanded(
+                  child: ListView.separated(
+                    controller: scrollCtrl,
+                    itemCount: hosts.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (_, idx) {
+                      final doc = hosts[idx];
+                      final raw = doc.data();
+                      final Map<String, dynamic> h =
+                          raw is Map<String, dynamic> ? raw : {};
+                      final name = (h['name'] ?? 'Host').toString();
+                      final numericId = (h['numericId'] as num?)?.toInt() ?? 0;
+                      int pts = (h['points'] as num?)?.toInt() ?? 0;
+                      if (pts == 0) {
+                        pts = (h['diamonds'] as num?)?.toInt() ?? 0;
+                      }
+                      final micMins =
+                          (h['todayMicMinutes'] as num?)?.toInt() ?? 0;
+
+                      return ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: CircleAvatar(
+                          backgroundColor: kTealGreen.withOpacity(0.15),
+                          child: Text(
+                            name.isNotEmpty ? name[0].toUpperCase() : "H",
+                            style: const TextStyle(
+                              color: kTealGreen,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        title: Text(
+                          name,
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+
+),
+                        subtitle: Text("ID: $numericId • Mic: $micMins mins"),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              "$pts pts",
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: kTealGreen,
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(
+                                Icons.remove_circle_outline,
+                                color: Colors.redAccent,
+                                size: 20,
+                              ),
+                              onPressed: () {
+                                Navigator.pop(ctx);
+                                _removeHostFromAgency(agencyId, doc.id, name);
+                              },
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showSubAgenciesSheet(
+      String parentAgencyId, List<QueryDocumentSnapshot> subAgencies) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  "Sub-agency Number (${subAgencies.length})",
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: kTextDark,
+                  ),
+                ),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: kCyanBlue,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                  ),
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    _showInviteAgencySheet(parentAgencyId);
+                  },
+                  icon: const Icon(Icons.add, size: 16),
+                  label: const Text("Invite Agency"),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (subAgencies.isEmpty)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 24),
+                child: Center(
+                  child: Text(
+                    "No sub-agencies linked yet.",
+                    style: TextStyle(color: kTextMuted),
+                  ),
+                ),
+              )
+            else
+              Flexible(
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: subAgencies.length,
+                  separatorBuilder: (_, __) => const Divider(height: 1),
+                  itemBuilder: (_, idx) {
+                    final raw = subAgencies[idx].data();
+                    final Map<String, dynamic> s =
+                        raw is Map<String, dynamic> ? raw : {};
+                    return ListTile(
+                      contentPadding: EdgeInsets.zero,
+
+leading: CircleAvatar(
+                        backgroundColor: kCyanBlue.withOpacity(0.15),
+                        child: const Icon(Icons.apartment, color: kCyanBlue),
+                      ),
+                      title: Text(
+                        (s['name'] ?? 'Sub-Agency').toString(),
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      subtitle: Text("ID: ${s['agencyId'] ?? subAgencies[idx].id}"),
+                      trailing: Text(
+                        "${s['totalHosts'] ?? 0} Hosts",
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: kCyanBlue,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showIncomeAndPayoutSheet({
+    required String title,
     required String agencyId,
     required String agencyName,
     required int availableCommissionPoints,
-    required double availableCommissionUsd,
+    required double commissionUsd,
+    required int ratePct,
   }) {
-    showDialog(
+    final bool canWithdraw = commissionUsd >= 10.0;
+
+    showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
       builder: (ctx) => StatefulBuilder(
-        builder: (context, setDialogState) {
+        builder: (ctx, setSheetState) {
           String accountHint = "Enter Binance Pay ID";
           if (_selectedPayoutMethod == "Telebirr") {
             accountHint = "Enter Telebirr Phone (+251...)";
@@ -317,193 +1039,191 @@ color: whiteCard,
             accountHint = "Enter CBE Account (1000...)";
           }
 
-          return AlertDialog(
-            backgroundColor: shiroBg,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
-              side: const BorderSide(color: borderShiro, width: 1.2),
+          return Padding(
+            padding: EdgeInsets.only(
+              left: 20,
+              right: 20,
+              top: 20,
+              bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
             ),
-            title: const Row(
-              children: [
-                Icon(Icons.account_balance_wallet, color: accentGold, size: 24),
-                SizedBox(width: 8),
-                Text(
-                  "Agency Profit Payout",
-                  style: TextStyle(
-                    color: textBlack,
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-            ),
-            content: Column(
+            child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  "Available: \$${availableCommissionUsd.toStringAsFixed(2)} USD ($availableCommissionPoints Pts)",
+                  title,
                   style: const TextStyle(
-                    color: accentGreen,
+                    fontSize: 18,
                     fontWeight: FontWeight.bold,
-                    fontSize: 13.5,
+                    color: kTextDark,
                   ),
                 ),
                 const SizedBox(height: 12),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [kMintCardStart, kMintCardEnd],
+                    ),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "Available Net Commission ($ratePct% Rate)",
+                        style: const TextStyle(fontSize: 12, color: kTextMuted),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        "\$${commissionUsd.toStringAsFixed(2)} USD",
+                        style: const TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.w900,
+                          color: kTextDark,
+                        ),
+                      ),
+                      Text(
+                        "$availableCommissionPoints Points (10,000 Pts = \$1)",
+                        style: const TextStyle(fontSize: 11.5, color: kTextMuted),
+
+),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
                 const Text(
-                  "Select Payment Method:",
+                  "Withdraw Method:",
                   style: TextStyle(
-                    color: textMuted,
-                    fontSize: 12,
+                    fontSize: 12.5,
                     fontWeight: FontWeight.bold,
+                    color: kTextDark,
                   ),
                 ),
                 const SizedBox(height: 6),
                 Wrap(
                   spacing: 6,
                   children: [
-
-"Binance Pay (USDT)",
+                    "Binance Pay (USDT)",
                     "Telebirr",
                     "CBE Bank",
                   ].map((method) {
-                    final bool isSelected = _selectedPayoutMethod == method;
-                    Color chipBg = whiteCard;
-                    Color chipText = textBlack;
-                    if (isSelected) {
-                      chipBg = accentBrown;
-                      chipText = Colors.white;
-                    }
+                    final isSel = _selectedPayoutMethod == method;
                     return ChoiceChip(
                       label: Text(method),
-                      selected: isSelected,
-                      selectedColor: accentBrown,
-                      backgroundColor: chipBg,
+                      selected: isSel,
+                      selectedColor: kTealGreen,
                       labelStyle: TextStyle(
-                        color: chipText,
-                        fontSize: 11,
+                        color: isSel ? Colors.white : kTextDark,
+                        fontSize: 11.5,
                         fontWeight: FontWeight.bold,
                       ),
                       onSelected: (_) {
-                        setDialogState(() => _selectedPayoutMethod = method);
+                        setSheetState(() => _selectedPayoutMethod = method);
                       },
                     );
                   }).toList(),
                 ),
-                const SizedBox(height: 12),
-                const Text(
-                  "Account Details:",
-                  style: TextStyle(
-                    color: textMuted,
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _payoutAccountController,
+                  decoration: InputDecoration(
+                    hintText: accountHint,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
                 ),
-                const SizedBox(height: 6),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  decoration: BoxDecoration(
-                    color: whiteCard,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: borderShiro),
-                  ),
-                  child: TextField(
-                    controller: _payoutAccountController,
-                    style: const TextStyle(
-                      color: textBlack,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
+                const SizedBox(height: 14),
+                SizedBox(
+                  width: double.infinity,
+                  height: 46,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: canWithdraw ? kTealGreen : Colors.black26,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(23),
+                      ),
                     ),
-                    decoration: InputDecoration(
-                      hintText: accountHint,
-                      hintStyle:
-                          const TextStyle(color: Colors.black38, fontSize: 13),
-                      border: InputBorder.none,
+                    onPressed: canWithdraw
+                        ? () async {
+                            final accountVal =
+                                _payoutAccountController.text.trim();
+                            if (accountVal.isEmpty) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text("Please enter account details"),
+                                ),
+                              );
+                              return;
+                            }
+
+                            Navigator.pop(ctx);
+
+                            final String currencyCode =
+                                _selectedPayoutMethod == "Binance Pay (USDT)"
+                                    ? "USDT"
+                                    : "ETB";
+
+                            final batch = FirebaseFirestore.instance.batch();
+                            final requestRef = FirebaseFirestore.instance
+                                .collection('withdraw_requests')
+                                .doc();
+
+                            batch.set(requestRef, {
+                              'requestId': requestRef.id,
+                              'userUid': _currentUser!.uid,
+                              'uid': _currentUser!.uid,
+                              'userNumericId': widget.userNumericId,
+                              'userName': "$agencyName (Agency)",
+                              'agencyId': agencyId,
+
+'points': availableCommissionPoints,
+                              'usdAmount': commissionUsd,
+                              'method': _selectedPayoutMethod,
+                              'currency': currencyCode,
+                              'account': accountVal,
+                              'accountDetails': accountVal,
+                              'type': 'AGENCY_COMMISSION',
+                              'status': 'PENDING',
+                              'createdAt': FieldValue.serverTimestamp(),
+                            });
+
+                            final agencyRef = FirebaseFirestore.instance
+                                .collection('agencies')
+                                .doc(agencyId);
+                            batch.update(agencyRef, {
+                              'withdrawnCommissionPoints': FieldValue.increment(
+                                  availableCommissionPoints),
+                            });
+
+                            await batch.commit();
+                            _payoutAccountController.clear();
+
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    "Agency payout request submitted for review!",
+                                  ),
+                                  backgroundColor: kTealGreen,
+                                ),
+                              );
+                            }
+                          }
+                        : null,
+                    child: Text(
+                      canWithdraw
+                          ? "Withdraw Agency Profit"
+                          : "Min. \$10.00 USD to Withdraw",
+                      style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
                   ),
                 ),
               ],
             ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text("Cancel", style: TextStyle(color: textMuted)),
-              ),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: accentGreen,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
-                ),
-                onPressed: () async {
-                  final accountVal = _payoutAccountController.text.trim();
-                  if (accountVal.isEmpty) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                          content: Text("Please enter account details")),
-                    );
-                    return;
-                  }
-
-                  Navigator.pop(ctx);
-
-                  String currencyCode = "USDT";
-                  if (_selectedPayoutMethod != "Binance Pay (USDT)") {
-                    currencyCode = "ETB";
-                  }
-
-                  final batch = FirebaseFirestore.instance.batch();
-                  final requestRef = FirebaseFirestore.instance
-                      .collection('withdraw_requests')
-                      .doc();
-
-                  batch.set(requestRef, {
-
-'requestId': requestRef.id,
-                    'userUid': _currentUser!.uid,
-                    'uid': _currentUser!.uid,
-                    'userNumericId': widget.userNumericId,
-                    'userName': "$agencyName (Agency)",
-                    'agencyId': agencyId,
-                    'points': availableCommissionPoints,
-                    'usdAmount': availableCommissionUsd,
-                    'method': _selectedPayoutMethod,
-                    'currency': currencyCode,
-                    'account': accountVal,
-                    'accountDetails': accountVal,
-                    'type': 'AGENCY_COMMISSION',
-                    'status': 'PENDING',
-                    'createdAt': FieldValue.serverTimestamp(),
-                  });
-
-                  final agencyRef = FirebaseFirestore.instance
-                      .collection('agencies')
-                      .doc(agencyId);
-                  batch.update(agencyRef, {
-                    'withdrawnCommissionPoints':
-                        FieldValue.increment(availableCommissionPoints),
-                  });
-
-                  await batch.commit();
-                  _payoutAccountController.clear();
-
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content:
-                            Text("Agency payout request submitted for review!"),
-                        backgroundColor: accentGreen,
-                      ),
-                    );
-                  }
-                },
-                child: const Text(
-                  "Submit Payout",
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-              ),
-            ],
           );
         },
       ),
@@ -515,9 +1235,9 @@ color: whiteCard,
     final user = _currentUser;
     if (user == null) {
       return const Scaffold(
-        backgroundColor: shiroBg,
+        backgroundColor: kBgColor,
         body: Center(
-          child: Text("Please login first", style: TextStyle(color: textBlack)),
+          child: Text("Please login first", style: TextStyle(color: kTextDark)),
         ),
       );
     }
@@ -531,9 +1251,9 @@ color: whiteCard,
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
           return const Scaffold(
-            backgroundColor: shiroBg,
+            backgroundColor: kBgColor,
             body: Center(
-              child: CircularProgressIndicator(color: accentBrown),
+              child: CircularProgressIndicator(color: kTealGreen),
             ),
           );
         }
@@ -548,15 +1268,15 @@ color: whiteCard,
             rawAgency is Map<String, dynamic> ? rawAgency : {};
         final agencyId = agencyDoc.id;
 
-        String agencyName = "My Agency";
-        if (agencyData['name'] != null) {
-          agencyName = agencyData['name'].toString();
-        }
-
+        final String agencyName =
+            (agencyData['name'] ?? "MY AGENCY").toString();
         final int withdrawnPoints =
             (agencyData['withdrawnCommissionPoints'] as num?)?.toInt() ?? 0;
         final int bonusCommissionPoints =
             (agencyData['bonusCommissionPoints'] as num?)?.toInt() ?? 0;
+        final List<String> tags = agencyData['tags'] is List
+            ? List<String>.from(agencyData['tags'])
+            : ["VIP Voice"];
 
         return StreamBuilder<QuerySnapshot>(
           stream: FirebaseFirestore.instance
@@ -564,90 +1284,801 @@ color: whiteCard,
               .where('agencyId', isEqualTo: agencyId)
               .snapshots(),
           builder: (context, hostsSnap) {
-            List hostsList = [];
-            if (hostsSnap.hasData) {
-              hostsList = hostsSnap.data!.docs;
-            }
+            final List<QueryDocumentSnapshot> hostsList =
+                hostsSnap.hasData ? hostsSnap.data!.docs : [];
 
             int totalHostPoints = 0;
-            for (var doc in hostsList) {
+            int todayHostPoints = 0;
 
-final rawH = doc.data();
+for (final doc in hostsList) {
+              final rawH = doc.data();
               final Map<String, dynamic> hData =
                   rawH is Map<String, dynamic> ? rawH : {};
               int pts = (hData['points'] as num?)?.toInt() ?? 0;
               if (pts == 0) {
                 pts = (hData['diamonds'] as num?)?.toInt() ?? 0;
               }
+              final int tPts = (hData['todayTaskPoints'] as num?)?.toInt() ?? 0;
               totalHostPoints += pts;
+              todayHostPoints += tPts;
             }
 
-            final int grossCommissionPoints =
-                (totalHostPoints * _agencyCommissionRate).round() +
-                    bonusCommissionPoints;
-            int availableCommissionPoints =
-                grossCommissionPoints - withdrawnPoints;
-            if (availableCommissionPoints < 0) {
-              availableCommissionPoints = 0;
-            }
+            return StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('agencies')
+                  .where('parentAgencyId', isEqualTo: agencyId)
+                  .snapshots(),
+              builder: (context, subSnap) {
+                final List<QueryDocumentSnapshot> subAgenciesList =
+                    subSnap.hasData ? subSnap.data!.docs : [];
 
-            final double commissionUsd =
-                availableCommissionPoints / _pointsPerUsd;
+                final tier = _getTierForPoints(totalHostPoints);
+                final int tierMin = tier['min'] as int;
+                final int tierMax = tier['max'] as int;
+                final double rate = tier['rate'] as double;
+                final int currentPct = (rate * 100).round();
+                final int nextPct =
+                    ((tier['nextRate'] as double) * 100).round();
 
-            return Scaffold(
-              backgroundColor: shiroBg,
-              appBar: AppBar(
-                backgroundColor: shiroCard,
-                elevation: 0,
-                leading: IconButton(
-                  icon: const Icon(Icons.arrow_back_ios_new,
-                      color: textBlack, size: 18),
-                  onPressed: () => Navigator.pop(context),
-                ),
-                title: Text(
-                  agencyName,
-                  style: const TextStyle(
-                    color: textBlack,
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
+                final int remainingPoints = max(0, tierMax - totalHostPoints);
+                final double progress = ((totalHostPoints - tierMin) /
+                        max(1, tierMax - tierMin))
+                    .clamp(0.0, 1.0);
+
+                final double myIncomeToday = todayHostPoints * rate;
+                final int grossCommissionPoints =
+                    (totalHostPoints * rate).round() + bonusCommissionPoints;
+                final int availableCommissionPoints =
+                    max(0, grossCommissionPoints - withdrawnPoints);
+                final double commissionUsd =
+                    availableCommissionPoints / _pointsPerUsd;
+
+                return Scaffold(
+                  backgroundColor: kBgColor,
+                  appBar: AppBar(
+                    backgroundColor: kBgColor,
+                    elevation: 0,
+                    centerTitle: true,
+                    leading: IconButton(
+                      icon: const Icon(
+                        Icons.arrow_back_ios_new,
+                        color: kTextDark,
+                        size: 20,
+                      ),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                    title: const Text(
+                      "Agency Center",
+                      style: TextStyle(
+                        color: kTextDark,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    actions: [
+                      IconButton(
+                        icon: const Icon(
+                          Icons.help_outline_rounded,
+                          color: kTextDark,
+                          size: 23,
+                        ),
+                        onPressed: _showRulesSheet,
+                      ),
+                    ],
                   ),
-                ),
-                centerTitle: true,
-                actions: [
-                  IconButton(
-                    icon:
-                        const Icon(Icons.person_add_alt_1, color: accentBrown),
-                    tooltip: "Recruit Host",
-                    onPressed: () => _showAddHostDialog(agencyId, agencyName),
+                  body: SingleChildScrollView(
+                    physics: const BouncingScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(16, 6, 16, 28),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // 1. Agency Header Row
+                        Row(
+                          children: [
+                            Container(
+                              width: 60,
+                              height: 60,
+
+decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                gradient: const LinearGradient(
+                                  colors: [
+                                    Color(0xFF2D2216),
+                                    Color(0xFF120D08),
+                                  ],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                border: Border.all(
+                                  color: const Color(0xFFFFD700),
+                                  width: 2,
+                                ),
+                              ),
+                              child: const Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.emoji_events,
+                                    color: Color(0xFFFFD700),
+                                    size: 22,
+                                  ),
+                                  Text(
+                                    "KING",
+                                    style: TextStyle(
+                                      color: Color(0xFFFFD700),
+                                      fontSize: 8.5,
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    agencyName,
+                                    style: const TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w800,
+                                      color: kTextDark,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  const SizedBox(height: 4),
+                                  GestureDetector(
+                                    onTap: () =>
+                                        _copyText(agencyId, "Agency ID"),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          "ID:$agencyId",
+                                          style: const TextStyle(
+                                            fontSize: 13,
+                                            color: kTextMuted,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 6),
+                                        const Icon(
+                                          Icons.copy_rounded,
+                                          size: 15,
+                                          color: kTextMuted,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+
+),
+                            IconButton(
+                              icon: const Icon(
+                                Icons.edit_outlined,
+                                color: kTextMuted,
+                                size: 22,
+                              ),
+                              onPressed: () =>
+                                  _showEditNameDialog(agencyId, agencyName),
+                            ),
+                          ],
+                        ),
+
+                        const SizedBox(height: 16),
+
+                        // 2. Invite Host & Invite Agency Pill Buttons
+                        Row(
+                          children: [
+                            Expanded(
+                              child: SizedBox(
+                                height: 46,
+                                child: ElevatedButton(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: kTealGreen,
+                                    foregroundColor: Colors.white,
+                                    elevation: 0,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(23),
+                                    ),
+                                  ),
+                                  onPressed: () => _showInviteHostSheet(
+                                      agencyId, agencyName),
+                                  child: const Text(
+                                    "Invite Host",
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: SizedBox(
+                                height: 46,
+                                child: ElevatedButton(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: kCyanBlue,
+                                    foregroundColor: Colors.white,
+                                    elevation: 0,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(23),
+                                    ),
+                                  ),
+                                  onPressed: () =>
+                                      _showInviteAgencySheet(agencyId),
+                                  child: const Text(
+                                    "Invite Agency",
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        const SizedBox(height: 14),
+
+                        // 3. Agency Tag Card
+                        GestureDetector(
+                          onTap: () => _showAgencyTagSheet(agencyId, tags),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 14,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+
+borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: Row(
+                              children: [
+                                const Text(
+                                  "Agency Tag",
+                                  style: TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w600,
+                                    color: kTextDark,
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Wrap(
+                                    spacing: 6,
+                                    children: tags
+                                        .take(2)
+                                        .map(
+                                          (t) => Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 8,
+                                              vertical: 2,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: kOverviewTileBg,
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                            ),
+                                            child: Text(
+                                              t,
+                                              style: const TextStyle(
+                                                fontSize: 11,
+                                                color: kTealGreen,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                          ),
+                                        )
+                                        .toList(),
+                                  ),
+                                ),
+                                const Icon(
+                                  Icons.chevron_right_rounded,
+                                  color: kTextMuted,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+
+                        const SizedBox(height: 14),
+
+                        // 4. Income & Next-Level Progress Card
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [kMintCardStart, kMintCardEnd],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Column(
+                            children: [
+                              Row(
+                                children: [
+                                  const Text(
+                                    "My Income Today:",
+                                    style: TextStyle(
+                                      fontSize: 14.5,
+                                      color: kTextDark,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+
+_coinBadge(),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    _fmtNum(myIncomeToday, decimals: 1),
+                                    style: const TextStyle(
+                                      fontSize: 17,
+                                      fontWeight: FontWeight.w800,
+                                      color: kTextDark,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                children: [
+                                  const Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        "Total Host Points:",
+                                        style: TextStyle(
+                                          fontSize: 14.5,
+                                          color: kTextDark,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                      Text(
+                                        "Past 30 Days",
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color: kTextMuted,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(width: 8),
+                                  _coinBadge(),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    _fmtNum(totalHostPoints, decimals: 1),
+                                    style: const TextStyle(
+                                      fontSize: 17,
+                                      fontWeight: FontWeight.w800,
+                                      color: kTextDark,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              Row(
+                                children: [
+                                  const Text(
+                                    "Commission Rate",
+                                    style: TextStyle(
+                                      fontSize: 14.5,
+                                      color: kTextDark,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  _coinBadge(),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    "$currentPct%",
+                                    style: const TextStyle(
+                                      fontSize: 17,
+                                      fontWeight: FontWeight.w800,
+                                      color: kTextDark,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 14),
+
+Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Wrap(
+                                      crossAxisAlignment:
+                                          WrapCrossAlignment.center,
+                                      spacing: 4,
+                                      children: [
+                                        const Text(
+                                          "Still need",
+                                          style: TextStyle(
+                                            fontSize: 12.5,
+                                            color: kTextDark,
+                                          ),
+                                        ),
+                                        _coinBadge(),
+                                        Text(
+                                          _fmtNum(remainingPoints, decimals: 1),
+                                          style: const TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.bold,
+                                            color: kTextDark,
+                                          ),
+                                        ),
+                                        const Text(
+                                          "to reach next level",
+                                          style: TextStyle(
+                                            fontSize: 12.5,
+                                            color: kTextDark,
+                                          ),
+                                        ),
+                                        Text(
+                                          "$nextPct%",
+                                          style: const TextStyle(
+                                            fontSize: 13.5,
+                                            fontWeight: FontWeight.w800,
+                                            color: kCoralRed,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 10),
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(6),
+                                      child: LinearProgressIndicator(
+                                        value: progress,
+                                        minHeight: 7,
+                                        backgroundColor:
+                                            const Color(0xFFE6ECEF),
+                                        valueColor:
+                                            const AlwaysStoppedAnimation<Color>(
+                                          kTealGreen,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            _coinBadge(),
+
+const SizedBox(width: 4),
+                                            Text(
+                                              _fmtNum(tierMin, decimals: 0),
+                                              style: const TextStyle(
+                                                fontSize: 11.5,
+                                                color: kTextDark,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        Row(
+                                          children: [
+                                            _coinBadge(),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              _fmtNum(tierMax, decimals: 0),
+                                              style: const TextStyle(
+                                                fontSize: 11.5,
+                                                color: kTextDark,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        const SizedBox(height: 14),
+
+                        // 5. Overview 2x3 Grid Card
+                        Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                "Overview",
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: kTextDark,
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: _overviewMetricBox(
+                                      title: "Host Points",
+                                      subtitle: "Today",
+                                      value: _fmtNum(todayHostPoints),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: _overviewMetricBox(
+                                      title: "My Hosts Points",
+                                      subtitle: "Past 30 Days",
+                                      value: _fmtNum(totalHostPoints),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 10),
+                              Row(
+                                children: [
+
+Expanded(
+                                    child: _overviewMetricBox(
+                                      title: "Sub-agent Host Points",
+                                      subtitle: "Today",
+                                      value: "0.0",
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: _overviewMetricBox(
+                                      title: "Sub-agent Host Points",
+                                      subtitle: "Past 30 Days",
+                                      value: "0.0",
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 10),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: _overviewCountBox(
+                                      title: "Host Number",
+                                      count: "${hostsList.length}",
+                                      onTap: () => _showHostsSheet(
+                                        agencyId,
+                                        agencyName,
+                                        hostsList,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: _overviewCountBox(
+                                      title: "Sub-agency Number",
+                                      count: "${subAgenciesList.length}",
+                                      onTap: () => _showSubAgenciesSheet(
+                                        agencyId,
+                                        subAgenciesList,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        const SizedBox(height: 14),
+
+                        // 6. Income & Payout Navigation Card
+                        Container(
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Column(
+                            children: [
+                              _incomeNavRow(
+                                icon: Icons.mic_none_rounded,
+                                title: "Host Income",
+                                onTap: () => _showIncomeAndPayoutSheet(
+                                  title: "Host Income & Profit Payout",
+                                  agencyId: agencyId,
+                                  agencyName: agencyName,
+                                  availableCommissionPoints:
+                                      availableCommissionPoints,
+                                  commissionUsd: commissionUsd,
+                                  ratePct: currentPct,
+                                ),
+                              ),
+                              const Divider(
+                                height: 1,
+                                indent: 50,
+                                color: Color(0xFFF0F2F5),
+                              ),
+                              _incomeNavRow(
+                                icon: Icons.verified_user_outlined,
+
+title: "Sub-agency Income",
+                                onTap: () => _showIncomeAndPayoutSheet(
+                                  title: "Sub-agency Income",
+                                  agencyId: agencyId,
+                                  agencyName: agencyName,
+                                  availableCommissionPoints:
+                                      availableCommissionPoints,
+                                  commissionUsd: commissionUsd,
+                                  ratePct: currentPct,
+                                ),
+                              ),
+                              const Divider(
+                                height: 1,
+                                indent: 50,
+                                color: Color(0xFFF0F2F5),
+                              ),
+                              _incomeNavRow(
+                                icon: Icons.pending_outlined,
+                                title: "Other income",
+                                onTap: () => _showIncomeAndPayoutSheet(
+                                  title: "Other Income",
+                                  agencyId: agencyId,
+                                  agencyName: agencyName,
+                                  availableCommissionPoints:
+                                      availableCommissionPoints,
+                                  commissionUsd: commissionUsd,
+                                  ratePct: currentPct,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        const SizedBox(height: 14),
+
+                        // 7. Contact Admin Card
+                        Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                "Contact Admin",
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: kTextDark,
+                                ),
+                              ),
+                              const SizedBox(height: 14),
+                              Row(
+                                children: [
+                                  Container(
+                                    width: 40,
+                                    height: 40,
+                                    decoration: const BoxDecoration(
+                                      color: Color(0xFF25D366),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(
+                                      Icons.chat_rounded,
+                                      color: Colors.white,
+                                      size: 22,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  const Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          "WhatsApp",
+
+style: TextStyle(
+                                            fontSize: 14.5,
+                                            fontWeight: FontWeight.w600,
+                                            color: kTextDark,
+                                          ),
+                                        ),
+                                        SizedBox(height: 2),
+                                        Text(
+                                          "+251900000000",
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: kTextMuted,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  _contactPillButton(
+                                    onTap: () => _copyText(
+                                      "+251900000000",
+                                      "Admin WhatsApp",
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 14),
+                              Row(
+                                children: [
+                                  Container(
+                                    width: 40,
+                                    height: 40,
+                                    decoration: const BoxDecoration(
+                                      color: Color(0xFF2AABEE),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(
+                                      Icons.send_rounded,
+                                      color: Colors.white,
+                                      size: 20,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  const Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          "Telegram",
+                                          style: TextStyle(
+                                            fontSize: 14.5,
+                                            fontWeight: FontWeight.w600,
+                                            color: kTextDark,
+                                          ),
+                                        ),
+                                        SizedBox(height: 2),
+                                        Text(
+                                          "@NILELive_Support",
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: kTextMuted,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  _contactPillButton(
+                                    onTap: () => _copyText(
+                                      "@NILELive_Support",
+                                      "Admin Telegram",
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ],
-                bottom: TabBar(
-                  controller: _tabController,
-                  indicatorColor: accentBrown,
-                  indicatorWeight: 3,
-                  labelColor: textBlack,
-                  unselectedLabelColor: textMuted,
-                  labelStyle: const TextStyle(fontWeight: FontWeight.bold),
-                  tabs: const [
-                    Tab(text: "Agency Hosts"),
-                    Tab(text: "Commission & Stats"),
-                  ],
-                ),
-              ),
-              body: TabBarView(
-                controller: _tabController,
-                children: [
-                  _buildHostsListTab(agencyId, agencyName, hostsList),
-                  _buildStatsTab(
-                    agencyId: agencyId,
-                    agencyName: agencyName,
-                    activeHostsCount: hostsList.length,
-                    totalHostPoints: totalHostPoints,
-                    availableCommissionPoints: availableCommissionPoints,
-                    commissionUsd: commissionUsd,
-                  ),
-                ],
-              ),
+                );
+              },
             );
           },
         );
@@ -655,541 +2086,324 @@ final rawH = doc.data();
     );
   }
 
-  Widget _buildHostsListTab(
-      String agencyId, String agencyName, List hosts) {
-    if (hosts.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.groups_outlined, color: textMuted, size: 54),
-              const SizedBox(height: 12),
-              const Text(
-                "No hosts in your agency yet.",
-                style: TextStyle(
-                  color: textBlack,
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                "Share Agency ID: $agencyId or tap Recruit Host below.",
-
-textAlign: TextAlign.center,
-                style: const TextStyle(color: textMuted, fontSize: 12),
-              ),
-              const SizedBox(height: 16),
-              ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: accentBrown,
-                  foregroundColor: Colors.white,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16)),
-                ),
-                onPressed: () => _showAddHostDialog(agencyId, agencyName),
-                icon: const Icon(Icons.add, size: 18),
-                label: const Text(
-                  "Recruit Host",
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    return ListView.builder(
-      padding: const EdgeInsets.all(14),
-      itemCount: hosts.length,
-      itemBuilder: (context, idx) {
-        final doc = hosts[idx];
-        final rawH = doc.data();
-        final Map<String, dynamic> h =
-            rawH is Map<String, dynamic> ? rawH : {};
-
-        String name = "Host";
-        if (h['name'] != null) {
-          name = h['name'].toString();
-        }
-        final int numericId = (h['numericId'] as num?)?.toInt() ?? 0;
-        int points = (h['points'] as num?)?.toInt() ?? 0;
-        if (points == 0) {
-          points = (h['diamonds'] as num?)?.toInt() ?? 0;
-        }
-        final int micMins = (h['todayMicMinutes'] as num?)?.toInt() ?? 0;
-
-        String initialChar = "H";
-        if (name.isNotEmpty) {
-          initialChar = name[0].toUpperCase();
-        }
-
-        return Container(
-          margin: const EdgeInsets.only(bottom: 10),
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: whiteCard,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: borderShiro),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: shiroCard,
-                ),
-                child: Center(
-                  child: Text(
-                    initialChar,
-                    style: const TextStyle(
-                      color: textBlack,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 18,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      name,
-                      style: const TextStyle(
-                        color: textBlack,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      "ID: $numericId • Mic Today: $micMins mins",
-                      style: const TextStyle(color: textMuted, fontSize: 11.5),
-                    ),
-                  ],
-                ),
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Row(
-                    children: [
-                      const Icon(Icons.stars_rounded,
-                          size: 15, color: accentGold),
-                      const SizedBox(width: 4),
-
-Text(
-                        "$points",
-                        style: const TextStyle(
-                          color: textBlack,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13.5,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 2),
-                  const Text(
-                    "Host Points",
-                    style: TextStyle(color: textMuted, fontSize: 10),
-                  ),
-                ],
-              ),
-              const SizedBox(width: 6),
-              IconButton(
-                icon: const Icon(Icons.remove_circle_outline,
-                    color: Colors.redAccent, size: 20),
-                tooltip: "Remove Host",
-                onPressed: () =>
-                    _removeHostFromAgency(agencyId, doc.id, name),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildStatsTab({
-    required String agencyId,
-    required String agencyName,
-    required int activeHostsCount,
-    required int totalHostPoints,
-    required int availableCommissionPoints,
-    required double commissionUsd,
+Widget _overviewMetricBox({
+    required String title,
+    required String subtitle,
+    required String value,
   }) {
-    final bool canWithdraw = commissionUsd >= 10.0;
-    VoidCallback? withdrawAction;
-    String withdrawBtnText = "Min. \$10 USD to Withdraw";
-    Color withdrawBtnColor = Colors.black26;
-
-    if (canWithdraw) {
-      withdrawBtnText = "Withdraw Agency Profit";
-      withdrawBtnColor = accentGreen;
-      withdrawAction = () => _showAgencyPayoutDialog(
-            agencyId: agencyId,
-            agencyName: agencyName,
-            availableCommissionPoints: availableCommissionPoints,
-            availableCommissionUsd: commissionUsd,
-          );
-    }
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Agency ID Copy Banner
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            decoration: BoxDecoration(
-              color: whiteCard,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: borderShiro),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      "Agency Invite ID (Share with Hosts)",
-                      style: TextStyle(color: textMuted, fontSize: 11),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      agencyId,
-                      style: const TextStyle(
-                        color: textBlack,
-                        fontSize: 13.5,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-                ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: shiroCard,
-                    foregroundColor: textBlack,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10)),
-                  ),
-                  onPressed: () => _copyAgencyId(agencyId),
-                  icon: const Icon(Icons.copy, size: 15, color: textBlack),
-                  label: const Text(
-                    "Copy",
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 14),
-
-// Commission Balance Card
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: shiroCard,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: borderShiro),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  "Agency Net Commission (15%)",
-                  style: TextStyle(
-                    color: textMuted,
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  "\$${commissionUsd.toStringAsFixed(2)} USD",
-                  style: const TextStyle(
-                    color: textBlack,
-                    fontSize: 28,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  "Available Commission Points: $availableCommissionPoints Pts (10,000 Pts = \$1)",
-                  style: const TextStyle(color: textMuted, fontSize: 11),
-                ),
-                const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  height: 46,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: withdrawBtnColor,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(22)),
-                      elevation: 0,
-                    ),
-                    onPressed: withdrawAction,
-                    child: Text(
-                      withdrawBtnText,
-                      style: const TextStyle(
-                          fontWeight: FontWeight.bold, fontSize: 13),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 20),
-          const Text(
-            "Agency Performance",
-            style: TextStyle(
-              color: textBlack,
-              fontSize: 14,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: _buildMetricCard(
-                  "Active Hosts",
-                  "$activeHostsCount",
-                  Icons.people,
-                  accentBrown,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _buildMetricCard(
-                  "Total Host Points",
-                  "$totalHostPoints",
-                  Icons.stars_rounded,
-                  accentGold,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: whiteCard,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: borderShiro),
-            ),
-            child: const Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  "Agency Policy Summary",
-                  style: TextStyle(
-                    color: textBlack,
-                    fontSize: 13,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                SizedBox(height: 6),
-                Text(
-
-"• Agency earns 15% commission on all host gift points.\n"
-                  "• Conversion rate: 10,000 Points = \$1.00 USD.\n"
-                  "• Minimum agency payout threshold is \$10.00 USD.",
-                  style: TextStyle(
-                    color: textMuted,
-                    fontSize: 11.5,
-                    height: 1.45,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMetricCard(
-      String label, String value, IconData icon, Color accent) {
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: whiteCard,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: borderShiro),
+        color: kOverviewTileBg,
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: accent, size: 22),
-          const SizedBox(height: 10),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Text(
-              value,
-              style: const TextStyle(
-                color: textBlack,
-                fontWeight: FontWeight.bold,
-                fontSize: 18,
-              ),
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 12.5,
+              color: kTextDark,
+              fontWeight: FontWeight.w500,
             ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
           const SizedBox(height: 2),
-          Text(label, style: const TextStyle(color: textMuted, fontSize: 11)),
+          Text(
+            subtitle,
+            style: const TextStyle(fontSize: 10.5, color: kTextMuted),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              _coinBadge(),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  value,
+                  style: const TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
+                    color: kTextDark,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildCreateAgencyPrompt() {
-    VoidCallback? createAction = () async {
-      final name = _agencyNameController.text.trim();
-      if (name.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Please enter an agency name")),
-        );
-        return;
-      }
-
-      setState(() => _isCreatingAgency = true);
-      try {
-        final agencyId = "AG_${DateTime.now().millisecondsSinceEpoch % 1000000}";
-        await FirebaseFirestore.instance
-            .collection('agencies')
-            .doc(agencyId)
-            .set({
-          'agencyId': agencyId,
-          'ownerUid': _currentUser!.uid,
-          'ownerNumericId': widget.userNumericId,
-          'name': name,
-          'commissionRate': _agencyCommissionRate,
-          'totalHosts': 0,
-          'withdrawnCommissionPoints': 0,
-          'bonusCommissionPoints': 0,
-          'createdAt': FieldValue.serverTimestamp(),
-        });
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text("Failed to create agency: $e")),
-          );
-        }
-      } finally {
-        if (mounted) setState(() => _isCreatingAgency = false);
-      }
-    };
-
-    Widget createChild = const Text(
-      "Launch Agency",
-      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+  Widget _overviewCountBox({
+    required String title,
+    required String count,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: kOverviewTileBg,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 12.5,
+                      color: kTextDark,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const Icon(
+                  Icons.chevron_right_rounded,
+                  size: 18,
+                  color: kTextMuted,
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              count,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                color: kTextDark,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
+  }
 
-    if (_isCreatingAgency) {
-      createAction = null;
-      createChild = const SizedBox(
-        width: 18,
-        height: 18,
-        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-      );
-    }
+  Widget _incomeNavRow({
+    required IconData icon,
+    required String title,
+    required VoidCallback onTap,
+  }) {
+    return ListTile(
+      onTap: onTap,
+      leading: Icon(icon, color: kTextDark, size: 22),
+      title: Text(
+        title,
+        style: const TextStyle(
+          fontSize: 14.5,
+          fontWeight: FontWeight.w600,
+          color: kTextDark,
+        ),
+      ),
+      trailing: const Icon(Icons.chevron_right_rounded, color: kTextMuted),
+    );
+  }
 
+  Widget _contactPillButton({required VoidCallback onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+        decoration: BoxDecoration(
+          color: const Color(0xFFE3F8F1),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: const Text(
+          "Contact",
+          style: TextStyle(
+            color: Color(0xFF00A86B),
+            fontWeight: FontWeight.bold,
+            fontSize: 13,
+          ),
+        ),
+      ),
+    );
+  }
+
+Widget _buildCreateAgencyPrompt() {
     return Scaffold(
-      backgroundColor: shiroBg,
+      backgroundColor: kBgColor,
       appBar: AppBar(
-        backgroundColor: shiroCard,
+        backgroundColor: kBgColor,
         elevation: 0,
+        centerTitle: true,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, color: textBlack, size: 18),
+          icon: const Icon(
+            Icons.arrow_back_ios_new,
+            color: kTextDark,
+            size: 20,
+          ),
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
-          "Create Agency",
+          "Agency Center",
           style: TextStyle(
-            color: textBlack,
-            fontSize: 16,
+            color: kTextDark,
+            fontSize: 18,
             fontWeight: FontWeight.bold,
           ),
         ),
       ),
       body: Padding(
         padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.business_center_outlined,
-                color: accentBrown, size: 64),
+        child: Center(
+          child: Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 68,
+                  height: 68,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF2D2216), Color(0xFF120D08)],
+                    ),
+                    border: Border.all(
+                      color: const Color(0xFFFFD700),
+                      width: 2,
+                    ),
+                  ),
+                  child: const Icon(
+                    Icons.emoji_events,
+                    color: Color(0xFFFFD700),
+                    size: 34,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  "Register Your Agency",
+                  style: TextStyle(
+                    color: kTextDark,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  "Recruit hosts, build sub-agencies, and earn daily agency commission.",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: kTextMuted, fontSize: 12.5),
+                ),
+                const SizedBox(height: 20),
+                TextField(
+                  controller: _agencyNameController,
+                  style: const TextStyle(
+                    color: kTextDark,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  decoration: InputDecoration(
+                    hintText: "Agency Name (e.g. NILE FAMS)",
+                    hintStyle: const TextStyle(
+                      color: Colors.black38,
+                      fontSize: 13,
+                    ),
+                    filled: true,
+                    fillColor: kBgColor,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: kTealGreen,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                    ),
+                    onPressed: _isCreatingAgency
+                        ? null
+                        : () async {
+                            final name = _agencyNameController.text.trim();
 
-const SizedBox(height: 14),
-            const Text(
-              "Register Your Agency",
-              style: TextStyle(
-                color: textBlack,
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 6),
-            const Text(
-              "Manage hosts, track room gift points, and earn 15% agency commission.",
-              textAlign: TextAlign.center,
-              style: TextStyle(color: textMuted, fontSize: 12.5),
-            ),
-            const SizedBox(height: 24),
-            TextField(
-              controller: _agencyNameController,
-              style: const TextStyle(
-                color: textBlack,
-                fontWeight: FontWeight.w600,
-              ),
-              decoration: InputDecoration(
-                hintText: "Agency Name (e.g. Nile Star Agency)",
-                hintStyle:
-                    const TextStyle(color: Colors.black38, fontSize: 13),
-                filled: true,
-                fillColor: whiteCard,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: const BorderSide(color: borderShiro),
+if (name.isEmpty) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text("Please enter an agency name"),
+                                ),
+                              );
+                              return;
+                            }
+
+                            setState(() => _isCreatingAgency = true);
+                            try {
+                              final agencyId =
+                                  "${1000000 + Random().nextInt(8999999)}";
+                              await FirebaseFirestore.instance
+                                  .collection('agencies')
+                                  .doc(agencyId)
+                                  .set({
+                                'agencyId': agencyId,
+                                'ownerUid': _currentUser!.uid,
+                                'ownerNumericId': widget.userNumericId,
+                                'name': name,
+                                'commissionRate': 0.04,
+                                'totalHosts': 0,
+                                'tags': ['VIP Voice'],
+                                'withdrawnCommissionPoints': 0,
+                                'bonusCommissionPoints': 0,
+                                'createdAt': FieldValue.serverTimestamp(),
+                              });
+                            } catch (e) {
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content:
+                                        Text("Failed to create agency: $e"),
+                                  ),
+                                );
+                              }
+                            } finally {
+                              if (mounted) {
+                                setState(() => _isCreatingAgency = false);
+                              }
+                            }
+                          },
+                    child: _isCreatingAgency
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Text(
+                            "Launch Agency",
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 15,
+                            ),
+                          ),
+                  ),
                 ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: const BorderSide(color: borderShiro),
-                ),
-              ),
+              ],
             ),
-            const SizedBox(height: 18),
-            SizedBox(
-              width: double.infinity,
-              height: 48,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: accentBrown,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(24)),
-                ),
-                onPressed: createAction,
-                child: createChild,
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
