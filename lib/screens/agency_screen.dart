@@ -44,7 +44,7 @@ class _AgencyScreenState extends State<AgencyScreen> {
   static const Color kOrangeCardStart = Color(0xFFF39C12);
   static const Color kOrangeCardEnd = Color(0xFFE67E22);
 
-  final List> _tiers = const [
+  final List _tiers = const [
     {'min': 0, 'max': 2000000, 'rate': 0.04, 'nextRate': 0.08},
     {'min': 2000000, 'max': 5000000, 'rate': 0.08, 'nextRate': 0.12},
     {'min': 5000000, 'max': 15000000, 'rate': 0.12, 'nextRate': 0.15},
