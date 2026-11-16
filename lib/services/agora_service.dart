@@ -16,15 +16,18 @@ class AgoraService extends ChangeNotifier {
   RtcEngine? get engine => _engine;
 
   bool _isInRoom = false;
+  bool _isChannelJoined = false;
   bool _isMinimized = false;
   bool _isMicMuted = false;
+  bool _currentIsSpeaker = false;
   String _currentRoomTitle = "";
   String _currentChannelId = "";
   int _currentUid = 0;
-  int _currentSeatCount = 12;
+  int _currentSeatCount = 30;
   String _lastError = "";
 
   bool get isInRoom => _isInRoom;
+  bool get isChannelJoined => _isChannelJoined;
   bool get isMinimized => _isMinimized;
   bool get isMicMuted => _isMicMuted;
   String get currentRoomTitle => _currentRoomTitle;
@@ -42,27 +45,25 @@ class AgoraService extends ChangeNotifier {
     required int uid,
     required bool isSpeaker,
   }) async {
-    String roleParam = "subscriber";
-    if (isSpeaker) {
-      roleParam = "publisher";
-    }
+    final String roleParam = isSpeaker ? "publisher" : "subscriber";
+    final uri = Uri.parse(
+      "$tokenServerBaseUrl/rtcToken?channelName=$channelId&uid=$uid&role=$roleParam",
+    );
 
-    try {
-      final uri = Uri.parse(
-        "$tokenServerBaseUrl/rtcToken?channelName=$channelId&uid=$uid&role=$roleParam",
-      );
-      final response = await http.get(uri).timeout(const Duration(seconds: 15));
-      if (response.statusCode == 200) {
-        final decoded = jsonDecode(response.body);
-        if (decoded is Map) {
-          if (decoded['token'] != null) {
-            return decoded['token'].toString();
+    for (int attempt = 0; attempt < 2; attempt++) {
+      try {
+        final response = await http.get(uri).timeout(const Duration(seconds: 45));
+        if (response.statusCode == 200) {
+          final decoded = jsonDecode(response.body);
+          if (decoded is Map && decoded['token'] != null) {
+            final t = decoded['token'].toString().trim();
+            if (t.isNotEmpty) return t;
           }
         }
+      } catch (e) {
+        _lastError = "Token fetch attempt ${attempt + 1} failed: $e";
+        debugPrint(_lastError);
       }
-    } catch (e) {
-      _lastError = "Token fetch failed: $e";
-      debugPrint(_lastError);
     }
     return "";
   }
@@ -71,10 +72,12 @@ class AgoraService extends ChangeNotifier {
     required Function(int uid) onUserJoined,
     required Function(int uid) onUserOffline,
     required Function(List<AudioVolumeInfo> speakers) onVolumeChanged,
+    Function(String errorMessage)? onError,
   }) async {
     onUserJoinedCallback = onUserJoined;
     onUserOfflineCallback = onUserOffline;
     onVolumeChangedCallback = onVolumeChanged;
+    if (onError != null) onErrorCallback = onError;
 
     if (_engine != null) return;
 
@@ -90,14 +93,22 @@ class AgoraService extends ChangeNotifier {
     _engine!.registerEventHandler(
       RtcEngineEventHandler(
         onJoinChannelSuccess: (RtcConnection connection, int elapsed) {
+          _isChannelJoined = true;
           debugPrint("Joined Agora channel: ${connection.channelId}");
+          _engine?.setEnableSpeakerphone(true);
+          notifyListeners();
+        },
+        onLeaveChannel: (RtcConnection connection, RtcStats stats) {
+          _isChannelJoined = false;
+          notifyListeners();
         },
         onUserJoined: (RtcConnection connection, int remoteUid, int elapsed) {
           onUserJoinedCallback?.call(remoteUid);
         },
         onUserOffline: (RtcConnection connection, int remoteUid, UserOfflineReasonType reason) {
           onUserOfflineCallback?.call(remoteUid);
-        },
+
+},
         onAudioVolumeIndication: (
           RtcConnection connection,
           List<AudioVolumeInfo> speakers,
@@ -105,6 +116,18 @@ class AgoraService extends ChangeNotifier {
           int speakerNumber,
         ) {
           onVolumeChangedCallback?.call(speakers);
+        },
+        onTokenPrivilegeWillExpire: (RtcConnection connection, String token) async {
+          if (_currentChannelId.isNotEmpty) {
+            final newToken = await _fetchRtcToken(
+              channelId: _currentChannelId,
+              uid: _currentUid,
+              isSpeaker: _currentIsSpeaker,
+            );
+            if (newToken.isNotEmpty) {
+              await _engine?.renewToken(newToken);
+            }
+          }
         },
         onError: (ErrorCodeType err, String msg) {
           _lastError = "Agora error $err: $msg";
@@ -115,18 +138,20 @@ class AgoraService extends ChangeNotifier {
     );
 
     await _engine!.setAudioProfile(
-      profile: AudioProfileType.audioProfileMusicStandard,
-      scenario: AudioScenarioType.audioScenarioGameStreaming,
+      profile: AudioProfileType.audioProfileDefault,
+      scenario: AudioScenarioType.audioScenarioChatroom,
     );
 
     await _engine!.enableAudioVolumeIndication(
-      interval: 200,
+      interval: 250,
       smooth: 3,
       reportVad: true,
     );
 
-await _engine!.enableAudio();
+    await _engine!.enableAudio();
     await _engine!.setDefaultAudioRouteToSpeakerphone(true);
+    await _engine!.adjustRecordingSignalVolume(100);
+    await _engine!.adjustPlaybackSignalVolume(100);
   }
 
   Future<void> joinRoom({
@@ -135,16 +160,14 @@ await _engine!.enableAudio();
     String? token,
     required bool isSpeaker,
     String roomTitle = "VIP Voice Room",
-    int seatCount = 12,
+    int seatCount = 30,
   }) async {
     if (_engine == null) return;
 
-    if (_isInRoom) {
-      if (_currentChannelId == channelId) {
-        _isMinimized = false;
-        notifyListeners();
-        return;
-      }
+    if (_isInRoom && _isChannelJoined && _currentChannelId == channelId) {
+      _isMinimized = false;
+      notifyListeners();
+      return;
     }
 
     if (isSpeaker) {
@@ -155,15 +178,13 @@ await _engine!.enableAudio();
     _currentUid = uid;
     _currentRoomTitle = roomTitle;
     _currentSeatCount = seatCount;
+    _currentIsSpeaker = isSpeaker;
     _isInRoom = true;
     _isMinimized = false;
-    _isMicMuted = false;
+    _isMicMuted = !isSpeaker;
     notifyListeners();
 
-    String activeToken = "";
-    if (token != null) {
-      activeToken = token.trim();
-    }
+    String activeToken = (token ?? "").trim();
     if (activeToken.isEmpty) {
       activeToken = await _fetchRtcToken(
         channelId: channelId,
@@ -172,10 +193,9 @@ await _engine!.enableAudio();
       );
     }
 
-    ClientRoleType targetRole = ClientRoleType.clientRoleAudience;
-    if (isSpeaker) {
-      targetRole = ClientRoleType.clientRoleBroadcaster;
-    }
+    final ClientRoleType targetRole = isSpeaker
+        ? ClientRoleType.clientRoleBroadcaster
+        : ClientRoleType.clientRoleAudience;
 
     await _engine!.setClientRole(role: targetRole);
     await _engine!.enableLocalAudio(isSpeaker);
@@ -193,9 +213,8 @@ await _engine!.enableAudio();
     );
 
     await _engine!.setDefaultAudioRouteToSpeakerphone(true);
-    if (isSpeaker) {
-      await _engine!.muteLocalAudioStream(false);
-    }
+    await _engine!.setEnableSpeakerphone(true);
+    await _engine!.muteLocalAudioStream(!isSpeaker);
   }
 
   void minimizeRoom() {
@@ -214,6 +233,7 @@ await _engine!.enableAudio();
 
   Future<void> switchRole({required bool isSpeaker}) async {
     if (_engine == null) return;
+    _currentIsSpeaker = isSpeaker;
 
     if (isSpeaker) {
       final status = await Permission.microphone.request();
@@ -224,7 +244,19 @@ await _engine!.enableAudio();
       }
     }
 
-    if (_currentChannelId.isNotEmpty) {
+    // If initial channel join did not succeed yet, join now
+    if (!_isChannelJoined && _currentChannelId.isNotEmpty) {
+      await joinRoom(
+        channelId: _currentChannelId,
+        uid: _currentUid,
+        isSpeaker: isSpeaker,
+        roomTitle: _currentRoomTitle,
+        seatCount: _currentSeatCount,
+      );
+      return;
+    }
+
+if (_currentChannelId.isNotEmpty) {
       final refreshedToken = await _fetchRtcToken(
         channelId: _currentChannelId,
         uid: _currentUid,
@@ -235,10 +267,9 @@ await _engine!.enableAudio();
       }
     }
 
-    ClientRoleType targetRole = ClientRoleType.clientRoleAudience;
-    if (isSpeaker) {
-      targetRole = ClientRoleType.clientRoleBroadcaster;
-    }
+    final ClientRoleType targetRole = isSpeaker
+        ? ClientRoleType.clientRoleBroadcaster
+        : ClientRoleType.clientRoleAudience;
 
     await _engine!.setClientRole(role: targetRole);
     await _engine!.enableLocalAudio(isSpeaker);
@@ -252,9 +283,13 @@ await _engine!.enableAudio();
     );
 
     await _engine!.setDefaultAudioRouteToSpeakerphone(true);
+    await _engine!.setEnableSpeakerphone(true);
     if (isSpeaker) {
       _isMicMuted = false;
       await _engine!.muteLocalAudioStream(false);
+    } else {
+      _isMicMuted = true;
+      await _engine!.muteLocalAudioStream(true);
     }
     notifyListeners();
   }
@@ -263,11 +298,15 @@ await _engine!.enableAudio();
     _isMicMuted = isMuted;
     notifyListeners();
     if (_engine == null) return;
+    if (!isMuted) {
+      await _engine!.enableLocalAudio(true);
+    }
     await _engine!.muteLocalAudioStream(isMuted);
   }
 
   Future<void> leaveRoom() async {
     _isInRoom = false;
+    _isChannelJoined = false;
     _isMinimized = false;
     _currentChannelId = "";
     _currentRoomTitle = "";
