@@ -90,10 +90,12 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
   int _totalSeats = 30;
   late List<String?> _seats;
   late List<String?> _seatUids;
+  late List<int> _seatNumericIds;
   late List<int> _seatGifts;
   late List<bool> _seatMutes;
   bool _isConnecting = true;
   bool _hasCleanedUp = false;
+  int _myAgoraUid = 0;
 
   int _myCoins = 0;
   int _myPoints = 0;
@@ -114,7 +116,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
   int _comboCount = 0;
   Timer? _comboTimer;
   late AnimationController _comboRingController;
-  Map<String, dynamic>? _lastSentGiftConfig;
+  Map? _lastSentGiftConfig;
 
   String? _luckyWinToast;
   Timer? _luckyWinToastTimer;
@@ -149,14 +151,23 @@ String get _resolvedUid {
     return 6;
   }
 
+  void _onAgoraChanged() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
   @override
   void initState() {
     super.initState();
     _sessionStartMs = DateTime.now().millisecondsSinceEpoch;
     _seats = List.filled(30, null);
     _seatUids = List.filled(30, null);
+    _seatNumericIds = List.filled(30, 0);
     _seatGifts = List.filled(30, 0);
     _seatMutes = List.filled(30, false);
+
+    _agoraService.addListener(_onAgoraChanged);
 
     _comboRingController = AnimationController(
       vsync: this,
@@ -266,12 +277,11 @@ String get _resolvedUid {
     });
   }
 
-  // Heartbeat keeps only active live users on seats; stale ghost seats auto-expire in 25s
   void _startSeatHeartbeat() {
-    _heartbeatTimer?.cancel();
-    _heartbeatTimer = Timer.periodic(const Duration(seconds: 10), (_) {
 
-if (_hasCleanedUp || !mounted) return;
+_heartbeatTimer?.cancel();
+    _heartbeatTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+      if (_hasCleanedUp || !mounted) return;
       if (_mySeatIndex != null) {
         final idx = _mySeatIndex!;
         FirebaseFirestore.instance
@@ -282,7 +292,7 @@ if (_hasCleanedUp || !mounted) return;
             '$idx': {
               'uid': _resolvedUid,
               'name': widget.userName,
-              'numericId': widget.userNumericId,
+              'numericId': _myAgoraUid > 0 ? _myAgoraUid : widget.userNumericId,
               'isMuted': _isMuted,
               'updatedAt': DateTime.now().millisecondsSinceEpoch,
             }
@@ -295,11 +305,10 @@ if (_hasCleanedUp || !mounted) return;
   void _initRoomLiveSync() {
     final roomRef = FirebaseFirestore.instance.collection('rooms').doc(widget.roomId);
 
-    // 1. Live active seats listener (ignores old ghost seatMap)
     _roomLiveSubscription = roomRef.snapshots().listen((snapshot) {
       if (!mounted || _hasCleanedUp) return;
       final nowMs = DateTime.now().millisecondsSinceEpoch;
-      final Map<String, dynamic> activeMap = {};
+      final Map activeMap = {};
       final Map<String, dynamic> staleCleanup = {};
 
       if (snapshot.exists && snapshot.data() != null) {
@@ -310,7 +319,6 @@ if (_hasCleanedUp || !mounted) return;
             if (value is Map) {
               final int updatedAt = (value['updatedAt'] as num?)?.toInt() ?? 0;
               final String uid = (value['uid'] ?? '').toString();
-              // Expire any seat not updated within 25 seconds (ghost cleanup)
               if (uid.isNotEmpty && (nowMs - updatedAt) < 25000) {
                 activeMap[key.toString()] = value;
               } else {
@@ -333,19 +341,21 @@ if (_hasCleanedUp || !mounted) return;
             final uid = (entry['uid'] ?? '').toString();
             final name = (entry['name'] ?? 'User').toString();
             final muted = entry['isMuted'] == true;
+            final numId = (entry['numericId'] as num?)?.toInt() ?? 0;
             _seats[i] = name;
             _seatUids[i] = uid;
+            _seatNumericIds[i] = numId;
             _seatMutes[i] = muted;
             if (uid == _resolvedUid) {
               foundMySeat = i;
             }
           } else {
-            // Preserve local optimistic seat if we just tapped it
             if (_mySeatIndex == i && _seatUids[i] == _resolvedUid) {
               foundMySeat = i;
             } else {
               _seats[i] = null;
               _seatUids[i] = null;
+              _seatNumericIds[i] = 0;
               _seatGifts[i] = 0;
               _seatMutes[i] = false;
               _speakingSeatIndices.remove(i);
@@ -356,7 +366,6 @@ if (_hasCleanedUp || !mounted) return;
       });
     });
 
-    // 2. Live chat messages listener
     _chatSubscription = roomRef
         .collection('messages')
         .orderBy('ts', descending: false)
@@ -382,8 +391,7 @@ if (_hasCleanedUp || !mounted) return;
       }
     });
 
-// 3. Live gifts broadcast listener across devices
-    _eventsSubscription = roomRef
+_eventsSubscription = roomRef
         .collection('events')
         .orderBy('createdAt', descending: true)
         .limit(10)
@@ -478,9 +486,18 @@ if (_hasCleanedUp || !mounted) return;
     try {
       await Permission.microphone.request();
 
+      final int effectiveUid = widget.userNumericId > 0
+          ? widget.userNumericId
+          : (100000 + _random.nextInt(899999));
+      _myAgoraUid = effectiveUid;
+
       await _agoraService.initEngine(
-        onUserJoined: (uid) {},
-        onUserOffline: (uid) {},
+        onUserJoined: (uid) {
+          if (mounted) setState(() {});
+        },
+        onUserOffline: (uid) {
+          if (mounted) setState(() {});
+        },
         onVolumeChanged: (speakers) {
           if (!mounted) return;
           setState(() {
@@ -488,15 +505,15 @@ if (_hasCleanedUp || !mounted) return;
             for (var speaker in speakers) {
               final vol = speaker.volume ?? 0;
               if (vol > 5) {
-                final bool isMe = speaker.uid == 0 || speaker.uid == widget.userNumericId;
+                final int sUid = speaker.uid ?? 0;
+                final bool isMe = sUid == 0 || sUid == _myAgoraUid;
                 if (isMe && _mySeatIndex != null && !_isMuted && !_seatMutes[_mySeatIndex!]) {
-                  _speakingSeatIndices.add(_mySeatIndex!);
+
+_speakingSeatIndices.add(_mySeatIndex!);
                 } else if (!isMe) {
                   for (int i = 0; i < _totalSeats; i++) {
-                    if (_seats[i] != null && i != _mySeatIndex) {
+                    if (_seats[i] != null && _seatNumericIds[i] == sUid) {
                       _speakingSeatIndices.add(i);
-
-break;
                     }
                   }
                 }
@@ -513,12 +530,10 @@ break;
         },
       );
 
-      final int effectiveUid = widget.userNumericId > 0
-          ? widget.userNumericId
-          : (100000 + _random.nextInt(899999));
+      final String cleanChannelId = widget.roomId.trim();
 
       await _agoraService.joinRoom(
-        channelId: widget.roomId,
+        channelId: cleanChannelId,
         uid: effectiveUid,
         isSpeaker: _mySeatIndex != null,
         roomTitle: widget.roomTitle,
@@ -572,11 +587,11 @@ break;
   void _handleSeatTap(int index) async {
     final roomRef = FirebaseFirestore.instance.collection('rooms').doc(widget.roomId);
 
-    // 1. Leave seat immediately if tapping own seat
     if (_mySeatIndex == index) {
       setState(() {
         _seats[index] = null;
         _seatUids[index] = null;
+        _seatNumericIds[index] = 0;
         _seatGifts[index] = 0;
         _seatMutes[index] = false;
         _speakingSeatIndices.remove(index);
@@ -592,27 +607,25 @@ break;
       return;
     }
 
-    // 2. Check if occupied by another active user
     if (_seats[index] != null && _seatUids[index] != _resolvedUid) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("ይህ ወንበር ተይዟል (Seat occupied)")),
+        const SnackBar(content: Text("Seat is occupied")),
       );
       return;
     }
 
-    // 3. Request microphone permission
     final status = await Permission.microphone.request();
     if (!status.isGranted) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("ወንበር ላይ ለመውጣት የማይክሮፎን ፈቃድ ይፍቀዱ")),
+          const SnackBar(content: Text("Please allow microphone permission")),
         );
       }
       return;
     }
 
-    // 4. Seat user immediately
     final int? oldIndex = _mySeatIndex;
+    final int activeNumId = _myAgoraUid > 0 ? _myAgoraUid : widget.userNumericId;
 
     setState(() {
       if (oldIndex != null && oldIndex != index) {
@@ -620,21 +633,24 @@ break;
         _seatGifts[oldIndex] = 0;
         _seats[oldIndex] = null;
         _seatUids[oldIndex] = null;
+        _seatNumericIds[oldIndex] = 0;
         _seatMutes[oldIndex] = false;
         _speakingSeatIndices.remove(oldIndex);
       }
       _seats[index] = widget.userName;
       _seatUids[index] = _resolvedUid;
+      _seatNumericIds[index] = activeNumId;
       _mySeatIndex = index;
       _isMuted = false;
       _seatMutes[index] = false;
     });
 
     final Map<String, dynamic> seatUpdates = {
-      '$index': {
+
+'$index': {
         'uid': _resolvedUid,
         'name': widget.userName,
-        'numericId': widget.userNumericId,
+        'numericId': activeNumId,
         'isMuted': false,
         'updatedAt': DateTime.now().millisecondsSinceEpoch,
       }
@@ -645,7 +661,7 @@ break;
 
     roomRef.set({'activeSeats': seatUpdates}, SetOptions(merge: true)).catchError((_) {});
 
-await _agoraService.switchRole(isSpeaker: true);
+    await _agoraService.switchRole(isSpeaker: true);
     await _agoraService.setMicrophoneMute(false);
   }
 
@@ -668,7 +684,7 @@ await _agoraService.switchRole(isSpeaker: true);
           '$idx': {
             'uid': _resolvedUid,
             'name': widget.userName,
-            'numericId': widget.userNumericId,
+            'numericId': _myAgoraUid > 0 ? _myAgoraUid : widget.userNumericId,
             'isMuted': _isMuted,
             'updatedAt': DateTime.now().millisecondsSinceEpoch,
           }
@@ -780,13 +796,13 @@ await _agoraService.switchRole(isSpeaker: true);
       _playCoinSound();
     }
 
-    final int netChange = -totalSpend + wonCoins;
+final int netChange = -totalSpend + wonCoins;
     FirebaseFirestore.instance.collection('users').doc(_resolvedUid).set({
       'coins': FieldValue.increment(netChange),
       'wealthExp': FieldValue.increment(totalSpend),
     }, SetOptions(merge: true)).catchError((_) {});
 
-final double rate = isLucky ? 0.04 : 0.70;
+    final double rate = isLucky ? 0.04 : 0.70;
     final int ptsPerSeat = max(1, (sendCost * rate).round());
     final List<int> activeTargets = isAll
         ? [for (int i = 0; i < _totalSeats; i++) if (_seats[i] != null) i]
@@ -916,13 +932,13 @@ final double rate = isLucky ? 0.04 : 0.70;
     final bool isFifthMilestone = isLucky && fromCombo && (_comboCount % 5 == 0);
     final int burstCount = isFifthMilestone ? 3 : 1;
 
-    setState(() {
+setState(() {
       if (!fromCombo) {
         _comboCount = 1;
         _showComboButton = true;
       }
 
-if (isAll) {
+      if (isAll) {
         for (int i = 0; i < _totalSeats; i++) {
           if (_seats[i] != null) {
             _seatGifts[i] += cost;
@@ -978,6 +994,7 @@ if (isAll) {
 
   @override
   void dispose() {
+    _agoraService.removeListener(_onAgoraChanged);
     _cleanupAndLeave();
     _rocketBannerTimer?.cancel();
     _luckyWinToastTimer?.cancel();
@@ -1039,13 +1056,13 @@ if (isAll) {
                   child: Image.asset(
                     'assets/images/weekly_lovers_heart_value.webp',
                     width: seatDimension * 0.58,
-                    errorBuilder: (c, e, s) => const SizedBox.shrink(),
+
+errorBuilder: (c, e, s) => const SizedBox.shrink(),
                   ),
                 ),
               Container(
                 width: seatDimension,
-
-height: seatDimension,
+                height: seatDimension,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   gradient: const LinearGradient(
@@ -1156,6 +1173,9 @@ height: seatDimension,
 
     final int comboTier = (_comboCount ~/ 5) + 1;
     final double comboScale = (1.0 + ((comboTier - 1) * 0.08)).clamp(1.0, 1.45);
+    final String audioStatus = _agoraService.isChannelJoined
+        ? "Audio: Live"
+        : (_isConnecting ? "Connecting..." : "Audio: Wait");
 
     return PopScope(
       onPopInvoked: (didPop) {
@@ -1179,13 +1199,13 @@ height: seatDimension,
                 ),
               ),
               Text(
-                _isConnecting
-                    ? "Connecting..."
-                    : "ID: ${widget.roomId} • My ID: ${widget.userNumericId}",
-                style: const TextStyle(
-                  fontSize: 11,
-                  color: kSubBlack,
-                  fontWeight: FontWeight.w600,
+                "$audioStatus • ID: ${widget.roomId}",
+                style: TextStyle(
+                  fontSize: 10.5,
+                  color: _agoraService.isChannelJoined
+                      ? const Color(0xFF107C41)
+                      : kSubBlack,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ],
@@ -1247,10 +1267,10 @@ height: seatDimension,
                         child: Text(
                           "$count Seats Layout",
                           style: TextStyle(
-                            color: count == _totalSeats ? kGoldBright : Colors.white,
-                            fontWeight: FontWeight.bold,
 
-),
+color: count == _totalSeats ? kGoldBright : Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ))
                   .toList(),
@@ -1338,10 +1358,10 @@ height: seatDimension,
                   ),
 
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
-                    child: Container(
 
-height: 36,
+padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+                    child: Container(
+                      height: 36,
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
                       decoration: BoxDecoration(
                         gradient: const LinearGradient(
@@ -1415,12 +1435,12 @@ height: 36,
                                 borderRadius: BorderRadius.circular(12),
                                 border: Border.all(
                                   color: kGoldBorder.withOpacity(0.65),
-                                  width: 0.9,
+
+width: 0.9,
                                 ),
                               ),
                               child: RichText(
-
-text: TextSpan(
+                                text: TextSpan(
                                   children: [
                                     if (item.isSystem)
                                       const WidgetSpan(
@@ -1496,11 +1516,11 @@ text: TextSpan(
                             ),
                             child: TextField(
                               controller: _chatController,
-                              style: const TextStyle(
+
+style: const TextStyle(
                                 color: kBlackText,
                                 fontSize: 13,
-
-fontWeight: FontWeight.w600,
+                                fontWeight: FontWeight.w600,
                               ),
                               decoration: const InputDecoration(
                                 hintText: "Say something...",
@@ -1585,7 +1605,8 @@ fontWeight: FontWeight.w600,
                         ),
                         child: Text(
                           _entryBannerText!,
-                          style: const TextStyle(
+
+style: const TextStyle(
                             color: kGoldBright,
                             fontSize: 11.5,
                             fontWeight: FontWeight.bold,
@@ -1596,7 +1617,7 @@ fontWeight: FontWeight.w600,
                   ),
                 ),
 
-..._activeFlyingGifts.map((gift) {
+              ..._activeFlyingGifts.map((gift) {
                 return AnimatedBuilder(
                   animation: gift.controller,
                   builder: (context, child) {
@@ -1676,7 +1697,8 @@ fontWeight: FontWeight.w600,
                                   color: kGoldBright,
                                   backgroundColor: Colors.black26,
                                 );
-                              },
+
+},
                             ),
                           ),
                           Container(
@@ -1685,8 +1707,7 @@ fontWeight: FontWeight.w600,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
                               gradient: LinearGradient(
-
-colors: comboTier >= 2
+                                colors: comboTier >= 2
                                     ? [const Color(0xFFB71C1C), const Color(0xFF4A0E0E)]
                                     : [kGoldBlackTop, kGoldBlackBottom],
                                 begin: Alignment.topLeft,
