@@ -3,6 +3,9 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'screens/login_screen.dart';
 import 'screens/main_navigation.dart';
+import 'services/room_session_manager.dart';
+
+final GlobalKey<NavigatorState> appNavigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -35,6 +38,7 @@ class NileApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: appNavigatorKey,
       title: 'NILE Live',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
@@ -46,6 +50,12 @@ class NileApp extends StatelessWidget {
           secondary: accentGold,
         ),
       ),
+      builder: (context, child) {
+        if (child == null) {
+          return const SizedBox.shrink();
+        }
+        return FloatingRoomOverlay(child: child);
+      },
       home: FutureBuilder<FirebaseApp>(
         future: _initializeFirebase(),
         builder: (context, snapshot) {
