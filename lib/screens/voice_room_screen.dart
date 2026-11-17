@@ -6,9 +6,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:audioplayers/audioplayers.dart';
 import '../services/agora_service.dart';
+import '../services/room_session_manager.dart';
 import '../widgets/gift_dialog.dart';
 import '../widgets/fullscreen_gift_animator.dart';
 import '../widgets/room_tools_sheet.dart';
+import '../main.dart';
 
 class RoomChatMessage {
   final String id;
@@ -77,7 +79,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
   static const Color kGoldBorder = Color(0xFFD49B42);
   static const Color kGoldBright = Color(0xFFFFD700);
 
-  final AgoraService _agoraService = AgoraService();
+  late AgoraService _agoraService;
   final User? _currentUser = FirebaseAuth.instance.currentUser;
   final Random _random = Random();
   final AudioPlayer _audioPlayer = AudioPlayer();
@@ -95,6 +97,8 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
   late List<bool> _seatMutes;
   bool _isConnecting = true;
   bool _hasCleanedUp = false;
+  bool _isMinimizing = false;
+  bool _resumedFromMinimize = false;
   int _myAgoraUid = 0;
 
   int _myCoins = 0;
@@ -132,10 +136,10 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
   final TextEditingController _chatController = TextEditingController();
   final ScrollController _chatScrollController = ScrollController();
 
-  int _currentRocketLevel = 1;
+int _currentRocketLevel = 1;
   Timer? _rocketBannerTimer;
 
-String get _resolvedUid {
+  String get _resolvedUid {
     if (_currentUser != null) return _currentUser!.uid;
     if (widget.userUid.isNotEmpty && widget.userUid != "user_guest_id") {
       return widget.userUid;
@@ -166,6 +170,21 @@ String get _resolvedUid {
     _seatNumericIds = List.filled(30, 0);
     _seatGifts = List.filled(30, 0);
     _seatMutes = List.filled(30, false);
+
+    final mgr = RoomSessionManager.instance;
+    if (mgr.hasActiveRoom && mgr.roomId == widget.roomId && mgr.activeEngine is AgoraService) {
+      _agoraService = mgr.activeEngine as AgoraService;
+      _isMuted = mgr.isMuted;
+      _mySeatIndex = mgr.seatedIndex;
+      _isConnecting = false;
+      _resumedFromMinimize = true;
+      mgr.clearSessionOnly();
+    } else {
+      if (mgr.hasActiveRoom) {
+        mgr.closeMinimizedRoom();
+      }
+      _agoraService = AgoraService();
+    }
 
     _agoraService.addListener(_onAgoraChanged);
 
@@ -198,7 +217,9 @@ String get _resolvedUid {
     _initRoomLiveSync();
     _startSeatHeartbeat();
     _setupAgora();
-    _announceEntry();
+    if (!_resumedFromMinimize) {
+      _announceEntry();
+    }
   }
 
   void _announceEntry() {
@@ -262,7 +283,7 @@ String get _resolvedUid {
     });
   }
 
-  void _initPointsSync() {
+void _initPointsSync() {
     _pointsSubscription = FirebaseFirestore.instance
         .collection('users')
         .doc(_resolvedUid)
@@ -278,10 +299,9 @@ String get _resolvedUid {
   }
 
   void _startSeatHeartbeat() {
-
-_heartbeatTimer?.cancel();
+    _heartbeatTimer?.cancel();
     _heartbeatTimer = Timer.periodic(const Duration(seconds: 10), (_) {
-      if (_hasCleanedUp || !mounted) return;
+      if (_hasCleanedUp  _isMinimizing  !mounted) return;
       if (_mySeatIndex != null) {
         final idx = _mySeatIndex!;
         FirebaseFirestore.instance
@@ -382,7 +402,7 @@ _heartbeatTimer?.cancel();
         final senderUid = (d['senderUid'] ?? '').toString();
         if (senderUid == _resolvedUid) continue;
 
-        _addChatMessage(RoomChatMessage(
+_addChatMessage(RoomChatMessage(
           id: doc.id,
           sender: (d['sender'] ?? 'User').toString(),
           message: (d['message'] ?? '').toString(),
@@ -391,7 +411,7 @@ _heartbeatTimer?.cancel();
       }
     });
 
-_eventsSubscription = roomRef
+    _eventsSubscription = roomRef
         .collection('events')
         .orderBy('createdAt', descending: true)
         .limit(10)
@@ -484,12 +504,17 @@ _eventsSubscription = roomRef
 
   Future<void> _setupAgora() async {
     try {
-      await Permission.microphone.request();
-
       final int effectiveUid = widget.userNumericId > 0
           ? widget.userNumericId
           : (100000 + _random.nextInt(899999));
       _myAgoraUid = effectiveUid;
+
+      if (_resumedFromMinimize && _agoraService.isChannelJoined) {
+        if (mounted) setState(() => _isConnecting = false);
+        return;
+      }
+
+      await Permission.microphone.request();
 
       await _agoraService.initEngine(
         onUserJoined: (uid) {
@@ -501,15 +526,15 @@ _eventsSubscription = roomRef
         onVolumeChanged: (speakers) {
           if (!mounted) return;
           setState(() {
-            _speakingSeatIndices.clear();
+
+_speakingSeatIndices.clear();
             for (var speaker in speakers) {
               final vol = speaker.volume ?? 0;
               if (vol > 5) {
                 final int sUid = speaker.uid ?? 0;
                 final bool isMe = sUid == 0 || sUid == _myAgoraUid;
                 if (isMe && _mySeatIndex != null && !_isMuted && !_seatMutes[_mySeatIndex!]) {
-
-_speakingSeatIndices.add(_mySeatIndex!);
+                  _speakingSeatIndices.add(_mySeatIndex!);
                 } else if (!isMe) {
                   for (int i = 0; i < _totalSeats; i++) {
                     if (_seats[i] != null && _seatNumericIds[i] == sUid) {
@@ -542,6 +567,110 @@ _speakingSeatIndices.add(_mySeatIndex!);
     } catch (_) {}
 
     if (mounted) setState(() => _isConnecting = false);
+  }
+
+  void _minimizeRoom() {
+    if (_isMinimizing) return;
+    _isMinimizing = true;
+
+    final String rId = widget.roomId;
+    final String rTitle = widget.roomTitle;
+    final String hName = widget.hostName;
+    final int uNumId = widget.userNumericId;
+    final String uUid = widget.userUid;
+    final String uName = widget.userName;
+    final String resolvedU = _resolvedUid;
+    final int activeNumId = _myAgoraUid > 0 ? _myAgoraUid : uNumId;
+    final AgoraService engineRef = _agoraService;
+    final List<String?> seatUidsSnapshot = List<String?>.from(_seatUids);
+    final int? currentSeatSnapshot = _mySeatIndex;
+
+    RoomSessionManager.instance.registerActiveRoom(
+      id: rId,
+      title: rTitle,
+      muted: _isMuted,
+      engine: engineRef,
+      seatIndex: currentSeatSnapshot,
+      expandCallback: () {
+        final nav = appNavigatorKey.currentState;
+        if (nav != null) {
+          nav.push(
+            MaterialPageRoute(
+              builder: (_) => VoiceRoomScreen(
+                roomTitle: rTitle,
+                roomId: rId,
+                hostName: hName,
+                userNumericId: uNumId,
+                userUid: uUid,
+                userName: uName,
+              ),
+            ),
+          );
+        }
+      },
+      leaveCallback: () async {
+        final Map<String, dynamic> removeSeats = {};
+        for (int i = 0; i < 30; i++) {
+          if (seatUidsSnapshot[i] == resolvedU || currentSeatSnapshot == i) {
+            removeSeats['$i'] = FieldValue.delete();
+          }
+        }
+        if (removeSeats.isNotEmpty) {
+          try {
+            await FirebaseFirestore.instance
+                .collection('rooms')
+                .doc(rId)
+                .set({'activeSeats': removeSeats}, SetOptions(merge: true));
+          } catch (_) {}
+        }
+        try {
+          await engineRef.leaveRoom();
+        } catch (_) {}
+      },
+      muteCallback: (bool mute) async {
+        final int? seatIdx = RoomSessionManager.instance.seatedIndex;
+        if (seatIdx != null) {
+          FirebaseFirestore.instance
+              .collection('rooms')
+              .doc(rId)
+              .set({
+            'activeSeats': {
+              '$seatIdx': {
+                'uid': resolvedU,
+                'name': uName,
+                'numericId': activeNumId,
+                'isMuted': mute,
+                'updatedAt': DateTime.now().millisecondsSinceEpoch,
+              }
+            }
+
+}, SetOptions(merge: true)).catchError((_) {});
+        }
+        await engineRef.setMicrophoneMute(mute);
+      },
+      heartbeatCallback: () {
+        final int? seatIdx = RoomSessionManager.instance.seatedIndex;
+        if (seatIdx != null) {
+          FirebaseFirestore.instance
+              .collection('rooms')
+              .doc(rId)
+              .set({
+            'activeSeats': {
+              '$seatIdx': {
+                'uid': resolvedU,
+                'name': uName,
+                'numericId': activeNumId,
+                'isMuted': RoomSessionManager.instance.isMuted,
+                'updatedAt': DateTime.now().millisecondsSinceEpoch,
+              }
+            }
+          }, SetOptions(merge: true)).catchError((_) {});
+        }
+      },
+    );
+
+    RoomSessionManager.instance.minimizeRoom();
+    Navigator.of(context).pop();
   }
 
   void _triggerCenterGiftAnimation(
@@ -646,8 +775,7 @@ _speakingSeatIndices.add(_mySeatIndex!);
     });
 
     final Map<String, dynamic> seatUpdates = {
-
-'$index': {
+      '$index': {
         'uid': _resolvedUid,
         'name': widget.userName,
         'numericId': activeNumId,
@@ -659,7 +787,7 @@ _speakingSeatIndices.add(_mySeatIndex!);
       seatUpdates['$oldIndex'] = FieldValue.delete();
     }
 
-    roomRef.set({'activeSeats': seatUpdates}, SetOptions(merge: true)).catchError((_) {});
+roomRef.set({'activeSeats': seatUpdates}, SetOptions(merge: true)).catchError((_) {});
 
     await _agoraService.switchRole(isSpeaker: true);
     await _agoraService.setMicrophoneMute(false);
@@ -796,13 +924,13 @@ _speakingSeatIndices.add(_mySeatIndex!);
       _playCoinSound();
     }
 
-final int netChange = -totalSpend + wonCoins;
+    final int netChange = -totalSpend + wonCoins;
     FirebaseFirestore.instance.collection('users').doc(_resolvedUid).set({
       'coins': FieldValue.increment(netChange),
       'wealthExp': FieldValue.increment(totalSpend),
     }, SetOptions(merge: true)).catchError((_) {});
 
-    final double rate = isLucky ? 0.04 : 0.70;
+final double rate = isLucky ? 0.04 : 0.70;
     final int ptsPerSeat = max(1, (sendCost * rate).round());
     final List<int> activeTargets = isAll
         ? [for (int i = 0; i < _totalSeats; i++) if (_seats[i] != null) i]
@@ -932,13 +1060,13 @@ final int netChange = -totalSpend + wonCoins;
     final bool isFifthMilestone = isLucky && fromCombo && (_comboCount % 5 == 0);
     final int burstCount = isFifthMilestone ? 3 : 1;
 
-setState(() {
+    setState(() {
       if (!fromCombo) {
         _comboCount = 1;
         _showComboButton = true;
       }
 
-      if (isAll) {
+if (isAll) {
         for (int i = 0; i < _totalSeats; i++) {
           if (_seats[i] != null) {
             _seatGifts[i] += cost;
@@ -977,6 +1105,7 @@ setState(() {
     if (_hasCleanedUp) return;
     _hasCleanedUp = true;
     _heartbeatTimer?.cancel();
+    RoomSessionManager.instance.clearSessionOnly();
 
     final roomRef = FirebaseFirestore.instance.collection('rooms').doc(widget.roomId);
     final Map<String, dynamic> removeSeats = {};
@@ -995,7 +1124,9 @@ setState(() {
   @override
   void dispose() {
     _agoraService.removeListener(_onAgoraChanged);
-    _cleanupAndLeave();
+    if (!_isMinimizing) {
+      _cleanupAndLeave();
+    }
     _rocketBannerTimer?.cancel();
     _luckyWinToastTimer?.cancel();
     _walletSubscription?.cancel();
@@ -1056,9 +1187,9 @@ setState(() {
                   child: Image.asset(
                     'assets/images/weekly_lovers_heart_value.webp',
                     width: seatDimension * 0.58,
+                    errorBuilder: (c, e, s) => const SizedBox.shrink(),
 
-errorBuilder: (c, e, s) => const SizedBox.shrink(),
-                  ),
+),
                 ),
               Container(
                 width: seatDimension,
@@ -1178,15 +1309,23 @@ errorBuilder: (c, e, s) => const SizedBox.shrink(),
         : (_isConnecting ? "Connecting..." : "Audio: Wait");
 
     return PopScope(
+      canPop: false,
       onPopInvoked: (didPop) {
-        if (didPop) _cleanupAndLeave();
+        if (!didPop && !_isMinimizing) {
+          _minimizeRoom();
+        }
       },
       child: Scaffold(
         backgroundColor: kShiroBg,
         appBar: AppBar(
           backgroundColor: kShiroBg,
           elevation: 0,
-          iconTheme: const IconThemeData(color: kBlackText),
+          leading: IconButton(
+            icon: const Icon(Icons.keyboard_arrow_down_rounded,
+                color: kBlackText, size: 28),
+            tooltip: "Minimize",
+            onPressed: _minimizeRoom,
+          ),
           title: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1262,13 +1401,13 @@ errorBuilder: (c, e, s) => const SizedBox.shrink(),
               color: kGoldBlackTop,
               onSelected: (int count) => _changeSeatCount(count),
               itemBuilder: (context) => _allowedSeatOptions
-                  .map((int count) => PopupMenuItem(
+
+.map((int count) => PopupMenuItem(
                         value: count,
                         child: Text(
                           "$count Seats Layout",
                           style: TextStyle(
-
-color: count == _totalSeats ? kGoldBright : Colors.white,
+                            color: count == _totalSeats ? kGoldBright : Colors.white,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
@@ -1290,7 +1429,14 @@ color: count == _totalSeats ? kGoldBright : Colors.white,
               },
             ),
             IconButton(
+              icon: const Icon(Icons.picture_in_picture_alt_rounded,
+                  color: kBlackText, size: 20),
+              tooltip: "Minimize",
+              onPressed: _minimizeRoom,
+            ),
+            IconButton(
               icon: const Icon(Icons.power_settings_new, color: Colors.redAccent),
+              tooltip: "Leave Room",
               onPressed: () {
                 _cleanupAndLeave();
                 Navigator.pop(context);
@@ -1343,7 +1489,8 @@ color: count == _totalSeats ? kGoldBright : Colors.white,
                                           index: seatIdx,
                                           seatDimension: seatDimension,
                                           nameFontSize: nameFontSize,
-                                          badgeFontSize: badgeFontSize,
+
+badgeFontSize: badgeFontSize,
                                         ),
                                       ),
                                     );
@@ -1358,8 +1505,7 @@ color: count == _totalSeats ? kGoldBright : Colors.white,
                   ),
 
                   Container(
-
-padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
                     child: Container(
                       height: 36,
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
@@ -1428,15 +1574,15 @@ padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
                             child: Container(
                               margin: const EdgeInsets.symmetric(vertical: 2.5),
                               padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 5.0),
-                              decoration: BoxDecoration(
+
+decoration: BoxDecoration(
                                 color: item.isSystem
                                     ? const Color(0xFFDFC08E)
                                     : kShiroCard,
                                 borderRadius: BorderRadius.circular(12),
                                 border: Border.all(
                                   color: kGoldBorder.withOpacity(0.65),
-
-width: 0.9,
+                                  width: 0.9,
                                 ),
                               ),
                               child: RichText(
@@ -1509,15 +1655,15 @@ width: 0.9,
                         Expanded(
                           child: Container(
                             padding: const EdgeInsets.symmetric(horizontal: 14),
-                            decoration: BoxDecoration(
+
+decoration: BoxDecoration(
                               color: kShiroBg,
                               borderRadius: BorderRadius.circular(20),
                               border: Border.all(color: kGoldBorder),
                             ),
                             child: TextField(
                               controller: _chatController,
-
-style: const TextStyle(
+                              style: const TextStyle(
                                 color: kBlackText,
                                 fontSize: 13,
                                 fontWeight: FontWeight.w600,
@@ -1598,15 +1744,15 @@ style: const TextStyle(
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                         decoration: BoxDecoration(
                           gradient: const LinearGradient(
-                            colors: [kGoldBlackTop, kGoldBlackBottom],
+
+colors: [kGoldBlackTop, kGoldBlackBottom],
                           ),
                           borderRadius: BorderRadius.circular(20),
                           border: Border.all(color: kGoldBright, width: 1.2),
                         ),
                         child: Text(
                           _entryBannerText!,
-
-style: const TextStyle(
+                          style: const TextStyle(
                             color: kGoldBright,
                             fontSize: 11.5,
                             fontWeight: FontWeight.bold,
@@ -1691,14 +1837,14 @@ style: const TextStyle(
                             child: AnimatedBuilder(
                               animation: _comboRingController,
                               builder: (context, child) {
-                                return CircularProgressIndicator(
+
+return CircularProgressIndicator(
                                   value: 1.0 - _comboRingController.value,
                                   strokeWidth: 3.5,
                                   color: kGoldBright,
                                   backgroundColor: Colors.black26,
                                 );
-
-},
+                              },
                             ),
                           ),
                           Container(
