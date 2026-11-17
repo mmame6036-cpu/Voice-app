@@ -71,8 +71,8 @@ jobs:
           sed -i 's/android:label="voiceapp"/android:label="NILE Live"/' android/app/src/main/AndroidManifest.xml
           sed -i 's|<application|<uses-permission android:name="android.permission.INTERNET"/><uses-permission android:name="android.permission.RECORD_AUDIO"/><uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/><uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/><uses-permission android:name="android.permission.BLUETOOTH"/><uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/><uses-permission android:name="android.permission.WAKE_LOCK"/><application|' android/app/src/main/AndroidManifest.xml
 
-          - name: Configure Gradle Settings
-          run: |
+      - name: Configure Gradle Settings
+        run: |
           mkdir -p ~/.gradle
           echo 'allprojects {' > ~/.gradle/init.gradle
           echo '    buildscript { repositories { google(); mavenCentral() } }' >> ~/.gradle/init.gradle
