@@ -48,7 +48,7 @@ jobs:
           echo 'zipStoreBase=GRADLE_USER_HOME' >> android/gradle/wrapper/gradle-wrapper.properties
           echo 'zipStorePath=wrapper/dists' >> android/gradle/wrapper/gradle-wrapper.properties
 
-      - name: Restore Firebase Config and App Name
+      - name: Restore Firebase Config and Audio Rules
         run: |
           mkdir -p android/app
           cp /tmp/google-services.json android/app/google-services.json || cp google-services.json android/app/google-services.json
@@ -65,17 +65,19 @@ jobs:
           echo 'subprojects { project.evaluationDependsOn(":app") }' >> android/build.gradle
           echo 'tasks.register("clean", Delete) { delete rootProject.buildDir }' >> android/build.gradle
           echo 'apply plugin: "com.google.gms.google-services"' >> android/app/build.gradle
+          echo '-keep class io.agora.** { *; }' > android/app/proguard-rules.pro
+          echo '-dontwarn io.agora.**' >> android/app/proguard-rules.pro
+          echo 'android { buildTypes { release { proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro" } } }' >> android/app/build.gradle
           sed -i 's/android:label="voiceapp"/android:label="NILE Live"/' android/app/src/main/AndroidManifest.xml
-          sed -i 's|<application|<uses-permission android:name="android.permission.INTERNET"/><uses-permission android:name="android.permission.RECORD_AUDIO"/><uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/><uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/><application|' android/app/src/main/AndroidManifest.xml
+          sed -i 's|<application|<uses-permission android:name="android.permission.INTERNET"/><uses-permission android:name="android.permission.RECORD_AUDIO"/><uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/><uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/><uses-permission android:name="android.permission.BLUETOOTH"/><uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/><uses-permission android:name="android.permission.WAKE_LOCK"/><application|' android/app/src/main/AndroidManifest.xml
 
-      - name: Configure Gradle Settings
-        run: |
+          - name: Configure Gradle Settings
+          run: |
           mkdir -p ~/.gradle
           echo 'allprojects {' > ~/.gradle/init.gradle
           echo '    buildscript { repositories { google(); mavenCentral() } }' >> ~/.gradle/init.gradle
           echo '    repositories { google(); mavenCentral() }' >> ~/.gradle/init.gradle
           echo '    afterEvaluate { project ->' >> ~/.gradle/init.gradle
-
           echo '        if (project.hasProperty("android")) {' >> ~/.gradle/init.gradle
           echo '            android {' >> ~/.gradle/init.gradle
           echo '                compileSdkVersion 34' >> ~/.gradle/init.gradle
