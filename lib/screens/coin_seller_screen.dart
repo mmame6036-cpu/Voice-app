@@ -83,6 +83,19 @@ class _CoinSellerScreenState extends State<CoinSellerScreen>
     super.dispose();
   }
 
+  Map _toMap(dynamic raw) {
+    if (raw is Map) {
+      return Map.from(raw);
+    }
+    return {};
+  }
+
+  String _readStr(Map m, String key) {
+    final val = m[key];
+    if (val == null) return "";
+    return val.toString().trim();
+  }
+
   void _copyToClipboard(String text) {
     Clipboard.setData(ClipboardData(text: text));
     _showToast("Copied: $text");
@@ -102,17 +115,17 @@ class _CoinSellerScreenState extends State<CoinSellerScreen>
     );
   }
 
-  bool _checkUserMapIsAgent(Map data) {
-    final String role = (data['role'] ?? '').toString().toLowerCase().trim();
+bool _checkUserMapIsAgent(Map data) {
+    final String role = _readStr(data, 'role').toLowerCase();
     if (data['isAgent'] == true) return true;
     if (data['isCoinSeller'] == true) return true;
     if (const ['agent', 'agency', 'coinseller'].contains(role)) return true;
-    if ((data['agencyId'] ?? '').toString().trim().isNotEmpty) return true;
-    if ((data['agencyName'] ?? '').toString().trim().isNotEmpty) return true;
+    if (_readStr(data, 'agencyId').isNotEmpty) return true;
+    if (_readStr(data, 'agencyName').isNotEmpty) return true;
     return false;
   }
 
-Future<void> _verifyAgencyOwnership(String numericIdStr) async {
+  Future<void> _verifyAgencyOwnership(String numericIdStr) async {
     if (numericIdStr.isEmpty) return;
     if (_checkedNumericIdCache == numericIdStr) return;
     _checkedNumericIdCache = numericIdStr;
@@ -125,10 +138,12 @@ Future<void> _verifyAgencyOwnership(String numericIdStr) async {
           .where('ownerNumericId', isEqualTo: numId)
           .limit(1)
           .get();
-      if (snap.docs.isNotEmpty && mounted) {
-        setState(() {
-          _isAgencyOwnerFromDb = true;
-        });
+      if (snap.docs.isNotEmpty) {
+        if (mounted) {
+          setState(() {
+            _isAgencyOwnerFromDb = true;
+          });
+        }
       }
     } catch (_) {}
   }
@@ -218,7 +233,7 @@ Future<void> _verifyAgencyOwnership(String numericIdStr) async {
       _verifiedReceiverIsAgent = false;
     });
 
-    try {
+try {
       final int? numId = int.tryParse(queryText);
       QuerySnapshot query;
       if (numId != null) {
@@ -235,15 +250,17 @@ Future<void> _verifyAgencyOwnership(String numericIdStr) async {
             .get();
       }
 
-if (query.docs.isNotEmpty) {
-        final raw = query.docs.first.data();
-        final Map data = raw is Map ? raw : {};
+      if (query.docs.isNotEmpty) {
+        final Map data = _toMap(query.docs.first.data());
         String foundName = "Verified User";
-        if (data['name'] != null && data['name'].toString().isNotEmpty) {
-          foundName = data['name'].toString();
-        } else if (data['displayName'] != null && data['displayName'].toString().isNotEmpty) {
-          foundName = data['displayName'].toString();
+        final String nameVal = _readStr(data, 'name');
+        final String dispVal = _readStr(data, 'displayName');
+        if (nameVal.isNotEmpty) {
+          foundName = nameVal;
+        } else if (dispVal.isNotEmpty) {
+          foundName = dispVal;
         }
+
         final int? resolvedNum = (data['numericId'] as num?)?.toInt() ?? numId;
         final bool targetIsAgent = await _isTargetDocAgent(data, resolvedNum);
 
@@ -332,8 +349,7 @@ if (query.docs.isNotEmpty) {
         return;
       }
 
-      final rawReceiver = receiverDoc.data();
-      final Map receiverMap = rawReceiver is Map ? rawReceiver : {};
+      final Map receiverMap = _toMap(receiverDoc.data());
       final int? targetNumId = (receiverMap['numericId'] as num?)?.toInt() ?? numId;
 
       if (_salesMethodIndex == 1) {
@@ -349,14 +365,13 @@ if (query.docs.isNotEmpty) {
       final sellerRef = FirebaseFirestore.instance.collection('users').doc(user.uid);
       final String salesType = _salesMethodIndex == 1 ? "Coinseller" : "User";
 
-      await FirebaseFirestore.instance.runTransaction((transaction) async {
+await FirebaseFirestore.instance.runTransaction((transaction) async {
         final sellerSnap = await transaction.get(sellerRef);
-        final rawSeller = sellerSnap.data();
-        final Map sellerMap = rawSeller is Map ? rawSeller : {};
+        final Map sellerMap = _toMap(sellerSnap.data());
         final int currentCoins = (sellerMap['coins'] as num?)?.toInt() ?? 0;
         final int prevSold = (sellerMap['totalCoinsSold'] as num?)?.toInt() ?? 0;
 
-if (currentCoins < amountInput) {
+        if (currentCoins < amountInput) {
           throw Exception("Insufficient balance.");
         }
 
@@ -472,13 +487,12 @@ if (currentCoins < amountInput) {
     if (!mounted) return;
     final TextEditingController receiptController = TextEditingController();
 
-    showDialog(
+showDialog(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
         backgroundColor: bgColor,
-
-shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Row(
           children: [
             const Icon(Icons.verified, color: accentGreen, size: 22),
@@ -540,7 +554,10 @@ shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
               const SizedBox(height: 12),
               Text(
                 "1. Send exact $priceLabel via $methodTitle to:",
-                style: const TextStyle(color: Colors.black87, fontSize: 12, fontWeight: FontWeight.w600),
+                style: const TextStyle(
+                    color: Colors.black87,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 6),
               Container(
@@ -573,19 +590,23 @@ shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
               const SizedBox(height: 12),
               const Text(
                 "2. Enter Payment Transaction ID / Receipt:",
-                style: TextStyle(color: Colors.black87, fontSize: 12, fontWeight: FontWeight.w600),
-              ),
+                style: TextStyle(
+                    color: Colors.black87,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600),
+
+),
               const SizedBox(height: 6),
               TextField(
                 controller: receiptController,
                 style: const TextStyle(color: textBlack, fontSize: 13),
                 decoration: InputDecoration(
-
-hintText: "e.g. Binance Order ID or Telebirr Ref",
+                  hintText: "e.g. Binance Order ID or Telebirr Ref",
                   hintStyle: const TextStyle(color: Colors.black38, fontSize: 11.5),
                   filled: true,
                   fillColor: cardBg,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                     borderSide: const BorderSide(color: borderColor),
@@ -617,12 +638,14 @@ hintText: "e.g. Binance Order ID or Telebirr Ref",
                 await FirebaseFirestore.instance
                     .collection('coin_recharges')
                     .doc(orderRef)
-                    .set({'paymentTxnId': proof}, SetOptions(merge: true)).catchError((_) {});
+                    .set({'paymentTxnId': proof}, SetOptions(merge: true))
+                    .catchError((_) {});
               }
               if (ctx.mounted) Navigator.pop(ctx);
               _showToast("Order $orderRef submitted! Check Recharge Details.");
             },
-            child: const Text("Submit Order", style: TextStyle(fontWeight: FontWeight.bold)),
+            child: const Text("Submit Order",
+                style: TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -653,8 +676,7 @@ hintText: "e.g. Binance Order ID or Telebirr Ref",
 
       await FirebaseFirestore.instance.runTransaction((transaction) async {
         final snap = await transaction.get(userRef);
-        final raw = snap.data();
-        final Map data = raw is Map ? raw : {};
+        final Map data = _toMap(snap.data());
         final int currentPts = (data['points'] as num?)?.toInt() ?? 0;
 
         if (currentPts < pointsCost) {
@@ -677,7 +699,8 @@ hintText: "e.g. Binance Order ID or Telebirr Ref",
       });
 
       _customExchangeController.clear();
-      _showToast("Exchanged $pointsCost Points for $coinsGain Coins (96% Agent Rate)!");
+      _showToast(
+          "Exchanged $pointsCost Points for $coinsGain Coins (96% Agent Rate)!");
     } catch (e) {
       _showToast("Exchange failed: $e");
     } finally {
@@ -685,12 +708,12 @@ hintText: "e.g. Binance Order ID or Telebirr Ref",
     }
   }
 
-  void _showHistoryModal(String title, String collectionName) {
+void _showHistoryModal(String title, String collectionName) {
     final String filterField =
         collectionName == 'coin_transfers' ? "sellerUid" : "uid";
     final String currentUid = _currentUser?.uid ?? "";
 
-showModalBottomSheet(
+    showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
@@ -752,14 +775,14 @@ showModalBottomSheet(
 
                   final docs = qSnap.docs.toList();
                   docs.sort((a, b) {
-                    final rawA = a.data();
-                    final rawB = b.data();
-                    final Map mapA = rawA is Map ? rawA : {};
-                    final Map mapB = rawB is Map ? rawB : {};
+                    final Map mapA = _toMap(a.data());
+                    final Map mapB = _toMap(b.data());
                     final tsA = mapA['timestamp'];
                     final tsB = mapB['timestamp'];
-                    if (tsA is Timestamp && tsB is Timestamp) {
-                      return tsB.compareTo(tsA);
+                    if (tsA is Timestamp) {
+                      if (tsB is Timestamp) {
+                        return tsB.compareTo(tsA);
+                      }
                     }
                     return 0;
                   });
@@ -767,8 +790,7 @@ showModalBottomSheet(
                   return ListView.builder(
                     itemCount: docs.length,
                     itemBuilder: (context, idx) {
-                      final raw = docs[idx].data();
-                      final Map item = raw is Map ? raw : {};
+                      final Map item = _toMap(docs[idx].data());
 
                       String headerTitle = "Agent Exchange (96%)";
                       if (item['salesMethod'] != null) {
@@ -782,11 +804,11 @@ showModalBottomSheet(
                       if (item['receiverId'] != null) {
                         subInfo = "To ID: ${item['receiverId']}";
                       } else if (item['orderRef'] != null) {
-                        final String tx = (item['paymentTxnId'] ?? '').toString();
-                        subInfo = tx.isNotEmpty
-                            ? "Ref: ${item['orderRef']} • Tx: $tx"
+                        final String tx = _readStr(item, 'paymentTxnId');
 
-: "Ref: ${item['orderRef']} (\$${item['usdAmount']} USD)";
+subInfo = tx.isNotEmpty
+                            ? "Ref: ${item['orderRef']} • Tx: $tx"
+                            : "Ref: ${item['orderRef']} (\$${item['usdAmount']} USD)";
                       } else if (item['coinsAdded'] != null) {
                         subInfo = "Points: -${item['pointsDeducted']} Pts";
                       }
@@ -874,10 +896,10 @@ showModalBottomSheet(
           maxLines: 3,
           style: const TextStyle(color: textBlack),
           decoration: InputDecoration(
-            hintText: "Enter automatic greeting sent to buyers...",
-            hintStyle: const TextStyle(color: Colors.black38, fontSize: 12),
 
-filled: true,
+hintText: "Enter automatic greeting sent to buyers...",
+            hintStyle: const TextStyle(color: Colors.black38, fontSize: 12),
+            filled: true,
             fillColor: cardBg,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
@@ -989,11 +1011,11 @@ filled: true,
     );
   }
 
-  @override
+@override
   Widget build(BuildContext context) {
     final String uid = _currentUser?.uid ?? "";
 
-if (uid.isEmpty) {
+    if (uid.isEmpty) {
       return const Scaffold(
         backgroundColor: bgColor,
         body: Center(
@@ -1035,19 +1057,15 @@ if (uid.isEmpty) {
           }
 
           final docSnap = snapshot.data as DocumentSnapshot;
-          Map userData = {};
-          if (docSnap.exists) {
-            final raw = docSnap.data();
-            if (raw is Map) {
-              userData = raw;
-            }
-          }
+          final Map userData = docSnap.exists ? _toMap(docSnap.data()) : {};
 
           String numericId = "100000";
-          if (userData['numericId'] != null) {
-            numericId = userData['numericId'].toString();
-          } else if (userData['id'] != null) {
-            numericId = userData['id'].toString();
+          final String numStr = _readStr(userData, 'numericId');
+          final String idStr = _readStr(userData, 'id');
+          if (numStr.isNotEmpty) {
+            numericId = numStr;
+          } else if (idStr.isNotEmpty) {
+            numericId = idStr;
           }
 
           _verifyAgencyOwnership(numericId);
@@ -1061,15 +1079,15 @@ if (uid.isEmpty) {
           }
 
           String name = "Agent Seller";
-          if (userData['agencyName'] != null &&
-              userData['agencyName'].toString().isNotEmpty) {
-            name = userData['agencyName'].toString();
-          } else if (userData['name'] != null &&
-              userData['name'].toString().isNotEmpty) {
-            name = userData['name'].toString();
-          } else if (userData['displayName'] != null &&
-              userData['displayName'].toString().isNotEmpty) {
-            name = userData['displayName'].toString();
+          final String agName = _readStr(userData, 'agencyName');
+          final String uName = _readStr(userData, 'name');
+          final String dName = _readStr(userData, 'displayName');
+          if (agName.isNotEmpty) {
+            name = agName;
+          } else if (uName.isNotEmpty) {
+            name = uName;
+          } else if (dName.isNotEmpty) {
+            name = dName;
           }
 
           final int coins = (userData['coins'] as num?)?.toInt() ?? 0;
@@ -1079,9 +1097,9 @@ if (uid.isEmpty) {
           final String currentLevel = _resolveSellerLevel(totalCoinsSold);
 
           String sellerGreeting = "Thank you for buying from NILE Live!";
-          if (userData['sellerGreeting'] != null &&
-              userData['sellerGreeting'].toString().isNotEmpty) {
-            sellerGreeting = userData['sellerGreeting'].toString();
+          final String customGreet = _readStr(userData, 'sellerGreeting');
+          if (customGreet.isNotEmpty) {
+            sellerGreeting = customGreet;
           }
 
           Widget activeBodySection = _buildTransferSection(
@@ -1103,11 +1121,11 @@ if (uid.isEmpty) {
             physics: const BouncingScrollPhysics(),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             children: [
-
-// 1. Agent Profile Card
+              // 1. Agent Profile Card
               Container(
                 padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
+
+decoration: BoxDecoration(
                   color: cardBg,
                   borderRadius: BorderRadius.circular(18),
                   border: Border.all(color: borderColor),
@@ -1196,8 +1214,9 @@ if (uid.isEmpty) {
 
               const SizedBox(height: 12),
 
-// 2. Balance & Payment Method Card
-              Container(
+              // 2. Balance & Payment Method Card
+
+Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   color: cardBg,
@@ -1289,9 +1308,9 @@ if (uid.isEmpty) {
                     color: buttonDark,
                     borderRadius: BorderRadius.circular(24),
                   ),
+                  labelColor: Colors.white,
 
-labelColor: Colors.white,
-                  unselectedLabelColor: textBlack,
+unselectedLabelColor: textBlack,
                   labelStyle: const TextStyle(
                       fontWeight: FontWeight.bold, fontSize: 13),
                   onTap: (idx) {
@@ -1405,8 +1424,7 @@ labelColor: Colors.white,
     required String sellerGreeting,
   }) {
     VoidCallback? transferAction = () => _executeCoinTransfer(
-
-sellerBalance: sellerCoins,
+          sellerBalance: sellerCoins,
           sellerName: sellerName,
           sellerNumericId: sellerNumericId,
           sellerGreeting: sellerGreeting,
@@ -1417,7 +1435,7 @@ sellerBalance: sellerCoins,
           color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
     );
 
-    if (_isProcessing) {
+if (_isProcessing) {
       transferAction = null;
       transferChild = const SizedBox(
         width: 18,
@@ -1513,8 +1531,7 @@ sellerBalance: sellerCoins,
                   ? "Receiver: $_verifiedReceiverName (Agent / Seller)"
                   : "Receiver: $_verifiedReceiverName",
               style: TextStyle(
-
-color: _verifiedReceiverName == "User Not Found"
+                  color: _verifiedReceiverName == "User Not Found"
                       ? Colors.redAccent
                       : accentGreen,
                   fontSize: 11.5,
@@ -1524,7 +1541,8 @@ color: _verifiedReceiverName == "User Not Found"
           const SizedBox(height: 14),
           const Text(
             "Coin Amount",
-            style: TextStyle(
+
+style: TextStyle(
                 color: textBlack, fontSize: 13, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 6),
@@ -1628,8 +1646,7 @@ color: _verifiedReceiverName == "User Not Found"
         color: cardBg,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: borderColor),
-
-),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1639,7 +1656,8 @@ color: _verifiedReceiverName == "User Not Found"
               const SizedBox(width: 10),
               _buildRechargeSubTab(1, "Senior Coin Seller"),
             ],
-          ),
+
+),
           const SizedBox(height: 14),
           const Text(
             "Select Wholesale Package (USD)",
@@ -1727,8 +1745,7 @@ color: _verifiedReceiverName == "User Not Found"
                 style: TextStyle(
                     color: Colors.white,
                     fontSize: 14,
-
-fontWeight: FontWeight.bold),
+                    fontWeight: FontWeight.bold),
               ),
             ),
           ),
@@ -1738,7 +1755,8 @@ fontWeight: FontWeight.bold),
               onTap: () =>
                   _showHistoryModal("Recharge Details", "coin_recharges"),
               child: const Text(
-                "Recharge Details >",
+
+"Recharge Details >",
                 style: TextStyle(
                     color: textBlack,
                     fontSize: 11.5,
@@ -1841,14 +1859,14 @@ fontWeight: FontWeight.bold),
                   onPressed: _isProcessing
                       ? null
                       : () {
-
-final input = int.tryParse(
+                          final input = int.tryParse(
                                   _customExchangeController.text.trim()) ??
                               0;
                           if (input > 0) {
                             final int coinsCalculated = (input * 0.96).floor();
                             _executePointsExchange(
-                                userPoints, input, coinsCalculated);
+
+userPoints, input, coinsCalculated);
                           }
                         },
                   child: const Text(
