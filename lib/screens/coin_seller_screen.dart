@@ -28,6 +28,9 @@ class _CoinSellerScreenState extends State<CoinSellerScreen>
 
   bool _isProcessing = false;
   String _verifiedReceiverName = "";
+  bool _verifiedReceiverIsAgent = false;
+  String _checkedNumericIdCache = "";
+  bool _isAgencyOwnerFromDb = false;
 
   static const String officialBinancePayId = "1059643208";
   static const String officialTelebirrNumber = "0943724560";
@@ -49,6 +52,7 @@ class _CoinSellerScreenState extends State<CoinSellerScreen>
   ];
 
   final List _exchangePacks = const [
+    {"coins": 96000, "points": 100000},
     {"coins": 960000, "points": 1000000},
     {"coins": 1920000, "points": 2000000},
     {"coins": 9600000, "points": 10000000},
@@ -98,6 +102,44 @@ class _CoinSellerScreenState extends State<CoinSellerScreen>
     );
   }
 
+  bool _checkUserMapIsAgent(Map<String, dynamic> data) {
+    final String role = (data['role'] ?? '').toString().toLowerCase().trim();
+    if (role == 'host' || role == 'user') {
+      if (data['isAgent'] != true && data['isCoinSeller'] != true) {
+
+final String agId = (data['agencyId'] ?? '').toString().trim();
+        final String agName = (data['agencyName'] ?? '').toString().trim();
+        if (agId.isEmpty && agName.isEmpty) return false;
+      }
+    }
+    if (data['isAgent'] == true) return true;
+    if (data['isCoinSeller'] == true) return true;
+    if (role == 'agent'  role == 'agency'  role == 'coinseller') return true;
+    if ((data['agencyId'] ?? '').toString().trim().isNotEmpty) return true;
+    if ((data['agencyName'] ?? '').toString().trim().isNotEmpty) return true;
+    return false;
+  }
+
+  Future<void> _verifyAgencyOwnership(String numericIdStr) async {
+    if (numericIdStr.isEmpty || _checkedNumericIdCache == numericIdStr) return;
+    _checkedNumericIdCache = numericIdStr;
+    final int? numId = int.tryParse(numericIdStr);
+    if (numId == null) return;
+
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('agencies')
+          .where('ownerNumericId', isEqualTo: numId)
+          .limit(1)
+          .get();
+      if (snap.docs.isNotEmpty && mounted) {
+        setState(() {
+          _isAgencyOwnerFromDb = true;
+        });
+      }
+    } catch (_) {}
+  }
+
   String _resolveSellerLevel(int totalCoinsSold) {
     if (totalCoinsSold >= 30000000) {
       return "VIP Official Seller";
@@ -112,8 +154,7 @@ class _CoinSellerScreenState extends State<CoinSellerScreen>
   }
 
   void _showSellerLevelDialog(int totalCoinsSold, String currentLevel) {
-
-showDialog(
+    showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: bgColor,
@@ -123,7 +164,7 @@ showDialog(
             Icon(Icons.workspace_premium, color: accentGold, size: 24),
             SizedBox(width: 8),
             Text(
-              "Coin Seller Tier Rules",
+              "Agent Coin Seller Tiers",
               style: TextStyle(color: textBlack, fontSize: 16, fontWeight: FontWeight.bold),
             ),
           ],
@@ -162,13 +203,29 @@ showDialog(
     );
   }
 
+  Future<bool> _isTargetDocAgent(Map<String, dynamic> data, int? numId) async {
+    if (_checkUserMapIsAgent(data)) return true;
+    if (numId != null) {
+      final agSnap = await FirebaseFirestore.instance
+          .collection('agencies')
+          .where('ownerNumericId', isEqualTo: numId)
+          .limit(1)
+          .get();
+      if (agSnap.docs.isNotEmpty) return true;
+    }
+    return false;
+  }
+
   Future<void> _verifyReceiver() async {
     final queryText = _receiverIdController.text.trim();
     if (queryText.isEmpty) return;
 
-    setState(() => _verifiedReceiverName = "Searching...");
+    setState(() {
+      _verifiedReceiverName = "Searching...";
+      _verifiedReceiverIsAgent = false;
+    });
 
-    try {
+try {
       final int? numId = int.tryParse(queryText);
       QuerySnapshot query;
       if (numId != null) {
@@ -189,23 +246,44 @@ showDialog(
         final raw = query.docs.first.data();
         final Map<String, dynamic> data = raw is Map<String, dynamic> ? raw : {};
         String foundName = "Verified User";
-        if (data['name'] != null) {
+        if (data['name'] != null && data['name'].toString().isNotEmpty) {
           foundName = data['name'].toString();
-        } else if (data['displayName'] != null) {
+        } else if (data['displayName'] != null && data['displayName'].toString().isNotEmpty) {
           foundName = data['displayName'].toString();
         }
-        setState(() {
-          _verifiedReceiverName = foundName;
-        });
+        final int? resolvedNum = (data['numericId'] as num?)?.toInt() ?? numId;
+        final bool targetIsAgent = await _isTargetDocAgent(data, resolvedNum);
+
+        if (mounted) {
+          setState(() {
+            _verifiedReceiverName = foundName;
+            _verifiedReceiverIsAgent = targetIsAgent;
+          });
+        }
       } else {
-        setState(() => _verifiedReceiverName = "User Not Found");
+        if (mounted) {
+          setState(() {
+            _verifiedReceiverName = "User Not Found";
+            _verifiedReceiverIsAgent = false;
+          });
+        }
       }
     } catch (_) {
-      setState(() => _verifiedReceiverName = "Verification Failed");
+      if (mounted) {
+        setState(() {
+          _verifiedReceiverName = "Verification Failed";
+          _verifiedReceiverIsAgent = false;
+        });
+      }
     }
   }
 
-  Future<void> _executeCoinTransfer(int sellerBalance, String sellerGreeting) async {
+  Future<void> _executeCoinTransfer({
+    required int sellerBalance,
+    required String sellerName,
+    required String sellerNumericId,
+    required String sellerGreeting,
+  }) async {
     final user = _currentUser;
     if (user == null) return;
 
@@ -231,7 +309,7 @@ showDialog(
 
     setState(() => _isProcessing = true);
 
-try {
+    try {
       final int? numId = int.tryParse(targetInput);
       QuerySnapshot query;
       if (numId != null) {
@@ -261,13 +339,23 @@ try {
         return;
       }
 
-      final receiverRef = receiverDoc.reference;
-      final sellerRef = FirebaseFirestore.instance.collection('users').doc(user.uid);
+      final rawReceiver = receiverDoc.data();
+      final Map<String, dynamic> receiverMap =
+          rawReceiver is Map<String, dynamic> ? rawReceiver : {};
+      final int? targetNumId = (receiverMap['numericId'] as num?)?.toInt() ?? numId;
 
-      String salesType = "User";
       if (_salesMethodIndex == 1) {
-        salesType = "Coinseller";
+        final bool targetIsAgent = await _isTargetDocAgent(receiverMap, targetNumId);
+        if (!targetIsAgent) {
+          _showToast("Target account is not a registered Agent / Coin Seller.");
+          setState(() => _isProcessing = false);
+          return;
+        }
       }
+
+final receiverRef = receiverDoc.reference;
+      final sellerRef = FirebaseFirestore.instance.collection('users').doc(user.uid);
+      final String salesType = _salesMethodIndex == 1 ? "Coinseller" : "User";
 
       await FirebaseFirestore.instance.runTransaction((transaction) async {
         final sellerSnap = await transaction.get(sellerRef);
@@ -297,6 +385,8 @@ try {
         final logRef = FirebaseFirestore.instance.collection('coin_transfers').doc();
         transaction.set(logRef, {
           'sellerUid': user.uid,
+          'sellerName': sellerName,
+          'sellerNumericId': sellerNumericId,
           'receiverUid': receiverDoc.id,
           'receiverId': targetInput,
           'salesMethod': salesType,
@@ -304,16 +394,32 @@ try {
           'greeting': sellerGreeting,
           'timestamp': FieldValue.serverTimestamp(),
         });
+
+        final notifRef = receiverRef.collection('notifications').doc();
+        transaction.set(notifRef, {
+          'type': 'COIN_RECEIVED',
+          'title': 'Coins Received (+$amountInput)',
+          'message': sellerGreeting,
+          'coins': amountInput,
+          'senderUid': user.uid,
+          'senderName': sellerName,
+          'senderNumericId': sellerNumericId,
+          'isRead': false,
+          'timestamp': FieldValue.serverTimestamp(),
+        });
       });
 
       _receiverIdController.clear();
       _coinAmountController.clear();
-      setState(() => _verifiedReceiverName = "");
+      setState(() {
+        _verifiedReceiverName = "";
+        _verifiedReceiverIsAgent = false;
+      });
       _showToast("Successfully transferred $amountInput Coins!");
     } catch (e) {
       _showToast("Transfer failed: $e");
     } finally {
-      setState(() => _isProcessing = false);
+      if (mounted) setState(() => _isProcessing = false);
     }
   }
 
@@ -321,6 +427,7 @@ try {
     required String sellerNumericId,
     required String sellerName,
   }) async {
+    if (_isProcessing) return;
     final user = _currentUser;
     if (user == null) return;
 
@@ -336,36 +443,48 @@ try {
       payAddress = officialTelebirrNumber;
     }
 
-    String channelType = "Official";
-    if (_rechargeSubTabIndex == 1) {
-      channelType = "Coin Seller";
-    }
-
+    final String channelType =
+        _rechargeSubTabIndex == 1 ? "Senior Coin Seller" : "Official Wholesale";
     final String orderRef =
         "SLR_${sellerNumericId}_${DateTime.now().millisecondsSinceEpoch}";
 
-    await FirebaseFirestore.instance
-        .collection('coin_recharges')
-        .doc(orderRef)
-        .set({
-      'orderRef': orderRef,
+    setState(() => _isProcessing = true);
 
-'uid': user.uid,
-      'sellerNumericId': sellerNumericId,
-      'sellerName': sellerName,
-      'channelType': channelType,
-      'paymentMethod': methodTitle,
-      'currency': 'USD',
-      'coins': coinsToReceive,
-      'usdAmount': usdCost,
-      'status': 'PENDING',
-      'timestamp': FieldValue.serverTimestamp(),
-    });
+    try {
+      await FirebaseFirestore.instance
+          .collection('coin_recharges')
+          .doc(orderRef)
+          .set({
+        'orderRef': orderRef,
+        'uid': user.uid,
+        'sellerNumericId': sellerNumericId,
+        'sellerName': sellerName,
+        'channelType': channelType,
+        'paymentMethod': methodTitle,
+
+'currency': 'USD',
+        'coins': coinsToReceive,
+        'usdAmount': usdCost,
+        'paymentTxnId': '',
+        'status': 'PENDING',
+        'timestamp': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isProcessing = false);
+        _showToast("Failed to create order: $e");
+      }
+      return;
+    } finally {
+      if (mounted) setState(() => _isProcessing = false);
+    }
 
     if (!mounted) return;
+    final TextEditingController receiptController = TextEditingController();
 
     showDialog(
       context: context,
+      barrierDismissible: false,
       builder: (ctx) => AlertDialog(
         backgroundColor: bgColor,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -385,87 +504,114 @@ try {
             ),
           ],
         ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Text(
-                  "Coins: ",
-                  style: TextStyle(
-                    color: textBlack,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 13.5,
-                  ),
-                ),
-                Text(
-                  "$coinsToReceive Coins",
-                  style: const TextStyle(
-                    color: accentGreen,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                  ),
-                ),
-                Text(
-                  " ($priceLabel)",
-                  style: const TextStyle(
-                    color: textBlack,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 13,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 6),
-            Text(
-              "Order Ref: $orderRef",
-              style: const TextStyle(
-                color: accentGold,
-                fontWeight: FontWeight.bold,
-                fontSize: 11.5,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              "Pay exact $priceLabel via $methodTitle to:",
-              style: const TextStyle(color: Colors.black54, fontSize: 12),
-            ),
-            const SizedBox(height: 6),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              decoration: BoxDecoration(
-                color: cardBg,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: borderColor),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
                 children: [
-                  Expanded(
-                    child: Text(
-                      payAddress,
-                      style: const TextStyle(
-                        color: textBlack,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                      ),
+                  const Text(
+                    "Coins: ",
+                    style: TextStyle(
+                      color: textBlack,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13.5,
                     ),
                   ),
-                  GestureDetector(
-                    onTap: () => _copyToClipboard(payAddress),
-                    child: const Icon(Icons.copy, size: 18, color: primaryBrown),
+                  Text(
+                    "$coinsToReceive Coins",
+                    style: const TextStyle(
+                      color: accentGreen,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                    ),
+                  ),
+                  Text(
+                    " ($priceLabel)",
+                    style: const TextStyle(
+                      color: textBlack,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                    ),
                   ),
                 ],
               ),
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              "Your USD order is recorded as PENDING. Once verified by Admin, coins will be added to your seller balance.",
-              style: TextStyle(color: Colors.black54, fontSize: 11, height: 1.4),
+              const SizedBox(height: 6),
+              Text(
+                "Order Ref: $orderRef",
+                style: const TextStyle(
+                  color: accentGold,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 11.5,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                "1. Send exact $priceLabel via $methodTitle to:",
+                style: const TextStyle(color: Colors.black87, fontSize: 12, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: cardBg,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: borderColor),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        payAddress,
+                        style: const TextStyle(
+                          color: textBlack,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: () => _copyToClipboard(payAddress),
 
-),
-          ],
+child: const Icon(Icons.copy, size: 18, color: primaryBrown),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                "2. Enter Payment Transaction ID / Receipt:",
+                style: TextStyle(color: Colors.black87, fontSize: 12, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 6),
+              TextField(
+                controller: receiptController,
+                style: const TextStyle(color: textBlack, fontSize: 13),
+                decoration: InputDecoration(
+                  hintText: "e.g. Binance Order ID or Telebirr Ref",
+                  hintStyle: const TextStyle(color: Colors.black38, fontSize: 11.5),
+                  filled: true,
+                  fillColor: cardBg,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: borderColor),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: borderColor),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              const Text(
+                "Order is sent to Admin Dashboard as PENDING. Once verified by Admin, coins will be added to your agent balance.",
+                style: TextStyle(color: Colors.black54, fontSize: 11, height: 1.4),
+              ),
+            ],
+          ),
         ),
         actions: [
           ElevatedButton(
@@ -474,11 +620,18 @@ try {
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
-            onPressed: () {
-              Navigator.pop(ctx);
-              _showToast("Order $orderRef saved! Check Recharge Details.");
+            onPressed: () async {
+              final proof = receiptController.text.trim();
+              if (proof.isNotEmpty) {
+                await FirebaseFirestore.instance
+                    .collection('coin_recharges')
+                    .doc(orderRef)
+                    .set({'paymentTxnId': proof}, SetOptions(merge: true)).catchError((_) {});
+              }
+              if (ctx.mounted) Navigator.pop(ctx);
+              _showToast("Order $orderRef submitted! Check Recharge Details.");
             },
-            child: const Text("Done", style: TextStyle(fontWeight: FontWeight.bold)),
+            child: const Text("Submit Order", style: TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -489,8 +642,7 @@ try {
       int userPoints, int pointsCost, int coinsGain) async {
     final user = _currentUser;
     if (user == null) return;
-    if (pointsCost <= 0) return;
-    if (coinsGain <= 0) return;
+    if (pointsCost <= 0 || coinsGain <= 0) return;
 
     if (pointsCost < 10000) {
       _showToast("Minimum exchange is 10,000 Points.");
@@ -523,34 +675,29 @@ try {
           'coins': FieldValue.increment(coinsGain),
         });
 
-        final logRef = FirebaseFirestore.instance.collection('point_exchanges').doc();
+final logRef = FirebaseFirestore.instance.collection('point_exchanges').doc();
         transaction.set(logRef, {
           'uid': user.uid,
           'pointsDeducted': pointsCost,
           'coinsAdded': coinsGain,
+          'rate': '96%',
           'timestamp': FieldValue.serverTimestamp(),
         });
       });
 
       _customExchangeController.clear();
-      _showToast("Exchanged $pointsCost Points for $coinsGain Coins!");
+      _showToast("Exchanged $pointsCost Points for $coinsGain Coins (96% Agent Rate)!");
     } catch (e) {
       _showToast("Exchange failed: $e");
     } finally {
-      setState(() => _isProcessing = false);
+      if (mounted) setState(() => _isProcessing = false);
     }
   }
 
   void _showHistoryModal(String title, String collectionName) {
-    String filterField = "uid";
-    if (collectionName == 'coin_transfers') {
-      filterField = "sellerUid";
-    }
-
-    String currentUid = "";
-    if (_currentUser != null) {
-      currentUid = _currentUser!.uid;
-    }
+    final String filterField =
+        collectionName == 'coin_transfers' ? "sellerUid" : "uid";
+    final String currentUid = _currentUser?.uid ?? "";
 
     showModalBottomSheet(
       context: context,
@@ -589,20 +736,12 @@ try {
             Expanded(
               child: StreamBuilder<QuerySnapshot>(
                 stream: FirebaseFirestore.instance
-
-.collection(collectionName)
+                    .collection(collectionName)
                     .where(filterField, isEqualTo: currentUid)
-                    .limit(30)
+                    .limit(100)
                     .snapshots(),
                 builder: (context, snapshot) {
-                  bool hasRecords = false;
-                  if (snapshot.hasData) {
-                    if (snapshot.data!.docs.isNotEmpty) {
-                      hasRecords = true;
-                    }
-                  }
-
-                  if (!hasRecords) {
+                  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
                     return const Center(
                       child: Text(
                         "No history records found.",
@@ -621,10 +760,8 @@ try {
                         rawB is Map<String, dynamic> ? rawB : {};
                     final tsA = mapA['timestamp'];
                     final tsB = mapB['timestamp'];
-                    if (tsA is Timestamp) {
-                      if (tsB is Timestamp) {
-                        return tsB.compareTo(tsA);
-                      }
+                    if (tsA is Timestamp && tsB is Timestamp) {
+                      return tsB.compareTo(tsA);
                     }
                     return 0;
                   });
@@ -636,28 +773,27 @@ try {
                       final Map<String, dynamic> item =
                           raw is Map<String, dynamic> ? raw : {};
 
-                      String headerTitle = "Exchange";
+                      String headerTitle = "Agent Exchange (96%)";
                       if (item['salesMethod'] != null) {
                         headerTitle = "Transfer (${item['salesMethod']})";
                       } else if (item['orderRef'] != null) {
-                        String st = "PENDING";
-                        if (item['status'] != null) {
-                          st = item['status'].toString();
-                        }
+                        final String st = (item['status'] ?? 'PENDING').toString();
                         headerTitle = "Wholesale Recharge ($st)";
                       }
 
-                      String subInfo = "";
+String subInfo = "";
                       if (item['receiverId'] != null) {
                         subInfo = "To ID: ${item['receiverId']}";
                       } else if (item['orderRef'] != null) {
-                        subInfo = "Ref: ${item['orderRef']} (\$${item['usdAmount']} USD)";
+                        final String tx = (item['paymentTxnId'] ?? '').toString();
+                        subInfo = tx.isNotEmpty
+                            ? "Ref: ${item['orderRef']} • Tx: $tx"
+                            : "Ref: ${item['orderRef']} (\$${item['usdAmount']} USD)";
                       } else if (item['coinsAdded'] != null) {
                         subInfo = "Points: -${item['pointsDeducted']} Pts";
                       }
 
                       String amountRight = "";
-                      Color amountColor = accentGreen;
                       if (item['orderRef'] != null) {
                         amountRight = "+${item['coins']} Coins";
                       } else if (item['coins'] != null) {
@@ -675,8 +811,7 @@ try {
                           border: Border.all(color: borderColor),
                         ),
                         child: Row(
-
-mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Expanded(
                               child: Column(
@@ -704,8 +839,8 @@ mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             const SizedBox(width: 8),
                             Text(
                               amountRight,
-                              style: TextStyle(
-                                color: amountColor,
+                              style: const TextStyle(
+                                color: accentGreen,
                                 fontWeight: FontWeight.bold,
                                 fontSize: 13,
                               ),
@@ -733,7 +868,8 @@ mainAxisAlignment: MainAxisAlignment.spaceBetween,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text(
           "Greeting Message Settings",
-          style: TextStyle(
+
+style: TextStyle(
               color: textBlack, fontSize: 16, fontWeight: FontWeight.bold),
         ),
         content: TextField(
@@ -741,7 +877,7 @@ mainAxisAlignment: MainAxisAlignment.spaceBetween,
           maxLines: 3,
           style: const TextStyle(color: textBlack),
           decoration: InputDecoration(
-            hintText: "Enter automatic greeting for your buyers...",
+            hintText: "Enter automatic greeting sent to buyers...",
             hintStyle: const TextStyle(color: Colors.black38, fontSize: 12),
             filled: true,
             fillColor: cardBg,
@@ -772,13 +908,10 @@ mainAxisAlignment: MainAxisAlignment.spaceBetween,
               if (user != null) {
                 await FirebaseFirestore.instance
                     .collection('users')
-
-.doc(user.uid)
+                    .doc(user.uid)
                     .set({'sellerGreeting': msg}, SetOptions(merge: true));
               }
-              if (ctx.mounted) {
-                Navigator.pop(ctx);
-              }
+              if (ctx.mounted) Navigator.pop(ctx);
               _showToast("Greeting message saved.");
             },
             child: const Text("Save",
@@ -790,12 +923,78 @@ mainAxisAlignment: MainAxisAlignment.spaceBetween,
     );
   }
 
+  Widget _buildRestrictedAccessView() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: cardBg,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: borderColor, width: 1.5),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.redAccent.withOpacity(0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.lock_person,
+                    color: Colors.redAccent, size: 40),
+              ),
+              const SizedBox(height: 14),
+              const Text(
+                "Agents Only (Access Restricted)",
+                style: TextStyle(
+                  color: textBlack,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w900,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                "Coin Seller Hub is exclusively available for verified Agency Owners. Hosts and standard users cannot access this section.",
+                style: TextStyle(
+                  color: Colors.black54,
+                  fontSize: 12.5,
+                  height: 1.4,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                height: 44,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+
+backgroundColor: buttonDark,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                  ),
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text(
+                    "Go Back",
+                    style: TextStyle(
+                        color: Colors.white, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    String uid = "";
-    if (_currentUser != null) {
-      uid = _currentUser!.uid;
-    }
+    final String uid = _currentUser?.uid ?? "";
 
     if (uid.isEmpty) {
       return const Scaffold(
@@ -817,7 +1016,7 @@ mainAxisAlignment: MainAxisAlignment.spaceBetween,
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
-          "Coin Seller Hub",
+          "Agent Coin Seller Hub",
           style: TextStyle(
             color: textBlack,
             fontSize: 18,
@@ -832,25 +1031,18 @@ mainAxisAlignment: MainAxisAlignment.spaceBetween,
             .doc(uid)
             .snapshots(),
         builder: (context, snapshot) {
-          Map<String, dynamic> userData = {};
-          if (snapshot.hasData) {
-            if (snapshot.data!.exists) {
-              final raw = snapshot.data!.data();
-              if (raw is Map<String, dynamic>) {
-                userData = raw;
-              }
-            }
+          if (!snapshot.hasData) {
+            return const Center(
+              child: CircularProgressIndicator(color: primaryBrown),
+            );
           }
 
-          String name = "Seller";
-          if (userData['agencyName'] != null) {
-            if (userData['agencyName'].toString().isNotEmpty) {
-              name = userData['agencyName'].toString();
+          Map<String, dynamic> userData = {};
+          if (snapshot.data!.exists) {
+            final raw = snapshot.data!.data();
+            if (raw is Map<String, dynamic>) {
+              userData = raw;
             }
-          } else if (userData['name'] != null) {
-            name = userData['name'].toString();
-          } else if (userData['displayName'] != null) {
-            name = userData['displayName'].toString();
           }
 
           String numericId = "100000";
@@ -860,6 +1052,26 @@ mainAxisAlignment: MainAxisAlignment.spaceBetween,
             numericId = userData['id'].toString();
           }
 
+          _verifyAgencyOwnership(numericId);
+
+          final bool isAuthorizedAgent =
+              _checkUserMapIsAgent(userData) || _isAgencyOwnerFromDb;
+          if (!isAuthorizedAgent) {
+            return _buildRestrictedAccessView();
+          }
+
+          String name = "Agent Seller";
+          if (userData['agencyName'] != null &&
+              userData['agencyName'].toString().isNotEmpty) {
+            name = userData['agencyName'].toString();
+          } else if (userData['name'] != null &&
+              userData['name'].toString().isNotEmpty) {
+            name = userData['name'].toString();
+          } else if (userData['displayName'] != null &&
+              userData['displayName'].toString().isNotEmpty) {
+            name = userData['displayName'].toString();
+          }
+
           final int coins = (userData['coins'] as num?)?.toInt() ?? 0;
           final int points = (userData['points'] as num?)?.toInt() ?? 0;
           final int totalCoinsSold =
@@ -867,14 +1079,18 @@ mainAxisAlignment: MainAxisAlignment.spaceBetween,
           final String currentLevel = _resolveSellerLevel(totalCoinsSold);
 
           String sellerGreeting = "Thank you for buying from NILE Live!";
-          if (userData['sellerGreeting'] != null) {
-            if (userData['sellerGreeting'].toString().isNotEmpty) {
-              sellerGreeting = userData['sellerGreeting'].toString();
-            }
+          if (userData['sellerGreeting'] != null &&
+              userData['sellerGreeting'].toString().isNotEmpty) {
+            sellerGreeting = userData['sellerGreeting'].toString();
           }
 
-          Widget activeBodySection =
-              _buildTransferSection(coins, sellerGreeting);
+          Widget activeBodySection = _buildTransferSection(
+            sellerCoins: coins,
+            sellerName: name,
+
+sellerNumericId: numericId,
+            sellerGreeting: sellerGreeting,
+          );
           if (_activeTabIndex == 1) {
             activeBodySection = _buildRechargeSection(
               sellerNumericId: numericId,
@@ -888,9 +1104,8 @@ mainAxisAlignment: MainAxisAlignment.spaceBetween,
             physics: const BouncingScrollPhysics(),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             children: [
-              // 1. Seller Profile Card
-
-Container(
+              // 1. Agent Profile Card
+              Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   color: cardBg,
@@ -939,7 +1154,7 @@ Container(
                           ),
                           const SizedBox(height: 3),
                           Text(
-                            "ID: $numericId • Sold: $totalCoinsSold",
+                            "Agent ID: $numericId • Sold: $totalCoinsSold",
                             style: const TextStyle(
                                 color: Colors.black54, fontSize: 11),
                           ),
@@ -961,7 +1176,8 @@ Container(
                       child: Container(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
+
+decoration: BoxDecoration(
                           color: accentGreen,
                           borderRadius: BorderRadius.circular(16),
                         ),
@@ -981,7 +1197,7 @@ Container(
 
               const SizedBox(height: 12),
 
-// 2. Balance & Payment Method Card
+              // 2. Balance & Payment Method Card
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
@@ -996,7 +1212,7 @@ Container(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         const Text(
-                          "Seller Coin Balance",
+                          "Agent Coin Balance",
                           style:
                               TextStyle(color: Colors.black54, fontSize: 12),
                         ),
@@ -1062,7 +1278,7 @@ Container(
 
               const SizedBox(height: 14),
 
-              // 3. Tab Structure (Transfer, Recharge, Exchange)
+// 3. Tab Structure (Transfer, Recharge, Exchange)
               Container(
                 decoration: BoxDecoration(
                   color: const Color(0xFFE8DFD8),
@@ -1074,8 +1290,7 @@ Container(
                     color: buttonDark,
                     borderRadius: BorderRadius.circular(24),
                   ),
-
-labelColor: Colors.white,
+                  labelColor: Colors.white,
                   unselectedLabelColor: textBlack,
                   labelStyle: const TextStyle(
                       fontWeight: FontWeight.bold, fontSize: 13),
@@ -1144,14 +1359,9 @@ labelColor: Colors.white,
 
   Widget _buildPaymentMethodPill(int index, String label, IconData icon) {
     final bool isSelected = _selectedPaymentMethod == index;
-    Color bg = bgColor;
-    Color border = borderColor;
-    Color fg = textBlack;
-    if (isSelected) {
-      bg = buttonDark;
-      border = buttonDark;
-      fg = Colors.white;
-    }
+    final Color bg = isSelected ? buttonDark : bgColor;
+    final Color border = isSelected ? buttonDark : borderColor;
+    final Color fg = isSelected ? Colors.white : textBlack;
 
     return Expanded(
       child: GestureDetector(
@@ -1187,17 +1397,26 @@ labelColor: Colors.white,
     );
   }
 
-  // 1. Transfer Section
-  Widget _buildTransferSection(int sellerCoins, String sellerGreeting) {
-    VoidCallback? transferAction =
-        () => _executeCoinTransfer(sellerCoins, sellerGreeting);
+// 1. Transfer Section
+  Widget _buildTransferSection({
+    required int sellerCoins,
+    required String sellerName,
+    required String sellerNumericId,
+    required String sellerGreeting,
+  }) {
+    VoidCallback? transferAction = () => _executeCoinTransfer(
+          sellerBalance: sellerCoins,
+          sellerName: sellerName,
+          sellerNumericId: sellerNumericId,
+          sellerGreeting: sellerGreeting,
+        );
     Widget transferChild = const Text(
       "Transfer",
       style: TextStyle(
           color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
     );
 
-if (_isProcessing) {
+    if (_isProcessing) {
       transferAction = null;
       transferChild = const SizedBox(
         width: 18,
@@ -1248,6 +1467,14 @@ if (_isProcessing) {
                 Expanded(
                   child: TextField(
                     controller: _receiverIdController,
+                    onChanged: (_) {
+                      if (_verifiedReceiverName.isNotEmpty) {
+                        setState(() {
+                          _verifiedReceiverName = "";
+                          _verifiedReceiverIsAgent = false;
+                        });
+                      }
+                    },
                     style: const TextStyle(
                         color: textBlack, fontWeight: FontWeight.w600),
                     decoration: const InputDecoration(
@@ -1279,11 +1506,16 @@ if (_isProcessing) {
             ),
           ),
           if (_verifiedReceiverName.isNotEmpty) ...[
-            const SizedBox(height: 4),
+
+const SizedBox(height: 4),
             Text(
-              "Receiver: $_verifiedReceiverName",
-              style: const TextStyle(
-                  color: accentGreen,
+              _verifiedReceiverIsAgent
+                  ? "Receiver: $_verifiedReceiverName (Agent / Seller)"
+                  : "Receiver: $_verifiedReceiverName",
+              style: TextStyle(
+                  color: _verifiedReceiverName == "User Not Found"
+                      ? Colors.redAccent
+                      : accentGreen,
                   fontSize: 11.5,
                   fontWeight: FontWeight.bold),
             ),
@@ -1305,8 +1537,7 @@ if (_isProcessing) {
             child: TextField(
               controller: _coinAmountController,
               keyboardType: TextInputType.number,
-
-style: const TextStyle(
+              style: const TextStyle(
                   color: accentGreen, fontWeight: FontWeight.bold),
               decoration: const InputDecoration(
                 hintText: "Enter amount (e.g. 10000)",
@@ -1356,14 +1587,9 @@ style: const TextStyle(
 
   Widget _buildSalesMethodOption(int index, String label) {
     final bool isSelected = _salesMethodIndex == index;
-    Color bg = bgColor;
-    Color border = borderColor;
-    Color fg = textBlack;
-    if (isSelected) {
-      bg = buttonDark;
-      border = buttonDark;
-      fg = Colors.white;
-    }
+    final Color bg = isSelected ? buttonDark : bgColor;
+    final Color border = isSelected ? buttonDark : borderColor;
+    final Color fg = isSelected ? Colors.white : textBlack;
 
     return Expanded(
       child: GestureDetector(
@@ -1393,7 +1619,8 @@ style: const TextStyle(
   // 2. Recharge Section (USD Pricing for both Binance Pay & Telebirr)
   Widget _buildRechargeSection({
     required String sellerNumericId,
-    required String sellerName,
+
+required String sellerName,
   }) {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -1426,21 +1653,17 @@ style: const TextStyle(
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 2,
               crossAxisSpacing: 10,
-
-mainAxisSpacing: 10,
+              mainAxisSpacing: 10,
               childAspectRatio: 1.45,
             ),
             itemBuilder: (context, idx) {
               final pkg = _rechargePackages[idx];
               final isSelected = _selectedRechargePackage == idx;
-              Color itemBg = bgColor;
-              Color itemBorder = borderColor;
-              double itemBorderW = 1.0;
-              if (isSelected) {
-                itemBg = const Color(0xFFE8F5E9);
-                itemBorder = accentGreen;
-                itemBorderW = 1.8;
-              }
+
+              final Color itemBg =
+                  isSelected ? const Color(0xFFE8F5E9) : bgColor;
+              final Color itemBorder = isSelected ? accentGreen : borderColor;
+              final double itemBorderW = isSelected ? 1.8 : 1.0;
 
               return GestureDetector(
                 onTap: () => setState(() => _selectedRechargePackage = idx),
@@ -1492,10 +1715,13 @@ mainAxisSpacing: 10,
                     borderRadius: BorderRadius.circular(14)),
                 elevation: 0,
               ),
-              onPressed: () => _openWholesaleRechargeDialog(
-                sellerNumericId: sellerNumericId,
-                sellerName: sellerName,
-              ),
+              onPressed: _isProcessing
+                  ? null
+                  : () => _openWholesaleRechargeDialog(
+                        sellerNumericId: sellerNumericId,
+
+sellerName: sellerName,
+                      ),
               child: const Text(
                 "Create Wholesale Order",
                 style: TextStyle(
@@ -1526,18 +1752,12 @@ mainAxisSpacing: 10,
 
   Widget _buildRechargeSubTab(int index, String label) {
     final bool isSelected = _rechargeSubTabIndex == index;
-    Color bg = bgColor;
-    Color border = borderColor;
-    Color fg = textBlack;
-    if (isSelected) {
-      bg = buttonDark;
-      border = buttonDark;
-      fg = Colors.white;
-    }
+    final Color bg = isSelected ? buttonDark : bgColor;
+    final Color border = isSelected ? buttonDark : borderColor;
+    final Color fg = isSelected ? Colors.white : textBlack;
 
     return Expanded(
-
-child: GestureDetector(
+      child: GestureDetector(
         onTap: () => setState(() => _rechargeSubTabIndex = index),
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 7),
@@ -1561,7 +1781,7 @@ child: GestureDetector(
     );
   }
 
-  // 3. Exchange Section (Points to Coins at 96% Wholesale Rate)
+  // 3. Exchange Section (Points to Coins at 96% Agent Rate)
   Widget _buildExchangeSection(int userPoints) {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -1576,7 +1796,7 @@ child: GestureDetector(
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text("My Points Balance",
+              const Text("My Agent Points",
                   style: TextStyle(color: Colors.black54, fontSize: 12)),
               Text(
                 "$userPoints Pts",
@@ -1589,7 +1809,7 @@ child: GestureDetector(
           ),
           const Divider(color: Color(0xFFEFE6DE), height: 18),
           const Text(
-            "Custom Exchange (96% Seller Rate)",
+            "Custom Exchange (96% Agent Rate)",
             style: TextStyle(
                 color: textBlack, fontSize: 13, fontWeight: FontWeight.bold),
           ),
@@ -1610,22 +1830,26 @@ child: GestureDetector(
                     style: const TextStyle(
                         color: textBlack, fontWeight: FontWeight.w600),
                     decoration: const InputDecoration(
-                      hintText: "Min. 10,000 points",
+                      hintText: "e.g. 100000 Pts = 96000 Coins",
                       hintStyle: TextStyle(color: Colors.black38, fontSize: 12),
-                      border: InputBorder.none,
+
+border: InputBorder.none,
                     ),
                   ),
                 ),
                 TextButton(
-                  onPressed: () {
-                    final input =
-                        int.tryParse(_customExchangeController.text.trim()) ?? 0;
-                    if (input > 0) {
-                      final int coinsCalculated = (input * 0.96).floor();
-                      _executePointsExchange(
-                          userPoints, input, coinsCalculated);
-                    }
-                  },
+                  onPressed: _isProcessing
+                      ? null
+                      : () {
+                          final input = int.tryParse(
+                                  _customExchangeController.text.trim()) ??
+                              0;
+                          if (input > 0) {
+                            final int coinsCalculated = (input * 0.96).floor();
+                            _executePointsExchange(
+                                userPoints, input, coinsCalculated);
+                          }
+                        },
                   child: const Text(
                     "Convert",
                     style: TextStyle(
@@ -1637,7 +1861,7 @@ child: GestureDetector(
           ),
           const SizedBox(height: 14),
           const Text(
-            "Standard Exchange Packs",
+            "Agent Exchange Packs (96% Rate)",
             style: TextStyle(
                 color: textBlack, fontSize: 13, fontWeight: FontWeight.bold),
           ),
@@ -1646,13 +1870,11 @@ child: GestureDetector(
             final int coinsGain = pack['coins'] as int;
             final int pointsCost = pack['points'] as int;
 
-            VoidCallback? packAction =
-                () => _executePointsExchange(userPoints, pointsCost, coinsGain);
-            if (_isProcessing) {
-              packAction = null;
-            }
+            final VoidCallback? packAction = _isProcessing
+                ? null
+                : () => _executePointsExchange(userPoints, pointsCost, coinsGain);
 
-return Container(
+            return Container(
               margin: const EdgeInsets.only(bottom: 8),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
