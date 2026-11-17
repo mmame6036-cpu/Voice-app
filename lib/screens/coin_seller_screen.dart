@@ -102,26 +102,19 @@ class _CoinSellerScreenState extends State<CoinSellerScreen>
     );
   }
 
-  bool _checkUserMapIsAgent(Map<String, dynamic> data) {
+  bool _checkUserMapIsAgent(Map data) {
     final String role = (data['role'] ?? '').toString().toLowerCase().trim();
-    if (role == 'host' || role == 'user') {
-      if (data['isAgent'] != true && data['isCoinSeller'] != true) {
-
-final String agId = (data['agencyId'] ?? '').toString().trim();
-        final String agName = (data['agencyName'] ?? '').toString().trim();
-        if (agId.isEmpty && agName.isEmpty) return false;
-      }
-    }
     if (data['isAgent'] == true) return true;
     if (data['isCoinSeller'] == true) return true;
-    if (role == 'agent'  role == 'agency'  role == 'coinseller') return true;
+    if (const ['agent', 'agency', 'coinseller'].contains(role)) return true;
     if ((data['agencyId'] ?? '').toString().trim().isNotEmpty) return true;
     if ((data['agencyName'] ?? '').toString().trim().isNotEmpty) return true;
     return false;
   }
 
-  Future<void> _verifyAgencyOwnership(String numericIdStr) async {
-    if (numericIdStr.isEmpty || _checkedNumericIdCache == numericIdStr) return;
+Future<void> _verifyAgencyOwnership(String numericIdStr) async {
+    if (numericIdStr.isEmpty) return;
+    if (_checkedNumericIdCache == numericIdStr) return;
     _checkedNumericIdCache = numericIdStr;
     final int? numId = int.tryParse(numericIdStr);
     if (numId == null) return;
@@ -203,7 +196,7 @@ final String agId = (data['agencyId'] ?? '').toString().trim();
     );
   }
 
-  Future<bool> _isTargetDocAgent(Map<String, dynamic> data, int? numId) async {
+  Future<bool> _isTargetDocAgent(Map data, int? numId) async {
     if (_checkUserMapIsAgent(data)) return true;
     if (numId != null) {
       final agSnap = await FirebaseFirestore.instance
@@ -225,7 +218,7 @@ final String agId = (data['agencyId'] ?? '').toString().trim();
       _verifiedReceiverIsAgent = false;
     });
 
-try {
+    try {
       final int? numId = int.tryParse(queryText);
       QuerySnapshot query;
       if (numId != null) {
@@ -242,9 +235,9 @@ try {
             .get();
       }
 
-      if (query.docs.isNotEmpty) {
+if (query.docs.isNotEmpty) {
         final raw = query.docs.first.data();
-        final Map<String, dynamic> data = raw is Map<String, dynamic> ? raw : {};
+        final Map data = raw is Map ? raw : {};
         String foundName = "Verified User";
         if (data['name'] != null && data['name'].toString().isNotEmpty) {
           foundName = data['name'].toString();
@@ -340,8 +333,7 @@ try {
       }
 
       final rawReceiver = receiverDoc.data();
-      final Map<String, dynamic> receiverMap =
-          rawReceiver is Map<String, dynamic> ? rawReceiver : {};
+      final Map receiverMap = rawReceiver is Map ? rawReceiver : {};
       final int? targetNumId = (receiverMap['numericId'] as num?)?.toInt() ?? numId;
 
       if (_salesMethodIndex == 1) {
@@ -353,19 +345,18 @@ try {
         }
       }
 
-final receiverRef = receiverDoc.reference;
+      final receiverRef = receiverDoc.reference;
       final sellerRef = FirebaseFirestore.instance.collection('users').doc(user.uid);
       final String salesType = _salesMethodIndex == 1 ? "Coinseller" : "User";
 
       await FirebaseFirestore.instance.runTransaction((transaction) async {
         final sellerSnap = await transaction.get(sellerRef);
         final rawSeller = sellerSnap.data();
-        final Map<String, dynamic> sellerMap =
-            rawSeller is Map<String, dynamic> ? rawSeller : {};
+        final Map sellerMap = rawSeller is Map ? rawSeller : {};
         final int currentCoins = (sellerMap['coins'] as num?)?.toInt() ?? 0;
         final int prevSold = (sellerMap['totalCoinsSold'] as num?)?.toInt() ?? 0;
 
-        if (currentCoins < amountInput) {
+if (currentCoins < amountInput) {
           throw Exception("Insufficient balance.");
         }
 
@@ -461,8 +452,7 @@ final receiverRef = receiverDoc.reference;
         'sellerName': sellerName,
         'channelType': channelType,
         'paymentMethod': methodTitle,
-
-'currency': 'USD',
+        'currency': 'USD',
         'coins': coinsToReceive,
         'usdAmount': usdCost,
         'paymentTxnId': '',
@@ -487,7 +477,8 @@ final receiverRef = receiverDoc.reference;
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
         backgroundColor: bgColor,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+
+shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Row(
           children: [
             const Icon(Icons.verified, color: accentGreen, size: 22),
@@ -574,8 +565,7 @@ final receiverRef = receiverDoc.reference;
                     ),
                     GestureDetector(
                       onTap: () => _copyToClipboard(payAddress),
-
-child: const Icon(Icons.copy, size: 18, color: primaryBrown),
+                      child: const Icon(Icons.copy, size: 18, color: primaryBrown),
                     ),
                   ],
                 ),
@@ -590,7 +580,8 @@ child: const Icon(Icons.copy, size: 18, color: primaryBrown),
                 controller: receiptController,
                 style: const TextStyle(color: textBlack, fontSize: 13),
                 decoration: InputDecoration(
-                  hintText: "e.g. Binance Order ID or Telebirr Ref",
+
+hintText: "e.g. Binance Order ID or Telebirr Ref",
                   hintStyle: const TextStyle(color: Colors.black38, fontSize: 11.5),
                   filled: true,
                   fillColor: cardBg,
@@ -642,7 +633,8 @@ child: const Icon(Icons.copy, size: 18, color: primaryBrown),
       int userPoints, int pointsCost, int coinsGain) async {
     final user = _currentUser;
     if (user == null) return;
-    if (pointsCost <= 0 || coinsGain <= 0) return;
+    if (pointsCost <= 0) return;
+    if (coinsGain <= 0) return;
 
     if (pointsCost < 10000) {
       _showToast("Minimum exchange is 10,000 Points.");
@@ -662,8 +654,7 @@ child: const Icon(Icons.copy, size: 18, color: primaryBrown),
       await FirebaseFirestore.instance.runTransaction((transaction) async {
         final snap = await transaction.get(userRef);
         final raw = snap.data();
-        final Map<String, dynamic> data =
-            raw is Map<String, dynamic> ? raw : {};
+        final Map data = raw is Map ? raw : {};
         final int currentPts = (data['points'] as num?)?.toInt() ?? 0;
 
         if (currentPts < pointsCost) {
@@ -675,7 +666,7 @@ child: const Icon(Icons.copy, size: 18, color: primaryBrown),
           'coins': FieldValue.increment(coinsGain),
         });
 
-final logRef = FirebaseFirestore.instance.collection('point_exchanges').doc();
+        final logRef = FirebaseFirestore.instance.collection('point_exchanges').doc();
         transaction.set(logRef, {
           'uid': user.uid,
           'pointsDeducted': pointsCost,
@@ -699,7 +690,7 @@ final logRef = FirebaseFirestore.instance.collection('point_exchanges').doc();
         collectionName == 'coin_transfers' ? "sellerUid" : "uid";
     final String currentUid = _currentUser?.uid ?? "";
 
-    showModalBottomSheet(
+showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
@@ -734,14 +725,23 @@ final logRef = FirebaseFirestore.instance.collection('point_exchanges').doc();
             ),
             const SizedBox(height: 14),
             Expanded(
-              child: StreamBuilder<QuerySnapshot>(
+              child: StreamBuilder(
                 stream: FirebaseFirestore.instance
                     .collection(collectionName)
                     .where(filterField, isEqualTo: currentUid)
                     .limit(100)
                     .snapshots(),
                 builder: (context, snapshot) {
-                  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                  if (!snapshot.hasData) {
+                    return const Center(
+                      child: Text(
+                        "No history records found.",
+                        style: TextStyle(color: Colors.black45, fontSize: 13),
+                      ),
+                    );
+                  }
+                  final qSnap = snapshot.data as QuerySnapshot;
+                  if (qSnap.docs.isEmpty) {
                     return const Center(
                       child: Text(
                         "No history records found.",
@@ -750,14 +750,12 @@ final logRef = FirebaseFirestore.instance.collection('point_exchanges').doc();
                     );
                   }
 
-                  final docs = snapshot.data!.docs.toList();
+                  final docs = qSnap.docs.toList();
                   docs.sort((a, b) {
                     final rawA = a.data();
                     final rawB = b.data();
-                    final Map<String, dynamic> mapA =
-                        rawA is Map<String, dynamic> ? rawA : {};
-                    final Map<String, dynamic> mapB =
-                        rawB is Map<String, dynamic> ? rawB : {};
+                    final Map mapA = rawA is Map ? rawA : {};
+                    final Map mapB = rawB is Map ? rawB : {};
                     final tsA = mapA['timestamp'];
                     final tsB = mapB['timestamp'];
                     if (tsA is Timestamp && tsB is Timestamp) {
@@ -770,8 +768,7 @@ final logRef = FirebaseFirestore.instance.collection('point_exchanges').doc();
                     itemCount: docs.length,
                     itemBuilder: (context, idx) {
                       final raw = docs[idx].data();
-                      final Map<String, dynamic> item =
-                          raw is Map<String, dynamic> ? raw : {};
+                      final Map item = raw is Map ? raw : {};
 
                       String headerTitle = "Agent Exchange (96%)";
                       if (item['salesMethod'] != null) {
@@ -781,14 +778,15 @@ final logRef = FirebaseFirestore.instance.collection('point_exchanges').doc();
                         headerTitle = "Wholesale Recharge ($st)";
                       }
 
-String subInfo = "";
+                      String subInfo = "";
                       if (item['receiverId'] != null) {
                         subInfo = "To ID: ${item['receiverId']}";
                       } else if (item['orderRef'] != null) {
                         final String tx = (item['paymentTxnId'] ?? '').toString();
                         subInfo = tx.isNotEmpty
                             ? "Ref: ${item['orderRef']} • Tx: $tx"
-                            : "Ref: ${item['orderRef']} (\$${item['usdAmount']} USD)";
+
+: "Ref: ${item['orderRef']} (\$${item['usdAmount']} USD)";
                       } else if (item['coinsAdded'] != null) {
                         subInfo = "Points: -${item['pointsDeducted']} Pts";
                       }
@@ -868,8 +866,7 @@ String subInfo = "";
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text(
           "Greeting Message Settings",
-
-style: TextStyle(
+          style: TextStyle(
               color: textBlack, fontSize: 16, fontWeight: FontWeight.bold),
         ),
         content: TextField(
@@ -879,7 +876,8 @@ style: TextStyle(
           decoration: InputDecoration(
             hintText: "Enter automatic greeting sent to buyers...",
             hintStyle: const TextStyle(color: Colors.black38, fontSize: 12),
-            filled: true,
+
+filled: true,
             fillColor: cardBg,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
@@ -972,8 +970,7 @@ style: TextStyle(
                 height: 44,
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
-
-backgroundColor: buttonDark,
+                    backgroundColor: buttonDark,
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12)),
                   ),
@@ -996,7 +993,7 @@ backgroundColor: buttonDark,
   Widget build(BuildContext context) {
     final String uid = _currentUser?.uid ?? "";
 
-    if (uid.isEmpty) {
+if (uid.isEmpty) {
       return const Scaffold(
         backgroundColor: bgColor,
         body: Center(
@@ -1025,7 +1022,7 @@ backgroundColor: buttonDark,
         ),
         centerTitle: true,
       ),
-      body: StreamBuilder<DocumentSnapshot>(
+      body: StreamBuilder(
         stream: FirebaseFirestore.instance
             .collection('users')
             .doc(uid)
@@ -1037,10 +1034,11 @@ backgroundColor: buttonDark,
             );
           }
 
-          Map<String, dynamic> userData = {};
-          if (snapshot.data!.exists) {
-            final raw = snapshot.data!.data();
-            if (raw is Map<String, dynamic>) {
+          final docSnap = snapshot.data as DocumentSnapshot;
+          Map userData = {};
+          if (docSnap.exists) {
+            final raw = docSnap.data();
+            if (raw is Map) {
               userData = raw;
             }
           }
@@ -1054,8 +1052,10 @@ backgroundColor: buttonDark,
 
           _verifyAgencyOwnership(numericId);
 
-          final bool isAuthorizedAgent =
-              _checkUserMapIsAgent(userData) || _isAgencyOwnerFromDb;
+          bool isAuthorizedAgent = _checkUserMapIsAgent(userData);
+          if (_isAgencyOwnerFromDb) {
+            isAuthorizedAgent = true;
+          }
           if (!isAuthorizedAgent) {
             return _buildRestrictedAccessView();
           }
@@ -1087,8 +1087,7 @@ backgroundColor: buttonDark,
           Widget activeBodySection = _buildTransferSection(
             sellerCoins: coins,
             sellerName: name,
-
-sellerNumericId: numericId,
+            sellerNumericId: numericId,
             sellerGreeting: sellerGreeting,
           );
           if (_activeTabIndex == 1) {
@@ -1104,7 +1103,8 @@ sellerNumericId: numericId,
             physics: const BouncingScrollPhysics(),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             children: [
-              // 1. Agent Profile Card
+
+// 1. Agent Profile Card
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
@@ -1176,8 +1176,7 @@ sellerNumericId: numericId,
                       child: Container(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 12, vertical: 6),
-
-decoration: BoxDecoration(
+                        decoration: BoxDecoration(
                           color: accentGreen,
                           borderRadius: BorderRadius.circular(16),
                         ),
@@ -1197,7 +1196,7 @@ decoration: BoxDecoration(
 
               const SizedBox(height: 12),
 
-              // 2. Balance & Payment Method Card
+// 2. Balance & Payment Method Card
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
@@ -1278,7 +1277,7 @@ decoration: BoxDecoration(
 
               const SizedBox(height: 14),
 
-// 3. Tab Structure (Transfer, Recharge, Exchange)
+              // 3. Tab Structure (Transfer, Recharge, Exchange)
               Container(
                 decoration: BoxDecoration(
                   color: const Color(0xFFE8DFD8),
@@ -1290,7 +1289,8 @@ decoration: BoxDecoration(
                     color: buttonDark,
                     borderRadius: BorderRadius.circular(24),
                   ),
-                  labelColor: Colors.white,
+
+labelColor: Colors.white,
                   unselectedLabelColor: textBlack,
                   labelStyle: const TextStyle(
                       fontWeight: FontWeight.bold, fontSize: 13),
@@ -1397,7 +1397,7 @@ decoration: BoxDecoration(
     );
   }
 
-// 1. Transfer Section
+  // 1. Transfer Section
   Widget _buildTransferSection({
     required int sellerCoins,
     required String sellerName,
@@ -1405,7 +1405,8 @@ decoration: BoxDecoration(
     required String sellerGreeting,
   }) {
     VoidCallback? transferAction = () => _executeCoinTransfer(
-          sellerBalance: sellerCoins,
+
+sellerBalance: sellerCoins,
           sellerName: sellerName,
           sellerNumericId: sellerNumericId,
           sellerGreeting: sellerGreeting,
@@ -1506,14 +1507,14 @@ decoration: BoxDecoration(
             ),
           ),
           if (_verifiedReceiverName.isNotEmpty) ...[
-
-const SizedBox(height: 4),
+            const SizedBox(height: 4),
             Text(
               _verifiedReceiverIsAgent
                   ? "Receiver: $_verifiedReceiverName (Agent / Seller)"
                   : "Receiver: $_verifiedReceiverName",
               style: TextStyle(
-                  color: _verifiedReceiverName == "User Not Found"
+
+color: _verifiedReceiverName == "User Not Found"
                       ? Colors.redAccent
                       : accentGreen,
                   fontSize: 11.5,
@@ -1619,8 +1620,7 @@ const SizedBox(height: 4),
   // 2. Recharge Section (USD Pricing for both Binance Pay & Telebirr)
   Widget _buildRechargeSection({
     required String sellerNumericId,
-
-required String sellerName,
+    required String sellerName,
   }) {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -1628,7 +1628,8 @@ required String sellerName,
         color: cardBg,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: borderColor),
-      ),
+
+),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1719,15 +1720,15 @@ required String sellerName,
                   ? null
                   : () => _openWholesaleRechargeDialog(
                         sellerNumericId: sellerNumericId,
-
-sellerName: sellerName,
+                        sellerName: sellerName,
                       ),
               child: const Text(
                 "Create Wholesale Order",
                 style: TextStyle(
                     color: Colors.white,
                     fontSize: 14,
-                    fontWeight: FontWeight.bold),
+
+fontWeight: FontWeight.bold),
               ),
             ),
           ),
@@ -1832,8 +1833,7 @@ sellerName: sellerName,
                     decoration: const InputDecoration(
                       hintText: "e.g. 100000 Pts = 96000 Coins",
                       hintStyle: TextStyle(color: Colors.black38, fontSize: 12),
-
-border: InputBorder.none,
+                      border: InputBorder.none,
                     ),
                   ),
                 ),
@@ -1841,7 +1841,8 @@ border: InputBorder.none,
                   onPressed: _isProcessing
                       ? null
                       : () {
-                          final input = int.tryParse(
+
+final input = int.tryParse(
                                   _customExchangeController.text.trim()) ??
                               0;
                           if (input > 0) {
