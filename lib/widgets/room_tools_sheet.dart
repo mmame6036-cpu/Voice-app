@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../screens/room_settings_screen.dart';
+import 'dragon_tiger_sheet.dart';
 
 class RoomToolsSheet extends StatelessWidget {
   final String roomId;
@@ -107,9 +108,9 @@ class RoomToolsSheet extends StatelessWidget {
                 if (target.isNotEmpty) {
                   await FirebaseFirestore.instance.collection('rooms').doc(roomId).set({
                     'admins': FieldValue.arrayUnion([target]),
-                  }, SetOptions(merge: true));
 
-controller.clear();
+}, SetOptions(merge: true));
+                  controller.clear();
                 }
               },
               child: const Text("Add Admin", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
@@ -147,7 +148,7 @@ controller.clear();
           ),
           const SizedBox(height: 14),
           const Text(
-            "Basic Tools",
+            "Room Games & Tools",
             style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 20),
@@ -158,6 +159,20 @@ controller.clear();
             mainAxisSpacing: 16,
             crossAxisSpacing: 10,
             children: [
+              _buildToolItem(
+                icon: Icons.casino,
+                label: "Dragon Tiger",
+                iconColor: const Color(0xFFFFD700),
+                onTap: () {
+                  final nav = Navigator.of(context);
+                  nav.pop();
+                  DragonTigerSheet.show(
+                    nav.context,
+                    roomId: roomId,
+                    userName: userName,
+                  );
+                },
+              ),
               _buildToolItem(
                 icon: isVoiceOn ? Icons.volume_up : Icons.volume_off,
                 label: isVoiceOn ? "Voice On" : "Voice Off",
@@ -205,7 +220,8 @@ controller.clear();
                 icon: Icons.people_outline,
                 label: "Room Admin",
                 iconColor: const Color(0xFF00E5FF),
-                onTap: () {
+
+onTap: () {
                   Navigator.pop(context);
                   _showAdminManagementDialog(context);
                 },
@@ -220,8 +236,7 @@ controller.clear();
                 },
               ),
               _buildToolItem(
-
-icon: Icons.mic,
+                icon: Icons.mic,
                 label: "Open all mic",
                 iconColor: const Color(0xFF00E676),
                 onTap: () => Navigator.pop(context),
@@ -242,12 +257,6 @@ icon: Icons.mic,
                 icon: Icons.work_outline,
                 label: "Backpack",
                 iconColor: const Color(0xFFFFB300),
-                onTap: () => Navigator.pop(context),
-              ),
-              _buildToolItem(
-                icon: Icons.auto_awesome,
-                label: "Effect Setting",
-                iconColor: const Color(0xFFE040FB),
                 onTap: () => Navigator.pop(context),
               ),
               _buildToolItem(
