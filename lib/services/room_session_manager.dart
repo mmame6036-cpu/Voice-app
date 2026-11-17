@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 
 class RoomSessionManager extends ChangeNotifier {
@@ -9,27 +10,50 @@ class RoomSessionManager extends ChangeNotifier {
   String roomId = "";
   String roomTitle = "";
   bool isMuted = false;
+  int? seatedIndex;
+  dynamic activeEngine;
 
   VoidCallback? onExpand;
-  Future<void> Function()? onLeaveRoom;
-  Future<void> Function(bool mute)? onToggleMute;
+  Function? onLeaveRoom;
+  Function? onToggleMute;
+  VoidCallback? onHeartbeat;
+  Timer? _bgHeartbeatTimer;
 
   void registerActiveRoom({
     required String id,
     required String title,
     required bool muted,
+    required dynamic engine,
+    int? seatIndex,
     required VoidCallback expandCallback,
-    required Future<void> Function() leaveCallback,
-    required Future<void> Function(bool mute) muteCallback,
+    required Function leaveCallback,
+    required Function muteCallback,
+    VoidCallback? heartbeatCallback,
   }) {
     hasActiveRoom = true;
     isMinimized = false;
     roomId = id;
     roomTitle = title;
     isMuted = muted;
+    seatedIndex = seatIndex;
+    activeEngine = engine;
     onExpand = expandCallback;
     onLeaveRoom = leaveCallback;
     onToggleMute = muteCallback;
+    onHeartbeat = heartbeatCallback;
+
+    _bgHeartbeatTimer?.cancel();
+    _bgHeartbeatTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+      if (hasActiveRoom) {
+        if (isMinimized) {
+          final hb = onHeartbeat;
+          if (hb != null) {
+            hb();
+          }
+        }
+      }
+    });
+
     notifyListeners();
   }
 
@@ -42,6 +66,7 @@ class RoomSessionManager extends ChangeNotifier {
   void expandRoom() {
     if (!hasActiveRoom) return;
     isMinimized = false;
+    _bgHeartbeatTimer?.cancel();
     notifyListeners();
     final cb = onExpand;
     if (cb != null) {
@@ -55,28 +80,45 @@ class RoomSessionManager extends ChangeNotifier {
   }
 
   Future<void> closeMinimizedRoom() async {
+    _bgHeartbeatTimer?.cancel();
     final leaveCb = onLeaveRoom;
+    final eng = activeEngine;
+
     hasActiveRoom = false;
     isMinimized = false;
     roomId = "";
     roomTitle = "";
+    seatedIndex = null;
+    activeEngine = null;
     onExpand = null;
     onLeaveRoom = null;
     onToggleMute = null;
+    onHeartbeat = null;
     notifyListeners();
+
     if (leaveCb != null) {
-      await leaveCb();
+      try {
+        await leaveCb();
+      } catch (_) {}
+    } else if (eng != null) {
+      try {
+        await eng.leaveRoom();
+      } catch (_) {}
     }
   }
 
   void clearSessionOnly() {
+    _bgHeartbeatTimer?.cancel();
     hasActiveRoom = false;
     isMinimized = false;
     roomId = "";
     roomTitle = "";
+    seatedIndex = null;
+    activeEngine = null;
     onExpand = null;
     onLeaveRoom = null;
     onToggleMute = null;
+    onHeartbeat = null;
     notifyListeners();
   }
 }
@@ -112,7 +154,8 @@ class _FloatingRoomOverlayState extends State<FloatingRoomOverlay> {
               child: GestureDetector(
                 onPanUpdate: (details) {
                   setState(() {
-                    _rightOffset -= details.delta.dx;
+
+_rightOffset -= details.delta.dx;
                     _bottomOffset -= details.delta.dy;
                   });
                 },
@@ -132,8 +175,7 @@ class _FloatingRoomOverlayState extends State<FloatingRoomOverlay> {
                       borderRadius: BorderRadius.circular(30),
                       border: Border.all(
                         color: const Color(0xFFFFD700),
-
-width: 1.5,
+                        width: 1.5,
                       ),
                       boxShadow: [
                         BoxShadow(
@@ -199,7 +241,8 @@ width: 1.5,
                           },
                           child: Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 4),
-                            child: Icon(
+
+child: Icon(
                               mgr.isMuted ? Icons.mic_off : Icons.mic,
                               color: mgr.isMuted
                                   ? Colors.redAccent
