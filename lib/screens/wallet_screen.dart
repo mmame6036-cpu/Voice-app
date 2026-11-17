@@ -90,12 +90,12 @@ class _WalletScreenState extends State<WalletScreen> {
   Future<void> _recordVerifiedTransaction({
     required int addedCoins,
     required String amountStr,
-    required String txnId,
+    required String orderRef,
     required int targetNumericId,
     required bool serverAlreadyCredited,
   }) async {
     final db = FirebaseFirestore.instance;
-    final txnRef = db.collection('recharge_transactions').doc(txnId);
+    final txnRef = db.collection('recharge_transactions').doc(orderRef);
     final existing = await txnRef.get();
     if (existing.exists) {
       return;
@@ -115,7 +115,8 @@ class _WalletScreenState extends State<WalletScreen> {
     }
 
     batch.set(txnRef, {
-      'txnId': txnId,
+      'txnId': orderRef,
+      'orderRef': orderRef,
       'userUid': widget.userUid,
       'userNumericId': widget.userNumericId,
       'targetNumericId': targetNumericId,
@@ -133,9 +134,9 @@ class _WalletScreenState extends State<WalletScreen> {
   }
 
   void _processBinancePay() {
-    final pkg = _binancePackages[_selectedPackageIdx];
 
-final int coinsToAdd = pkg["coins"] as int;
+final pkg = _binancePackages[_selectedPackageIdx];
+    final int coinsToAdd = pkg["coins"] as int;
     final String priceStr = pkg["price"] as String;
     final int usdAmount = pkg["usd"] as int;
     final String targetText = _userIdController.text.trim();
@@ -145,7 +146,7 @@ final int coinsToAdd = pkg["coins"] as int;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           backgroundColor: Colors.redAccent,
-          content: Text("እባክዎ ትክክለኛ የተጠቃሚ ID ያስገቡ!"),
+          content: Text("Please enter a valid numeric User ID!"),
         ),
       );
       return;
@@ -212,7 +213,7 @@ final int coinsToAdd = pkg["coins"] as int;
                   SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      "Secured by Binance Pay API server verification. Coins are credited only after payment confirmation.",
+                      "Secured by Binance Pay server verification. Coins are credited after admin payment confirmation.",
                       style: TextStyle(fontSize: 11, color: Colors.white70),
                     ),
                   ),
@@ -234,11 +235,11 @@ final int coinsToAdd = pkg["coins"] as int;
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12)),
               padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-            ),
+
+),
             onPressed: () async {
               Navigator.pop(ctx);
-
-await _initiateServerBinanceOrder(
+              await _initiateServerBinanceOrder(
                 coinsToAdd: coinsToAdd,
                 priceStr: priceStr,
                 usdAmount: usdAmount,
@@ -260,24 +261,28 @@ await _initiateServerBinanceOrder(
     required int targetNumericId,
   }) async {
     setState(() => _isProcessingPayment = true);
-    final String txnId =
-        "BNB_${widget.userNumericId}_${DateTime.now().millisecondsSinceEpoch}";
+
+    final String effectiveUid =
+        targetNumericId == widget.userNumericId ? widget.userUid : "";
 
     try {
       final response = await http
           .post(
-            Uri.parse("$_serverUrl/api/payment/binance-pay"),
+            Uri.parse("$_serverUrl/api/create-order"),
             headers: {"Content-Type": "application/json"},
             body: jsonEncode({
-              "userUid": widget.userUid,
+              "uid": effectiveUid,
+              "userUid": effectiveUid,
+              "numericId": targetNumericId,
               "userNumericId": widget.userNumericId,
               "targetNumericId": targetNumericId,
               "coins": coinsToAdd,
+              "usdAmount": usdAmount,
+              "amount": usdAmount,
               "priceUsd": usdAmount,
-              "txnId": txnId,
             }),
           )
-          .timeout(const Duration(seconds: 15));
+          .timeout(const Duration(seconds: 45));
 
       if (response.statusCode != 200) {
         throw Exception("Server returned status ${response.statusCode}");
@@ -289,15 +294,15 @@ await _initiateServerBinanceOrder(
       final bool isSuccess = res['success'] == true;
       final String status = (res['status'] ?? '').toString().toUpperCase();
       final bool isVerified = res['verified'] == true;
+      final String serverOrderRef = (res['orderRef'] ?? '').toString();
 
-      if (isSuccess && isVerified) {
-        final bool serverCredited = res['credited'] == true;
+      if (isSuccess && isVerified && serverOrderRef.isNotEmpty) {
         await _recordVerifiedTransaction(
           addedCoins: coinsToAdd,
           amountStr: priceStr,
-          txnId: txnId,
+          orderRef: serverOrderRef,
           targetNumericId: targetNumericId,
-          serverAlreadyCredited: serverCredited,
+          serverAlreadyCredited: true,
         );
 
         if (mounted) {
@@ -305,7 +310,7 @@ await _initiateServerBinanceOrder(
             SnackBar(
               backgroundColor: const Color(0xFF00C9A7),
               content: Text(
-                "ክፍያው ተረጋግጧል! 🪙 $coinsToAdd Coins ገብቷል።",
+                "Payment verified! 🪙 $coinsToAdd Coins credited.",
                 style: const TextStyle(
                     color: Colors.black, fontWeight: FontWeight.bold),
               ),
@@ -315,12 +320,13 @@ await _initiateServerBinanceOrder(
         return;
       }
 
-      if (status == 'PENDING') {
+      if (isSuccess && status == 'PENDING' && serverOrderRef.isNotEmpty) {
         final String checkoutUrl = (res['checkoutUrl'] ?? '').toString();
-        final String payId = (res['binancePayId'] ?? '').toString();
+        final String payId =
+            (res['binancePayId'] ?? '1059643208').toString();
         if (mounted) {
           _showPendingVerificationDialog(
-            txnId: txnId,
+            orderRef: serverOrderRef,
             coinsToAdd: coinsToAdd,
             priceStr: priceStr,
             targetNumericId: targetNumericId,
@@ -332,7 +338,7 @@ await _initiateServerBinanceOrder(
       }
 
       final String errMsg =
-          (res['message'] ?? 'Payment not verified by Binance Pay').toString();
+          (res['error'] ?? res['message'] ?? 'Order creation failed').toString();
       throw Exception(errMsg);
     } catch (e) {
       if (mounted) {
@@ -341,7 +347,7 @@ await _initiateServerBinanceOrder(
             backgroundColor: Colors.redAccent,
             duration: const Duration(seconds: 4),
             content: Text(
-              "ክፍያው አልተረጋገጠም! እባክዎ ክፍያ መፈጸምዎን ወይም ኢንተርኔትዎን ያረጋግጡ። ($e)",
+              "Order could not be created. Check internet connection and try again. ($e)",
               style: const TextStyle(
                   color: Colors.white, fontWeight: FontWeight.bold),
             ),
@@ -353,8 +359,8 @@ await _initiateServerBinanceOrder(
     }
   }
 
-  void _showPendingVerificationDialog({
-    required String txnId,
+void _showPendingVerificationDialog({
+    required String orderRef,
     required int coinsToAdd,
     required String priceStr,
     required int targetNumericId,
@@ -366,7 +372,7 @@ await _initiateServerBinanceOrder(
       paymentTarget = checkoutUrl;
     }
 
-showDialog(
+    showDialog(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
@@ -390,7 +396,7 @@ showDialog(
             ),
             const SizedBox(height: 8),
             Text(
-              "Order Ref: $txnId",
+              "Order Ref: $orderRef",
               style: const TextStyle(color: Color(0xFF00E5FF), fontSize: 11.5),
             ),
             if (paymentTarget.isNotEmpty) ...[
@@ -405,12 +411,24 @@ showDialog(
                 child: Row(
                   children: [
                     Expanded(
-                      child: Text(
-                        paymentTarget,
-                        style: const TextStyle(
-                            color: Color(0xFFF3BA2F), fontSize: 12),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            "Binance Pay ID:",
+                            style:
+                                TextStyle(color: Colors.white54, fontSize: 10),
+                          ),
+                          Text(
+                            paymentTarget,
+                            style: const TextStyle(
+                                color: Color(0xFFF3BA2F),
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
                       ),
                     ),
                     IconButton(
@@ -419,7 +437,7 @@ showDialog(
                       onPressed: () {
                         Clipboard.setData(ClipboardData(text: paymentTarget));
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text("ኮፒ ተደርጓል!")),
+                          const SnackBar(content: Text("Copied to clipboard!")),
                         );
                       },
                     ),
@@ -429,7 +447,7 @@ showDialog(
             ],
             const SizedBox(height: 10),
             const Text(
-              "After paying in Binance app, tap 'Verify Payment' below.",
+              "Order sent to Admin Dashboard. After sending USDT in Binance app, tap 'Verify Payment' below.",
               style: TextStyle(color: Colors.white60, fontSize: 11.5),
             ),
           ],
@@ -441,14 +459,15 @@ showDialog(
                 const Text("Close", style: TextStyle(color: Colors.white54)),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(
+
+style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF00C9A7),
               foregroundColor: Colors.black,
             ),
             onPressed: () async {
               Navigator.pop(ctx);
               await _verifyPendingBinanceOrder(
-                txnId: txnId,
+                orderRef: orderRef,
                 coinsToAdd: coinsToAdd,
                 priceStr: priceStr,
                 targetNumericId: targetNumericId,
@@ -465,7 +484,7 @@ showDialog(
   }
 
   Future<void> _verifyPendingBinanceOrder({
-    required String txnId,
+    required String orderRef,
     required int coinsToAdd,
     required String priceStr,
     required int targetNumericId,
@@ -474,33 +493,28 @@ showDialog(
     try {
       final response = await http
           .post(
-            Uri.parse("$_serverUrl/api/payment/verify-binance-pay"),
-
-headers: {"Content-Type": "application/json"},
+            Uri.parse("$_serverUrl/api/verify-payment"),
+            headers: {"Content-Type": "application/json"},
             body: jsonEncode({
-              "txnId": txnId,
+              "orderRef": orderRef,
+              "txnId": orderRef,
               "userUid": widget.userUid,
               "targetNumericId": targetNumericId,
               "coins": coinsToAdd,
             }),
           )
-          .timeout(const Duration(seconds: 15));
-
-      if (response.statusCode != 200) {
-        throw Exception("Verification failed (${response.statusCode})");
-      }
+          .timeout(const Duration(seconds: 30));
 
       final raw = jsonDecode(response.body);
       final Map res = raw is Map ? raw : {};
 
-      if (res['verified'] == true) {
-        final bool serverCredited = res['credited'] == true;
+      if (response.statusCode == 200 && res['verified'] == true) {
         await _recordVerifiedTransaction(
           addedCoins: coinsToAdd,
           amountStr: priceStr,
-          txnId: txnId,
+          orderRef: orderRef,
           targetNumericId: targetNumericId,
-          serverAlreadyCredited: serverCredited,
+          serverAlreadyCredited: true,
         );
 
         if (mounted) {
@@ -508,7 +522,7 @@ headers: {"Content-Type": "application/json"},
             SnackBar(
               backgroundColor: const Color(0xFF00C9A7),
               content: Text(
-                "ክፍያው ተረጋግጧል! 🪙 $coinsToAdd Coins ወደ ዋሌትዎ ገብቷል።",
+                "Payment approved! 🪙 $coinsToAdd Coins added to your wallet.",
                 style: const TextStyle(
                     color: Colors.black, fontWeight: FontWeight.bold),
               ),
@@ -516,15 +530,28 @@ headers: {"Content-Type": "application/json"},
           );
         }
       } else {
-        throw Exception(
-            (res['message'] ?? 'Payment not received yet on Binance').toString());
+        final String msg = (res['message'] ??
+                'Payment is still pending admin approval. Please wait and check again.')
+            .toString();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              backgroundColor: Colors.orangeAccent,
+              content: Text(
+                msg,
+                style: const TextStyle(
+                    color: Colors.black, fontWeight: FontWeight.bold),
+              ),
+            ),
+          );
+        }
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             backgroundColor: Colors.redAccent,
-            content: Text("ማረጋገጥ አልተቻለም: $e"),
+            content: Text("Verification error: $e"),
           ),
         );
       }
@@ -538,7 +565,7 @@ headers: {"Content-Type": "application/json"},
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           backgroundColor: Colors.redAccent,
-          content: Text("በቂ ነጥብ (Points) የለዎትም!"),
+          content: Text("Insufficient points balance!"),
         ),
       );
       return;
@@ -561,7 +588,7 @@ headers: {"Content-Type": "application/json"},
         });
       });
 
-      await db.collection('point_transactions').add({
+await db.collection('point_transactions').add({
         'userUid': widget.userUid,
         'userNumericId': widget.userNumericId,
         'type': 'EXCHANGE_TO_COINS',
@@ -577,7 +604,7 @@ headers: {"Content-Type": "application/json"},
           SnackBar(
             backgroundColor: const Color(0xFF00C9A7),
             content: Text(
-              "💎 $pointsCost Points ወደ 🪙 $coinsGain Coins ተቀይሯል!",
+              "Exchanged 💎 $pointsCost Points to 🪙 $coinsGain Coins!",
               style: const TextStyle(
                   color: Colors.black, fontWeight: FontWeight.bold),
             ),
@@ -587,7 +614,7 @@ headers: {"Content-Type": "application/json"},
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("መቀየር አልተቻለም: $e")),
+          SnackBar(content: Text("Exchange failed: $e")),
         );
       }
     } finally {
@@ -599,11 +626,10 @@ headers: {"Content-Type": "application/json"},
     const int minWithdrawPoints = 100000;
     if (_points < minWithdrawPoints) {
       ScaffoldMessenger.of(context).showSnackBar(
-
-const SnackBar(
+        const SnackBar(
           backgroundColor: Colors.orangeAccent,
           content: Text(
-            "ወጪ ለመጠየቅ ቢያንስ 100,000 Points (\$10) ያስፈልጋል!",
+            "Minimum 100,000 Points (\$10) required to withdraw!",
             style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
           ),
         ),
@@ -666,7 +692,8 @@ const SnackBar(
                           value: "USDT (TRC20)", child: Text("USDT (TRC20)")),
                       DropdownMenuItem(
                           value: "Telebirr", child: Text("Telebirr (ETB)")),
-                      DropdownMenuItem(
+
+DropdownMenuItem(
                           value: "Binance ID", child: Text("Binance Pay ID")),
                     ],
                     onChanged: (val) {
@@ -691,8 +718,7 @@ const SnackBar(
                   ),
                   const SizedBox(height: 10),
                   TextField(
-
-controller: addressController,
+                    controller: addressController,
                     style: const TextStyle(color: Colors.white),
                     decoration: InputDecoration(
                       labelText: accountLabel,
@@ -724,19 +750,20 @@ controller: addressController,
                   if (reqPoints < minWithdrawPoints) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
-                          content: Text("ቢያንስ 100,000 Points ያስገቡ!")),
+                          content: Text("Minimum withdrawal is 100,000 Points!")),
                     );
                     return;
                   }
                   if (reqPoints > _points) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text("ያለዎት ነጥብ አይበቃም!")),
+                      const SnackBar(content: Text("Insufficient points balance!")),
                     );
                     return;
                   }
                   if (account.isEmpty) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text("የመቀበያ አካውንት ያስገቡ!")),
+                      const SnackBar(
+                          content: Text("Please enter payout account details!")),
                     );
                     return;
                   }
@@ -748,13 +775,19 @@ controller: addressController,
                     final db = FirebaseFirestore.instance;
                     final userRef = db.collection('users').doc(widget.userUid);
                     final usdAmount = reqPoints / 10000.0;
+                    String resolvedUserName = "ID ${widget.userNumericId}";
 
                     await db.runTransaction((tx) async {
                       final snap = await tx.get(userRef);
-                      final cur =
-                          (snap.data()?['points'] as num?)?.toInt() ?? 0;
-                      if (cur < reqPoints) {
+                      final data = snap.data();
+                      final cur = (data?['points'] as num?)?.toInt() ?? 0;
+
+if (cur < reqPoints) {
                         throw Exception("Insufficient points");
+                      }
+                      final rawName = (data?['name'] ?? '').toString().trim();
+                      if (rawName.isNotEmpty) {
+                        resolvedUserName = "$rawName (${widget.userNumericId})";
                       }
                       tx.update(userRef, {
                         'points': FieldValue.increment(-reqPoints),
@@ -763,6 +796,7 @@ controller: addressController,
 
                     await db.collection('withdraw_requests').add({
                       'userUid': widget.userUid,
+                      'userName': resolvedUserName,
                       'userNumericId': widget.userNumericId,
                       'points': reqPoints,
                       'usdAmount': usdAmount,
@@ -777,19 +811,18 @@ controller: addressController,
                         const SnackBar(
                           backgroundColor: Color(0xFF00C9A7),
                           content: Text(
-                            "የወጪ ጥያቄዎ ተልኳል! Admin ሲያጸድቀው ይገባልዎታል።",
+                            "Withdrawal request submitted! It will be processed after admin approval.",
                             style: TextStyle(
                                 color: Colors.black,
                                 fontWeight: FontWeight.bold),
-
-),
+                          ),
                         ),
                       );
                     }
                   } catch (e) {
                     if (mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text("ስህተት ተፈጥሯል: $e")),
+                        SnackBar(content: Text("Submission error: $e")),
                       );
                     }
                   } finally {
@@ -854,7 +887,8 @@ controller: addressController,
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(color: Colors.white12),
                 ),
-                child: Row(
+
+child: Row(
                   children: [
                     Expanded(
                       child: GestureDetector(
@@ -889,8 +923,7 @@ controller: addressController,
                           ),
                           child: Center(
                             child: Text(
-
-"💎 Points ($_points)",
+                              "💎 Points ($_points)",
                               style: TextStyle(
                                 color: pointsTabText,
                                 fontWeight: FontWeight.bold,
@@ -956,7 +989,8 @@ controller: addressController,
                   children: [
                     const Text("Available Coins",
                         style: TextStyle(color: Colors.white60, fontSize: 12)),
-                    const SizedBox(height: 6),
+
+const SizedBox(height: 6),
                     Row(
                       children: [
                         const Text("🪙", style: TextStyle(fontSize: 24)),
@@ -996,8 +1030,7 @@ controller: addressController,
             "Recharge Target User ID",
             style: TextStyle(
                 fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white),
-
-),
+          ),
           const SizedBox(height: 8),
           Container(
             height: 48,
@@ -1059,7 +1092,8 @@ controller: addressController,
                     color: brandColor,
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.currency_bitcoin,
+
+child: const Icon(Icons.currency_bitcoin,
                       color: Colors.black, size: 18),
                 ),
                 const SizedBox(width: 10),
@@ -1098,8 +1132,7 @@ controller: addressController,
             itemCount: _binancePackages.length,
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 3,
-
-mainAxisSpacing: 10,
+              mainAxisSpacing: 10,
               crossAxisSpacing: 10,
               childAspectRatio: 0.92,
             ),
@@ -1155,7 +1188,8 @@ mainAxisSpacing: 10,
                           ],
                         ),
                       ),
-                      if (pkg['bonus'] != "+0%")
+
+if (pkg['bonus'] != "+0%")
                         Positioned(
                           top: 6,
                           right: 6,
@@ -1194,8 +1228,7 @@ mainAxisSpacing: 10,
                     borderRadius: BorderRadius.circular(25)),
               ),
               onPressed: _isProcessingPayment ? null : _processBinancePay,
-
-child: Text(
+              child: Text(
                 "Pay with Binance (${_binancePackages[_selectedPackageIdx]['price']} USDT)",
                 style: const TextStyle(
                     fontSize: 14.5, fontWeight: FontWeight.w900),
@@ -1253,7 +1286,8 @@ child: Text(
                       ),
                     ),
                   ],
-                ),
+
+),
                 const SizedBox(height: 8),
                 Row(
                   children: [
@@ -1297,8 +1331,7 @@ child: Text(
               style: ElevatedButton.styleFrom(
                 backgroundColor: diamondColor,
                 foregroundColor: Colors.black,
-
-shape: RoundedRectangleBorder(
+                shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14)),
               ),
               onPressed: _showWithdrawDialog,
@@ -1352,7 +1385,8 @@ shape: RoundedRectangleBorder(
                           fontWeight: FontWeight.bold,
                           fontSize: 14,
                         ),
-                      ),
+
+),
                       const SizedBox(height: 4),
                       Text(
                         "Use 💎 $pts Pts",
@@ -1398,8 +1432,7 @@ shape: RoundedRectangleBorder(
                 return const SizedBox.shrink();
               }
               final QuerySnapshot qSnap = snapshot.data as QuerySnapshot;
-
-final docs = qSnap.docs;
+              final docs = qSnap.docs;
               if (docs.isEmpty) {
                 return Container(
                   width: double.infinity,
@@ -1449,7 +1482,8 @@ final docs = qSnap.docs;
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
+
+Text(
                           titleText,
                           style: const TextStyle(
                               color: Colors.white, fontSize: 13),
