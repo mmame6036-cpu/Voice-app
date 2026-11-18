@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import '../services/user_service.dart';
-import 'profil_sub_screen.dart';
+import 'profile_setup_screen.dart';
 import 'main_navigation.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -616,14 +616,16 @@ try {
                             fontSize: 13.5,
                           ),
                           items: globalCountries
-                              .map((item) => DropdownMenuItem(
-                                    value: item["code"],
-                                    child: Text(item["label"]!),
-                                  ))
+                              .map<DropdownMenuItem<String>>(
+                                (item) => DropdownMenuItem<String>(
+                                  value: item["code"]!,
+                                  child: Text(item["label"]!),
+                                ),
+                              )
                               .toList(),
                           onChanged: verificationId != null
                               ? null
-                              : (val) {
+                              : (String? val) {
                                   if (val != null) {
                                     setSheetState(() => selectedCode = val);
                                   }
@@ -633,11 +635,11 @@ try {
                     ),
                     if (selectedCode == "OTHER") ...[
                       const SizedBox(width: 6),
-                      SizedBox(
+
+SizedBox(
                         width: 68,
                         child: TextField(
-
-controller: customCodeCtrl,
+                          controller: customCodeCtrl,
                           enabled: verificationId == null,
                           keyboardType: TextInputType.phone,
                           style: const TextStyle(
@@ -720,10 +722,10 @@ controller: customCodeCtrl,
                         ? null
                         : (verificationId == null
                             ? sendOtpCode
-                            : verifyOtpCode),
-                    child: (isSendingCode || isVerifyingCode)
 
-? const SizedBox(
+: verifyOtpCode),
+                    child: (isSendingCode || isVerifyingCode)
+                        ? const SizedBox(
                             height: 20,
                             width: 20,
                             child: CircularProgressIndicator(
@@ -835,10 +837,10 @@ controller: customCodeCtrl,
                   const Spacer(flex: 2),
                   Container(
                     padding: const EdgeInsets.all(18),
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
 
-color: kGold.withOpacity(0.12),
+decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: kGold.withOpacity(0.12),
                       boxShadow: [
                         BoxShadow(
                           color: kGold.withOpacity(0.3),
@@ -928,10 +930,10 @@ color: kGold.withOpacity(0.12),
                     child: const Text(
                       "By continuing, you agree to our Terms & Privacy Policy.",
                       style: TextStyle(
-                        color: Colors.white70,
-                        fontSize: 11.5,
 
-decoration: TextDecoration.underline,
+color: Colors.white70,
+                        fontSize: 11.5,
+                        decoration: TextDecoration.underline,
                       ),
                       textAlign: TextAlign.center,
                     ),
