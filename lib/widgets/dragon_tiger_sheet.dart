@@ -56,7 +56,7 @@ class _DragonTigerSheetState extends State<DragonTigerSheet> {
   static const int kRevealDurationMs = 3000;
   static const int kSettlementDurationMs = 4000;
 
-  final List<int _chips = [100, 500, 1000, 5000, 10000, 50000];
+  final List _chips = [100, 500, 1000, 5000, 10000, 50000];
   int _selectedChip = 100;
 
   String _resolvedUid = "";
@@ -81,11 +81,11 @@ class _DragonTigerSheetState extends State<DragonTigerSheet> {
   int _myBetTie = 0;
   int _myBetTiger = 0;
 
-  Map<String, dynamic>? _dragonCard;
-  Map<String, dynamic>? _tigerCard;
+  Map? _dragonCard;
+  Map? _tigerCard;
   String? _winner;
-  List> _topWinners = [];
-  List<String> _history = [];
+  List _topWinners = [];
+  List _history = [];
 
   int _lastSettledWin = 0;
   String _lastSettledRound = "";
@@ -100,14 +100,14 @@ class _DragonTigerSheetState extends State<DragonTigerSheet> {
   Timer? _clockTimer;
   Timer? _bannerTimer;
 
-  DocumentReference> get _gameDoc =>
+  DocumentReference get _gameDoc =>
       FirebaseFirestore.instance.collection('games').doc('dragon_tiger');
 
-  Map<String, dynamic> _asMap(Object? raw) {
+  Map _asMap(Object? raw) {
     if (raw is Map) {
-      return Map<String, dynamic>.from(raw);
+      return Map.from(raw);
     }
-    return <String, dynamic>{};
+    return {};
   }
 
   @override
@@ -144,9 +144,10 @@ class _DragonTigerSheetState extends State<DragonTigerSheet> {
         final d = _asMap(snap.data());
         if (d.isEmpty) return;
 
-setState(() {
+        setState(() {
           _myCoins = (d['coins'] as num?)?.toInt() ?? 0;
-          if ((d['name'] ?? '').toString().isNotEmpty) {
+
+if ((d['name'] ?? '').toString().isNotEmpty) {
             _resolvedName = d['name'].toString();
           }
           if (d['numericId'] != null) {
@@ -184,7 +185,7 @@ setState(() {
     });
   }
 
-  void _applyGameData(Map<String, dynamic> d) {
+  void _applyGameData(Map d) {
     if (!mounted) return;
 
     final String newRoundId = (d['roundId'] ?? '').toString();
@@ -201,17 +202,17 @@ setState(() {
 
     final potMap = _asMap(d['pot']);
     final rawWinners = d['topWinners'];
-    final List> nextWinners = [];
+    final List nextWinners = [];
     if (rawWinners is Iterable) {
       for (final item in rawWinners) {
         if (item is Map) {
-          nextWinners.add(Map<String, dynamic>.from(item));
+          nextWinners.add(Map.from(item));
         }
       }
     }
 
     final rawHistory = d['history'];
-    final List<String> nextHistory = [];
+    final List nextHistory = [];
     if (rawHistory is Iterable) {
       for (final item in rawHistory) {
         nextHistory.add(item.toString());
@@ -229,12 +230,10 @@ setState(() {
       _potTie = (potMap['tie'] as num?)?.toInt() ?? 0;
       _potTiger = (potMap['tiger'] as num?)?.toInt() ?? 0;
 
-      _dragonCard = (d['dragonCard'] is Map)
-          ? Map<String, dynamic>.from(d['dragonCard'] as Map)
-          : null;
-      _tigerCard = (d['tigerCard'] is Map)
-          ? Map<String, dynamic>.from(d['tigerCard'] as Map)
-          : null;
+      _dragonCard =
+          (d['dragonCard'] is Map) ? Map.from(d['dragonCard'] as Map) : null;
+      _tigerCard =
+          (d['tigerCard'] is Map) ? Map.from(d['tigerCard'] as Map) : null;
       _winner = d['winner']?.toString();
 
       _topWinners = nextWinners;
@@ -284,12 +283,12 @@ setState(() {
     });
   }
 
-void _startClockTimer() {
+  void _startClockTimer() {
     _clockTimer = Timer.periodic(const Duration(milliseconds: 300), (_) {
       if (!mounted) return;
       final int now = DateTime.now().millisecondsSinceEpoch;
 
-      if (_roundId.isEmpty) {
+if (_roundId.isEmpty) {
         _advanceGameEngine(forceInit: true);
         return;
       }
@@ -374,7 +373,7 @@ void _startClockTimer() {
             historyCode = 'T';
           }
 
-          final List<String> hist = [];
+          final List hist = [];
           final rawHist = data['history'];
           if (rawHist is Iterable) {
             for (final h in rawHist) {
@@ -396,12 +395,12 @@ void _startClockTimer() {
             'nextRoundTime': now + kRevealDurationMs + kSettlementDurationMs,
           });
         } else if (currentPhase == 'REVEALING' && now >= revealEndTime) {
-
-tx.update(_gameDoc, {
+          tx.update(_gameDoc, {
             'phase': 'SETTLEMENT',
             'nextRoundTime': now + kSettlementDurationMs,
           });
-        } else if (shouldStartNext) {
+
+} else if (shouldStartNext) {
           final int nextNum = roundNumber + 1;
           tx.update(_gameDoc, {
             'roundNumber': nextNum,
@@ -526,13 +525,13 @@ tx.update(_gameDoc, {
 
   Future<void> _placeBet(String side) async {
     if (_isPlacingBet) return;
-
-if (_roundId.isEmpty) {
+    if (_roundId.isEmpty) {
       await _advanceGameEngine(forceInit: true);
       return;
     }
     if (_phase != "BETTING") {
-      _showNotice("Betting closed! Wait for next round.");
+
+_showNotice("Betting closed! Wait for next round.");
       return;
     }
     if (_remainingSec <= 1) {
@@ -646,38 +645,42 @@ if (_roundId.isEmpty) {
     return "♠";
   }
 
-  Widget _buildPlayingCard(Map<String, dynamic>? card, Color accentColor) {
+  Widget _buildCardBack(Color accentColor) {
+    return Container(
+      width: 68,
+      height: 94,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(10),
+        gradient: LinearGradient(
+          colors: [accentColor, const Color(0xFF1A100B)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        border: Border.all(color: kGold, width: 1.8),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.5),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: const Center(
+        child: Icon(Icons.auto_awesome, color: kGold, size: 28),
+      ),
+    );
+  }
+
+  Widget _buildPlayingCard(Map? card, Color accentColor) {
     bool isRevealPhase = false;
     if (_phase == "REVEALING") isRevealPhase = true;
     if (_phase == "SETTLEMENT") isRevealPhase = true;
 
-    final bool showFace = isRevealPhase && card != null;
-
-    if (!showFace) {
-      return Container(
-        width: 68,
-        height: 94,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(10),
-          gradient: LinearGradient(
-            colors: [accentColor, const Color(0xFF1A100B)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-
-),
-          border: Border.all(color: kGold, width: 1.8),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.5),
-              blurRadius: 8,
-              offset: const Offset(0, 3),
-            ),
-          ],
-        ),
-        child: const Center(
-          child: Icon(Icons.auto_awesome, color: kGold, size: 28),
-        ),
-      );
+if (!isRevealPhase) {
+      return _buildCardBack(accentColor);
+    }
+    if (card == null) {
+      return _buildCardBack(accentColor);
     }
 
     final int rank = (card['rank'] as num?)?.toInt() ?? 1;
@@ -792,14 +795,14 @@ if (_roundId.isEmpty) {
                   color: Colors.white,
                   fontSize: 13,
                   fontWeight: FontWeight.w900,
-
-),
+                ),
               ),
               const SizedBox(height: 2),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
                 decoration: BoxDecoration(
-                  color: Colors.black45,
+
+color: Colors.black45,
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
@@ -905,14 +908,14 @@ if (_roundId.isEmpty) {
                   child: Text(
                     "#$_roundNumber",
                     style: const TextStyle(color: Colors.white70, fontSize: 10),
-
-),
+                  ),
                 ),
                 const Spacer(),
                 Container(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
+
+decoration: BoxDecoration(
                     color: kCardDark,
                     borderRadius: BorderRadius.circular(14),
                     border: Border.all(color: kGold, width: 1.1),
@@ -972,7 +975,7 @@ if (_roundId.isEmpty) {
                       scrollDirection: Axis.horizontal,
                       itemCount: _history.length,
                       itemBuilder: (ctx, idx) {
-                        final item = _history[idx];
+                        final item = _history[idx].toString();
                         Color c = kTieGreen;
                         if (item == "D") c = kDragonRed;
                         if (item == "T") c = kTigerAmber;
@@ -1006,12 +1009,12 @@ if (_roundId.isEmpty) {
 
             Container(
               padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-
-decoration: BoxDecoration(
+              decoration: BoxDecoration(
                 color: kCardDark,
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(color: kGoldBorder.withOpacity(0.5)),
-              ),
+
+),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
@@ -1104,13 +1107,13 @@ decoration: BoxDecoration(
                     const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
                   color: Colors.black54,
-
-borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(10),
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Text(
+
+const Text(
                       "🏆 Top: ",
                       style: TextStyle(
                         color: kGold,
@@ -1118,7 +1121,8 @@ borderRadius: BorderRadius.circular(10),
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    ..._topWinners.take(3).map((w) {
+                    ..._topWinners.take(3).map((item) {
+                      final w = _asMap(item);
                       final int wonAmt = (w['wonAmount'] as num?)?.toInt() ?? 0;
                       return Padding(
                         padding: const EdgeInsets.only(right: 8),
@@ -1190,7 +1194,8 @@ borderRadius: BorderRadius.circular(10),
 
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: _chips.map((chipVal) {
+              children: _chips.map((chip) {
+                final int chipVal = (chip as num).toInt();
                 final bool selected = _selectedChip == chipVal;
                 return GestureDetector(
                   onTap: () => setState(() => _selectedChip = chipVal),
@@ -1209,10 +1214,10 @@ borderRadius: BorderRadius.circular(10),
                                 const Color(0xFF1D130D)
                               ],
                         begin: Alignment.topLeft,
-
-end: Alignment.bottomRight,
+                        end: Alignment.bottomRight,
                       ),
-                      border: Border.all(
+
+border: Border.all(
                         color: selected ? Colors.white : kGoldBorder,
                         width: selected ? 2.2 : 1.0,
                       ),
