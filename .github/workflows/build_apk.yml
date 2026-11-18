@@ -1,3 +1,4 @@
+KEDER:
 name: Build Flutter APK
 
 on:
@@ -48,6 +49,31 @@ jobs:
           echo 'zipStoreBase=GRADLE_USER_HOME' >> android/gradle/wrapper/gradle-wrapper.properties
           echo 'zipStorePath=wrapper/dists' >> android/gradle/wrapper/gradle-wrapper.properties
 
+      - name: Configure Release Signing Keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: |
+          mkdir -p android/app
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > android/app/nile-release.jks
+            echo "Loaded permanent keystore from GitHub Secrets."
+          else
+            keytool -genkeypair -v \
+              -keystore android/app/nile-release.jks \
+              -alias nilekey \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -storepass nilelive2026 \
+              -keypass nilelive2026 \
+              -dname "CN=NILE Live, OU=Mobile, O=NILE, L=Dessie, S=Amhara, C=ET"
+            echo "Generated new release keystore."
+          fi
+          echo "=========================================="
+          echo "COPY SHA1 & SHA256 TO FIREBASE CONSOLE:"
+          keytool -list -v -keystore android/app/nile-release.jks -alias nilekey -storepass nilelive2026 | grep -E "SHA1:|SHA256:"
+          echo "=========================================="
+
       - name: Restore Firebase Config and Audio Rules
         run: |
           mkdir -p android/app
@@ -63,11 +89,27 @@ jobs:
           echo 'rootProject.buildDir = "../build"' >> android/build.gradle
           echo 'subprojects { project.buildDir = "${rootProject.buildDir}/${project.name}" }' >> android/build.gradle
           echo 'subprojects { project.evaluationDependsOn(":app") }' >> android/build.gradle
+
           echo 'tasks.register("clean", Delete) { delete rootProject.buildDir }' >> android/build.gradle
           echo 'apply plugin: "com.google.gms.google-services"' >> android/app/build.gradle
           echo '-keep class io.agora.** { *; }' > android/app/proguard-rules.pro
           echo '-dontwarn io.agora.**' >> android/app/proguard-rules.pro
-          echo 'android { buildTypes { release { proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro" } } }' >> android/app/build.gradle
+          echo 'android {' >> android/app/build.gradle
+          echo '    signingConfigs {' >> android/app/build.gradle
+          echo '        release {' >> android/app/build.gradle
+          echo '            storeFile file("nile-release.jks")' >> android/app/build.gradle
+          echo '            storePassword "nilelive2026"' >> android/app/build.gradle
+          echo '            keyAlias "nilekey"' >> android/app/build.gradle
+          echo '            keyPassword "nilelive2026"' >> android/app/build.gradle
+          echo '        }' >> android/app/build.gradle
+          echo '    }' >> android/app/build.gradle
+          echo '    buildTypes {' >> android/app/build.gradle
+          echo '        release {' >> android/app/build.gradle
+          echo '            signingConfig signingConfigs.release' >> android/app/build.gradle
+          echo '            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"' >> android/app/build.gradle
+          echo '        }' >> android/app/build.gradle
+          echo '    }' >> android/app/build.gradle
+          echo '}' >> android/app/build.gradle
           sed -i 's/android:label="voiceapp"/android:label="NILE Live"/' android/app/src/main/AndroidManifest.xml
           sed -i 's|<application|<uses-permission android:name="android.permission.INTERNET"/><uses-permission android:name="android.permission.RECORD_AUDIO"/><uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/><uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/><uses-permission android:name="android.permission.BLUETOOTH"/><uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/><uses-permission android:name="android.permission.WAKE_LOCK"/><application|' android/app/src/main/AndroidManifest.xml
 
@@ -104,3 +146,9 @@ jobs:
         with:
           name: nile-live-arm64-apk
           path: build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+
+      - name: Upload Release Keystore (Keep Safe)
+        uses: actions/upload-artifact@v4
+        with:
+          name: nile-release-keystore
+          path: android/app/nile-release.jks
