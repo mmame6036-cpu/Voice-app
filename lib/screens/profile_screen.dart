@@ -104,7 +104,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF6F8FA),
+      backgroundColor: const Color(0xFFF3F5F7),
       body: StreamBuilder(
         stream: userStream,
         builder: (context, snapshot) {
@@ -172,58 +172,91 @@ final int firestoreCoins =
             }
           }
 
-          return SafeArea(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              child: Column(
-                children: [
-                  // 1. User Header Section
-                  _buildHeaderSection(
-                    name: displayName,
-                    displayId: displayId,
-                    numericId: numericId,
-                    avatarUrl: avatarUrl,
-                    wealthLevel: wealthLevel,
-                    charmLevel: charmLevel,
-                    chatLevel: chatLevel,
-                    hasAgency: hasAgency,
-                    followed: followedCount,
-                    following: followingCount,
-                    friends: friendsCount,
+          return SingleChildScrollView(
+            child: Column(
+              children: [
+                // 1. የላይኛው Mint-Teal Gradient ክፍል (Profile + Stats + VIP)
+                Container(
+                  padding: EdgeInsets.fromLTRB(
+                    16,
+                    MediaQuery.of(context).padding.top + 14,
+                    16,
+                    14,
                   ),
-                  const SizedBox(height: 14),
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Color(0xFFC2ECE3),
+                        Color(0xFFE3F6F2),
+                        Color(0xFFF3F5F7),
+                      ],
+                    ),
+                  ),
+                  child: Column(
+                    children: [
+                      _buildHeaderSection(
+                        name: displayName,
+                        displayId: displayId,
+                        numericId: numericId,
+                        avatarUrl: avatarUrl,
+                        wealthLevel: wealthLevel,
+                        charmLevel: charmLevel,
+                        chatLevel: chatLevel,
+                        hasAgency: hasAgency,
+                        followed: followedCount,
+                        following: followingCount,
+                        friends: friendsCount,
+                      ),
+                      const SizedBox(height: 16),
+                      _buildVipClubCard(),
+                    ],
+                  ),
+                ),
 
-                  // 2. VIP CLUB Banner
-                  _buildVipClubCard(),
-                  const SizedBox(height: 12),
-
-                  // 3. COINS & POINTS Card
-                  _buildAssetsCard(
+                // 2. COINS & POINTS Card
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  child: _buildAssetsCard(
                     coins: firestoreCoins,
                     points: points,
                     numericId: numericId,
                   ),
-                  const SizedBox(height: 14),
+                ),
+                const SizedBox(height: 12),
 
-                  // 4. Main 8 Features Grid
-                  _buildMainFeaturesGrid(
-                      coins: firestoreCoins, numericId: numericId),
-                  const SizedBox(height: 14),
+                // 3. Main 8 Features Grid (ጉልት እና ባለ 3D መልክ)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  child: _buildMainFeaturesGrid(
+                    coins: firestoreCoins,
+                    numericId: numericId,
+                  ),
+                ),
+                const SizedBox(height: 12),
 
-                  // 5. Promo Recharge Banner
-                  _buildPromoRechargeBanner(
-                      coins: firestoreCoins, numericId: numericId),
-                  const SizedBox(height: 14),
+                // 4. Promo Recharge Banner
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  child: _buildPromoRechargeBanner(
+                    coins: firestoreCoins,
+                    numericId: numericId,
+                  ),
+                ),
+                const SizedBox(height: 12),
 
-                  // 6. Creator, Business & Settings Section
-                  _buildBusinessSection(
+// 5. Creator, Business & Settings Section (እንደ Hala ደማቅ Teal)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  child: _buildBusinessSection(
                     numericId: numericId,
                     currentName: displayName,
                     avatarUrl: avatarUrl,
                   ),
-                  const SizedBox(height: 24),
-                ],
-              ),
+                ),
+                const SizedBox(height: 28),
+              ],
             ),
           );
         },
@@ -247,19 +280,17 @@ final int firestoreCoins =
   }) {
     ImageProvider? avatarImg;
     Widget? avatarPlaceholder = const Icon(
-      Icons.person,
-      size: 36,
-      color: Color(0xFFC7CBD1),
+      Icons.person_rounded,
+      size: 40,
+      color: Colors.white,
     );
 
-    if (avatarUrl != null) {
-      if (avatarUrl.isNotEmpty) {
-        avatarImg = NetworkImage(avatarUrl);
-        avatarPlaceholder = null;
-      }
+    if (avatarUrl != null && avatarUrl.isNotEmpty) {
+      avatarImg = NetworkImage(avatarUrl);
+      avatarPlaceholder = null;
     }
 
-return Column(
+    return Column(
       children: [
         GestureDetector(
           behavior: HitTestBehavior.opaque,
@@ -271,29 +302,26 @@ return Column(
           child: Row(
             children: [
               Container(
-                width: 68,
-                height: 68,
+                width: 70,
+                height: 70,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFFFFDF9E), Color(0xFFF3BA2F)],
-                  ),
+                  border: Border.all(color: Colors.white, width: 2.5),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.08),
-                      blurRadius: 8,
+                      color: Colors.black.withOpacity(0.12),
+                      blurRadius: 10,
                       offset: const Offset(0, 3),
                     ),
                   ],
                 ),
-                padding: const EdgeInsets.all(2.5),
                 child: CircleAvatar(
-                  backgroundColor: Colors.white,
+                  backgroundColor: const Color(0xFF9B87B5),
                   backgroundImage: avatarImg,
                   child: avatarPlaceholder,
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -301,43 +329,44 @@ return Column(
                     Text(
                       name,
                       style: const TextStyle(
-                        fontSize: 16.5,
+                        fontSize: 20,
                         fontWeight: FontWeight.w900,
-                        color: Color(0xFF1D2129),
+                        color: Color(0xFF111827),
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 5),
                     Wrap(
                       spacing: 6,
                       runSpacing: 4,
                       children: [
                         _buildLevelTag(Icons.shield, "$wealthLevel",
-                            const Color(0xFF38D5C5)),
+                            const Color(0xFF14B8A6)),
                         _buildLevelTag(Icons.arrow_upward, "$charmLevel",
-                            const Color(0xFF81D774)),
+                            const Color(0xFF22C55E)),
                         _buildLevelTag(Icons.auto_awesome, "$chatLevel",
-                            const Color(0xFFB57DE5)),
+                            const Color(0xFF9333EA)),
                         if (hasAgency)
                           Container(
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 6, vertical: 1.5),
+                                horizontal: 7, vertical: 2),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF5AB6FF),
+                              color: const Color(0xFF2563EB),
                               borderRadius: BorderRadius.circular(10),
                             ),
                             child: const Text(
-                              "AGENCY",
+
+"AGENCY",
                               style: TextStyle(
                                   color: Colors.white,
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.bold),
+                                  fontSize: 9.5,
+                                  fontWeight: FontWeight.w800),
                             ),
                           ),
                       ],
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 6),
                     GestureDetector(
                       onTap: () => _copyId(displayId),
                       child: Row(
@@ -346,31 +375,32 @@ return Column(
                           Text(
                             "ID:$displayId",
                             style: const TextStyle(
-                                fontSize: 11.5,
-                                color: Color(0xFF86909C),
-                                fontWeight: FontWeight.w600),
+                                fontSize: 13,
+                                color: Color(0xFF475569),
+                                fontWeight: FontWeight.w700),
                           ),
-                          const SizedBox(width: 4),
-                          const Icon(Icons.copy,
-
-size: 11, color: Color(0xFF86909C)),
+                          const SizedBox(width: 6),
+                          const Icon(Icons.copy_rounded,
+                              size: 14, color: Color(0xFF475569)),
                         ],
                       ),
                     ),
                   ],
                 ),
               ),
-              const Icon(Icons.chevron_right,
-                  color: Color(0xFFC9CDD4), size: 22),
+              const Icon(Icons.chevron_right_rounded,
+                  color: Color(0xFF475569), size: 28),
             ],
           ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 18),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
             _buildStatItem("$followed", "Followed"),
+            Container(height: 22, width: 1, color: Colors.black12),
             _buildStatItem("$following", "Following"),
+            Container(height: 22, width: 1, color: Colors.black12),
             _buildStatItem("$friends", "Friends"),
           ],
         ),
@@ -380,7 +410,7 @@ size: 11, color: Color(0xFF86909C)),
 
   Widget _buildLevelTag(IconData icon, String value, Color bgColor) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
         color: bgColor,
         borderRadius: BorderRadius.circular(10),
@@ -388,12 +418,12 @@ size: 11, color: Color(0xFF86909C)),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 9, color: Colors.white),
-          const SizedBox(width: 2),
+          Icon(icon, size: 10, color: Colors.white),
+          const SizedBox(width: 2.5),
           Text(
             value,
             style: const TextStyle(
-                color: Colors.white, fontSize: 9.5, fontWeight: FontWeight.bold),
+                color: Colors.white, fontSize: 10, fontWeight: FontWeight.w800),
           ),
         ],
       ),
@@ -406,14 +436,17 @@ size: 11, color: Color(0xFF86909C)),
         Text(
           count,
           style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF1D2129)),
+              fontSize: 20,
+              fontWeight: FontWeight.w900,
+              color: Color(0xFF111827)),
         ),
         const SizedBox(height: 2),
         Text(
           label,
-          style: const TextStyle(fontSize: 11.5, color: Color(0xFF86909C)),
+          style: const TextStyle(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF475569)),
         ),
       ],
     );
@@ -423,20 +456,28 @@ size: 11, color: Color(0xFF86909C)),
   Widget _buildVipClubCard() {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color(0xFF3E2D1D), Color(0xFF2B1D11)],
+          colors: [Color(0xFF3E2D1D), Color(0xFF26190E)],
           begin: Alignment.centerLeft,
           end: Alignment.centerRight,
         ),
         borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.12),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
       ),
       child: Row(
         children: [
           const Icon(Icons.workspace_premium,
-              color: Color(0xFFFFD580), size: 26),
-          const SizedBox(width: 10),
+              color: Color(0xFFFFD580), size: 32),
+
+const SizedBox(width: 12),
           const Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -444,19 +485,23 @@ size: 11, color: Color(0xFF86909C)),
                 Text(
                   "VIP Club",
                   style: TextStyle(
-                      color: Color(0xFFFFD580),
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold),
+                      color: Color(0xFFFFE099),
+                      fontSize: 15.5,
+                      fontWeight: FontWeight.w900),
                 ),
+                SizedBox(height: 2),
                 Text(
                   "Upgrade to VIP and get free coins daily",
-                  style: TextStyle(color: Color(0xFFD6C0B3), fontSize: 10.5),
+                  style: TextStyle(
+                      color: Color(0xFFE5D3C5),
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w500),
                 ),
               ],
             ),
           ),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             decoration: BoxDecoration(
               gradient: const LinearGradient(
                 colors: [Color(0xFFFFDF9E), Color(0xFFF3BA2F)],
@@ -466,9 +511,9 @@ size: 11, color: Color(0xFF86909C)),
             child: const Text(
               "Get VIP",
               style: TextStyle(
-                  color: Color(0xFF3E2D1D),
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold),
+                  color: Color(0xFF2B1D10),
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w900),
             ),
           ),
         ],
@@ -487,14 +532,14 @@ size: 11, color: Color(0xFF86909C)),
       currentUid = _currentUser!.uid;
     }
 
-return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 15),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: Colors.black.withOpacity(0.04),
             blurRadius: 10,
             offset: const Offset(0, 3),
           ),
@@ -523,35 +568,36 @@ return Container(
                       Text(
                         "Coins",
                         style: TextStyle(
-                            fontSize: 12,
-                            color: Color(0xFF4E5969),
-                            fontWeight: FontWeight.w600),
+                            fontSize: 13.5,
+                            color: Color(0xFF334155),
+                            fontWeight: FontWeight.w700),
                       ),
-                      SizedBox(width: 4),
-                      Icon(Icons.chevron_right,
-                          size: 14, color: Color(0xFF86909C)),
+                      SizedBox(width: 3),
+                      Icon(Icons.chevron_right_rounded,
+                          size: 18, color: Color(0xFF64748B)),
                     ],
                   ),
                   const SizedBox(height: 6),
                   Row(
                     children: [
-                      const Icon(Icons.monetization_on,
-                          color: Color(0xFFFFB300), size: 18),
-                      const SizedBox(width: 6),
+                      const Icon(Icons.monetization_on_rounded,
+                          color: Color(0xFFF59E0B), size: 26),
+                      const SizedBox(width: 7),
                       Text(
                         "$coins",
                         style: const TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF1D2129)),
+                            fontSize: 21,
+                            fontWeight: FontWeight.w900,
+                            color: Color(0xFF111827)),
                       ),
                     ],
                   ),
                 ],
-              ),
+
+),
             ),
           ),
-          Container(width: 1, height: 36, color: const Color(0xFFF2F3F5)),
+          Container(width: 1, height: 40, color: const Color(0xFFE2E8F0)),
           const SizedBox(width: 18),
           Expanded(
             child: InkWell(
@@ -564,27 +610,27 @@ return Container(
                       Text(
                         "Points",
                         style: TextStyle(
-                            fontSize: 12,
-                            color: Color(0xFF4E5969),
-                            fontWeight: FontWeight.w600),
+                            fontSize: 13.5,
+                            color: Color(0xFF334155),
+                            fontWeight: FontWeight.w700),
                       ),
-                      SizedBox(width: 4),
-                      Icon(Icons.chevron_right,
-                          size: 14, color: Color(0xFF86909C)),
+                      SizedBox(width: 3),
+                      Icon(Icons.chevron_right_rounded,
+                          size: 18, color: Color(0xFF64748B)),
                     ],
                   ),
                   const SizedBox(height: 6),
                   Row(
                     children: [
                       const Icon(Icons.stars_rounded,
-                          color: Color(0xFF7E22CE), size: 18),
-                      const SizedBox(width: 6),
+                          color: Color(0xFF14B8A6), size: 26),
+                      const SizedBox(width: 7),
                       Text(
                         points.toInt().toString(),
                         style: const TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF7E22CE)),
+                            fontSize: 21,
+                            fontWeight: FontWeight.w900,
+                            color: Color(0xFF14B8A6)),
                       ),
                     ],
                   ),
@@ -597,21 +643,21 @@ return Container(
     );
   }
 
-  // 4. Main 8 Features Grid
+  // 4. Main 8 Features Grid (ጉልት እና 3D መልክ ያላቸው አዶዎች)
   Widget _buildMainFeaturesGrid({required int coins, required int numericId}) {
     String currentUid = "";
     if (_currentUser != null) {
       currentUid = _currentUser!.uid;
     }
 
-return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 14),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: Colors.black.withOpacity(0.04),
             blurRadius: 10,
             offset: const Offset(0, 3),
           ),
@@ -621,13 +667,13 @@ return Container(
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
         crossAxisCount: 4,
-        mainAxisSpacing: 14,
-        crossAxisSpacing: 4,
-        childAspectRatio: 0.9,
+        mainAxisSpacing: 16,
+        crossAxisSpacing: 6,
+        childAspectRatio: 0.88,
         children: [
-          _buildItemTile(
-            icon: Icons.account_balance_wallet,
-            color: const Color(0xFFFFA940),
+          _buildBoldFeatureTile(
+            icon: Icons.account_balance_wallet_rounded,
+            colors: const [Color(0xFFFFB703), Color(0xFFFB8500)],
             label: "Recharge",
             onTap: () => Navigator.push(
               context,
@@ -641,9 +687,9 @@ return Container(
               ),
             ),
           ),
-          _buildItemTile(
-            icon: Icons.storefront,
-            color: const Color(0xFFFF4D4F),
+          _buildBoldFeatureTile(
+            icon: Icons.storefront_rounded,
+            colors: const [Color(0xFFFF5A5F), Color(0xFFE01E37)],
             label: "Store",
             onTap: () => Navigator.push(
               context,
@@ -656,43 +702,44 @@ return Container(
               ),
             ),
           ),
-          _buildItemTile(
-            icon: Icons.mark_email_unread,
-            color: const Color(0xFFFF7A45),
+          _buildBoldFeatureTile(
+            icon: Icons.mark_email_unread_rounded,
+            colors: const [Color(0xFFFF758F), Color(0xFFC9184A)],
             label: "Invitation",
             onTap: () => Navigator.push(context,
-                MaterialPageRoute(builder: (_) => const InvitationScreen())),
+
+MaterialPageRoute(builder: (_) => const InvitationScreen())),
           ),
-          _buildItemTile(
-            icon: Icons.backpack,
-            color: const Color(0xFF40A9FF),
+          _buildBoldFeatureTile(
+            icon: Icons.backpack_rounded,
+            colors: const [Color(0xFF4CC9F0), Color(0xFF3A86FF)],
             label: "Backpack",
             onTap: () => Navigator.push(context,
                 MaterialPageRoute(builder: (_) => const BackpackScreen())),
           ),
-          _buildItemTile(
-            icon: Icons.landscape,
-            color: const Color(0xFF73D13D),
+          _buildBoldFeatureTile(
+            icon: Icons.beach_access_rounded,
+            colors: const [Color(0xFF52B788), Color(0xFF2D6A4F)],
             label: "Lucky Island",
             onTap: _openLuckyIsland,
           ),
-          _buildItemTile(
-            icon: Icons.military_tech,
-            color: const Color(0xFF9254DE),
+          _buildBoldFeatureTile(
+            icon: Icons.military_tech_rounded,
+            colors: const [Color(0xFFB5179E), Color(0xFF7209B7)],
             label: "Level",
             onTap: () => Navigator.push(context,
                 MaterialPageRoute(builder: (_) => const LevelScreen())),
           ),
-          _buildItemTile(
-            icon: Icons.event_available,
-            color: const Color(0xFF36CFC9),
+          _buildBoldFeatureTile(
+            icon: Icons.event_available_rounded,
+            colors: const [Color(0xFF2EC4B6), Color(0xFF0096C7)],
             label: "Task",
             onTap: () => Navigator.push(
                 context, MaterialPageRoute(builder: (_) => const TaskScreen())),
           ),
-          _buildItemTile(
-            icon: Icons.verified_user,
-            color: const Color(0xFFFFC53D),
+          _buildBoldFeatureTile(
+            icon: Icons.verified_rounded,
+            colors: const [Color(0xFFFF9E00), Color(0xFFFF6D00)],
             label: "Badge",
             onTap: () => Navigator.push(context,
                 MaterialPageRoute(builder: (_) => const BadgeScreen())),
@@ -723,20 +770,19 @@ return Container(
         ),
       ),
       child: Container(
-
-width: double.infinity,
-        height: 104,
+        width: double.infinity,
+        height: 94,
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(16),
           gradient: const LinearGradient(
-            colors: [Color(0xFFFF2A54), Color(0xFFFF6B6B)],
+            colors: [Color(0xFFEF233C), Color(0xFFD90429)],
             begin: Alignment.centerLeft,
             end: Alignment.centerRight,
           ),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFFFF2A54).withOpacity(0.24),
-              blurRadius: 12,
+              color: const Color(0xFFEF233C).withOpacity(0.28),
+              blurRadius: 10,
               offset: const Offset(0, 4),
             ),
           ],
@@ -753,49 +799,48 @@ width: double.infinity,
                   "UP TO 60% OFF",
                   style: TextStyle(
                       color: Color(0xFFFFE58F),
-                      fontWeight: FontWeight.bold,
-                      fontSize: 11),
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.8,
+                      fontSize: 11.5),
                 ),
-                SizedBox(height: 2),
+                SizedBox(height: 3),
                 Text(
                   "COIN RECHARGE",
                   style: TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.w900,
-                      fontSize: 18),
+                      fontSize: 19),
                 ),
               ],
             ),
-            Icon(Icons.savings, color: Color(0xFFFFE58F), size: 48),
+            Icon(Icons.savings_rounded, color: Color(0xFFFFD166), size: 46),
           ],
         ),
       ),
     );
   }
 
-  // 6. Creator, Business & Settings Section
-  Widget _buildBusinessSection({
+  // 6. Creator, Business & Settings Section (ልክ እንደ Hala ደማቅ Teal)
+
+Widget _buildBusinessSection({
     required int numericId,
     required String currentName,
     required String? avatarUrl,
   }) {
-    final List items = [
-      _buildItemTile(
+    final List<Widget> items = [
+      _buildTealServiceTile(
         icon: Icons.stars_rounded,
-        color: const Color(0xFF7E22CE),
         label: "Points Wallet",
         onTap: _openPointsWallet,
       ),
-      _buildItemTile(
-        icon: Icons.person_pin,
-        color: const Color(0xFF13C2C2),
+      _buildTealServiceTile(
+        icon: Icons.record_voice_over_rounded,
         label: "Host Center",
         onTap: () => Navigator.push(context,
             MaterialPageRoute(builder: (_) => const HostCenterScreen())),
       ),
-      _buildItemTile(
-        icon: Icons.business_center,
-        color: const Color(0xFF1890FF),
+      _buildTealServiceTile(
+        icon: Icons.business_center_rounded,
         label: "Agency",
         onTap: () => Navigator.push(
           context,
@@ -803,23 +848,20 @@ width: double.infinity,
               builder: (_) => AgencyScreen(userNumericId: numericId)),
         ),
       ),
-      _buildItemTile(
-        icon: Icons.currency_exchange,
-        color: const Color(0xFF52C41A),
+      _buildTealServiceTile(
+        icon: Icons.currency_exchange_rounded,
         label: "Coin Seller",
         onTap: () => Navigator.push(context,
             MaterialPageRoute(builder: (_) => const CoinSellerScreen())),
       ),
-      _buildItemTile(
-        icon: Icons.support_agent,
-        color: const Color(0xFF722ED1),
+      _buildTealServiceTile(
+        icon: Icons.headset_mic_rounded,
         label: "Support",
         onTap: () => Navigator.push(context,
             MaterialPageRoute(builder: (_) => const SupportScreen())),
       ),
-      _buildItemTile(
-        icon: Icons.settings,
-        color: const Color(0xFF595959),
+      _buildTealServiceTile(
+        icon: Icons.settings_rounded,
         label: "Settings",
         onTap: () => _openAccountSettings(
           currentName: currentName,
@@ -830,13 +872,13 @@ width: double.infinity,
     ];
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: Colors.black.withOpacity(0.04),
             blurRadius: 10,
             offset: const Offset(0, 3),
           ),
@@ -846,17 +888,17 @@ width: double.infinity,
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
         crossAxisCount: 4,
-        mainAxisSpacing: 14,
-        crossAxisSpacing: 4,
+        mainAxisSpacing: 16,
+        crossAxisSpacing: 6,
         childAspectRatio: 0.9,
-        children: List.from(items),
+        children: items,
       ),
     );
   }
 
-Widget _buildItemTile({
+  Widget _buildBoldFeatureTile({
     required IconData icon,
-    required Color color,
+    required List<Color> colors,
     required String label,
     required VoidCallback onTap,
   }) {
@@ -867,21 +909,66 @@ Widget _buildItemTile({
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Container(
-            width: 44,
-            height: 44,
+            width: 50,
+            height: 50,
             decoration: BoxDecoration(
-              color: color.withOpacity(0.12),
-              shape: BoxShape.circle,
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: colors,
+              ),
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: colors.last.withOpacity(0.32),
+                  blurRadius: 6,
+                  offset: const Offset(0, 3),
+                ),
+              ],
             ),
-            child: Icon(icon, color: color, size: 24),
+            child: Icon(icon, color: Colors.white, size: 28),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 7),
           Text(
             label,
             style: const TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF4E5969),
+              fontSize: 12.5,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF1E293B),
+            ),
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTealServiceTile({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+
+child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            icon,
+            color: const Color(0xFF14B8A6),
+            size: 34,
+          ),
+          const SizedBox(height: 7),
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF1E293B),
             ),
             textAlign: TextAlign.center,
             maxLines: 1,
