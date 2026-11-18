@@ -56,7 +56,7 @@ class _DragonTigerSheetState extends State<DragonTigerSheet> {
   static const int kRevealDurationMs = 3000;
   static const int kSettlementDurationMs = 4000;
 
-  final List<int> _chips = [100, 500, 1000, 5000, 10000, 50000];
+  final List<int _chips = [100, 500, 1000, 5000, 10000, 50000];
   int _selectedChip = 100;
 
   String _resolvedUid = "";
