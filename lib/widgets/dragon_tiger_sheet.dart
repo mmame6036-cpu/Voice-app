@@ -52,9 +52,9 @@ class _DragonTigerSheetState extends State<DragonTigerSheet> {
   static const Color kTigerAmber = Color(0xFFE65100);
   static const Color kTieGreen = Color(0xFF1B5E20);
 
-  static const int kBettingDurationMs = 15000; // 15 ሰከንድ መወራረጃ
-  static const int kRevealDurationMs = 3000; // 3 ሰከንድ ካርድ መግለጫ
-  static const int kSettlementDurationMs = 4000; // 4 ሰከንድ ውጤት ማሳያ
+  static const int kBettingDurationMs = 15000;
+  static const int kRevealDurationMs = 3000;
+  static const int kSettlementDurationMs = 4000;
 
   final List<int> _chips = [100, 500, 1000, 5000, 10000, 50000];
   int _selectedChip = 100;
@@ -103,6 +103,13 @@ class _DragonTigerSheetState extends State<DragonTigerSheet> {
   DocumentReference> get _gameDoc =>
       FirebaseFirestore.instance.collection('games').doc('dragon_tiger');
 
+  Map<String, dynamic> _asMap(Object? raw) {
+    if (raw is Map) {
+      return Map<String, dynamic>.from(raw);
+    }
+    return <String, dynamic>{};
+  }
+
   @override
   void initState() {
     super.initState();
@@ -132,11 +139,12 @@ class _DragonTigerSheetState extends State<DragonTigerSheet> {
           .doc(uid)
           .snapshots()
           .listen((snap) {
-        if (!mounted || !snap.exists) return;
-        final d = snap.data();
-        if (d == null) return;
+        if (!mounted) return;
+        if (!snap.exists) return;
+        final d = _asMap(snap.data());
+        if (d.isEmpty) return;
 
-        setState(() {
+setState(() {
           _myCoins = (d['coins'] as num?)?.toInt() ?? 0;
           if ((d['name'] ?? '').toString().isNotEmpty) {
             _resolvedName = d['name'].toString();
@@ -149,11 +157,10 @@ class _DragonTigerSheetState extends State<DragonTigerSheet> {
     }
   }
 
-// ጨዋታው ገና ካልተጀመረ ወዲያውኑ ያስነሳዋል
   Future<void> _ensureGameInitialized() async {
     try {
       final snap = await _gameDoc.get();
-      if (!snap.exists || snap.data() == null) {
+      if (!snap.exists) {
         await _advanceGameEngine(forceInit: true);
       } else {
         await _advanceGameEngine();
@@ -164,11 +171,15 @@ class _DragonTigerSheetState extends State<DragonTigerSheet> {
   void _listenToGameStream() {
     _gameSub = _gameDoc.snapshots().listen((snap) {
       if (!mounted) return;
-      if (!snap.exists || snap.data() == null) {
+      if (!snap.exists) {
         _advanceGameEngine(forceInit: true);
         return;
       }
-      final d = snap.data()!;
+      final d = _asMap(snap.data());
+      if (d.isEmpty) {
+        _advanceGameEngine(forceInit: true);
+        return;
+      }
       _applyGameData(d);
     });
   }
@@ -188,7 +199,7 @@ class _DragonTigerSheetState extends State<DragonTigerSheet> {
       _subscribeToMyRoundBet(newRoundId);
     }
 
-    final potMap = (d['pot'] is Map) ? d['pot'] as Map : {};
+    final potMap = _asMap(d['pot']);
     final rawWinners = d['topWinners'];
     final List> nextWinners = [];
     if (rawWinners is Iterable) {
@@ -230,16 +241,19 @@ class _DragonTigerSheetState extends State<DragonTigerSheet> {
       _history = nextHistory;
     });
 
-    if ((newPhase == "REVEALING" || newPhase == "SETTLEMENT") &&
-        _winner != null &&
-        _winner!.isNotEmpty) {
+    bool isRevealOrSettle = false;
+    if (newPhase == "REVEALING") isRevealOrSettle = true;
+    if (newPhase == "SETTLEMENT") isRevealOrSettle = true;
+
+    if (isRevealOrSettle && _winner != null && _winner!.isNotEmpty) {
       _settleMyBetIfNeeded(newRoundId, _winner!);
     }
   }
 
   void _subscribeToMyRoundBet(String roundId) {
     _myBetSub?.cancel();
-    if (_resolvedUid.isEmpty || roundId.isEmpty) return;
+    if (_resolvedUid.isEmpty) return;
+    if (roundId.isEmpty) return;
 
     _myBetSub = _gameDoc
         .collection('rounds')
@@ -248,9 +262,10 @@ class _DragonTigerSheetState extends State<DragonTigerSheet> {
         .doc(_resolvedUid)
         .snapshots()
         .listen((snap) {
-      if (!mounted || !snap.exists) return;
-      final d = snap.data();
-      if (d == null) return;
+      if (!mounted) return;
+      if (!snap.exists) return;
+      final d = _asMap(snap.data());
+      if (d.isEmpty) return;
 
       final int won = (d['wonAmount'] as num?)?.toInt() ?? 0;
       final bool paid = d['paid'] == true;
@@ -269,8 +284,7 @@ class _DragonTigerSheetState extends State<DragonTigerSheet> {
     });
   }
 
-  // ሰዓት ቆጣሪ እና ዙር ቀያሪ
-  void _startClockTimer() {
+void _startClockTimer() {
     _clockTimer = Timer.periodic(const Duration(milliseconds: 300), (_) {
       if (!mounted) return;
       final int now = DateTime.now().millisecondsSinceEpoch;
@@ -284,7 +298,7 @@ class _DragonTigerSheetState extends State<DragonTigerSheet> {
       if (_phase == "REVEALING") target = _revealEndTime;
       if (_phase == "SETTLEMENT") target = _nextRoundTime;
 
-final int diffSec = ((target - now) / 1000).ceil();
+      final int diffSec = ((target - now) / 1000).ceil();
       setState(() {
         _remainingSec = diffSec.clamp(0, 30);
       });
@@ -295,7 +309,6 @@ final int diffSec = ((target - now) / 1000).ceil();
     });
   }
 
-  // በFirestore Transaction አማካኝነት ዙሮችን ያለ ግጭት ያሽከረክራል
   Future<void> _advanceGameEngine({bool forceInit = false}) async {
     if (_isAdvancingEngine) return;
     _isAdvancingEngine = true;
@@ -304,16 +317,19 @@ final int diffSec = ((target - now) / 1000).ceil();
       await FirebaseFirestore.instance.runTransaction((tx) async {
         final snap = await tx.get(_gameDoc);
         final int now = DateTime.now().millisecondsSinceEpoch;
+        final data = _asMap(snap.data());
 
-        if (!snap.exists  snap.data() == null  forceInit && !snap.exists) {
+        if (!snap.exists || data.isEmpty) {
           tx.set(_gameDoc, {
             'roundNumber': 1,
             'roundId': 'round_1_$now',
             'phase': 'BETTING',
             'roundEndTime': now + kBettingDurationMs,
             'revealEndTime': now + kBettingDurationMs + kRevealDurationMs,
-            'nextRoundTime':
-                now + kBettingDurationMs + kRevealDurationMs + kSettlementDurationMs,
+            'nextRoundTime': now +
+                kBettingDurationMs +
+                kRevealDurationMs +
+                kSettlementDurationMs,
             'pot': {'dragon': 0, 'tie': 0, 'tiger': 0},
             'dragonCard': null,
             'tigerCard': null,
@@ -324,14 +340,22 @@ final int diffSec = ((target - now) / 1000).ceil();
           return;
         }
 
-        final data = snap.data()!;
         final String currentPhase = (data['phase'] ?? 'BETTING').toString();
         final int roundNumber = (data['roundNumber'] as num?)?.toInt() ?? 1;
         final int roundEndTime = (data['roundEndTime'] as num?)?.toInt() ?? 0;
-        final int revealEndTime = (data['revealEndTime'] as num?)?.toInt() ?? 0;
-        final int nextRoundTime = (data['nextRoundTime'] as num?)?.toInt() ?? 0;
+        final int revealEndTime =
+            (data['revealEndTime'] as num?)?.toInt() ?? 0;
+        final int nextRoundTime =
+            (data['nextRoundTime'] as num?)?.toInt() ?? 0;
 
-        // 1. BETTING ሲያልቅ -> ካርዶችን ይገልጣል (REVEALING)
+        bool shouldStartNext = false;
+        if (currentPhase == 'SETTLEMENT' && now >= nextRoundTime) {
+          shouldStartNext = true;
+        }
+        if (nextRoundTime > 0 && (now - nextRoundTime) > 15000) {
+          shouldStartNext = true;
+        }
+
         if (currentPhase == 'BETTING' && now >= roundEndTime) {
           final rng = Random.secure();
           const suits = ['S', 'H', 'D', 'C'];
@@ -351,13 +375,16 @@ final int diffSec = ((target - now) / 1000).ceil();
           }
 
           final List<String> hist = [];
-          if (data['history'] is Iterable) {
-            for (final h in data['history']) {
+          final rawHist = data['history'];
+          if (rawHist is Iterable) {
+            for (final h in rawHist) {
               hist.add(h.toString());
             }
           }
           hist.insert(0, historyCode);
-          if (hist.length > 15) hist.removeRange(15, hist.length);
+          if (hist.length > 15) {
+            hist.removeRange(15, hist.length);
+          }
 
           tx.update(_gameDoc, {
             'phase': 'REVEALING',
@@ -368,27 +395,24 @@ final int diffSec = ((target - now) / 1000).ceil();
             'revealEndTime': now + kRevealDurationMs,
             'nextRoundTime': now + kRevealDurationMs + kSettlementDurationMs,
           });
-        }
-        // 2. REVEALING ሲያልቅ -> ወደ SETTLEMENT ይሄዳል
-        else if (currentPhase == 'REVEALING' && now >= revealEndTime) {
-          tx.update(_gameDoc, {
+        } else if (currentPhase == 'REVEALING' && now >= revealEndTime) {
+
+tx.update(_gameDoc, {
             'phase': 'SETTLEMENT',
             'nextRoundTime': now + kSettlementDurationMs,
           });
-        }
-        // 3. SETTLEMENT ሲያልቅ (ወይም ዙሩ ከቆየ) -> አዲስ ዙር ይጀምራል
-        else if ((currentPhase == 'SETTLEMENT' && now >= nextRoundTime) ||
-            (now - nextRoundTime > 15000 && nextRoundTime > 0)) {
+        } else if (shouldStartNext) {
           final int nextNum = roundNumber + 1;
           tx.update(_gameDoc, {
             'roundNumber': nextNum,
             'roundId': 'round_${nextNum}_$now',
             'phase': 'BETTING',
             'roundEndTime': now + kBettingDurationMs,
-
-'revealEndTime': now + kBettingDurationMs + kRevealDurationMs,
-            'nextRoundTime':
-                now + kBettingDurationMs + kRevealDurationMs + kSettlementDurationMs,
+            'revealEndTime': now + kBettingDurationMs + kRevealDurationMs,
+            'nextRoundTime': now +
+                kBettingDurationMs +
+                kRevealDurationMs +
+                kSettlementDurationMs,
             'pot': {'dragon': 0, 'tie': 0, 'tiger': 0},
             'dragonCard': null,
             'tigerCard': null,
@@ -403,9 +427,10 @@ final int diffSec = ((target - now) / 1000).ceil();
     }
   }
 
-  // ተጫዋቹ ካሸነፈ ኮይኑን በራስ-ሰር ይከፍላል
   Future<void> _settleMyBetIfNeeded(String roundId, String winnerSide) async {
-    if (_isSettlingMyBet  _resolvedUid.isEmpty  roundId.isEmpty) return;
+    if (_isSettlingMyBet) return;
+    if (_resolvedUid.isEmpty) return;
+    if (roundId.isEmpty) return;
     if (_lastSettledRound == roundId) return;
 
     _isSettlingMyBet = true;
@@ -422,9 +447,10 @@ final int diffSec = ((target - now) / 1000).ceil();
 
       await FirebaseFirestore.instance.runTransaction((tx) async {
         final betSnap = await tx.get(betRef);
-        if (!betSnap.exists || betSnap.data() == null) return;
+        if (!betSnap.exists) return;
 
-        final betData = betSnap.data()!;
+        final betData = _asMap(betSnap.data());
+        if (betData.isEmpty) return;
         if (betData['paid'] == true) return;
 
         final int dBet = (betData['dragon'] as num?)?.toInt() ?? 0;
@@ -498,14 +524,18 @@ final int diffSec = ((target - now) / 1000).ceil();
     });
   }
 
-  // በቀጥታ በFirestore ላይ ውርርድ ያስይዛል (ምንም የሰርቨር መዘግየት የለውም)
   Future<void> _placeBet(String side) async {
     if (_isPlacingBet) return;
-    if (_roundId.isEmpty) {
+
+if (_roundId.isEmpty) {
       await _advanceGameEngine(forceInit: true);
       return;
     }
-    if (_phase != "BETTING" || _remainingSec <= 1) {
+    if (_phase != "BETTING") {
+      _showNotice("Betting closed! Wait for next round.");
+      return;
+    }
+    if (_remainingSec <= 1) {
       _showNotice("Betting closed! Wait for next round.");
       return;
     }
@@ -520,7 +550,7 @@ final int diffSec = ((target - now) / 1000).ceil();
 
     setState(() => _isPlacingBet = true);
 
-try {
+    try {
       final userRef =
           FirebaseFirestore.instance.collection('users').doc(_resolvedUid);
       final betRef = _gameDoc
@@ -535,14 +565,18 @@ try {
         final userSnap = await tx.get(userRef);
         final gameSnap = await tx.get(_gameDoc);
 
-        if (!userSnap.exists || !gameSnap.exists) {
-          throw Exception("Account or game not ready");
+        if (!userSnap.exists) {
+          throw Exception("Account not ready");
+        }
+        if (!gameSnap.exists) {
+          throw Exception("Game not ready");
         }
 
-        final int currentCoins =
-            (userSnap.data()?['coins'] as num?)?.toInt() ?? 0;
-        final String livePhase =
-            (gameSnap.data()?['phase'] ?? '').toString();
+        final userData = _asMap(userSnap.data());
+        final gameData = _asMap(gameSnap.data());
+
+        final int currentCoins = (userData['coins'] as num?)?.toInt() ?? 0;
+        final String livePhase = (gameData['phase'] ?? '').toString();
 
         if (livePhase != 'BETTING') {
           throw Exception("Betting closed for this round");
@@ -613,8 +647,10 @@ try {
   }
 
   Widget _buildPlayingCard(Map<String, dynamic>? card, Color accentColor) {
-    final bool isRevealPhase =
-        _phase == "REVEALING" || _phase == "SETTLEMENT";
+    bool isRevealPhase = false;
+    if (_phase == "REVEALING") isRevealPhase = true;
+    if (_phase == "SETTLEMENT") isRevealPhase = true;
+
     final bool showFace = isRevealPhase && card != null;
 
     if (!showFace) {
@@ -627,7 +663,8 @@ try {
             colors: [accentColor, const Color(0xFF1A100B)],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-          ),
+
+),
           border: Border.all(color: kGold, width: 1.8),
           boxShadow: [
             BoxShadow(
@@ -645,15 +682,17 @@ try {
 
     final int rank = (card['rank'] as num?)?.toInt() ?? 1;
     final String suit = (card['suit'] ?? 'S').toString();
-    final bool isRed = suit == 'H' || suit == 'D';
+    bool isRed = false;
+    if (suit == 'H') isRed = true;
+    if (suit == 'D') isRed = true;
+
     final Color cardColor =
         isRed ? const Color(0xFFC62828) : const Color(0xFF1A1A1A);
 
     return Container(
       width: 68,
       height: 94,
-
-padding: const EdgeInsets.all(6),
+      padding: const EdgeInsets.all(6),
       decoration: BoxDecoration(
         color: const Color(0xFFFFFBF2),
         borderRadius: BorderRadius.circular(10),
@@ -708,8 +747,10 @@ padding: const EdgeInsets.all(6),
     required int myBet,
     required Color baseColor,
   }) {
-    final bool isRevealPhase =
-        _phase == "REVEALING" || _phase == "SETTLEMENT";
+    bool isRevealPhase = false;
+    if (_phase == "REVEALING") isRevealPhase = true;
+    if (_phase == "SETTLEMENT") isRevealPhase = true;
+
     final bool isWinner = isRevealPhase && _winner == side;
 
     return Expanded(
@@ -751,7 +792,8 @@ padding: const EdgeInsets.all(6),
                   color: Colors.white,
                   fontSize: 13,
                   fontWeight: FontWeight.w900,
-                ),
+
+),
               ),
               const SizedBox(height: 2),
               Container(
@@ -774,8 +816,7 @@ padding: const EdgeInsets.all(6),
                 "POT: ${_formatNum(pot)}",
                 style: const TextStyle(
                   color: Colors.white70,
-
-fontSize: 11,
+                  fontSize: 11,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -806,8 +847,9 @@ fontSize: 11,
 
   @override
   Widget build(BuildContext context) {
-    final bool isRevealPhase =
-        _phase == "REVEALING" || _phase == "SETTLEMENT";
+    bool isRevealPhase = false;
+    if (_phase == "REVEALING") isRevealPhase = true;
+    if (_phase == "SETTLEMENT") isRevealPhase = true;
 
     String phaseText = "BETTING: ${_remainingSec}s";
     Color phaseColor = const Color(0xFF107C41);
@@ -863,7 +905,8 @@ fontSize: 11,
                   child: Text(
                     "#$_roundNumber",
                     style: const TextStyle(color: Colors.white70, fontSize: 10),
-                  ),
+
+),
                 ),
                 const Spacer(),
                 Container(
@@ -883,8 +926,7 @@ fontSize: 11,
                         style: const TextStyle(
                           color: kGold,
                           fontSize: 12,
-
-fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w900,
                         ),
                       ),
                     ],
@@ -964,7 +1006,8 @@ fontWeight: FontWeight.w900,
 
             Container(
               padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-              decoration: BoxDecoration(
+
+decoration: BoxDecoration(
                 color: kCardDark,
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(color: kGoldBorder.withOpacity(0.5)),
@@ -984,8 +1027,7 @@ fontWeight: FontWeight.w900,
                       ),
                       const SizedBox(height: 6),
                       _buildPlayingCard(_dragonCard, kDragonRed),
-
-],
+                    ],
                   ),
                   Column(
                     children: [
@@ -1062,7 +1104,8 @@ fontWeight: FontWeight.w900,
                     const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
                   color: Colors.black54,
-                  borderRadius: BorderRadius.circular(10),
+
+borderRadius: BorderRadius.circular(10),
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -1081,8 +1124,7 @@ fontWeight: FontWeight.w900,
                         padding: const EdgeInsets.only(right: 8),
                         child: Text(
                           "${w['name']} (+${_formatNum(wonAmt)})",
-
-style: const TextStyle(
+                          style: const TextStyle(
                             color: Colors.white,
                             fontSize: 10.5,
                             fontWeight: FontWeight.w600,
@@ -1167,7 +1209,8 @@ style: const TextStyle(
                                 const Color(0xFF1D130D)
                               ],
                         begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
+
+end: Alignment.bottomRight,
                       ),
                       border: Border.all(
                         color: selected ? Colors.white : kGoldBorder,
