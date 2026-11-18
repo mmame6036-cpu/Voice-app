@@ -141,7 +141,7 @@ bool _showComboButton = false;
   int _comboCount = 0;
   Timer? _comboTimer;
   late AnimationController _comboRingController;
-  Map? _lastSentGiftConfig;
+  Map<String, dynamic>? _lastSentGiftConfig;
 
   String? _luckyWinToast;
   Timer? _luckyWinToastTimer;
@@ -447,7 +447,8 @@ for (final doc in snap.docs) {
           wonAmount = remCoins;
         } else {
           final int maxGrab = max(1, ((remCoins / remCount) * 2).floor());
-          wonAmount = min(remCoins - (remCount - 1), _random.nextInt(maxGrab) + 1);
+          wonAmount =
+              min(remCoins - (remCount - 1), _random.nextInt(maxGrab) + 1);
         }
 
         claimed.add(_resolvedUid);
@@ -501,8 +502,9 @@ for (final doc in snap.docs) {
     final String title = (music['trackTitle'] ?? '').toString();
     final String asset = (music['trackAsset'] ?? '').toString();
     final String url = (music['trackUrl'] ?? '').toString();
-    final double vol =
-        _isRoomVoiceOn ? ((music['volume'] as num?)?.toDouble() ?? 0.6).clamp(0.0, 1.0) : 0.0;
+    final double vol = _isRoomVoiceOn
+        ? ((music['volume'] as num?)?.toDouble() ?? 0.6).clamp(0.0, 1.0)
+        : 0.0;
     final String key = "$title|$asset|$url";
 
     try {
@@ -555,14 +557,15 @@ void _startSeatHeartbeat() {
       if (!mounted) return;
       if (_hasCleanedUp) return;
       final nowMs = DateTime.now().millisecondsSinceEpoch;
-      final Map activeMap = {};
+      final Map<String, dynamic> activeMap = {};
       final Map<String, dynamic> staleCleanup = {};
 
       if (snapshot.exists && snapshot.data() != null) {
         final data = snapshot.data()!;
 
         final List<String> kicked =
-            (data['kickedUsers'] as List?)?.map((e) => e.toString()).toList() ?? [];
+            (data['kickedUsers'] as List?)?.map((e) => e.toString()).toList() ??
+                [];
         if (kicked.contains(_resolvedUid) && !_isHostUser) {
           _cleanupAndLeave();
           if (mounted) {
@@ -1137,7 +1140,8 @@ setState(() {
 
 try {
       final double targetVol = nextState
-          ? (((_musicData?['volume'] as num?)?.toDouble() ?? 0.6).clamp(0.0, 1.0))
+          ? (((_musicData?['volume'] as num?)?.toDouble() ?? 0.6)
+              .clamp(0.0, 1.0))
           : 0.0;
       await _musicPlayer.setVolume(targetVol);
     } catch (_) {}
@@ -1221,7 +1225,7 @@ try {
     int blueAdd = 0;
 
     final List<int> seatsToScore = isAll
-        ? [
+        ? <int>[
             for (int i = 0; i < _totalSeats; i++)
               if (_seats[i] != null) i
           ]
@@ -1250,7 +1254,7 @@ try {
 
     final config = _lastSentGiftConfig!;
     final bool isLucky = config['isLucky'] == true;
-    final List<int> targets = List<int>.from(config['targetSeats']);
+    final List<int> targets = List<int>.from(config['targetSeats'] as List);
     final bool isAll = config['isAll'] == true;
     final int unitPrice = (config['unitPrice'] as num).toInt();
     final int sendCost = isLucky ? unitPrice : (config['cost'] as num).toInt();
@@ -1273,9 +1277,9 @@ try {
     int wonCoins = 0;
 
     if (isLucky) {
-      for (int i = 0; i < max(1, seatCount); i++) {
 
-wonCoins += _rollLuckyWin(unitPrice);
+for (int i = 0; i < max(1, seatCount); i++) {
+        wonCoins += _rollLuckyWin(unitPrice);
       }
       final bool playSoundNow =
           (wonCoins > 0) ? true : (nextCombo % 5 == 0);
@@ -1298,7 +1302,7 @@ wonCoins += _rollLuckyWin(unitPrice);
     final double rate = isLucky ? 0.04 : 0.70;
     final int ptsPerSeat = max(1, (sendCost * rate).round());
     final List<int> activeTargets = isAll
-        ? [
+        ? <int>[
             for (int i = 0; i < _totalSeats; i++)
               if (_seats[i] != null) i
           ]
@@ -1335,9 +1339,9 @@ wonCoins += _rollLuckyWin(unitPrice);
       isAll: isAll,
       cost: sendCost,
       unitPrice: unitPrice,
-      name: config['name'],
-      asset: config['asset'],
-      icon: config['icon'] ?? "🎁",
+      name: config['name'].toString(),
+      asset: config['asset'].toString(),
+      icon: (config['icon'] ?? "🎁").toString(),
       isLucky: isLucky,
       wonCoins: wonCoins,
       fromCombo: true,
@@ -1347,7 +1351,7 @@ wonCoins += _rollLuckyWin(unitPrice);
   }
 
   void _openGiftSheet() async {
-    final seatedList = [];
+    final List> seatedList = [];
     for (int i = 0; i < _totalSeats; i++) {
       if (_seats[i] != null) {
         seatedList.add({
@@ -1617,7 +1621,9 @@ final isSpeaking = _speakingSeatIndices.contains(index);
                   child: Icon(
                     isOccupied
                         ? Icons.person
-                        : (_allMicsClosed ? Icons.lock_outline : Icons.chair_rounded),
+                        : (_allMicsClosed
+                            ? Icons.lock_outline
+                            : Icons.chair_rounded),
                     color: isOccupied ? frameColor : kGoldBorder,
                     size: seatDimension * 0.46,
                   ),
@@ -1637,9 +1643,9 @@ final isSpeaking = _speakingSeatIndices.contains(index);
                     ),
                     child: Icon(
                       isMuted ? Icons.mic_off : Icons.mic,
-                      size: (seatDimension * 0.22).clamp(9.0, 15.0),
 
-color: Colors.white,
+size: (seatDimension * 0.22).clamp(9.0, 15.0),
+                      color: Colors.white,
                     ),
                   ),
                 ),
@@ -1701,7 +1707,8 @@ color: Colors.white,
     final int rScore = (_pkData!['redScore'] as num?)?.toInt() ?? 0;
     final int bScore = (_pkData!['blueScore'] as num?)?.toInt() ?? 0;
     final int total = rScore + bScore;
-    final double redRatio = total == 0 ? 0.5 : (rScore / total).clamp(0.15, 0.85);
+    final double redRatio =
+        total == 0 ? 0.5 : (rScore / total).clamp(0.15, 0.85);
     final int mins = _pkSecondsLeft ~/ 60;
     final int secs = _pkSecondsLeft % 60;
     final String timeStr =
@@ -1742,10 +1749,10 @@ color: Colors.white,
                 ),
               ),
               Text(
-                "$bScore :${_pkData!['blueName'] ?? 'Blue'}",
-                style: const TextStyle(
 
-color: Color(0xFF448AFF),
+"$bScore :${_pkData!['blueName'] ?? 'Blue'}",
+                style: const TextStyle(
+                    color: Color(0xFF448AFF),
                     fontSize: 11,
                     fontWeight: FontWeight.bold),
               ),
@@ -1795,7 +1802,9 @@ color: Color(0xFF448AFF),
             child: Text(
               "Playing: ${_musicData!['trackTitle'] ?? 'Room Music'}",
               style: const TextStyle(
-                  color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                  color: Colors.white,
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold),
               overflow: TextOverflow.ellipsis,
             ),
           ),
@@ -1817,7 +1826,7 @@ color: Color(0xFF448AFF),
     );
   }
 
-  List> _buildSeatedUsersList() {
+  List _buildSeatedUsersList() {
     final List> list = [];
     for (int i = 0; i < _totalSeats; i++) {
       if (_seats[i] != null) {
@@ -1863,11 +1872,11 @@ color: Color(0xFF448AFF),
             onPressed: _minimizeRoom,
           ),
           iconTheme: const IconThemeData(color: kBlackText),
-          title: Column(
+
+title: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-
-Row(
+              Row(
                 children: [
                   Flexible(
                     child: Text(
@@ -1924,7 +1933,7 @@ Row(
               ),
             ),
             const SizedBox(width: 4),
-            PopupMenuButton(
+            PopupMenuButton<int>(
               icon: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
@@ -1950,7 +1959,7 @@ Row(
               color: kGoldBlackTop,
               onSelected: (int count) => _changeSeatCount(count),
               itemBuilder: (context) => _allowedSeatOptions
-                  .map((int count) => PopupMenuItem(
+                  .map((int count) => PopupMenuItem<int>(
                         value: count,
                         child: Text(
                           "$count Seats Layout",
@@ -1964,11 +1973,11 @@ Row(
                       ))
                   .toList(),
             ),
-            IconButton(
+
+IconButton(
               icon: const Icon(Icons.grid_view_rounded, color: kBlackText),
               onPressed: () {
-
-RoomToolsSheet.show(
+                RoomToolsSheet.show(
                   context,
                   roomId: widget.roomId,
                   roomTitle: _liveRoomTitle,
@@ -2053,10 +2062,10 @@ RoomToolsSheet.show(
                                     return Expanded(
                                       child: Center(
                                         child: _buildSingleSeat(
-                                          index: seatIdx,
-                                          seatDimension: seatDimension,
 
-nameFontSize: nameFontSize,
+index: seatIdx,
+                                          seatDimension: seatDimension,
+                                          nameFontSize: nameFontSize,
                                           badgeFontSize: badgeFontSize,
                                         ),
                                       ),
@@ -2138,11 +2147,11 @@ nameFontSize: nameFontSize,
                         padding: const EdgeInsets.only(bottom: 6),
                         itemCount: _messages.length,
                         itemBuilder: (context, index) {
-                          final item = _messages[index];
+
+final item = _messages[index];
                           return Align(
                             alignment: Alignment.centerLeft,
-
-child: Container(
+                            child: Container(
                               margin: const EdgeInsets.symmetric(vertical: 2.5),
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 10.0, vertical: 5.0),
@@ -2217,11 +2226,11 @@ child: Container(
                           child: IconButton(
                             icon: Icon(
                               _isMuted ? Icons.mic_off : Icons.mic,
-                              color: _mySeatIndex != null
+
+color: _mySeatIndex != null
                                   ? (_isMuted ? Colors.redAccent : kGoldBright)
                                   : kSubBlack,
-
-size: 24,
+                              size: 24,
                             ),
                             onPressed: _mySeatIndex != null ? _toggleMute : null,
                           ),
@@ -2299,12 +2308,12 @@ size: 24,
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(color: kGoldBright, width: 1.6),
                         boxShadow: [
-                          BoxShadow(
+
+BoxShadow(
                             color: Colors.redAccent.withOpacity(0.5),
                             blurRadius: 10,
                           ),
-
-],
+                        ],
                       ),
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
@@ -2388,7 +2397,8 @@ size: 24,
                             fontSize: 11.5,
                             fontWeight: FontWeight.bold,
                           ),
-                        ),
+
+),
                       ),
                     ),
                   ),
@@ -2399,7 +2409,7 @@ size: 24,
                   builder: (context, child) {
                     final t = gift.flightAnimation.value;
 
-final centerX = size.width * 0.5;
+                    final centerX = size.width * 0.5;
                     final centerY = size.height * 0.42;
 
                     final col = gift.targetSeatIndex % crossAxis;
@@ -2477,15 +2487,15 @@ final centerX = size.width * 0.5;
                           Container(
                             width: 62,
                             height: 62,
-                            decoration: BoxDecoration(
+
+decoration: BoxDecoration(
                               shape: BoxShape.circle,
                               gradient: LinearGradient(
                                 colors: comboTier >= 2
                                     ? [
                                         const Color(0xFFB71C1C),
                                         const Color(0xFF4A0E0E)
-
-]
+                                      ]
                                     : [kGoldBlackTop, kGoldBlackBottom],
                                 begin: Alignment.topLeft,
                                 end: Alignment.bottomRight,
