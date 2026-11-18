@@ -27,9 +27,10 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   final AgoraService _agoraService = AgoraService();
   Offset _floatingOffset = const Offset(16, 120);
 
-  static const Color navBgColor = Color(0xFF161426);
-  static const Color activeGold = Color(0xFFFFD700);
-  static const Color inactiveColor = Color(0xFF8E8A9F);
+  // እንደ ዋናው Hala አፕ ንጹህ እና ጉልት የሆኑ የታችኛው ባር ቀለሞች
+  static const Color navBgColor = Colors.white;
+  static const Color activeColor = Color(0xFF14B8A6);
+  static const Color inactiveColor = Color(0xFF475569);
 
   @override
   void initState() {
@@ -130,10 +131,10 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(16),
 
-decoration: BoxDecoration(
+Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
                       color: Colors.redAccent.withOpacity(0.15),
                       shape: BoxShape.circle,
                     ),
@@ -238,10 +239,10 @@ decoration: BoxDecoration(
               (_floatingOffset.dx - details.delta.dx)
                   .clamp(8.0, MediaQuery.of(context).size.width - 210),
               (_floatingOffset.dy - details.delta.dy)
-                  .clamp(80.0, MediaQuery.of(context).size.height - 140),
-            );
 
-});
+.clamp(80.0, MediaQuery.of(context).size.height - 140),
+            );
+          });
         },
         onTap: () {
           String targetTitle = "VIP Voice Room";
@@ -348,7 +349,7 @@ decoration: BoxDecoration(
       return _buildBannedScreen();
     }
 
-    final List<Widget> screens = [
+final List<Widget> screens = [
       HomeScreen(
         coins: _coins,
         onCoinUpdate: _updateCoins,
@@ -361,7 +362,7 @@ decoration: BoxDecoration(
       ),
     ];
 
-return Scaffold(
+    return Scaffold(
       body: Stack(
         children: [
           IndexedStack(
@@ -373,13 +374,16 @@ return Scaffold(
         ],
       ),
       bottomNavigationBar: Container(
-        height: 64,
+        height: 68,
         decoration: BoxDecoration(
           color: navBgColor,
+          border: const Border(
+            top: BorderSide(color: Color(0xFFE2E8F0), width: 1),
+          ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.35),
-              blurRadius: 10,
+              color: Colors.black.withOpacity(0.08),
+              blurRadius: 12,
               offset: const Offset(0, -3),
             ),
           ],
@@ -389,21 +393,24 @@ return Scaffold(
             Expanded(
               child: _buildNavItem(
                 index: 0,
-                icon: Icons.home_filled,
+                icon: Icons.home_outlined,
+                activeIcon: Icons.home_rounded,
                 label: "Home",
               ),
             ),
             Expanded(
               child: _buildNavItem(
                 index: 1,
-                icon: Icons.chat_bubble_outline,
+                icon: Icons.chat_bubble_outline_rounded,
+                activeIcon: Icons.chat_bubble_rounded,
                 label: "Message",
               ),
             ),
             Expanded(
               child: _buildNavItem(
                 index: 2,
-                icon: Icons.person_outline,
+                icon: Icons.person_outline_rounded,
+                activeIcon: Icons.person_rounded,
                 label: "Me",
               ),
             ),
@@ -416,15 +423,13 @@ return Scaffold(
   Widget _buildNavItem({
     required int index,
     required IconData icon,
+    required IconData activeIcon,
     required String label,
   }) {
     final bool isSelected = _currentIndex == index;
-    Color itemColor = inactiveColor;
-    FontWeight itemWeight = FontWeight.normal;
-    if (isSelected) {
-      itemColor = activeGold;
-      itemWeight = FontWeight.bold;
-    }
+    final Color itemColor = isSelected ? activeColor : inactiveColor;
+    final FontWeight itemWeight =
+        isSelected ? FontWeight.w800 : FontWeight.w600;
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
@@ -433,16 +438,16 @@ return Scaffold(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(
-            icon,
+            isSelected ? activeIcon : icon,
             color: itemColor,
-            size: 23,
+            size: 28,
           ),
           const SizedBox(height: 3),
           Text(
             label,
             style: TextStyle(
               color: itemColor,
-              fontSize: 11.5,
+              fontSize: 12.5,
               fontWeight: itemWeight,
             ),
           ),
