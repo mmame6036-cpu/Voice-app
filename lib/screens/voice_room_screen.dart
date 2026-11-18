@@ -83,11 +83,31 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
   final User? _currentUser = FirebaseAuth.instance.currentUser;
   final Random _random = Random();
   final AudioPlayer _audioPlayer = AudioPlayer();
+  final AudioPlayer _musicPlayer = AudioPlayer();
 
   final StreamController<FullscreenGiftEvent> _fullscreenAnimStreamController =
       StreamController.broadcast();
 
   bool _isMuted = true;
+  bool _isRoomVoiceOn = true;
+  bool _allMicsClosed = false;
+  String? _roomPassword;
+  List<String> _roomAdmins = [];
+  String _liveRoomTitle = "";
+  String _equippedFrame = "default";
+  final List<String> _seatFrames = List.filled(30, 'default');
+
+  Map<String, dynamic>? _pkData;
+  Timer? _pkTickerTimer;
+  int _pkSecondsLeft = 0;
+
+  Map<String, dynamic>? _musicData;
+  String _activeMusicKey = "";
+
+  Map<String, dynamic>? _activeRedPacket;
+  String? _activeRedPacketId;
+  bool _isClaimingPacket = false;
+
   int? _mySeatIndex;
   int _totalSeats = 30;
   late List<String?> _seats;
@@ -108,6 +128,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
   StreamSubscription? _roomLiveSubscription;
   StreamSubscription? _eventsSubscription;
   StreamSubscription? _chatSubscription;
+  StreamSubscription? _redPacketSubscription;
   Timer? _heartbeatTimer;
 
   final Set<String> _processedEventIds = {};
@@ -116,7 +137,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
 
   final List<CenterFlyingGift> _activeFlyingGifts = [];
 
-  bool _showComboButton = false;
+bool _showComboButton = false;
   int _comboCount = 0;
   Timer? _comboTimer;
   late AnimationController _comboRingController;
@@ -136,7 +157,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
   final TextEditingController _chatController = TextEditingController();
   final ScrollController _chatScrollController = ScrollController();
 
-int _currentRocketLevel = 1;
+  int _currentRocketLevel = 1;
   Timer? _rocketBannerTimer;
 
   String get _resolvedUid {
@@ -146,6 +167,14 @@ int _currentRocketLevel = 1;
     }
     return "guest_${widget.userNumericId}";
   }
+
+  bool get _isHostUser =>
+      widget.userName == widget.hostName || _mySeatIndex == 0;
+
+  bool get _isAdminUser =>
+      _isHostUser ||
+      _roomAdmins.contains(_resolvedUid) ||
+      _roomAdmins.contains(widget.userName);
 
   int _getColsForSeats(int count) {
     if (count <= 6) return 3;
@@ -164,6 +193,7 @@ int _currentRocketLevel = 1;
   @override
   void initState() {
     super.initState();
+    _liveRoomTitle = widget.roomTitle;
     _sessionStartMs = DateTime.now().millisecondsSinceEpoch;
     _seats = List.filled(30, null);
     _seatUids = List.filled(30, null);
@@ -214,9 +244,11 @@ int _currentRocketLevel = 1;
     });
 
     _startRocketBannerRotation();
+    _startPkCountdownTicker();
     _initWalletSync();
     _initPointsSync();
     _initRoomLiveSync();
+    _initRedPacketSync();
     _startSeatHeartbeat();
     _setupAgora();
     if (!_resumedFromMinimize) {
@@ -248,7 +280,7 @@ int _currentRocketLevel = 1;
     _entryMarqueeController.forward();
   }
 
-  void _showCompactWinBadge(int wonCoins) {
+void _showCompactWinBadge(int wonCoins) {
     if (wonCoins <= 0) return;
     if (!mounted) return;
     _luckyWinToastTimer?.cancel();
@@ -271,6 +303,53 @@ int _currentRocketLevel = 1;
     });
   }
 
+  void _startPkCountdownTicker() {
+    _pkTickerTimer?.cancel();
+    _pkTickerTimer = Timer.periodic(const Duration(seconds: 1), (_) async {
+      if (!mounted) return;
+      if (_pkData != null && _pkData!['active'] == true) {
+        final int endMs = (_pkData!['endTimeMs'] as num?)?.toInt() ?? 0;
+        final int diffSec =
+            ((endMs - DateTime.now().millisecondsSinceEpoch) / 1000).ceil();
+        if (diffSec <= 0) {
+          setState(() => _pkSecondsLeft = 0);
+          if (_isAdminUser) {
+            final int rScore = (_pkData!['redScore'] as num?)?.toInt() ?? 0;
+            final int bScore = (_pkData!['blueScore'] as num?)?.toInt() ?? 0;
+            String winMsg = "PK Ended in a Draw! 🤝";
+            if (rScore > bScore) {
+              winMsg =
+                  "🏆 ${_pkData!['redName'] ?? 'Red Team'} won the PK Battle ($rScore vs $bScore)!";
+            } else if (bScore > rScore) {
+              winMsg =
+                  "🏆 ${_pkData!['blueName'] ?? 'Blue Team'} won the PK Battle ($bScore vs $rScore)!";
+            }
+            await FirebaseFirestore.instance
+                .collection('rooms')
+                .doc(widget.roomId)
+                .set({
+              'pkBattle': {'active': false},
+            }, SetOptions(merge: true)).catchError((_) {});
+
+            await FirebaseFirestore.instance
+                .collection('rooms')
+                .doc(widget.roomId)
+                .collection('messages')
+                .add({
+              'sender': 'System',
+              'senderUid': _resolvedUid,
+              'message': winMsg,
+              'isSystem': true,
+              'ts': DateTime.now().millisecondsSinceEpoch,
+            }).catchError((_) {});
+          }
+        } else {
+          setState(() => _pkSecondsLeft = diffSec);
+        }
+      }
+    });
+  }
+
   void _initWalletSync() {
     _walletSubscription = FirebaseFirestore.instance
         .collection('users')
@@ -281,12 +360,17 @@ int _currentRocketLevel = 1;
         final data = snapshot.data()!;
         setState(() {
           _myCoins = (data['coins'] as num?)?.toInt() ?? 0;
+          final frame = (data['equippedFrame'] ?? 'default').toString();
+          _equippedFrame = frame;
+          if (_mySeatIndex != null) {
+            _seatFrames[_mySeatIndex!] = frame;
+          }
         });
       }
     });
   }
 
-void _initPointsSync() {
+  void _initPointsSync() {
     _pointsSubscription = FirebaseFirestore.instance
         .collection('users')
         .doc(_resolvedUid)
@@ -301,7 +385,142 @@ void _initPointsSync() {
     });
   }
 
-  void _startSeatHeartbeat() {
+  void _initRedPacketSync() {
+    _redPacketSubscription = FirebaseFirestore.instance
+        .collection('rooms')
+        .doc(widget.roomId)
+        .collection('red_packets')
+        .orderBy('createdAt', descending: true)
+        .limit(5)
+        .snapshots()
+        .listen((snap) {
+      if (!mounted) return;
+      Map<String, dynamic>? foundPacket;
+      String? foundId;
+
+for (final doc in snap.docs) {
+        final d = doc.data();
+        final int rem = (d['remainingCount'] as num?)?.toInt() ?? 0;
+        final List claimed = (d['claimedBy'] as List?) ?? [];
+        if (rem > 0 && !claimed.contains(_resolvedUid)) {
+          foundPacket = d;
+          foundId = doc.id;
+          break;
+        }
+      }
+
+      setState(() {
+        _activeRedPacket = foundPacket;
+        _activeRedPacketId = foundId;
+      });
+    });
+  }
+
+  Future<void> _claimRedPacket() async {
+    if (_isClaimingPacket || _activeRedPacketId == null) return;
+    _isClaimingPacket = true;
+
+    final packetRef = FirebaseFirestore.instance
+        .collection('rooms')
+        .doc(widget.roomId)
+        .collection('red_packets')
+        .doc(_activeRedPacketId!);
+
+    int wonAmount = 0;
+    String senderName = "User";
+
+    try {
+      await FirebaseFirestore.instance.runTransaction((tx) async {
+        final snap = await tx.get(packetRef);
+        if (!snap.exists || snap.data() == null) return;
+        final data = snap.data()!;
+        final int remCount = (data['remainingCount'] as num?)?.toInt() ?? 0;
+        final int remCoins = (data['remainingCoins'] as num?)?.toInt() ?? 0;
+        final List claimed = List.from((data['claimedBy'] as List?) ?? []);
+        senderName = (data['senderName'] ?? 'User').toString();
+
+        if (remCount <= 0  remCoins <= 0  claimed.contains(_resolvedUid)) {
+          return;
+        }
+
+        if (remCount == 1) {
+          wonAmount = remCoins;
+        } else {
+          final int maxGrab = max(1, ((remCoins / remCount) * 2).floor());
+          wonAmount = min(remCoins - (remCount - 1), _random.nextInt(maxGrab) + 1);
+        }
+
+        claimed.add(_resolvedUid);
+        tx.update(packetRef, {
+          'remainingCount': remCount - 1,
+          'remainingCoins': remCoins - wonAmount,
+          'claimedBy': claimed,
+        });
+      });
+
+      if (wonAmount > 0) {
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(_resolvedUid)
+            .set({
+          'coins': FieldValue.increment(wonAmount),
+        }, SetOptions(merge: true));
+
+        _playCoinSound();
+        _showCompactWinBadge(wonAmount);
+
+        await FirebaseFirestore.instance
+            .collection('rooms')
+            .doc(widget.roomId)
+            .collection('messages')
+            .add({
+          'sender': 'System',
+          'senderUid': _resolvedUid,
+          'message':
+              "🧧 ${widget.userName} grabbed $wonAmount coins from $senderName's Red Packet!",
+          'isSystem': true,
+          'ts': DateTime.now().millisecondsSinceEpoch,
+        });
+      }
+    } catch (_) {}
+
+    _isClaimingPacket = false;
+  }
+
+  Future<void> _syncMusicPlayback(Map<String, dynamic>? music) async {
+    if (music == null || music['isPlaying'] != true) {
+      if (_activeMusicKey.isNotEmpty) {
+        _activeMusicKey = "";
+        try {
+          await _musicPlayer.stop();
+        } catch (_) {}
+      }
+      return;
+    }
+
+    final String title = (music['trackTitle'] ?? '').toString();
+    final String asset = (music['trackAsset'] ?? '').toString();
+    final String url = (music['trackUrl'] ?? '').toString();
+    final double vol =
+        _isRoomVoiceOn ? ((music['volume'] as num?)?.toDouble() ?? 0.6).clamp(0.0, 1.0) : 0.0;
+    final String key = "$title|$asset|$url";
+
+    try {
+      await _musicPlayer.setVolume(vol);
+      if (_activeMusicKey != key) {
+        _activeMusicKey = key;
+        await _musicPlayer.stop();
+        await _musicPlayer.setReleaseMode(ReleaseMode.loop);
+        if (asset.isNotEmpty) {
+          await _musicPlayer.play(AssetSource(asset));
+        } else if (url.isNotEmpty) {
+          await _musicPlayer.play(UrlSource(url));
+        }
+      }
+    } catch (_) {}
+  }
+
+void _startSeatHeartbeat() {
     _heartbeatTimer?.cancel();
     _heartbeatTimer = Timer.periodic(const Duration(seconds: 10), (_) {
       if (_hasCleanedUp) return;
@@ -319,6 +538,7 @@ void _initPointsSync() {
               'name': widget.userName,
               'numericId': _myAgoraUid > 0 ? _myAgoraUid : widget.userNumericId,
               'isMuted': _isMuted,
+              'frame': _equippedFrame,
               'updatedAt': DateTime.now().millisecondsSinceEpoch,
             }
           }
@@ -331,7 +551,7 @@ void _initPointsSync() {
     final roomRef =
         FirebaseFirestore.instance.collection('rooms').doc(widget.roomId);
 
-    _roomLiveSubscription = roomRef.snapshots().listen((snapshot) {
+    _roomLiveSubscription = roomRef.snapshots().listen((snapshot) async {
       if (!mounted) return;
       if (_hasCleanedUp) return;
       final nowMs = DateTime.now().millisecondsSinceEpoch;
@@ -340,6 +560,35 @@ void _initPointsSync() {
 
       if (snapshot.exists && snapshot.data() != null) {
         final data = snapshot.data()!;
+
+        final List<String> kicked =
+            (data['kickedUsers'] as List?)?.map((e) => e.toString()).toList() ?? [];
+        if (kicked.contains(_resolvedUid) && !_isHostUser) {
+          _cleanupAndLeave();
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text("You were removed from this room.")),
+            );
+            Navigator.of(context).pop();
+          }
+          return;
+        }
+
+        final String updatedTitle =
+            (data['roomTitle'] ?? data['title'] ?? '').toString();
+        final bool allClosed = data['allMicsClosed'] == true;
+        final String? pass = data['password']?.toString();
+        final List<String> admins =
+            (data['admins'] as List?)?.map((e) => e.toString()).toList() ?? [];
+        final Map<String, dynamic>? pk = data['pkBattle'] is Map
+            ? Map<String, dynamic>.from(data['pkBattle'])
+            : null;
+        final Map<String, dynamic>? music = data['musicState'] is Map
+            ? Map<String, dynamic>.from(data['musicState'])
+            : null;
+
+        await _syncMusicPlayback(music);
+
         if (data['activeSeats'] is Map) {
           final raw = data['activeSeats'] as Map;
           raw.forEach((key, value) {
@@ -354,45 +603,69 @@ void _initPointsSync() {
             }
           });
         }
-      }
 
-      if (staleCleanup.isNotEmpty) {
-        roomRef
-            .set({'activeSeats': staleCleanup}, SetOptions(merge: true))
-            .catchError((_) {});
-      }
+        if (staleCleanup.isNotEmpty) {
+          roomRef
+              .set({'activeSeats': staleCleanup}, SetOptions(merge: true))
+              .catchError((_) {});
+        }
 
-      setState(() {
-        int? foundMySeat;
-        for (int i = 0; i < 30; i++) {
-          final entry = activeMap['$i'];
-          if (entry is Map) {
-            final uid = (entry['uid'] ?? '').toString();
-            final name = (entry['name'] ?? 'User').toString();
-            final muted = entry['isMuted'] == true;
-            final numId = (entry['numericId'] as num?)?.toInt() ?? 0;
-            _seats[i] = name;
-            _seatUids[i] = uid;
-            _seatNumericIds[i] = numId;
-            _seatMutes[i] = muted;
-            if (uid == _resolvedUid) {
-              foundMySeat = i;
-            }
-          } else {
-            if (_mySeatIndex == i && _seatUids[i] == _resolvedUid) {
-              foundMySeat = i;
+        if (!mounted) return;
+        setState(() {
+          if (updatedTitle.isNotEmpty) {
+            _liveRoomTitle = updatedTitle;
+          }
+          _allMicsClosed = allClosed;
+          _roomPassword = (pass != null && pass.isNotEmpty) ? pass : null;
+          _roomAdmins = admins;
+          _pkData = pk;
+          _musicData = music;
+
+          int? foundMySeat;
+          for (int i = 0; i < 30; i++) {
+            final entry = activeMap['$i'];
+            if (entry is Map) {
+              final uid = (entry['uid'] ?? '').toString();
+
+final name = (entry['name'] ?? 'User').toString();
+              final muted = entry['isMuted'] == true;
+              final numId = (entry['numericId'] as num?)?.toInt() ?? 0;
+              final frame = (entry['frame'] ?? 'default').toString();
+              _seats[i] = name;
+              _seatUids[i] = uid;
+              _seatNumericIds[i] = numId;
+              _seatMutes[i] = muted;
+              _seatFrames[i] = frame;
+              if (uid == _resolvedUid) {
+                foundMySeat = i;
+              }
             } else {
-              _seats[i] = null;
-              _seatUids[i] = null;
-              _seatNumericIds[i] = 0;
-              _seatGifts[i] = 0;
-              _seatMutes[i] = false;
-              _speakingSeatIndices.remove(i);
+              if (_mySeatIndex == i && _seatUids[i] == _resolvedUid) {
+                foundMySeat = i;
+              } else {
+                _seats[i] = null;
+                _seatUids[i] = null;
+                _seatNumericIds[i] = 0;
+                _seatGifts[i] = 0;
+                _seatMutes[i] = false;
+                _seatFrames[i] = 'default';
+                _speakingSeatIndices.remove(i);
+              }
             }
           }
-        }
-        _mySeatIndex = foundMySeat;
-      });
+          _mySeatIndex = foundMySeat;
+
+          if (_allMicsClosed &&
+              !_isAdminUser &&
+              _mySeatIndex != null &&
+              !_isMuted) {
+            _isMuted = true;
+            _seatMutes[_mySeatIndex!] = true;
+            _speakingSeatIndices.remove(_mySeatIndex!);
+            _agoraService.setMicrophoneMute(true);
+          }
+        });
+      }
     });
 
     _chatSubscription = roomRef
@@ -404,13 +677,12 @@ void _initPointsSync() {
       if (!mounted) return;
       for (final doc in snap.docs) {
         if (_processedChatIds.contains(doc.id)) continue;
-
-_processedChatIds.add(doc.id);
+        _processedChatIds.add(doc.id);
         final d = doc.data();
         final int ts = (d['ts'] as num?)?.toInt() ?? 0;
         if (ts < _sessionStartMs - 5000) continue;
         final senderUid = (d['senderUid'] ?? '').toString();
-        if (senderUid == _resolvedUid) continue;
+        if (senderUid == _resolvedUid && d['isSystem'] != true) continue;
 
         _addChatMessage(RoomChatMessage(
           id: doc.id,
@@ -464,7 +736,8 @@ _processedChatIds.add(doc.id);
         }
 
         setState(() {
-          for (final s in seats) {
+
+for (final s in seats) {
             final idx = (s as num).toInt();
             if (idx >= 0 && idx < 30 && _seats[idx] != null) {
               _seatGifts[idx] += perSeatCost;
@@ -526,8 +799,7 @@ _processedChatIds.add(doc.id);
       await Permission.microphone.request();
 
       await _agoraService.initEngine(
-
-onUserJoined: (uid) {
+        onUserJoined: (uid) {
           if (mounted) setState(() {});
         },
         onUserOffline: (uid) {
@@ -586,7 +858,7 @@ onUserJoined: (uid) {
     _isMinimizing = true;
 
     final String rId = widget.roomId;
-    final String rTitle = widget.roomTitle;
+    final String rTitle = _liveRoomTitle;
     final String hName = widget.hostName;
     final int uNumId = widget.userNumericId;
     final String uUid = widget.userUid;
@@ -597,7 +869,7 @@ onUserJoined: (uid) {
     final List<String?> seatUidsSnapshot = List<String?>.from(_seatUids);
     final int? currentSeatSnapshot = _mySeatIndex;
 
-    RoomSessionManager.instance.registerActiveRoom(
+RoomSessionManager.instance.registerActiveRoom(
       id: rId,
       title: rTitle,
       muted: _isMuted,
@@ -646,8 +918,7 @@ onUserJoined: (uid) {
         final int? seatIdx = RoomSessionManager.instance.seatedIndex;
         if (seatIdx != null) {
           FirebaseFirestore.instance.collection('rooms').doc(rId).set({
-
-'activeSeats': {
+            'activeSeats': {
               '$seatIdx': {
                 'uid': resolvedU,
                 'name': uName,
@@ -727,7 +998,8 @@ onUserJoined: (uid) {
         FirebaseFirestore.instance.collection('rooms').doc(widget.roomId);
 
     if (_mySeatIndex == index) {
-      setState(() {
+
+setState(() {
         _seats[index] = null;
         _seatUids[index] = null;
         _seatNumericIds[index] = 0;
@@ -766,6 +1038,7 @@ onUserJoined: (uid) {
     final int? oldIndex = _mySeatIndex;
     final int activeNumId =
         _myAgoraUid > 0 ? _myAgoraUid : widget.userNumericId;
+    final bool shouldMuteOnJoin = _allMicsClosed && !_isAdminUser;
 
     setState(() {
       if (oldIndex != null && oldIndex != index) {
@@ -780,17 +1053,19 @@ onUserJoined: (uid) {
       _seats[index] = widget.userName;
       _seatUids[index] = _resolvedUid;
       _seatNumericIds[index] = activeNumId;
+      _seatFrames[index] = _equippedFrame;
       _mySeatIndex = index;
-      _isMuted = false;
-      _seatMutes[index] = false;
+      _isMuted = shouldMuteOnJoin;
+      _seatMutes[index] = shouldMuteOnJoin;
     });
 
-final Map<String, dynamic> seatUpdates = {
+    final Map<String, dynamic> seatUpdates = {
       '$index': {
         'uid': _resolvedUid,
         'name': widget.userName,
         'numericId': activeNumId,
-        'isMuted': false,
+        'isMuted': shouldMuteOnJoin,
+        'frame': _equippedFrame,
         'updatedAt': DateTime.now().millisecondsSinceEpoch,
       }
     };
@@ -803,10 +1078,17 @@ final Map<String, dynamic> seatUpdates = {
         .catchError((_) {});
 
     await _agoraService.switchRole(isSpeaker: true);
-    await _agoraService.setMicrophoneMute(false);
+    await _agoraService.setMicrophoneMute(shouldMuteOnJoin);
   }
 
   void _toggleMute() async {
+    if (_allMicsClosed && !_isAdminUser && _isMuted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("All mics are closed by the Host")),
+      );
+      return;
+    }
+
     setState(() {
       _isMuted = !_isMuted;
       if (_mySeatIndex != null) {
@@ -827,6 +1109,7 @@ final Map<String, dynamic> seatUpdates = {
             'name': widget.userName,
             'numericId': _myAgoraUid > 0 ? _myAgoraUid : widget.userNumericId,
             'isMuted': _isMuted,
+            'frame': _equippedFrame,
             'updatedAt': DateTime.now().millisecondsSinceEpoch,
           }
         }
@@ -834,6 +1117,42 @@ final Map<String, dynamic> seatUpdates = {
     }
 
     await _agoraService.setMicrophoneMute(_isMuted);
+  }
+
+  Future<void> _toggleRoomIncomingVoice() async {
+    final nextState = !_isRoomVoiceOn;
+    setState(() {
+      _isRoomVoiceOn = nextState;
+    });
+
+    try {
+      await (_agoraService as dynamic).muteAllRemoteAudioStreams(!nextState);
+    } catch (_) {
+      try {
+        await (_agoraService as dynamic)
+            .engine
+            ?.muteAllRemoteAudioStreams(!nextState);
+      } catch (_) {}
+    }
+
+try {
+      final double targetVol = nextState
+          ? (((_musicData?['volume'] as num?)?.toDouble() ?? 0.6).clamp(0.0, 1.0))
+          : 0.0;
+      await _musicPlayer.setVolume(targetVol);
+    } catch (_) {}
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            nextState
+                ? "Room Audio Restored (Voice On) 🔊"
+                : "Room Audio Muted (Voice Off) 🔇",
+          ),
+        ),
+      );
+    }
   }
 
   void _changeSeatCount(int newCount) {
@@ -896,6 +1215,36 @@ final Map<String, dynamic> seatUpdates = {
     return 0;
   }
 
+  void _addPkPointsForSeats(List<int> targetSeats, bool isAll, int costPerSeat) {
+    if (_pkData == null || _pkData!['active'] != true) return;
+    int redAdd = 0;
+    int blueAdd = 0;
+
+    final List<int> seatsToScore = isAll
+        ? [
+            for (int i = 0; i < _totalSeats; i++)
+              if (_seats[i] != null) i
+          ]
+        : targetSeats;
+
+    for (final idx in seatsToScore) {
+      if (idx % 2 == 0) {
+        redAdd += costPerSeat;
+      } else {
+        blueAdd += costPerSeat;
+      }
+    }
+
+    if (redAdd > 0 || blueAdd > 0) {
+      FirebaseFirestore.instance.collection('rooms').doc(widget.roomId).set({
+        'pkBattle': {
+          if (redAdd > 0) 'redScore': FieldValue.increment(redAdd),
+          if (blueAdd > 0) 'blueScore': FieldValue.increment(blueAdd),
+        }
+      }, SetOptions(merge: true)).catchError((_) {});
+    }
+  }
+
   void _onComboTapped() {
     if (_lastSentGiftConfig == null) return;
 
@@ -923,9 +1272,10 @@ final Map<String, dynamic> seatUpdates = {
 
     int wonCoins = 0;
 
-if (isLucky) {
+    if (isLucky) {
       for (int i = 0; i < max(1, seatCount); i++) {
-        wonCoins += _rollLuckyWin(unitPrice);
+
+wonCoins += _rollLuckyWin(unitPrice);
       }
       final bool playSoundNow =
           (wonCoins > 0) ? true : (nextCombo % 5 == 0);
@@ -1075,6 +1425,8 @@ void _executeMultiSeatSend({
   }) {
     if (targetSeats.isEmpty && !isAll) return;
 
+    _addPkPointsForSeats(targetSeats, isAll, cost);
+
     final bool isFifthMilestone =
         isLucky && fromCombo && (_comboCount % 5 == 0);
     final int burstCount = isFifthMilestone ? 3 : 1;
@@ -1152,16 +1504,19 @@ void _executeMultiSeatSend({
       _cleanupAndLeave();
     }
     _rocketBannerTimer?.cancel();
+    _pkTickerTimer?.cancel();
     _luckyWinToastTimer?.cancel();
     _walletSubscription?.cancel();
     _pointsSubscription?.cancel();
     _roomLiveSubscription?.cancel();
     _eventsSubscription?.cancel();
     _chatSubscription?.cancel();
+    _redPacketSubscription?.cancel();
     _comboRingController.dispose();
     _entryMarqueeController.dispose();
     _comboTimer?.cancel();
     _audioPlayer.dispose();
+    _musicPlayer.dispose();
     _fullscreenAnimStreamController.close();
     for (var g in _activeFlyingGifts) {
       g.controller.dispose();
@@ -1169,6 +1524,16 @@ void _executeMultiSeatSend({
     _chatController.dispose();
     _chatScrollController.dispose();
     super.dispose();
+  }
+
+  Color _getSeatFrameColor(int index, bool isOccupied, bool isSpeaking) {
+    if (isSpeaking) return const Color(0xFF00B8D4);
+    if (!isOccupied) return kGoldBorder;
+    final frame = _seatFrames[index];
+    if (frame == 'cyber_neon') return const Color(0xFF00E5FF);
+    if (frame == 'emerald_vip') return const Color(0xFF00E676);
+    if (frame == 'royal_fire') return const Color(0xFFFFAB00);
+    return kGoldBright;
   }
 
   Widget _buildSingleSeat({
@@ -1179,11 +1544,14 @@ void _executeMultiSeatSend({
   }) {
     final occupier = _seats[index];
     final isOccupied = occupier != null;
-    final isSpeaking = _speakingSeatIndices.contains(index);
+
+final isSpeaking = _speakingSeatIndices.contains(index);
     final isMuted = _seatMutes[index];
     final giftsCount = _seatGifts[index];
     final bool isHostSeat = index == 0;
     final bool isCrownSeat = index >= 1 && index <= 6;
+    final Color frameColor = _getSeatFrameColor(index, isOccupied, isSpeaking);
+    final bool hasCustomFrame = isOccupied && _seatFrames[index] != 'default';
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
@@ -1195,8 +1563,7 @@ void _executeMultiSeatSend({
           Stack(
             clipBehavior: Clip.none,
             alignment: Alignment.center,
-
-children: [
+            children: [
               if (isHostSeat && isOccupied)
                 Positioned(
                   top: -seatDimension * 0.32,
@@ -1226,15 +1593,15 @@ children: [
                     end: Alignment.bottomRight,
                   ),
                   border: Border.all(
-                    color: isSpeaking
-                        ? const Color(0xFF00B8D4)
-                        : (isOccupied ? kGoldBright : kGoldBorder),
-                    width: isSpeaking ? 2.6 : (isOccupied ? 2.0 : 1.3),
+                    color: frameColor,
+                    width: isSpeaking
+                        ? 2.6
+                        : (hasCustomFrame ? 2.5 : (isOccupied ? 2.0 : 1.3)),
                   ),
                   boxShadow: [
-                    if (isSpeaking)
+                    if (isSpeaking || hasCustomFrame)
                       BoxShadow(
-                        color: const Color(0xFF00B8D4).withOpacity(0.55),
+                        color: frameColor.withOpacity(0.55),
                         blurRadius: 10,
                         spreadRadius: 2,
                       )
@@ -1248,8 +1615,10 @@ children: [
                 ),
                 child: Center(
                   child: Icon(
-                    isOccupied ? Icons.person : Icons.chair_rounded,
-                    color: isOccupied ? kGoldBright : kGoldBorder,
+                    isOccupied
+                        ? Icons.person
+                        : (_allMicsClosed ? Icons.lock_outline : Icons.chair_rounded),
+                    color: isOccupied ? frameColor : kGoldBorder,
                     size: seatDimension * 0.46,
                   ),
                 ),
@@ -1269,7 +1638,8 @@ children: [
                     child: Icon(
                       isMuted ? Icons.mic_off : Icons.mic,
                       size: (seatDimension * 0.22).clamp(9.0, 15.0),
-                      color: Colors.white,
+
+color: Colors.white,
                     ),
                   ),
                 ),
@@ -1293,8 +1663,7 @@ children: [
             margin: const EdgeInsets.only(top: 1.0),
             padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
             decoration: BoxDecoration(
-
-color:
+              color:
                   (giftsCount > 0 && isOccupied) ? kGoldBlackBottom : kShiroCard,
               borderRadius: BorderRadius.circular(8),
               border: Border.all(color: kGoldBorder, width: 0.8),
@@ -1323,6 +1692,143 @@ color:
         ],
       ),
     );
+  }
+
+  Widget _buildPkScoreboard() {
+    if (_pkData == null || _pkData!['active'] != true) {
+      return const SizedBox.shrink();
+    }
+    final int rScore = (_pkData!['redScore'] as num?)?.toInt() ?? 0;
+    final int bScore = (_pkData!['blueScore'] as num?)?.toInt() ?? 0;
+    final int total = rScore + bScore;
+    final double redRatio = total == 0 ? 0.5 : (rScore / total).clamp(0.15, 0.85);
+    final int mins = _pkSecondsLeft ~/ 60;
+    final int secs = _pkSecondsLeft % 60;
+    final String timeStr =
+        "${mins.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}";
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: kGoldBlackBottom,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: kGoldBright, width: 1.2),
+      ),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                "${_pkData!['redName'] ?? 'Red'}: $rScore",
+                style: const TextStyle(
+                    color: Colors.redAccent,
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: kGoldBright,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  "PK $timeStr",
+                  style: const TextStyle(
+                      color: Colors.black,
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w900),
+                ),
+              ),
+              Text(
+                "$bScore :${_pkData!['blueName'] ?? 'Blue'}",
+                style: const TextStyle(
+
+color: Color(0xFF448AFF),
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          const SizedBox(height: 5),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: SizedBox(
+              height: 8,
+              child: Row(
+                children: [
+                  Expanded(
+                    flex: (redRatio * 100).round(),
+                    child: Container(color: Colors.redAccent),
+                  ),
+                  Expanded(
+                    flex: ((1.0 - redRatio) * 100).round(),
+                    child: Container(color: const Color(0xFF2979FF)),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMusicMiniBar() {
+    if (_musicData == null || _musicData!['isPlaying'] != true) {
+      return const SizedBox.shrink();
+    }
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      decoration: BoxDecoration(
+        color: kGoldBlackTop,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFFF4081), width: 1),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.music_note, color: Color(0xFFFF4081), size: 16),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              "Playing: ${_musicData!['trackTitle'] ?? 'Room Music'}",
+              style: const TextStyle(
+                  color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          if (_isAdminUser)
+            GestureDetector(
+              onTap: () async {
+                await FirebaseFirestore.instance
+                    .collection('rooms')
+                    .doc(widget.roomId)
+                    .set({
+                  'musicState': {'isPlaying': false}
+                }, SetOptions(merge: true));
+              },
+              child: const Icon(Icons.stop_circle,
+                  color: Colors.redAccent, size: 18),
+            ),
+        ],
+      ),
+    );
+  }
+
+  List> _buildSeatedUsersList() {
+    final List> list = [];
+    for (int i = 0; i < _totalSeats; i++) {
+      if (_seats[i] != null) {
+        list.add({
+          'seatIndex': i,
+          'uid': _seatUids[i] ?? '',
+          'name': _seats[i]!,
+        });
+      }
+    }
+    return list;
   }
 
   @override
@@ -1360,13 +1866,25 @@ color:
           title: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                widget.roomTitle,
-                style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.bold,
-                  color: kBlackText,
-                ),
+
+Row(
+                children: [
+                  Flexible(
+                    child: Text(
+                      _liveRoomTitle,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        color: kBlackText,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  if (_roomPassword != null) ...[
+                    const SizedBox(width: 4),
+                    const Icon(Icons.lock, color: kGoldBorder, size: 14),
+                  ],
+                ],
               ),
               Text(
                 "$audioStatus • ID: ${widget.roomId}",
@@ -1404,8 +1922,7 @@ color:
                   ),
                 ],
               ),
-
-),
+            ),
             const SizedBox(width: 4),
             PopupMenuButton(
               icon: Container(
@@ -1450,14 +1967,33 @@ color:
             IconButton(
               icon: const Icon(Icons.grid_view_rounded, color: kBlackText),
               onPressed: () {
-                RoomToolsSheet.show(
+
+RoomToolsSheet.show(
                   context,
                   roomId: widget.roomId,
-                  roomTitle: widget.roomTitle,
+                  roomTitle: _liveRoomTitle,
                   userName: widget.userName,
-                  isHost: true,
-                  isVoiceOn: !_isMuted,
-                  onToggleVoice: _toggleMute,
+                  userUid: _resolvedUid,
+                  userCoins: _myCoins,
+                  isHost: _isHostUser,
+                  isAdmin: _isAdminUser,
+                  isVoiceOn: _isRoomVoiceOn,
+                  onToggleVoice: _toggleRoomIncomingVoice,
+                  isAllMicClosed: _allMicsClosed,
+                  currentPassword: _roomPassword,
+                  admins: _roomAdmins,
+                  seatedUsers: _buildSeatedUsersList(),
+                  pkData: _pkData,
+                  musicData: _musicData,
+                  equippedFrame: _equippedFrame,
+                  onFrameChanged: (newFrame) {
+                    setState(() {
+                      _equippedFrame = newFrame;
+                      if (_mySeatIndex != null) {
+                        _seatFrames[_mySeatIndex!] = newFrame;
+                      }
+                    });
+                  },
                 );
               },
             ),
@@ -1476,6 +2012,8 @@ color:
             children: [
               Column(
                 children: [
+                  _buildPkScoreboard(),
+                  _buildMusicMiniBar(),
                   Expanded(
                     flex: 6,
                     child: LayoutBuilder(
@@ -1501,8 +2039,7 @@ color:
 
                         return Padding(
                           padding: const EdgeInsets.symmetric(
-
-horizontal: 6.0, vertical: 2.0),
+                              horizontal: 6.0, vertical: 2.0),
                           child: Column(
                             children: List.generate(rowCount, (r) {
                               return Expanded(
@@ -1518,7 +2055,8 @@ horizontal: 6.0, vertical: 2.0),
                                         child: _buildSingleSeat(
                                           index: seatIdx,
                                           seatDimension: seatDimension,
-                                          nameFontSize: nameFontSize,
+
+nameFontSize: nameFontSize,
                                           badgeFontSize: badgeFontSize,
                                         ),
                                       ),
@@ -1532,7 +2070,6 @@ horizontal: 6.0, vertical: 2.0),
                       },
                     ),
                   ),
-
                   Container(
                     padding:
                         const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
@@ -1589,8 +2126,7 @@ horizontal: 6.0, vertical: 2.0),
                       ),
                     ),
                   ),
-
-Expanded(
+                  Expanded(
                     flex: 3,
                     child: Container(
                       width: double.infinity,
@@ -1605,7 +2141,8 @@ Expanded(
                           final item = _messages[index];
                           return Align(
                             alignment: Alignment.centerLeft,
-                            child: Container(
+
+child: Container(
                               margin: const EdgeInsets.symmetric(vertical: 2.5),
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 10.0, vertical: 5.0),
@@ -1657,7 +2194,6 @@ Expanded(
                       ),
                     ),
                   ),
-
                   Container(
                     padding:
                         const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -1668,8 +2204,7 @@ Expanded(
                       ),
                       borderRadius:
                           BorderRadius.vertical(top: Radius.circular(20)),
-
-),
+                    ),
                     child: Row(
                       children: [
                         Container(
@@ -1685,7 +2220,8 @@ Expanded(
                               color: _mySeatIndex != null
                                   ? (_isMuted ? Colors.redAccent : kGoldBright)
                                   : kSubBlack,
-                              size: 24,
+
+size: 24,
                             ),
                             onPressed: _mySeatIndex != null ? _toggleMute : null,
                           ),
@@ -1747,15 +2283,68 @@ Expanded(
                   ),
                 ],
               ),
+              if (_activeRedPacket != null)
+                Positioned(
+                  top: 56,
+                  right: 14,
+                  child: GestureDetector(
+                    onTap: _claimRedPacket,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFFD32F2F), Color(0xFF7B1FA2)],
+                        ),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: kGoldBright, width: 1.6),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.redAccent.withOpacity(0.5),
+                            blurRadius: 10,
+                          ),
 
+],
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Text("🧧", style: TextStyle(fontSize: 26)),
+                          Text(
+                            "${_activeRedPacket!['senderName'] ?? 'VIP'}",
+                            style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold),
+                          ),
+                          Container(
+                            margin: const EdgeInsets.only(top: 3),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: kGoldBright,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Text(
+                              "GRAB",
+                              style: TextStyle(
+                                  color: Colors.black,
+                                  fontSize: 9.5,
+                                  fontWeight: FontWeight.w900),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
               if (_luckyWinToast != null)
                 Positioned(
                   top: 12,
                   left: 0,
                   right: 0,
                   child: Center(
-
-child: Container(
+                    child: Container(
                       padding: const EdgeInsets.symmetric(
                           horizontal: 14, vertical: 5),
                       decoration: BoxDecoration(
@@ -1774,7 +2363,6 @@ child: Container(
                     ),
                   ),
                 ),
-
               if (_entryBannerText != null)
                 Positioned(
                   bottom: 75,
@@ -1805,14 +2393,13 @@ child: Container(
                     ),
                   ),
                 ),
-
               ..._activeFlyingGifts.map((gift) {
                 return AnimatedBuilder(
                   animation: gift.controller,
                   builder: (context, child) {
                     final t = gift.flightAnimation.value;
 
-                    final centerX = size.width * 0.5;
+final centerX = size.width * 0.5;
                     final centerY = size.height * 0.42;
 
                     final col = gift.targetSeatIndex % crossAxis;
@@ -1844,8 +2431,7 @@ child: Container(
                                   height: 68,
                                   fit: BoxFit.contain,
                                   errorBuilder: (c, e, s) => Text(
-
-gift.icon,
+                                    gift.icon,
                                     style: const TextStyle(fontSize: 44),
                                   ),
                                 )
@@ -1859,11 +2445,9 @@ gift.icon,
                   },
                 );
               }),
-
               FullscreenGiftAnimator(
                 giftStream: _fullscreenAnimStreamController.stream,
               ),
-
               if (_showComboButton)
                 Positioned(
                   bottom: 65,
@@ -1900,7 +2484,8 @@ gift.icon,
                                     ? [
                                         const Color(0xFFB71C1C),
                                         const Color(0xFF4A0E0E)
-                                      ]
+
+]
                                     : [kGoldBlackTop, kGoldBlackBottom],
                                 begin: Alignment.topLeft,
                                 end: Alignment.bottomRight,
@@ -1931,8 +2516,7 @@ gift.icon,
                                 Text(
                                   "x$_comboCount",
                                   style: const TextStyle(
-
-color: Colors.white,
+                                    color: Colors.white,
                                     fontWeight: FontWeight.w900,
                                     fontSize: 13,
                                   ),
