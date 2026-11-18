@@ -17,7 +17,7 @@ class RoomToolsSheet extends StatelessWidget {
   final bool isAllMicClosed;
   final String? currentPassword;
   final List<String> admins;
-  final List> seatedUsers;
+  final List seatedUsers;
   final Map<String, dynamic>? pkData;
   final Map<String, dynamic>? musicData;
   final String equippedFrame;
@@ -58,7 +58,7 @@ class RoomToolsSheet extends StatelessWidget {
     bool isAllMicClosed = false,
     String? currentPassword,
     List<String> admins = const [],
-    List> seatedUsers = const [],
+    List seatedUsers = const [],
     Map<String, dynamic>? pkData,
     Map<String, dynamic>? musicData,
     String equippedFrame = 'default',
@@ -726,7 +726,7 @@ Center(
       text: (musicData?['trackUrl'] ?? '').toString(),
     );
 
-final List> tracks = [
+final List tracks = [
       {
         'title': '🎉 VIP Party Celebration Beat',
         'asset': 'sounds/Five_win.mp3',
@@ -952,7 +952,7 @@ child: ListTile(
 
   void _showBackpackSheet(BuildContext context) {
     String selectedFrame = equippedFrame;
-    final List> frames = [
+    final List frames = [
       {
         'id': 'default',
         'name': 'Classic Gold Ring',
