@@ -2171,54 +2171,59 @@ if (!isOccupied) return kGoldBorder;
   }
 
   Widget _buildSpeakingRippleRings(double seatDimension) {
-    return AnimatedBuilder(
-      animation: _speakingWaveController,
-      builder: (context, child) {
-        final double w1 = _speakingWaveController.value;
-        final double w2 = (_speakingWaveController.value + 0.5) % 1.0;
+    final double maxRingSize = seatDimension * 1.26;
+    final double offset = -(maxRingSize - seatDimension) / 2;
 
-        final double size1 = seatDimension * (1.0 + (0.48 * w1));
-        final double size2 = seatDimension * (1.0 + (0.48 * w2));
-        final double op1 = (0.8 * (1.0 - w1)).clamp(0.0, 1.0);
-        final double op2 = (0.8 * (1.0 - w2)).clamp(0.0, 1.0);
+    return Positioned(
+      left: offset,
+      top: offset,
+      width: maxRingSize,
+      height: maxRingSize,
+      child: IgnorePointer(
+        child: AnimatedBuilder(
+          animation: _speakingWaveController,
+          builder: (context, child) {
+            final double w1 = _speakingWaveController.value;
+            final double w2 = (_speakingWaveController.value + 0.5) % 1.0;
 
-        return SizedBox(
-          width: seatDimension * 1.5,
-          height: seatDimension * 1.5,
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              Container(
-                width: size1,
-                height: size1,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: kGoldBright.withOpacity(op1),
-                    width: 2.0,
+            final double size1 = seatDimension * (1.0 + (0.25 * w1));
+            final double size2 = seatDimension * (1.0 + (0.25 * w2));
+            final double op1 = (0.85 * (1.0 - w1)).clamp(0.0, 1.0);
+            final double op2 = (0.85 * (1.0 - w2)).clamp(0.0, 1.0);
+
+            return Stack(
+              alignment: Alignment.center,
+              children: [
+                Container(
+                  width: size1,
+                  height: size1,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: kGoldBright.withOpacity(op1),
+                      width: 1.6,
+                    ),
                   ),
-                  color: kGoldBright.withOpacity(op1 * 0.16),
                 ),
-              ),
-              Container(
-                width: size2,
-                height: size2,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: kGoldBright.withOpacity(op2),
-                    width: 1.8,
+                Container(
+                  width: size2,
+                  height: size2,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: kGoldBright.withOpacity(op2),
+                      width: 1.4,
+                    ),
                   ),
-                  color: kGoldBright.withOpacity(op2 * 0.12),
                 ),
-              ),
-            ],
-          ),
-        );
-      },
+              ],
+            );
+          },
+        ),
+      ),
     );
   }
-
+            
   Widget _buildSingleSeat({
     required int index,
     required double seatDimension,
