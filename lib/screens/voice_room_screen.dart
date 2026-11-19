@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -141,6 +142,7 @@ bool _showComboButton = false;
   int _comboCount = 0;
   Timer? _comboTimer;
   late AnimationController _comboRingController;
+  late AnimationController _speakingWaveController;
   Map? _lastSentGiftConfig;
 
   String? _luckyWinToast;
@@ -227,6 +229,11 @@ bool _showComboButton = false;
 
     _agoraService.addListener(_onAgoraChanged);
 
+    _speakingWaveController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1600),
+    )..repeat();
+
     _comboRingController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 3),
@@ -278,7 +285,7 @@ bool _showComboButton = false;
     }).catchError((_) {});
   }
 
-  void _triggerEntryNotice(String name) {
+void _triggerEntryNotice(String name) {
     if (!mounted) return;
     setState(() {
       _entryBannerText = "🎉 $name joined the party room!";
@@ -287,7 +294,7 @@ bool _showComboButton = false;
     _entryMarqueeController.forward();
   }
 
-void _showCompactWinBadge(int wonCoins) {
+  void _showCompactWinBadge(int wonCoins) {
     if (wonCoins <= 0) return;
     if (!mounted) return;
     _luckyWinToastTimer?.cancel();
@@ -394,7 +401,8 @@ void _showCompactWinBadge(int wonCoins) {
 
   void _initRedPacketSync() {
     _redPacketSubscription = FirebaseFirestore.instance
-        .collection('rooms')
+
+.collection('rooms')
         .doc(widget.roomId)
         .collection('red_packets')
         .orderBy('createdAt', descending: true)
@@ -405,7 +413,7 @@ void _showCompactWinBadge(int wonCoins) {
       Map<String, dynamic>? foundPacket;
       String? foundId;
 
-for (final doc in snap.docs) {
+      for (final doc in snap.docs) {
         final d = doc.data();
         final int rem = (d['remainingCount'] as num?)?.toInt() ?? 0;
         final List claimed = (d['claimedBy'] as List?) ?? [];
@@ -525,7 +533,7 @@ for (final doc in snap.docs) {
         : 0.0;
     final String key = "$title|$asset|$url";
 
-    try {
+try {
       await _musicPlayer.setVolume(vol);
       if (_activeMusicKey != key) {
         _activeMusicKey = key;
@@ -540,7 +548,7 @@ for (final doc in snap.docs) {
     } catch (_) {}
   }
 
-void _startSeatHeartbeat() {
+  void _startSeatHeartbeat() {
     _heartbeatTimer?.cancel();
     _heartbeatTimer = Timer.periodic(const Duration(seconds: 10), (_) {
       if (_hasCleanedUp) return;
@@ -642,13 +650,12 @@ void _startSeatHeartbeat() {
           _pkData = pk;
           _musicData = music;
 
-          int? foundMySeat;
+int? foundMySeat;
           for (int i = 0; i < 30; i++) {
             final entry = activeMap['$i'];
             if (entry is Map) {
               final uid = (entry['uid'] ?? '').toString();
-
-final name = (entry['name'] ?? 'User').toString();
+              final name = (entry['name'] ?? 'User').toString();
               final muted = entry['isMuted'] == true;
               final numId = (entry['numericId'] as num?)?.toInt() ?? 0;
               final frame = (entry['frame'] ?? 'default').toString();
@@ -659,6 +666,7 @@ final name = (entry['name'] ?? 'User').toString();
               _seatFrames[i] = frame;
               if (uid == _resolvedUid) {
                 foundMySeat = i;
+                _isMuted = muted;
               }
             } else {
               if (_mySeatIndex == i && _seatUids[i] == _resolvedUid) {
@@ -755,10 +763,9 @@ final name = (entry['name'] ?? 'User').toString();
           ),
         );
 
-        setState(() {
+setState(() {
           for (final s in seats) {
-
-final idx = (s as num).toInt();
+            final idx = (s as num).toInt();
             if (idx >= 0 && idx < 30 && _seats[idx] != null) {
               _seatGifts[idx] += perSeatCost;
               _triggerCenterGiftAnimation(asset, idx, icon: giftIcon);
@@ -1013,37 +1020,545 @@ RoomSessionManager.instance.registerActiveRoom(
     });
   }
 
-  void _handleSeatTap(int index) async {
+  Future<void> _leaveMySeat(int index) async {
     final roomRef =
         FirebaseFirestore.instance.collection('rooms').doc(widget.roomId);
 
-    if (_mySeatIndex == index) {
+    setState(() {
 
-setState(() {
-        _seats[index] = null;
-        _seatUids[index] = null;
-        _seatNumericIds[index] = 0;
-        _seatGifts[index] = 0;
-        _seatMutes[index] = false;
-        _speakingSeatIndices.remove(index);
+_seats[index] = null;
+      _seatUids[index] = null;
+      _seatNumericIds[index] = 0;
+      _seatGifts[index] = 0;
+      _seatMutes[index] = false;
+      _speakingSeatIndices.remove(index);
+      if (_mySeatIndex == index) {
         _mySeatIndex = null;
         _isMuted = true;
-      });
+      }
+    });
 
-      roomRef.set({
-        'activeSeats': {'$index': FieldValue.delete()}
-      }, SetOptions(merge: true)).catchError((_) {});
+    roomRef.set({
+      'activeSeats': {'$index': FieldValue.delete()}
+    }, SetOptions(merge: true)).catchError((_) {});
 
-      await _agoraService.switchRole(isSpeaker: false);
+    await _agoraService.switchRole(isSpeaker: false);
+  }
+
+  void _showSeatUserProfileSheet(int seatIndex) {
+    final String occupierName = _seats[seatIndex] ?? "User";
+    final String occupierUid = _seatUids[seatIndex] ?? "";
+    final int occupierNumId = _seatNumericIds[seatIndex];
+    final int receivedGifts = _seatGifts[seatIndex];
+    final bool isSeatMuted = _seatMutes[seatIndex];
+    final bool isMe =
+        (_mySeatIndex == seatIndex) ? true : (occupierUid == _resolvedUid);
+    final bool isSeatHost =
+        (seatIndex == 0) ? true : (occupierName == widget.hostName);
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) {
+        return FutureBuilder<DocumentSnapshot>(
+          future: occupierUid.isNotEmpty
+              ? FirebaseFirestore.instance
+                  .collection('users')
+                  .doc(occupierUid)
+                  .get()
+              : null,
+          builder: (context, snapshot) {
+            Map<String, dynamic> userData = {};
+            if (snapshot.hasData &&
+                snapshot.data != null &&
+                snapshot.data!.exists &&
+                snapshot.data!.data() is Map) {
+              userData = Map<String, dynamic>.from(snapshot.data!.data() as Map);
+            }
+
+            final int wealthExp =
+                (userData['wealthExp'] as num?)?.toInt() ?? 0;
+            final int userLevel =
+                (userData['level'] as num?)?.toInt() ?? ((wealthExp ~/ 1000) + 1);
+            final int vipLevel = (userData['vipLevel'] as num?)?.toInt() ?? 0;
+            final String flag = (userData['flag'] ?? '🇪🇹').toString();
+            final String displayUid = occupierNumId > 0
+                ? "$occupierNumId"
+                : (occupierUid.length > 8
+                    ? occupierUid.substring(0, 8)
+                    : occupierUid);
+
+            return Padding(
+              padding: const EdgeInsets.only(top: 44),
+              child: Stack(
+                clipBehavior: Clip.none,
+                alignment: Alignment.topCenter,
+                children: [
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.fromLTRB(18, 54, 18, 22),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFFFFBF4),
+                      borderRadius:
+                          BorderRadius.vertical(top: Radius.circular(26)),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black38,
+                          blurRadius: 18,
+                          offset: Offset(0, -4),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Flexible(
+                              child: Text(
+                                occupierName,
+                                style: const TextStyle(
+                                  color: kBlackText,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w900,
+
+),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(flag, style: const TextStyle(fontSize: 17)),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 9, vertical: 2.5),
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(
+                                  colors: [
+                                    Color(0xFF2979FF),
+                                    Color(0xFF00B0FF)
+                                  ],
+                                ),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Text(
+                                "Lv.$userLevel",
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                            if (isSeatHost) ...[
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 9, vertical: 2.5),
+                                decoration: BoxDecoration(
+                                  gradient: const LinearGradient(
+                                    colors: [kGoldBlackTop, kGoldBlackBottom],
+                                  ),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                      color: kGoldBright, width: 1.0),
+                                ),
+                                child: const Text(
+                                  "👑 Host",
+                                  style: TextStyle(
+                                    color: kGoldBright,
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ],
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 9, vertical: 2.5),
+                              decoration: BoxDecoration(
+                                color: kShiroCard,
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(
+                                    color: kGoldBorder, width: 0.9),
+                              ),
+                              child: Text(
+                                "No.${seatIndex + 1}",
+                                style: const TextStyle(
+                                  color: kBlackText,
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+
+],
+                        ),
+                        const SizedBox(height: 8),
+                        GestureDetector(
+                          onTap: () {
+                            Clipboard.setData(ClipboardData(text: displayUid));
+                            ScaffoldMessenger.of(this.context).showSnackBar(
+                              SnackBar(
+                                content: Text("UID $displayUid copied!"),
+                                duration: const Duration(seconds: 1),
+                              ),
+                            );
+                          },
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                "UID: $displayUid",
+                                style: const TextStyle(
+                                  color: kSubBlack,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(width: 5),
+                              const Icon(Icons.copy_rounded,
+                                  size: 14, color: kGoldBorder),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Container(
+                                height: 64,
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 8),
+                                decoration: BoxDecoration(
+                                  gradient: const LinearGradient(
+                                    colors: [kGoldBlackTop, kGoldBlackBottom],
+                                  ),
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(
+                                      color: kGoldBorder, width: 1.2),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      width: 36,
+                                      height: 36,
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        color: kGoldBright.withOpacity(0.18),
+                                      ),
+                                      child: const Center(
+                                        child: Text("👑",
+                                            style: TextStyle(fontSize: 20)),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        Text(
+                                          "VIP$vipLevel",
+                                          style: const TextStyle(
+                                            color: kGoldBright,
+                                            fontSize: 15,
+                                            fontWeight: FontWeight.w900,
+                                          ),
+
+),
+                                        const Text(
+                                          "Noble Privilege",
+                                          style: TextStyle(
+                                            color: Colors.white70,
+                                            fontSize: 10,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Container(
+                                height: 64,
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: kShiroCard,
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(
+                                      color: kGoldBorder, width: 1.2),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        const Text(
+                                          "Gifts",
+                                          style: TextStyle(
+                                            color: kSubBlack,
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                        Text(
+                                          "x$receivedGifts",
+                                          style: const TextStyle(
+                                            color: kBlackText,
+                                            fontSize: 12.5,
+                                            fontWeight: FontWeight.w900,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 4),
+                                    const Row(
+                                      children: [
+                                        Text("🌹",
+                                            style: TextStyle(fontSize: 16)),
+                                        SizedBox(width: 6),
+                                        Text("👑",
+                                            style: TextStyle(fontSize: 16)),
+                                        SizedBox(width: 6),
+                                        Text("💎",
+                                            style: TextStyle(fontSize: 16)),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (_isAdminUser && !isMe) ...[
+                          const SizedBox(height: 12),
+
+Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: kBlackText,
+                                    side: const BorderSide(color: kGoldBorder),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(14),
+                                    ),
+                                  ),
+                                  icon: Icon(
+                                    isSeatMuted ? Icons.mic : Icons.mic_off,
+                                    size: 16,
+                                  ),
+                                  label: Text(
+                                    isSeatMuted ? "Unmute Mic" : "Mute Mic",
+                                    style: const TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold),
+                                  ),
+                                  onPressed: () async {
+                                    Navigator.pop(ctx);
+                                    await FirebaseFirestore.instance
+                                        .collection('rooms')
+                                        .doc(widget.roomId)
+                                        .set({
+                                      'activeSeats': {
+                                        '$seatIndex': {
+                                          'isMuted': !isSeatMuted,
+                                          'updatedAt': DateTime.now()
+                                              .millisecondsSinceEpoch,
+                                        }
+                                      }
+                                    }, SetOptions(merge: true)).catchError(
+                                            (_) {});
+                                  },
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: Colors.redAccent,
+                                    side: const BorderSide(
+                                        color: Colors.redAccent),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(14),
+                                    ),
+                                  ),
+                                  icon: const Icon(Icons.person_remove,
+                                      size: 16),
+                                  label: const Text(
+                                    "Remove Seat",
+                                    style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold),
+                                  ),
+                                  onPressed: () async {
+                                    Navigator.pop(ctx);
+                                    await FirebaseFirestore.instance
+                                        .collection('rooms')
+                                        .doc(widget.roomId)
+                                        .set({
+                                      'activeSeats': {
+                                        '$seatIndex': FieldValue.delete(),
+                                      }
+                                    }, SetOptions(merge: true)).catchError(
+
+(_) {});
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                        const SizedBox(height: 16),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: SizedBox(
+                                height: 46,
+                                child: OutlinedButton(
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: isMe
+                                        ? Colors.redAccent
+                                        : kBlackText,
+                                    side: BorderSide(
+                                      color: isMe
+                                          ? Colors.redAccent
+                                          : kGoldBorder,
+                                      width: 1.4,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(24),
+                                    ),
+                                  ),
+                                  onPressed: () {
+                                    Navigator.pop(ctx);
+                                    if (isMe) {
+                                      _leaveMySeat(seatIndex);
+                                    } else {
+                                      _chatController.text =
+                                          "@$occupierName ";
+                                      _chatController.selection =
+                                          TextSelection.fromPosition(
+                                        TextPosition(
+                                            offset:
+                                                _chatController.text.length),
+                                      );
+                                    }
+                                  },
+                                  child: Text(
+                                    isMe
+                                        ? "Leave the microphone"
+                                        : "@ Mention",
+                                    style: const TextStyle(
+                                      fontSize: 12.5,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: SizedBox(
+                                height: 46,
+                                child: ElevatedButton.icon(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: kGoldBright,
+                                    foregroundColor: Colors.black,
+                                    elevation: 2,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(24),
+                                    ),
+                                  ),
+                                  icon: const Icon(Icons.card_giftcard,
+                                      size: 18, color: Colors.black),
+                                  label: const Text(
+                                    "Send gifts",
+                                    style: TextStyle(
+
+fontSize: 13,
+                                      fontWeight: FontWeight.w900,
+                                      color: Colors.black,
+                                    ),
+                                  ),
+                                  onPressed: () {
+                                    Navigator.pop(ctx);
+                                    _openGiftSheet(preselectSeat: seatIndex);
+                                  },
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  Positioned(
+                    top: -40,
+                    child: Container(
+                      width: 82,
+                      height: 82,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: const LinearGradient(
+                          colors: [kGoldBlackTop, kGoldBlackBottom],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        border: Border.all(color: kGoldBright, width: 3.0),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.35),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: const Center(
+                        child: Icon(
+                          Icons.person,
+                          color: kGoldBright,
+                          size: 44,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _handleSeatTap(int index) async {
+    if (_seats[index] != null) {
+      _showSeatUserProfileSheet(index);
       return;
     }
 
-    if (_seats[index] != null && _seatUids[index] != _resolvedUid) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Seat is occupied")),
-      );
-      return;
-    }
+    final roomRef =
+        FirebaseFirestore.instance.collection('rooms').doc(widget.roomId);
 
     final status = await Permission.microphone.request();
     if (!status.isGranted) {
@@ -1101,7 +1616,7 @@ setState(() {
     await _agoraService.setMicrophoneMute(shouldMuteOnJoin);
   }
 
-  void _toggleMute() async {
+void _toggleMute() async {
     if (_allMicsClosed && !_isAdminUser && _isMuted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("All mics are closed by the Host")),
@@ -1155,7 +1670,7 @@ setState(() {
       } catch (_) {}
     }
 
-try {
+    try {
       final double targetVol = nextState
           ? (((_musicData?['volume'] as num?)?.toDouble() ?? 0.6)
               .clamp(0.0, 1.0))
@@ -1180,7 +1695,7 @@ try {
     setState(() {
       _totalSeats = newCount;
       if (_mySeatIndex != null && _mySeatIndex! >= newCount) {
-        _handleSeatTap(_mySeatIndex!);
+        _leaveMySeat(_mySeatIndex!);
       }
     });
   }
@@ -1257,7 +1772,7 @@ try {
       }
     }
 
-    if (redAdd > 0) {
+if (redAdd > 0) {
       FirebaseFirestore.instance.collection('rooms').doc(widget.roomId).set({
         'pkBattle': {
           'redScore': FieldValue.increment(redAdd),
@@ -1300,7 +1815,7 @@ try {
       _comboCount = nextCombo;
     });
 
-int wonCoins = 0;
+    int wonCoins = 0;
     for (int i = 0; i < max(1, seatCount); i++) {
       wonCoins += _rollLuckyWin(unitPrice);
     }
@@ -1386,11 +1901,25 @@ int wonCoins = 0;
     _startComboTimer();
   }
 
-  void _openGiftSheet() async {
+void _openGiftSheet({int? preselectSeat}) async {
     dynamic dynVal = '';
     final sampleItem = {'seatIndex': 0, 'uid': dynVal, 'name': '', 'avatar': ''};
     final seatedList = [sampleItem]..clear();
+
+    if (preselectSeat != null &&
+        preselectSeat >= 0 &&
+        preselectSeat < _totalSeats &&
+        _seats[preselectSeat] != null) {
+      seatedList.add({
+        'seatIndex': preselectSeat,
+        'uid': _seatUids[preselectSeat] ?? _resolvedUid,
+        'name': _seats[preselectSeat]!,
+        'avatar': '',
+      });
+    }
+
     for (int i = 0; i < _totalSeats; i++) {
+      if (i == preselectSeat) continue;
       if (_seats[i] != null) {
         seatedList.add({
           'seatIndex': i,
@@ -1427,7 +1956,7 @@ int wonCoins = 0;
         }
       }
 
-_fullscreenAnimStreamController.add(
+      _fullscreenAnimStreamController.add(
         FullscreenGiftEvent(
           giftId: result.gift.id,
           giftName: "${result.gift.name} x${result.multiplier}",
@@ -1516,7 +2045,7 @@ _fullscreenAnimStreamController.add(
       }
     });
 
-    if (isLucky) {
+if (isLucky) {
       _lastSentGiftConfig = {
         'giftId': giftId,
         'targetSeats': targetSeats,
@@ -1567,14 +2096,14 @@ _fullscreenAnimStreamController.add(
     }
     _rocketBannerTimer?.cancel();
     _pkTickerTimer?.cancel();
-
-_luckyWinToastTimer?.cancel();
+    _luckyWinToastTimer?.cancel();
     _walletSubscription?.cancel();
     _pointsSubscription?.cancel();
     _roomLiveSubscription?.cancel();
     _eventsSubscription?.cancel();
     _chatSubscription?.cancel();
     _redPacketSubscription?.cancel();
+    _speakingWaveController.dispose();
     _comboRingController.dispose();
     _entryMarqueeController.dispose();
     _comboTimer?.cancel();
@@ -1590,7 +2119,7 @@ _luckyWinToastTimer?.cancel();
   }
 
   Color _getSeatFrameColor(int index, bool isOccupied, bool isSpeaking) {
-    if (isSpeaking) return const Color(0xFF00B8D4);
+    if (isSpeaking) return kGoldBright;
     if (!isOccupied) return kGoldBorder;
     final frame = _seatFrames[index];
     if (frame == 'cyber_neon') return const Color(0xFF00E5FF);
@@ -1599,7 +2128,56 @@ _luckyWinToastTimer?.cancel();
     return kGoldBright;
   }
 
-  Widget _buildSingleSeat({
+  Widget _buildSpeakingRippleRings(double seatDimension) {
+    return AnimatedBuilder(
+      animation: _speakingWaveController,
+      builder: (context, child) {
+        final double w1 = _speakingWaveController.value;
+        final double w2 = (_speakingWaveController.value + 0.5) % 1.0;
+
+        final double size1 = seatDimension * (1.0 + (0.48 * w1));
+        final double size2 = seatDimension * (1.0 + (0.48 * w2));
+        final double op1 = (0.8 * (1.0 - w1)).clamp(0.0, 1.0);
+        final double op2 = (0.8 * (1.0 - w2)).clamp(0.0, 1.0);
+
+        return SizedBox(
+          width: seatDimension * 1.5,
+          height: seatDimension * 1.5,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Container(
+                width: size1,
+                height: size1,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: kGoldBright.withOpacity(op1),
+                    width: 2.0,
+                  ),
+                  color: kGoldBright.withOpacity(op1 * 0.16),
+                ),
+              ),
+              Container(
+                width: size2,
+                height: size2,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: kGoldBright.withOpacity(op2),
+                    width: 1.8,
+                  ),
+                  color: kGoldBright.withOpacity(op2 * 0.12),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+Widget _buildSingleSeat({
     required int index,
     required double seatDimension,
     required double nameFontSize,
@@ -1607,8 +2185,9 @@ _luckyWinToastTimer?.cancel();
   }) {
     final occupier = _seats[index];
     final isOccupied = occupier != null;
-    final isSpeaking = _speakingSeatIndices.contains(index);
     final isMuted = _seatMutes[index];
+    final isSpeaking =
+        isOccupied && !isMuted && _speakingSeatIndices.contains(index);
     final giftsCount = _seatGifts[index];
     final bool isHostSeat = index == 0;
     final bool isCrownSeat = index >= 1 && index <= 6;
@@ -1626,6 +2205,7 @@ _luckyWinToastTimer?.cancel();
             clipBehavior: Clip.none,
             alignment: Alignment.center,
             children: [
+              if (isSpeaking) _buildSpeakingRippleRings(seatDimension),
               if (isHostSeat && isOccupied)
                 Positioned(
                   top: -seatDimension * 0.32,
@@ -1657,20 +2237,19 @@ _luckyWinToastTimer?.cancel();
                   border: Border.all(
                     color: frameColor,
                     width: isSpeaking
-                        ? 2.6
+                        ? 2.8
                         : (hasCustomFrame ? 2.5 : (isOccupied ? 2.0 : 1.3)),
                   ),
                   boxShadow: [
                     if (isSpeaking || hasCustomFrame)
                       BoxShadow(
-                        color: frameColor.withOpacity(0.55),
-                        blurRadius: 10,
+                        color: frameColor.withOpacity(0.65),
+                        blurRadius: 12,
                         spreadRadius: 2,
                       )
                     else
                       BoxShadow(
-
-color: Colors.black.withOpacity(0.25),
+                        color: Colors.black.withOpacity(0.25),
                         blurRadius: 4,
                         offset: const Offset(0, 2),
                       ),
@@ -1695,7 +2274,8 @@ color: Colors.black.withOpacity(0.25),
                   child: Container(
                     padding: EdgeInsets.all(seatDimension * 0.05),
                     decoration: BoxDecoration(
-                      shape: BoxShape.circle,
+
+shape: BoxShape.circle,
                       color:
                           isMuted ? Colors.redAccent : const Color(0xFF107C41),
                       border: Border.all(color: kShiroBg, width: 1.2),
@@ -1772,8 +2352,7 @@ color: Colors.black.withOpacity(0.25),
         "${mins.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}";
 
     return Container(
-
-margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: kGoldBlackBottom,
@@ -1797,7 +2376,8 @@ margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                 decoration: BoxDecoration(
                   color: kGoldBright,
                   borderRadius: BorderRadius.circular(10),
-                ),
+
+),
                 child: Text(
                   "PK $timeStr",
                   style: const TextStyle(
@@ -1883,8 +2463,7 @@ margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
   }
 
   dynamic _buildSeatedUsersList() {
-
-dynamic dynVal = '';
+    dynamic dynVal = '';
     final sampleItem = {'seatIndex': 0, 'uid': dynVal, 'name': ''};
     final list = [sampleItem]..clear();
     for (int i = 0; i < _totalSeats; i++) {
@@ -1916,7 +2495,8 @@ dynamic dynVal = '';
       canPop: false,
       onPopInvoked: (didPop) {
         if (!didPop && !_isMinimizing) {
-          _minimizeRoom();
+
+_minimizeRoom();
         }
       },
       child: Scaffold(
@@ -1995,8 +2575,7 @@ dynamic dynVal = '';
               icon: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-
-border: Border.all(color: kGoldBorder, width: 1.3),
+                  border: Border.all(color: kGoldBorder, width: 1.3),
                   borderRadius: BorderRadius.circular(12),
                   color: kGoldBlackBottom,
                 ),
@@ -2020,7 +2599,8 @@ border: Border.all(color: kGoldBorder, width: 1.3),
               itemBuilder: (context) => _allowedSeatOptions
                   .map((int count) => PopupMenuItem<int>(
                         value: count,
-                        child: Text(
+
+child: Text(
                           "$count Seats Layout",
                           style: TextStyle(
                             color: count == _totalSeats
@@ -2097,7 +2677,7 @@ border: Border.all(color: kGoldBorder, width: 1.3),
                         final double reservedLabelH =
                             nameFontSize + badgeFontSize + 14.0;
 
-final double maxByHeight =
+                        final double maxByHeight =
                             (cellH - reservedLabelH).clamp(28.0, 125.0);
                         final double maxByWidth =
                             (cellW * 0.72).clamp(28.0, 125.0);
@@ -2113,7 +2693,8 @@ final double maxByHeight =
                                 child: Row(
                                   children: List.generate(crossAxis, (c) {
                                     final int seatIdx = (r * crossAxis) + c;
-                                    if (seatIdx >= _totalSeats) {
+
+if (seatIdx >= _totalSeats) {
                                       return const Expanded(
                                           child: SizedBox.shrink());
                                     }
@@ -2176,8 +2757,7 @@ final double maxByHeight =
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 6, vertical: 1.5),
                             decoration: BoxDecoration(
-
-color: kGoldBorder,
+                              color: kGoldBorder,
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Text(
@@ -2198,7 +2778,8 @@ color: kGoldBorder,
                     child: Container(
                       width: double.infinity,
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 4),
+
+horizontal: 14, vertical: 4),
                       child: ListView.builder(
                         controller: _chatScrollController,
                         physics: const BouncingScrollPhysics(),
@@ -2253,8 +2834,7 @@ color: kGoldBorder,
                                     ),
                                   ],
                                 ),
-
-),
+                              ),
                             ),
                           );
                         },
@@ -2276,7 +2856,8 @@ color: kGoldBorder,
                       children: [
                         Container(
                           decoration: BoxDecoration(
-                            shape: BoxShape.circle,
+
+shape: BoxShape.circle,
                             color: _mySeatIndex != null
                                 ? kGoldBlackBottom
                                 : Colors.black12,
@@ -2336,13 +2917,12 @@ color: kGoldBorder,
                         Container(
                           decoration: const BoxDecoration(
                             shape: BoxShape.circle,
-
-color: kGoldBlackBottom,
+                            color: kGoldBlackBottom,
                           ),
                           child: IconButton(
                             icon: const Icon(Icons.card_giftcard,
                                 color: kGoldBright, size: 22),
-                            onPressed: _openGiftSheet,
+                            onPressed: () => _openGiftSheet(),
                           ),
                         ),
                       ],
@@ -2359,7 +2939,8 @@ color: kGoldBlackBottom,
                     child: Container(
                       padding: const EdgeInsets.symmetric(
                           horizontal: 12, vertical: 8),
-                      decoration: BoxDecoration(
+
+decoration: BoxDecoration(
                         gradient: const LinearGradient(
                           colors: [Color(0xFFD32F2F), Color(0xFF7B1FA2)],
                         ),
@@ -2425,8 +3006,7 @@ color: kGoldBlackBottom,
                           fontWeight: FontWeight.bold,
                           fontSize: 12,
                         ),
-
-),
+                      ),
                     ),
                   ),
                 ),
@@ -2447,7 +3027,8 @@ color: kGoldBlackBottom,
                           ),
                           borderRadius: BorderRadius.circular(20),
                           border: Border.all(color: kGoldBright, width: 1.2),
-                        ),
+
+),
                         child: Text(
                           _entryBannerText!,
                           style: const TextStyle(
@@ -2516,8 +3097,7 @@ color: kGoldBlackBottom,
                 giftStream: _fullscreenAnimStreamController.stream,
               ),
               if (_showComboButton)
-
-Positioned(
+                Positioned(
                   bottom: 65,
                   right: 20,
                   child: Transform.scale(
@@ -2537,7 +3117,8 @@ Positioned(
                                   value: 1.0 - _comboRingController.value,
                                   strokeWidth: 3.5,
                                   color: kGoldBright,
-                                  backgroundColor: Colors.black26,
+
+backgroundColor: Colors.black26,
                                 );
                               },
                             ),
