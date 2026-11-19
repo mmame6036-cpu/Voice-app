@@ -28,10 +28,7 @@ class GiftItem {
 
   double get pointRate => category == GiftCategory.lucky ? 0.04 : 0.70;
   bool get isLucky => category == GiftCategory.lucky;
-  String get playAsset {
-    if (isLucky) return "";
-    return animationAsset.isNotEmpty ? animationAsset : imageAsset;
-  }
+  String get playAsset => animationAsset.isNotEmpty ? animationAsset : imageAsset;
 }
 
 class GiftSendResult {
@@ -114,34 +111,34 @@ GiftItem(id: "svga11", name: "Golden Eagle", icon: "🦅", price: 8000, imageAss
     GiftItem(id: "svga14", name: "Victory Trophy", icon: "🏆", price: 13500, imageAsset: "assets/images/svga14.jpg", animationAsset: "assets/svga/svga14.mp4", category: GiftCategory.hot),
     GiftItem(id: "svga15", name: "Magic Lamp", icon: "🪔", price: 15000, imageAsset: "assets/images/svga15.jpg", animationAsset: "assets/svga/svga15.mp4", category: GiftCategory.hot),
 
-    // 2. LUCKY CATEGORY (Pure Icons Only - No Rectangular Background)
-    GiftItem(id: "ke1", name: "ke1", icon: "🔑", price: 10, imageAsset: "", category: GiftCategory.lucky),
-    GiftItem(id: "ke2", name: "ke2", icon: "🗝️", price: 20, imageAsset: "", category: GiftCategory.lucky),
-    GiftItem(id: "ke3", name: "ke3", icon: "👑", price: 30, imageAsset: "", category: GiftCategory.lucky),
-    GiftItem(id: "ke4", name: "ke4", icon: "💎", price: 50, imageAsset: "", category: GiftCategory.lucky),
-    GiftItem(id: "ke5", name: "ke5", icon: "💠", price: 80, imageAsset: "", category: GiftCategory.lucky),
-    GiftItem(id: "ke6", name: "ke6", icon: "🪔", price: 100, imageAsset: "", category: GiftCategory.lucky),
-    GiftItem(id: "ke7", name: "ke7", icon: "💍", price: 150, imageAsset: "", category: GiftCategory.lucky),
-    GiftItem(id: "ke8", name: "ke8", icon: "🔮", price: 200, imageAsset: "", category: GiftCategory.lucky),
-    GiftItem(id: "ke9", name: "ke9", icon: "🏆", price: 250, imageAsset: "", category: GiftCategory.lucky),
-    GiftItem(id: "ke10", name: "ke10", icon: "✨", price: 300, imageAsset: "", category: GiftCategory.lucky),
-    GiftItem(id: "ke11", name: "ke11", icon: "💲", price: 380, imageAsset: "", category: GiftCategory.lucky),
-    GiftItem(id: "ke12", name: "ke12", icon: "🎖️", price: 450, imageAsset: "", category: GiftCategory.lucky),
-    GiftItem(id: "ke13", name: "ke13", icon: "🏺", price: 520, imageAsset: "", category: GiftCategory.lucky),
-    GiftItem(id: "ke14", name: "ke14", icon: "🌹", price: 600, imageAsset: "", category: GiftCategory.lucky),
-    GiftItem(id: "ke15", name: "ke15", icon: "💙", price: 700, imageAsset: "", category: GiftCategory.lucky),
-    GiftItem(id: "ke16", name: "ke16", icon: "🐬", price: 800, imageAsset: "", category: GiftCategory.lucky),
-    GiftItem(id: "ke17", name: "ke17", icon: "🌸", price: 880, imageAsset: "", category: GiftCategory.lucky),
-    GiftItem(id: "ke18", name: "ke18", icon: "⏳", price: 920, imageAsset: "", category: GiftCategory.lucky),
-    GiftItem(id: "ke19", name: "ke19", icon: "🦋", price: 960, imageAsset: "", category: GiftCategory.lucky),
-    GiftItem(id: "prism_diamond", name: "Prism Diamond", icon: "💎", price: 1000, imageAsset: "", category: GiftCategory.lucky),
+    // 2. LUCKY CATEGORY (Original Custom Images Restored)
+    GiftItem(id: "ke1", name: "ke1", icon: "🔑", price: 10, imageAsset: "assets/images/ke1.jpg", category: GiftCategory.lucky),
+    GiftItem(id: "ke2", name: "ke2", icon: "🔑", price: 20, imageAsset: "assets/images/ke2.jpg", category: GiftCategory.lucky),
+    GiftItem(id: "ke3", name: "ke3", icon: "👑", price: 30, imageAsset: "assets/images/ke3.jpg", category: GiftCategory.lucky),
+    GiftItem(id: "ke4", name: "ke4", icon: "💎", price: 50, imageAsset: "assets/images/ke4.jpg", category: GiftCategory.lucky),
+    GiftItem(id: "ke5", name: "ke5", icon: "💠", price: 80, imageAsset: "assets/images/ke5.jpg", category: GiftCategory.lucky),
+    GiftItem(id: "ke6", name: "ke6", icon: "🪔", price: 100, imageAsset: "assets/images/ke6.jpg", category: GiftCategory.lucky),
+    GiftItem(id: "ke7", name: "ke7", icon: "💍", price: 150, imageAsset: "assets/images/ke7.jpg", category: GiftCategory.lucky),
+    GiftItem(id: "ke8", name: "ke8", icon: "💎", price: 200, imageAsset: "assets/images/ke8.jpg", category: GiftCategory.lucky),
+    GiftItem(id: "ke9", name: "ke9", icon: "👑", price: 250, imageAsset: "assets/images/ke9.jpg", category: GiftCategory.lucky),
+    GiftItem(id: "ke10", name: "ke10", icon: "💠", price: 300, imageAsset: "assets/images/ke10.jpg", category: GiftCategory.lucky),
+    GiftItem(id: "ke11", name: "ke11", icon: "💲", price: 380, imageAsset: "assets/images/ke11.jpg", category: GiftCategory.lucky),
+    GiftItem(id: "ke12", name: "ke12", icon: "👑", price: 450, imageAsset: "assets/images/ke12.jpg", category: GiftCategory.lucky),
+    GiftItem(id: "ke13", name: "ke13", icon: "🪔", price: 520, imageAsset: "assets/images/ke13.jpg", category: GiftCategory.lucky),
+    GiftItem(id: "ke14", name: "ke14", icon: "🌹", price: 600, imageAsset: "assets/images/ke14.jpg", category: GiftCategory.lucky),
+    GiftItem(id: "ke15", name: "ke15", icon: "💙", price: 700, imageAsset: "assets/images/ke15.jpg", category: GiftCategory.lucky),
+    GiftItem(id: "ke16", name: "ke16", icon: "🐬", price: 800, imageAsset: "assets/images/ke16.jpg", category: GiftCategory.lucky),
+    GiftItem(id: "ke17", name: "ke17", icon: "🌸", price: 880, imageAsset: "assets/images/ke17.jpg", category: GiftCategory.lucky),
+    GiftItem(id: "ke18", name: "ke18", icon: "⏳", price: 920, imageAsset: "assets/images/ke18.jpg", category: GiftCategory.lucky),
+    GiftItem(id: "ke19", name: "ke19", icon: "🦋", price: 960, imageAsset: "assets/images/ke19.jpg", category: GiftCategory.lucky),
+    GiftItem(id: "prism_diamond", name: "Prism Diamond", icon: "💎", price: 1000, imageAsset: "assets/images/Prism Diamond.jpg", category: GiftCategory.lucky),
 
     // 3. LUXURY CATEGORY (20,000 - 500,000 Coins)
     GiftItem(id: "svga27", name: "Gold Supercar", icon: "🏎️", price: 20000, imageAsset: "assets/images/svga27.jpg", animationAsset: "assets/svga/svga27.mp4", category: GiftCategory.luxury),
-    GiftItem(id: "svga29", name: "VIP Helicopter", icon: "🚁", price: 35000, imageAsset: "assets/images/svga29.jpg", animationAsset: "assets/svga/svga29.mp4", category: GiftCategory.luxury),
-    GiftItem(id: "svga30", name: "Luxury Yacht", icon: "🛥️", price: 50000, imageAsset: "assets/images/svga30.jpg", animationAsset: "assets/svga/svga30.mp4", category: GiftCategory.luxury),
 
-GiftItem(id: "svga31", name: "Golden Lion", icon: "🦁", price: 75000, imageAsset: "assets/images/svga31.jpg", animationAsset: "assets/svga/svga31.mp4", category: GiftCategory.luxury),
+GiftItem(id: "svga29", name: "VIP Helicopter", icon: "🚁", price: 35000, imageAsset: "assets/images/svga29.jpg", animationAsset: "assets/svga/svga29.mp4", category: GiftCategory.luxury),
+    GiftItem(id: "svga30", name: "Luxury Yacht", icon: "🛥️", price: 50000, imageAsset: "assets/images/svga30.jpg", animationAsset: "assets/svga/svga30.mp4", category: GiftCategory.luxury),
+    GiftItem(id: "svga31", name: "Golden Lion", icon: "🦁", price: 75000, imageAsset: "assets/images/svga31.jpg", animationAsset: "assets/svga/svga31.mp4", category: GiftCategory.luxury),
     GiftItem(id: "svga32", name: "Private Jet", icon: "✈️", price: 100000, imageAsset: "assets/images/svga32.jpg", animationAsset: "assets/svga/svga32.mp4", category: GiftCategory.luxury),
     GiftItem(id: "svga33", name: "Space Rocket", icon: "🚀", price: 150000, imageAsset: "assets/images/svga33.jpg", animationAsset: "assets/svga/svga33.mp4", category: GiftCategory.luxury),
     GiftItem(id: "svga34", name: "Imperial Throne", icon: "👑", price: 200000, imageAsset: "assets/images/svga34.jpg", animationAsset: "assets/svga/svga34.mp4", category: GiftCategory.luxury),
@@ -161,7 +158,8 @@ GiftItem(id: "svga31", name: "Golden Lion", icon: "🦁", price: 75000, imageAss
     GiftItem(id: "svga22", name: "Diamond Chain", icon: "📿", price: 25000, imageAsset: "assets/images/svga22.jpg", animationAsset: "assets/svga/svga22.mp4", category: GiftCategory.intimacy),
     GiftItem(id: "svga23", name: "Eternal Kiss", icon: "💋", price: 35000, imageAsset: "assets/images/svga23.jpg", animationAsset: "assets/svga/svga23.mp4", category: GiftCategory.intimacy),
     GiftItem(id: "svga24", name: "Crystal Castle", icon: "🏰", price: 50000, imageAsset: "assets/images/svga24.jpg", animationAsset: "assets/svga/svga24.mp4", category: GiftCategory.intimacy),
-    GiftItem(id: "svga25", name: "Starry Proposal", icon: "🌠", price: 65000, imageAsset: "assets/images/svga25.jpg", animationAsset: "assets/svga/svga25.mp4", category: GiftCategory.intimacy),
+
+GiftItem(id: "svga25", name: "Starry Proposal", icon: "🌠", price: 65000, imageAsset: "assets/images/svga25.jpg", animationAsset: "assets/svga/svga25.mp4", category: GiftCategory.intimacy),
     GiftItem(id: "svfa26", name: "Royal Wedding", icon: "👰", price: 80000, imageAsset: "assets/images/svfa26.jpg", animationAsset: "assets/svga/svfa26.mp4", category: GiftCategory.intimacy),
   ];
 
@@ -170,7 +168,7 @@ GiftItem(id: "svga31", name: "Golden Lion", icon: "🦁", price: 75000, imageAss
     return _allGifts.where((g) => g.category == currentCat).toList();
   }
 
-List get _userList {
+  List get _userList {
     if (widget.activeUsers is List) {
       return widget.activeUsers as List;
     }
@@ -295,7 +293,7 @@ List get _userList {
 
     setState(() => _isSending = true);
 
-    try {
+try {
       int wonCoins = 0;
       int maxMultiplier = 0;
 
@@ -315,7 +313,7 @@ List get _userList {
         _playFiveWinSound();
       }
 
-final senderRef = FirebaseFirestore.instance.collection('users').doc(_currentUser!.uid);
+      final senderRef = FirebaseFirestore.instance.collection('users').doc(_currentUser!.uid);
       final roomRef = FirebaseFirestore.instance.collection('rooms').doc(widget.roomId);
 
       final netDeduction = -totalCost + wonCoins;
@@ -420,6 +418,54 @@ final senderRef = FirebaseFirestore.instance.collection('users').doc(_currentUse
     }
   }
 
+Widget _buildBorderlessGiftVisual(GiftItem gift, bool isSelected) {
+    return Container(
+      width: 62,
+      height: 62,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        boxShadow: isSelected
+            ? [
+                BoxShadow(
+                  color: goldColor.withOpacity(0.5),
+                  blurRadius: 16,
+                  spreadRadius: 2,
+                ),
+              ]
+            : null,
+      ),
+      child: ShaderMask(
+        shaderCallback: (Rect bounds) {
+          return const RadialGradient(
+            center: Alignment.center,
+            radius: 0.5,
+            colors: [
+              Colors.white,
+              Colors.white,
+              Colors.transparent,
+            ],
+            stops: [0.0, 0.68, 1.0],
+          ).createShader(bounds);
+        },
+        blendMode: BlendMode.dstIn,
+        child: ClipOval(
+          child: Image.asset(
+            gift.imageAsset,
+            width: 62,
+            height: 62,
+            fit: BoxFit.cover,
+            errorBuilder: (ctx, err, stack) => Center(
+              child: Text(
+                gift.icon,
+                style: const TextStyle(fontSize: 36),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final totalCost = _calculateTotalPrice;
@@ -432,12 +478,12 @@ final senderRef = FirebaseFirestore.instance.collection('users').doc(_currentUse
     return Container(
       height: 480,
       decoration: const BoxDecoration(
-
-color: darkBg,
+        color: darkBg,
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       child: Column(
         children: [
+          // Seat selector
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: const BoxDecoration(
@@ -488,7 +534,7 @@ color: darkBg,
 
                         final isSelected = _selectedSeatIndices.contains(seatIdx);
 
-                        return GestureDetector(
+return GestureDetector(
                           onTap: isOccupied ? () => _toggleSeat(seatIdx) : null,
                           child: Container(
                             width: 32,
@@ -527,7 +573,8 @@ color: darkBg,
             ),
           ),
 
-Container(
+          // Categories
+          Container(
             height: 38,
             margin: const EdgeInsets.symmetric(vertical: 4),
             child: ListView.builder(
@@ -569,12 +616,14 @@ Container(
             ),
           ),
 
+          // Gifts Grid (Original Gift Artwork with Rectangular Corners Blended Out)
           Expanded(
             child: GridView.builder(
               padding: const EdgeInsets.all(8),
               itemCount: currentGifts.length,
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 4,
+
+crossAxisCount: 4,
                 mainAxisSpacing: 8,
                 crossAxisSpacing: 8,
                 childAspectRatio: 0.82,
@@ -590,39 +639,7 @@ Container(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Container(
-                          width: 62,
-                          height: 62,
-                          alignment: Alignment.center,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            boxShadow: isSelected
-                                ? [
-                                    BoxShadow(
-                                      color: goldColor.withOpacity(0.45),
-                                      blurRadius: 16,
-                                      spreadRadius: 2,
-                                    ),
-                                  ]
-                                : null,
-                          ),
-                          child: gift.isLucky
-                              ? Text(
-                                  gift.icon,
-                                  style: const TextStyle(fontSize: 40),
-                                )
-                              : ClipOval(
-                                  child: Image.asset(
-                                    gift.imageAsset,
-                                    width: 58,
-                                    height: 58,
-
-fit: BoxFit.cover,
-                                    errorBuilder: (ctx, err, stack) =>
-                                        Text(gift.icon, style: const TextStyle(fontSize: 36)),
-                                  ),
-                                ),
-                        ),
+                        _buildBorderlessGiftVisual(gift, isSelected),
                         const SizedBox(height: 4),
                         Text(
                           gift.name,
@@ -651,6 +668,7 @@ fit: BoxFit.cover,
             ),
           ),
 
+          // Bottom control bar (Multiplier shown ONLY under Lucky)
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: const BoxDecoration(
@@ -696,7 +714,8 @@ fit: BoxFit.cover,
                                 ),
                               ),
                             ))
-                        .toList(),
+
+.toList(),
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
@@ -706,8 +725,7 @@ fit: BoxFit.cover,
                       ),
                       child: Row(
                         children: [
-
-Text(
+                          Text(
                             "x$_selectedMultiplier",
                             style: const TextStyle(
                               color: Colors.white,
