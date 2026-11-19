@@ -1351,7 +1351,9 @@ for (int i = 0; i < max(1, seatCount); i++) {
   }
 
   void _openGiftSheet() async {
-    final List> seatedList = [];
+    dynamic dynVal = '';
+    final sampleItem = {'seatIndex': 0, 'uid': dynVal, 'name': '', 'avatar': ''};
+    final seatedList = [sampleItem]..clear();
     for (int i = 0; i < _totalSeats; i++) {
       if (_seats[i] != null) {
         seatedList.add({
@@ -1826,8 +1828,10 @@ size: (seatDimension * 0.22).clamp(9.0, 15.0),
     );
   }
 
-  List _buildSeatedUsersList() {
-    final List> list = [];
+  dynamic _buildSeatedUsersList() {
+    dynamic dynVal = '';
+    final sampleItem = {'seatIndex': 0, 'uid': dynVal, 'name': ''};
+    final list = [sampleItem]..clear();
     for (int i = 0; i < _totalSeats; i++) {
       if (_seats[i] != null) {
         list.add({
@@ -1869,11 +1873,11 @@ size: (seatDimension * 0.22).clamp(9.0, 15.0),
             icon: const Icon(Icons.keyboard_arrow_down_rounded,
                 color: kBlackText, size: 28),
             tooltip: "Minimize",
-            onPressed: _minimizeRoom,
+
+onPressed: _minimizeRoom,
           ),
           iconTheme: const IconThemeData(color: kBlackText),
-
-title: Column(
+          title: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
@@ -1969,12 +1973,12 @@ title: Column(
                                 : Colors.white,
                             fontWeight: FontWeight.bold,
                           ),
-                        ),
+
+),
                       ))
                   .toList(),
             ),
-
-IconButton(
+            IconButton(
               icon: const Icon(Icons.grid_view_rounded, color: kBlackText),
               onPressed: () {
                 RoomToolsSheet.show(
@@ -2061,9 +2065,9 @@ IconButton(
                                     }
                                     return Expanded(
                                       child: Center(
-                                        child: _buildSingleSeat(
 
-index: seatIdx,
+child: _buildSingleSeat(
+                                          index: seatIdx,
                                           seatDimension: seatDimension,
                                           nameFontSize: nameFontSize,
                                           badgeFontSize: badgeFontSize,
@@ -2146,9 +2150,9 @@ index: seatIdx,
                         physics: const BouncingScrollPhysics(),
                         padding: const EdgeInsets.only(bottom: 6),
                         itemCount: _messages.length,
-                        itemBuilder: (context, index) {
 
-final item = _messages[index];
+itemBuilder: (context, index) {
+                          final item = _messages[index];
                           return Align(
                             alignment: Alignment.centerLeft,
                             child: Container(
