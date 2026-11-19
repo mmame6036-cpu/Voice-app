@@ -6,12 +6,14 @@ class FullscreenGiftEvent {
   final String giftId;
   final String giftName;
   final String asset;
+  final String giftIcon;
   final String senderName;
 
   FullscreenGiftEvent({
     required this.giftId,
     required this.giftName,
     required this.asset,
+    this.giftIcon = "🎁",
     required this.senderName,
   });
 }
@@ -33,7 +35,7 @@ class _FullscreenGiftAnimatorState extends State<FullscreenGiftAnimator> {
 
   int _playToken = 0;
   bool _isVideoReady = false;
-  bool _useFallbackImage = false;
+  bool _useFallbackVisual = false;
   String _fallbackImagePath = "";
   double _opacity = 0.0;
   double _scale = 0.4;
@@ -41,16 +43,14 @@ class _FullscreenGiftAnimatorState extends State<FullscreenGiftAnimator> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    _subscription = widget.giftStream.listen((event) {
       if (!mounted) return;
-      _subscription = widget.giftStream.listen((event) {
-        if (!mounted) return;
-        _playAnimation(event);
-      });
+      _playAnimation(event);
     });
   }
 
   String _toFallbackImage(String assetPath) {
+    if (assetPath.isEmpty) return "";
     if (assetPath.toLowerCase().endsWith('.mp4')) {
       return assetPath
           .replaceFirst('assets/svga/', 'assets/images/')
@@ -85,32 +85,31 @@ class _FullscreenGiftAnimatorState extends State<FullscreenGiftAnimator> {
     setState(() {
       _currentGift = event;
       _isVideoReady = false;
-      _useFallbackImage = false;
+      _useFallbackVisual = false;
       _fallbackImagePath = _toFallbackImage(assetPath);
       _opacity = 1.0;
-      _scale = 0.5;
+      _scale = 0.45;
     });
 
     Future.delayed(const Duration(milliseconds: 50), () {
-      if (mounted && _playToken == currentToken) {
-        setState(() {
-          _scale = 1.0;
-        });
-      }
+      if (!mounted) return;
+      if (_playToken != currentToken) return;
+      setState(() {
+        _scale = 1.0;
+      });
     });
 
     if (!isMp4) {
       setState(() {
-        _useFallbackImage = true;
+        _useFallbackVisual = true;
       });
-      _dismissTimer = Timer(const Duration(milliseconds: 3000), () {
+      _dismissTimer = Timer(const Duration(milliseconds: 2400), () {
         _finishCurrentGift(currentToken);
       });
       return;
     }
 
-    // ቪዲዮው በምንም ምክንያት እንዳይቆም የ14 ሰከንድ ገደብ
-    _dismissTimer = Timer(const Duration(seconds: 14), () {
+    _dismissTimer = Timer(const Duration(seconds: 10), () {
       _finishCurrentGift(currentToken);
     });
 
@@ -122,7 +121,11 @@ class _FullscreenGiftAnimatorState extends State<FullscreenGiftAnimator> {
 
       await ctrl.initialize();
 
-      if (!mounted || _playToken != currentToken) {
+      if (!mounted) {
+        await ctrl.dispose();
+        return;
+      }
+      if (_playToken != currentToken) {
         await ctrl.dispose();
         return;
       }
@@ -130,26 +133,38 @@ class _FullscreenGiftAnimatorState extends State<FullscreenGiftAnimator> {
       _videoController = ctrl;
       ctrl.addListener(_onVideoProgress);
 
+      final int durMs = ctrl.value.duration.inMilliseconds;
+      if (durMs > 300) {
+        _dismissTimer?.cancel();
+        _dismissTimer = Timer(Duration(milliseconds: durMs + 250), () {
+          _finishCurrentGift(currentToken);
+        });
+      }
+
       await ctrl.setLooping(false);
       await ctrl.setVolume(1.0);
       await ctrl.play();
 
-      if (mounted && _playToken == currentToken) {
-        setState(() {
-          _isVideoReady = true;
-        });
+      if (mounted) {
+        if (_playToken == currentToken) {
+          setState(() {
+            _isVideoReady = true;
+
+});
+        }
       }
     } catch (_) {
-      // የ.mp4 ፋይሉ ገና ካልተጫነ ፎቶውን በአኒሜሽን ያሳያል
-      if (mounted && _playToken == currentToken) {
-        setState(() {
-          _isVideoReady = false;
-          _useFallbackImage = true;
-        });
-        _dismissTimer?.cancel();
-        _dismissTimer = Timer(const Duration(milliseconds: 3000), () {
-          _finishCurrentGift(currentToken);
-        });
+      if (mounted) {
+        if (_playToken == currentToken) {
+          setState(() {
+            _isVideoReady = false;
+            _useFallbackVisual = true;
+          });
+          _dismissTimer?.cancel();
+          _dismissTimer = Timer(const Duration(milliseconds: 2400), () {
+            _finishCurrentGift(currentToken);
+          });
+        }
       }
     }
   }
@@ -159,11 +174,20 @@ class _FullscreenGiftAnimatorState extends State<FullscreenGiftAnimator> {
     if (ctrl == null) return;
     if (!ctrl.value.isInitialized) return;
 
-final int totalMs = ctrl.value.duration.inMilliseconds;
+    if (ctrl.value.isCompleted) {
+      _finishCurrentGift(_playToken);
+      return;
+    }
+
+    final int totalMs = ctrl.value.duration.inMilliseconds;
     final int posMs = ctrl.value.position.inMilliseconds;
 
-    if (totalMs > 200 && posMs >= (totalMs - 120) && !ctrl.value.isPlaying) {
-      _finishCurrentGift(_playToken);
+    if (totalMs > 200) {
+      if (posMs >= (totalMs - 300)) {
+        if (!ctrl.value.isPlaying) {
+          _finishCurrentGift(_playToken);
+        }
+      }
     }
   }
 
@@ -176,16 +200,18 @@ final int totalMs = ctrl.value.duration.inMilliseconds;
       _opacity = 0.0;
     });
 
-    Future.delayed(const Duration(milliseconds: 300), () async {
+    Future.delayed(const Duration(milliseconds: 250), () async {
       if (!mounted) return;
       if (token != _playToken) return;
       await _disposeCurrentVideo();
-      if (mounted && token == _playToken) {
-        setState(() {
-          _currentGift = null;
-          _isVideoReady = false;
-          _useFallbackImage = false;
-        });
+      if (mounted) {
+        if (token == _playToken) {
+          setState(() {
+            _currentGift = null;
+            _isVideoReady = false;
+            _useFallbackVisual = false;
+          });
+        }
       }
     });
   }
@@ -198,6 +224,29 @@ final int totalMs = ctrl.value.duration.inMilliseconds;
     super.dispose();
   }
 
+  Widget _buildIconCenterpiece(String icon) {
+    return Container(
+      width: 190,
+      height: 190,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: RadialGradient(
+          colors: [
+            const Color(0xFFFFD700).withOpacity(0.45),
+            const Color(0xFFFF8C00).withOpacity(0.15),
+            Colors.transparent,
+          ],
+        ),
+      ),
+      child: Center(
+        child: Text(
+          icon,
+          style: const TextStyle(fontSize: 105),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_currentGift == null) return const SizedBox.shrink();
@@ -205,20 +254,23 @@ final int totalMs = ctrl.value.duration.inMilliseconds;
     double videoW = 720;
     double videoH = 1280;
     final ctrl = _videoController;
-    if (ctrl != null && ctrl.value.isInitialized) {
-      if (ctrl.value.size.width > 0) videoW = ctrl.value.size.width;
-      if (ctrl.value.size.height > 0) videoH = ctrl.value.size.height;
+    if (ctrl != null) {
+      if (ctrl.value.isInitialized) {
+        if (ctrl.value.size.width > 0) videoW = ctrl.value.size.width;
+        if (ctrl.value.size.height > 0) videoH = ctrl.value.size.height;
+      }
     }
+
+    final String activeIcon = _currentGift!.giftIcon;
 
     return Positioned.fill(
       child: IgnorePointer(
         ignoring: true,
         child: AnimatedOpacity(
-          duration: const Duration(milliseconds: 300),
+          duration: const Duration(milliseconds: 250),
           opacity: _opacity,
           child: Stack(
             children: [
-              // 1. ሙሉ ስክሪን የስጦታ ቪዲዮ (.mp4)
               if (_isVideoReady && ctrl != null)
                 Positioned.fill(
                   child: FittedBox(
@@ -231,28 +283,28 @@ final int totalMs = ctrl.value.duration.inMilliseconds;
                   ),
                 ),
 
-              // 2. ቪዲዮ የሌለው ስጦታ ከሆነ በትልቁ ምስሉን ያሳያል
-              if (_useFallbackImage)
+              if (_useFallbackVisual)
                 Center(
                   child: AnimatedScale(
                     scale: _scale,
-                    duration: const Duration(milliseconds: 400),
+                    duration: const Duration(milliseconds: 380),
                     curve: Curves.easeOutBack,
-                    child: Image.asset(
-                      _fallbackImagePath,
-                      width: 240,
-                      height: 240,
-                      fit: BoxFit.contain,
-                      errorBuilder: (ctx, err, stack) => const Icon(
-                        Icons.card_giftcard,
-                        size: 140,
-                        color: Color(0xFFFFD700),
-                      ),
-                    ),
+                    child: _fallbackImagePath.isNotEmpty
+                        ? ClipOval(
+                            child: Image.asset(
+                              _fallbackImagePath,
+                              width: 210,
+                              height: 210,
+
+fit: BoxFit.cover,
+                              errorBuilder: (ctx, err, stack) =>
+                                  _buildIconCenterpiece(activeIcon),
+                            ),
+                          )
+                        : _buildIconCenterpiece(activeIcon),
                   ),
                 ),
 
-              // 3. ከላይ የሚታይ የላኪው ማሳወቂያ ባነር
               Positioned(
                 top: 16,
                 left: 16,
@@ -275,9 +327,8 @@ final int totalMs = ctrl.value.duration.inMilliseconds;
                       ],
                     ),
                     child: Text(
-                      "🎉 ${_currentGift!.senderName} sent ${_currentGift!.giftName}! 🚀",
-
-style: const TextStyle(
+                      "🎉 ${_currentGift!.senderName} sent ${_currentGift!.giftName}! $activeIcon",
+                      style: const TextStyle(
                         color: Colors.black,
                         fontWeight: FontWeight.w900,
                         fontSize: 13,
