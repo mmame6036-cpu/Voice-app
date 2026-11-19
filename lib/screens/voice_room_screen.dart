@@ -439,7 +439,7 @@ for (final doc in snap.docs) {
         final List claimed = List.from((data['claimedBy'] as List?) ?? []);
         senderName = (data['senderName'] ?? 'User').toString();
 
-        if (remCount <= 0  remCoins <= 0  claimed.contains(_resolvedUid)) {
+        if (remCount <= 0 || remCoins <= 0 || claimed.contains(_resolvedUid)) {
           return;
         }
 
