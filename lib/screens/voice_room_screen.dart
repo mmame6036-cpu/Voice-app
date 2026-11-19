@@ -141,7 +141,7 @@ bool _showComboButton = false;
   int _comboCount = 0;
   Timer? _comboTimer;
   late AnimationController _comboRingController;
-  Map<String, dynamic>? _lastSentGiftConfig;
+  Map? _lastSentGiftConfig;
 
   String? _luckyWinToast;
   Timer? _luckyWinToastTimer;
@@ -162,19 +162,26 @@ bool _showComboButton = false;
 
   String get _resolvedUid {
     if (_currentUser != null) return _currentUser!.uid;
-    if (widget.userUid.isNotEmpty && widget.userUid != "user_guest_id") {
-      return widget.userUid;
+    if (widget.userUid.isNotEmpty) {
+      if (widget.userUid != "user_guest_id") {
+        return widget.userUid;
+      }
     }
     return "guest_${widget.userNumericId}";
   }
 
-  bool get _isHostUser =>
-      widget.userName == widget.hostName || _mySeatIndex == 0;
+  bool get _isHostUser {
+    if (widget.userName == widget.hostName) return true;
+    if (_mySeatIndex == 0) return true;
+    return false;
+  }
 
-  bool get _isAdminUser =>
-      _isHostUser ||
-      _roomAdmins.contains(_resolvedUid) ||
-      _roomAdmins.contains(widget.userName);
+  bool get _isAdminUser {
+    if (_isHostUser) return true;
+    if (_roomAdmins.contains(_resolvedUid)) return true;
+    if (_roomAdmins.contains(widget.userName)) return true;
+    return false;
+  }
 
   int _getColsForSeats(int count) {
     if (count <= 6) return 3;
@@ -417,7 +424,8 @@ for (final doc in snap.docs) {
   }
 
   Future<void> _claimRedPacket() async {
-    if (_isClaimingPacket || _activeRedPacketId == null) return;
+    if (_isClaimingPacket) return;
+    if (_activeRedPacketId == null) return;
     _isClaimingPacket = true;
 
     final packetRef = FirebaseFirestore.instance
@@ -432,16 +440,17 @@ for (final doc in snap.docs) {
     try {
       await FirebaseFirestore.instance.runTransaction((tx) async {
         final snap = await tx.get(packetRef);
-        if (!snap.exists || snap.data() == null) return;
+        if (!snap.exists) return;
+        if (snap.data() == null) return;
         final data = snap.data()!;
         final int remCount = (data['remainingCount'] as num?)?.toInt() ?? 0;
         final int remCoins = (data['remainingCoins'] as num?)?.toInt() ?? 0;
         final List claimed = List.from((data['claimedBy'] as List?) ?? []);
         senderName = (data['senderName'] ?? 'User').toString();
 
-        if (remCount <= 0 || remCoins <= 0 || claimed.contains(_resolvedUid)) {
-          return;
-        }
+        if (remCount <= 0) return;
+        if (remCoins <= 0) return;
+        if (claimed.contains(_resolvedUid)) return;
 
         if (remCount == 1) {
           wonAmount = remCoins;
@@ -489,7 +498,16 @@ for (final doc in snap.docs) {
   }
 
   Future<void> _syncMusicPlayback(Map<String, dynamic>? music) async {
-    if (music == null || music['isPlaying'] != true) {
+    if (music == null) {
+      if (_activeMusicKey.isNotEmpty) {
+        _activeMusicKey = "";
+        try {
+          await _musicPlayer.stop();
+        } catch (_) {}
+      }
+      return;
+    }
+    if (music['isPlaying'] != true) {
       if (_activeMusicKey.isNotEmpty) {
         _activeMusicKey = "";
         try {
@@ -721,27 +739,26 @@ final name = (entry['name'] ?? 'User').toString();
         final String giftName = (d['giftName'] ?? 'Gift').toString();
         final String giftIcon = (d['giftIcon'] ?? '🎁').toString();
         final String asset = (d['imageAsset'] ?? '').toString();
-        final bool isLucky = d['isLucky'] == true;
+        final int mult = (d['multiplier'] as num?)?.toInt() ?? 1;
         final int totalCost = (d['totalCost'] as num?)?.toInt() ?? 0;
         final List seats = (d['seats'] as List?) ?? [];
         final int perSeatCost =
             seats.isNotEmpty ? (totalCost ~/ seats.length) : totalCost;
 
-        if (!isLucky && perSeatCost >= 500) {
-          _fullscreenAnimStreamController.add(
-            FullscreenGiftEvent(
-              giftId: (d['giftId'] ?? '').toString(),
-              giftName: giftName,
-              asset: asset,
-              senderName: "VIP",
-            ),
-          );
-        }
+        _fullscreenAnimStreamController.add(
+          FullscreenGiftEvent(
+            giftId: (d['giftId'] ?? '').toString(),
+            giftName: "$giftName x$mult",
+            asset: asset,
+            giftIcon: giftIcon,
+            senderName: "VIP",
+          ),
+        );
 
         setState(() {
+          for (final s in seats) {
 
-for (final s in seats) {
-            final idx = (s as num).toInt();
+final idx = (s as num).toInt();
             if (idx >= 0 && idx < 30 && _seats[idx] != null) {
               _seatGifts[idx] += perSeatCost;
               _triggerCenterGiftAnimation(asset, idx, icon: giftIcon);
@@ -1220,7 +1237,8 @@ try {
   }
 
   void _addPkPointsForSeats(List<int> targetSeats, bool isAll, int costPerSeat) {
-    if (_pkData == null || _pkData!['active'] != true) return;
+    if (_pkData == null) return;
+    if (_pkData!['active'] != true) return;
     int redAdd = 0;
     int blueAdd = 0;
 
@@ -1239,11 +1257,17 @@ try {
       }
     }
 
-    if (redAdd > 0 || blueAdd > 0) {
+    if (redAdd > 0) {
       FirebaseFirestore.instance.collection('rooms').doc(widget.roomId).set({
         'pkBattle': {
-          if (redAdd > 0) 'redScore': FieldValue.increment(redAdd),
-          if (blueAdd > 0) 'blueScore': FieldValue.increment(blueAdd),
+          'redScore': FieldValue.increment(redAdd),
+        }
+      }, SetOptions(merge: true)).catchError((_) {});
+    }
+    if (blueAdd > 0) {
+      FirebaseFirestore.instance.collection('rooms').doc(widget.roomId).set({
+        'pkBattle': {
+          'blueScore': FieldValue.increment(blueAdd),
         }
       }, SetOptions(merge: true)).catchError((_) {});
     }
@@ -1254,10 +1278,12 @@ try {
 
     final config = _lastSentGiftConfig!;
     final bool isLucky = config['isLucky'] == true;
+    if (!isLucky) return;
+
     final List<int> targets = List<int>.from(config['targetSeats'] as List);
     final bool isAll = config['isAll'] == true;
     final int unitPrice = (config['unitPrice'] as num).toInt();
-    final int sendCost = isLucky ? unitPrice : (config['cost'] as num).toInt();
+    final int sendCost = unitPrice;
     final int seatCount =
         isAll ? _seats.where((s) => s != null).length : targets.length;
     final int totalSpend = sendCost * max(1, seatCount);
@@ -1274,24 +1300,31 @@ try {
       _comboCount = nextCombo;
     });
 
-    int wonCoins = 0;
-
-    if (isLucky) {
-
-for (int i = 0; i < max(1, seatCount); i++) {
-        wonCoins += _rollLuckyWin(unitPrice);
-      }
-      final bool playSoundNow =
-          (wonCoins > 0) ? true : (nextCombo % 5 == 0);
-      if (playSoundNow) {
-        _playCoinSound();
-      }
-      if (wonCoins > 0) {
-        _showCompactWinBadge(wonCoins);
-      }
-    } else {
+int wonCoins = 0;
+    for (int i = 0; i < max(1, seatCount); i++) {
+      wonCoins += _rollLuckyWin(unitPrice);
+    }
+    final bool playSoundNow = (wonCoins > 0) ? true : (nextCombo % 5 == 0);
+    if (playSoundNow) {
       _playCoinSound();
     }
+    if (wonCoins > 0) {
+      _showCompactWinBadge(wonCoins);
+    }
+
+    final String giftIconStr = (config['icon'] ?? "🎁").toString();
+    final String giftAssetStr = (config['asset'] ?? "").toString();
+    final String giftNameStr = (config['name'] ?? "Gift").toString();
+
+    _fullscreenAnimStreamController.add(
+      FullscreenGiftEvent(
+        giftId: (config['giftId'] ?? "").toString(),
+        giftName: "$giftNameStr (Combo x$nextCombo)",
+        asset: giftAssetStr,
+        giftIcon: giftIconStr,
+        senderName: widget.userName,
+      ),
+    );
 
     final int netChange = -totalSpend + wonCoins;
     FirebaseFirestore.instance.collection('users').doc(_resolvedUid).set({
@@ -1299,7 +1332,7 @@ for (int i = 0; i < max(1, seatCount); i++) {
       'wealthExp': FieldValue.increment(totalSpend),
     }, SetOptions(merge: true)).catchError((_) {});
 
-    final double rate = isLucky ? 0.04 : 0.70;
+    const double rate = 0.04;
     final int ptsPerSeat = max(1, (sendCost * rate).round());
     final List<int> activeTargets = isAll
         ? <int>[
@@ -1325,24 +1358,27 @@ for (int i = 0; i < max(1, seatCount); i++) {
         .add({
       'type': 'gift',
       'senderId': _resolvedUid,
-      'giftName': config['name'],
-      'giftIcon': config['icon'] ?? '🎁',
-      'imageAsset': config['asset'],
+      'giftId': (config['giftId'] ?? "").toString(),
+      'giftName': giftNameStr,
+      'giftIcon': giftIconStr,
+      'imageAsset': giftAssetStr,
+      'multiplier': nextCombo,
       'seats': activeTargets,
       'totalCost': totalSpend,
-      'isLucky': isLucky,
+      'isLucky': true,
       'createdAt': FieldValue.serverTimestamp(),
     }).catchError((_) {});
 
     _executeMultiSeatSend(
+      giftId: (config['giftId'] ?? "").toString(),
       targetSeats: targets,
       isAll: isAll,
       cost: sendCost,
       unitPrice: unitPrice,
-      name: config['name'].toString(),
-      asset: config['asset'].toString(),
-      icon: (config['icon'] ?? "🎁").toString(),
-      isLucky: isLucky,
+      name: giftNameStr,
+      asset: giftAssetStr,
+      icon: giftIconStr,
+      isLucky: true,
       wonCoins: wonCoins,
       fromCombo: true,
     );
@@ -1389,18 +1425,20 @@ for (int i = 0; i < max(1, seatCount); i++) {
         if (result.wonCoins > 0) {
           _showCompactWinBadge(result.wonCoins);
         }
-      } else {
-        _fullscreenAnimStreamController.add(
-          FullscreenGiftEvent(
-            giftId: result.gift.id,
-            giftName: "${result.gift.name} x${result.multiplier}",
-            asset: playAsset,
-            senderName: widget.userName,
-          ),
-        );
       }
 
+_fullscreenAnimStreamController.add(
+        FullscreenGiftEvent(
+          giftId: result.gift.id,
+          giftName: "${result.gift.name} x${result.multiplier}",
+          asset: playAsset,
+          giftIcon: result.gift.icon,
+          senderName: widget.userName,
+        ),
+      );
+
       _executeMultiSeatSend(
+        giftId: result.gift.id,
         targetSeats: result.targetSeatIndices,
         isAll: result.isAll,
         cost: result.rawGiftCostPerSeat,
@@ -1416,7 +1454,8 @@ for (int i = 0; i < max(1, seatCount); i++) {
     }
   }
 
-void _executeMultiSeatSend({
+  void _executeMultiSeatSend({
+    String giftId = "",
     required List<int> targetSeats,
     required bool isAll,
     required int cost,
@@ -1439,23 +1478,36 @@ void _executeMultiSeatSend({
 
     setState(() {
       if (!fromCombo) {
-        _comboCount = 1;
-        _showComboButton = true;
+        if (isLucky) {
+          _comboCount = 1;
+          _showComboButton = true;
+        } else {
+          _comboCount = 0;
+          _showComboButton = false;
+          _comboTimer?.cancel();
+        }
       }
 
       if (isAll) {
+        bool anyOccupied = false;
         for (int i = 0; i < _totalSeats; i++) {
           if (_seats[i] != null) {
+            anyOccupied = true;
             _seatGifts[i] += cost;
             for (int b = 0; b < burstCount; b++) {
               _triggerCenterGiftAnimation(asset, i, icon: icon, isToAll: true);
             }
           }
         }
+        if (!anyOccupied) {
+          _triggerCenterGiftAnimation(asset, 0, icon: icon, isToAll: true);
+        }
       } else {
         for (final seatIdx in targetSeats) {
-          if (seatIdx >= 0 && seatIdx < 30 && _seats[seatIdx] != null) {
-            _seatGifts[seatIdx] += cost;
+          if (seatIdx >= 0 && seatIdx < 30) {
+            if (_seats[seatIdx] != null) {
+              _seatGifts[seatIdx] += cost;
+            }
             for (int b = 0; b < burstCount; b++) {
               _triggerCenterGiftAnimation(asset, seatIdx, icon: icon);
             }
@@ -1464,18 +1516,22 @@ void _executeMultiSeatSend({
       }
     });
 
-    _lastSentGiftConfig = {
-      'targetSeats': targetSeats,
-      'isAll': isAll,
-      'cost': cost,
-      'unitPrice': unitPrice,
-      'name': name,
-      'asset': asset,
-      'icon': icon,
-      'isLucky': isLucky,
-    };
-
-    _startComboTimer();
+    if (isLucky) {
+      _lastSentGiftConfig = {
+        'giftId': giftId,
+        'targetSeats': targetSeats,
+        'isAll': isAll,
+        'cost': cost,
+        'unitPrice': unitPrice,
+        'name': name,
+        'asset': asset,
+        'icon': icon,
+        'isLucky': isLucky,
+      };
+      _startComboTimer();
+    } else {
+      _lastSentGiftConfig = null;
+    }
   }
 
   void _cleanupAndLeave() {
@@ -1511,7 +1567,8 @@ void _executeMultiSeatSend({
     }
     _rocketBannerTimer?.cancel();
     _pkTickerTimer?.cancel();
-    _luckyWinToastTimer?.cancel();
+
+_luckyWinToastTimer?.cancel();
     _walletSubscription?.cancel();
     _pointsSubscription?.cancel();
     _roomLiveSubscription?.cancel();
@@ -1550,8 +1607,7 @@ void _executeMultiSeatSend({
   }) {
     final occupier = _seats[index];
     final isOccupied = occupier != null;
-
-final isSpeaking = _speakingSeatIndices.contains(index);
+    final isSpeaking = _speakingSeatIndices.contains(index);
     final isMuted = _seatMutes[index];
     final giftsCount = _seatGifts[index];
     final bool isHostSeat = index == 0;
@@ -1613,7 +1669,8 @@ final isSpeaking = _speakingSeatIndices.contains(index);
                       )
                     else
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.25),
+
+color: Colors.black.withOpacity(0.25),
                         blurRadius: 4,
                         offset: const Offset(0, 2),
                       ),
@@ -1645,8 +1702,7 @@ final isSpeaking = _speakingSeatIndices.contains(index);
                     ),
                     child: Icon(
                       isMuted ? Icons.mic_off : Icons.mic,
-
-size: (seatDimension * 0.22).clamp(9.0, 15.0),
+                      size: (seatDimension * 0.22).clamp(9.0, 15.0),
                       color: Colors.white,
                     ),
                   ),
@@ -1703,9 +1759,8 @@ size: (seatDimension * 0.22).clamp(9.0, 15.0),
   }
 
   Widget _buildPkScoreboard() {
-    if (_pkData == null || _pkData!['active'] != true) {
-      return const SizedBox.shrink();
-    }
+    if (_pkData == null) return const SizedBox.shrink();
+    if (_pkData!['active'] != true) return const SizedBox.shrink();
     final int rScore = (_pkData!['redScore'] as num?)?.toInt() ?? 0;
     final int bScore = (_pkData!['blueScore'] as num?)?.toInt() ?? 0;
     final int total = rScore + bScore;
@@ -1717,7 +1772,8 @@ size: (seatDimension * 0.22).clamp(9.0, 15.0),
         "${mins.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}";
 
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+
+margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: kGoldBlackBottom,
@@ -1751,8 +1807,7 @@ size: (seatDimension * 0.22).clamp(9.0, 15.0),
                 ),
               ),
               Text(
-
-"$bScore :${_pkData!['blueName'] ?? 'Blue'}",
+                "$bScore :${_pkData!['blueName'] ?? 'Blue'}",
                 style: const TextStyle(
                     color: Color(0xFF448AFF),
                     fontSize: 11,
@@ -1785,9 +1840,8 @@ size: (seatDimension * 0.22).clamp(9.0, 15.0),
   }
 
   Widget _buildMusicMiniBar() {
-    if (_musicData == null || _musicData!['isPlaying'] != true) {
-      return const SizedBox.shrink();
-    }
+    if (_musicData == null) return const SizedBox.shrink();
+    if (_musicData!['isPlaying'] != true) return const SizedBox.shrink();
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
@@ -1829,7 +1883,8 @@ size: (seatDimension * 0.22).clamp(9.0, 15.0),
   }
 
   dynamic _buildSeatedUsersList() {
-    dynamic dynVal = '';
+
+dynamic dynVal = '';
     final sampleItem = {'seatIndex': 0, 'uid': dynVal, 'name': ''};
     final list = [sampleItem]..clear();
     for (int i = 0; i < _totalSeats; i++) {
@@ -1873,8 +1928,7 @@ size: (seatDimension * 0.22).clamp(9.0, 15.0),
             icon: const Icon(Icons.keyboard_arrow_down_rounded,
                 color: kBlackText, size: 28),
             tooltip: "Minimize",
-
-onPressed: _minimizeRoom,
+            onPressed: _minimizeRoom,
           ),
           iconTheme: const IconThemeData(color: kBlackText),
           title: Column(
@@ -1941,7 +1995,8 @@ onPressed: _minimizeRoom,
               icon: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  border: Border.all(color: kGoldBorder, width: 1.3),
+
+border: Border.all(color: kGoldBorder, width: 1.3),
                   borderRadius: BorderRadius.circular(12),
                   color: kGoldBlackBottom,
                 ),
@@ -1973,8 +2028,7 @@ onPressed: _minimizeRoom,
                                 : Colors.white,
                             fontWeight: FontWeight.bold,
                           ),
-
-),
+                        ),
                       ))
                   .toList(),
             ),
@@ -2043,7 +2097,7 @@ onPressed: _minimizeRoom,
                         final double reservedLabelH =
                             nameFontSize + badgeFontSize + 14.0;
 
-                        final double maxByHeight =
+final double maxByHeight =
                             (cellH - reservedLabelH).clamp(28.0, 125.0);
                         final double maxByWidth =
                             (cellW * 0.72).clamp(28.0, 125.0);
@@ -2065,8 +2119,7 @@ onPressed: _minimizeRoom,
                                     }
                                     return Expanded(
                                       child: Center(
-
-child: _buildSingleSeat(
+                                        child: _buildSingleSeat(
                                           index: seatIdx,
                                           seatDimension: seatDimension,
                                           nameFontSize: nameFontSize,
@@ -2123,7 +2176,8 @@ child: _buildSingleSeat(
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 6, vertical: 1.5),
                             decoration: BoxDecoration(
-                              color: kGoldBorder,
+
+color: kGoldBorder,
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Text(
@@ -2150,8 +2204,7 @@ child: _buildSingleSeat(
                         physics: const BouncingScrollPhysics(),
                         padding: const EdgeInsets.only(bottom: 6),
                         itemCount: _messages.length,
-
-itemBuilder: (context, index) {
+                        itemBuilder: (context, index) {
                           final item = _messages[index];
                           return Align(
                             alignment: Alignment.centerLeft,
@@ -2200,7 +2253,8 @@ itemBuilder: (context, index) {
                                     ),
                                   ],
                                 ),
-                              ),
+
+),
                             ),
                           );
                         },
@@ -2230,8 +2284,7 @@ itemBuilder: (context, index) {
                           child: IconButton(
                             icon: Icon(
                               _isMuted ? Icons.mic_off : Icons.mic,
-
-color: _mySeatIndex != null
+                              color: _mySeatIndex != null
                                   ? (_isMuted ? Colors.redAccent : kGoldBright)
                                   : kSubBlack,
                               size: 24,
@@ -2283,7 +2336,8 @@ color: _mySeatIndex != null
                         Container(
                           decoration: const BoxDecoration(
                             shape: BoxShape.circle,
-                            color: kGoldBlackBottom,
+
+color: kGoldBlackBottom,
                           ),
                           child: IconButton(
                             icon: const Icon(Icons.card_giftcard,
@@ -2312,8 +2366,7 @@ color: _mySeatIndex != null
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(color: kGoldBright, width: 1.6),
                         boxShadow: [
-
-BoxShadow(
+                          BoxShadow(
                             color: Colors.redAccent.withOpacity(0.5),
                             blurRadius: 10,
                           ),
@@ -2372,7 +2425,8 @@ BoxShadow(
                           fontWeight: FontWeight.bold,
                           fontSize: 12,
                         ),
-                      ),
+
+),
                     ),
                   ),
                 ),
@@ -2401,8 +2455,7 @@ BoxShadow(
                             fontSize: 11.5,
                             fontWeight: FontWeight.bold,
                           ),
-
-),
+                        ),
                       ),
                     ),
                   ),
@@ -2463,7 +2516,8 @@ BoxShadow(
                 giftStream: _fullscreenAnimStreamController.stream,
               ),
               if (_showComboButton)
-                Positioned(
+
+Positioned(
                   bottom: 65,
                   right: 20,
                   child: Transform.scale(
@@ -2491,8 +2545,7 @@ BoxShadow(
                           Container(
                             width: 62,
                             height: 62,
-
-decoration: BoxDecoration(
+                            decoration: BoxDecoration(
                               shape: BoxShape.circle,
                               gradient: LinearGradient(
                                 colors: comboTier >= 2
