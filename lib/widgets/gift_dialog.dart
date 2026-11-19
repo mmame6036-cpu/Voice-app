@@ -111,7 +111,7 @@ GiftItem(id: "svga11", name: "Golden Eagle", icon: "🦅", price: 8000, imageAss
     GiftItem(id: "svga14", name: "Victory Trophy", icon: "🏆", price: 13500, imageAsset: "assets/images/svga14.jpg", animationAsset: "assets/svga/svga14.mp4", category: GiftCategory.hot),
     GiftItem(id: "svga15", name: "Magic Lamp", icon: "🪔", price: 15000, imageAsset: "assets/images/svga15.jpg", animationAsset: "assets/svga/svga15.mp4", category: GiftCategory.hot),
 
-    // 2. LUCKY CATEGORY (Original Custom Images Restored)
+    // 2. LUCKY CATEGORY
     GiftItem(id: "ke1", name: "ke1", icon: "🔑", price: 10, imageAsset: "assets/images/ke1.jpg", category: GiftCategory.lucky),
     GiftItem(id: "ke2", name: "ke2", icon: "🔑", price: 20, imageAsset: "assets/images/ke2.jpg", category: GiftCategory.lucky),
     GiftItem(id: "ke3", name: "ke3", icon: "👑", price: 30, imageAsset: "assets/images/ke3.jpg", category: GiftCategory.lucky),
@@ -190,7 +190,7 @@ GiftItem(id: "svga25", name: "Starry Proposal", icon: "🌠", price: 65000, imag
     }
   }
 
-  Future<void> _playFiveWinSound() async {
+  Future<void> _playLuckyCoinSound() async {
     try {
       final AudioPlayer player = AudioPlayer();
       await player.setPlayerMode(PlayerMode.mediaPlayer);
@@ -306,11 +306,7 @@ try {
             wonCoins += selectedGift.price * mult;
           }
         }
-        if (wonCoins > 0) {
-          _playFiveWinSound();
-        }
-      } else {
-        _playFiveWinSound();
+        _playLuckyCoinSound();
       }
 
       final senderRef = FirebaseFirestore.instance.collection('users').doc(_currentUser!.uid);
@@ -483,7 +479,6 @@ Widget _buildBorderlessGiftVisual(GiftItem gift, bool isSelected) {
       ),
       child: Column(
         children: [
-          // Seat selector
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: const BoxDecoration(
@@ -573,7 +568,6 @@ return GestureDetector(
             ),
           ),
 
-          // Categories
           Container(
             height: 38,
             margin: const EdgeInsets.symmetric(vertical: 4),
@@ -616,14 +610,12 @@ return GestureDetector(
             ),
           ),
 
-          // Gifts Grid (Original Gift Artwork with Rectangular Corners Blended Out)
           Expanded(
             child: GridView.builder(
               padding: const EdgeInsets.all(8),
               itemCount: currentGifts.length,
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-
-crossAxisCount: 4,
+                crossAxisCount: 4,
                 mainAxisSpacing: 8,
                 crossAxisSpacing: 8,
                 childAspectRatio: 0.82,
@@ -632,7 +624,7 @@ crossAxisCount: 4,
                 final gift = currentGifts[index];
                 final isSelected = _selectedGiftIndex == index;
 
-                return GestureDetector(
+return GestureDetector(
                   onTap: () => setState(() => _selectedGiftIndex = index),
                   child: Container(
                     color: Colors.transparent,
@@ -668,7 +660,6 @@ crossAxisCount: 4,
             ),
           ),
 
-          // Bottom control bar (Multiplier shown ONLY under Lucky)
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: const BoxDecoration(
@@ -714,15 +705,15 @@ crossAxisCount: 4,
                                 ),
                               ),
                             ))
-
-.toList(),
+                        .toList(),
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
                         color: Colors.white.withOpacity(0.08),
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(color: Colors.white24),
-                      ),
+
+),
                       child: Row(
                         children: [
                           Text(
