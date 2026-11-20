@@ -97,6 +97,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
   String? _roomPassword;
   List<String> _roomAdmins = [];
   String _liveRoomTitle = "";
+  String _roomHostUid = "";
   String _roomAnnouncement = "";
   String _equippedFrame = "default";
   final List<String> _seatFrames = List.filled(30, 'default');
@@ -155,13 +156,11 @@ StreamSubscription? _walletSubscription;
   String? _luckyWinToast;
   Timer? _luckyWinToastTimer;
 
-  // Level 5: Joined Slide-in Banner
   String? _entryBannerText;
   String _entryBannerLevel = "Lv.1";
   late AnimationController _entryMarqueeController;
   late Animation<Offset> _entryMarqueeAnimation;
 
-  // Level 3: Top Lucky Winner Marquee
   final List<String> _winnerMarqueeItems = [
     "🏆 Amina won 100x in Lucky Gift!",
     "🎉 Kedir won 50x in Prism Diamond!",
@@ -171,7 +170,6 @@ StreamSubscription? _walletSubscription;
   int _winnerMarqueeIndex = 0;
   Timer? _winnerMarqueeTimer;
 
-  // Level 4: Chat Filter (0 = All, 1 = Room, 2 = Chat)
   int _chatFilterIndex = 0;
 
   final Set<int> _speakingSeatIndices = {};
@@ -191,14 +189,22 @@ StreamSubscription? _walletSubscription;
     return "guest_${widget.userNumericId}";
   }
 
-  bool get _isHostUser {
-    if (widget.userName == widget.hostName) return true;
-    if (_mySeatIndex == 0) return true;
+  // Strict Room Owner Check: Only the true room owner can sit on Seat 1
+  bool get _isRoomOwner {
+    if (widget.roomId == 'room_$_resolvedUid') return true;
+    if (_roomHostUid.isNotEmpty && _resolvedUid == _roomHostUid) return true;
+    if (_roomHostUid.isEmpty &&
+        widget.hostName.isNotEmpty &&
+        widget.userName == widget.hostName) {
+      return true;
+    }
     return false;
   }
 
+  bool get _isHostUser => _isRoomOwner;
+
   bool get _isAdminUser {
-    if (_isHostUser) return true;
+    if (_isRoomOwner) return true;
     if (_roomAdmins.contains(_resolvedUid)) return true;
     if (_roomAdmins.contains(widget.userName)) return true;
     return false;
@@ -259,7 +265,8 @@ StreamSubscription? _walletSubscription;
     );
 
     _entryMarqueeController = AnimationController(
-      vsync: this,
+
+vsync: this,
       duration: const Duration(milliseconds: 3400),
     );
     _entryMarqueeAnimation = Tween(
@@ -270,7 +277,7 @@ StreamSubscription? _walletSubscription;
       curve: Curves.easeInOut,
     ));
 
-_entryMarqueeController.addStatusListener((status) {
+    _entryMarqueeController.addStatusListener((status) {
       if (status == AnimationStatus.completed && mounted) {
         setState(() => _entryBannerText = null);
       }
@@ -404,10 +411,9 @@ _entryMarqueeController.addStatusListener((status) {
     } catch (_) {}
   }
 
-  void _startPkCountdownTicker() {
+void _startPkCountdownTicker() {
     _pkTickerTimer?.cancel();
-
-_pkTickerTimer = Timer.periodic(const Duration(seconds: 1), (_) async {
+    _pkTickerTimer = Timer.periodic(const Duration(seconds: 1), (_) async {
       if (!mounted) return;
       if (_pkData != null && _pkData!['active'] == true) {
         final int endMs = (_pkData!['endTimeMs'] as num?)?.toInt() ?? 0;
@@ -472,15 +478,16 @@ _pkTickerTimer = Timer.periodic(const Duration(seconds: 1), (_) async {
           if (_mySeatIndex != null) {
             _seatFrames[_mySeatIndex!] = frame;
           }
-          if (_isHostUser) {
+          if (_isRoomOwner) {
             _isRoomOwnerAgent = amAgent;
           }
         });
-        if (_isHostUser) {
+        if (_isRoomOwner) {
           FirebaseFirestore.instance
               .collection('rooms')
               .doc(widget.roomId)
               .set({
+            'hostUid': _resolvedUid,
             'isAgentHost': amAgent,
             'goldenSeatCount': amAgent ? 6 : 3,
           }, SetOptions(merge: true)).catchError((_) {});
@@ -520,12 +527,12 @@ _pkTickerTimer = Timer.periodic(const Duration(seconds: 1), (_) async {
     });
   }
 
-  Future<void> _claimRedPacket() async {
+Future<void> _claimRedPacket() async {
     if (_isClaimingPacket) return;
     if (_activeRedPacketId == null) return;
     _isClaimingPacket = true;
 
-final packetRef = FirebaseFirestore.instance
+    final packetRef = FirebaseFirestore.instance
         .collection('rooms')
         .doc(widget.roomId)
         .collection('red_packets')
@@ -642,13 +649,13 @@ final packetRef = FirebaseFirestore.instance
       if (_hasCleanedUp) return;
       if (_isMinimizing) return;
       if (!mounted) return;
-      if (_mySeatIndex != null) {
+
+if (_mySeatIndex != null) {
         final idx = _mySeatIndex!;
         FirebaseFirestore.instance
             .collection('rooms')
             .doc(widget.roomId)
-
-.set({
+            .set({
           'activeSeats': {
             '$idx': {
               'uid': _resolvedUid,
@@ -681,7 +688,7 @@ final packetRef = FirebaseFirestore.instance
         final List<String> kicked =
             (data['kickedUsers'] as List?)?.map((e) => e.toString()).toList() ??
                 [];
-        if (kicked.contains(_resolvedUid) && !_isHostUser) {
+        if (kicked.contains(_resolvedUid) && !_isRoomOwner) {
           _cleanupAndLeave();
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
@@ -694,6 +701,7 @@ final packetRef = FirebaseFirestore.instance
 
         final String updatedTitle =
             (data['roomTitle'] ?? data['title'] ?? '').toString();
+        final String hostUidDoc = (data['hostUid'] ?? '').toString();
         final String announcementText =
             (data['announcement'] ?? '').toString();
         final bool allClosed = data['allMicsClosed'] == true;
@@ -738,6 +746,9 @@ final packetRef = FirebaseFirestore.instance
           if (updatedTitle.isNotEmpty) {
             _liveRoomTitle = updatedTitle;
           }
+          if (hostUidDoc.isNotEmpty) {
+            _roomHostUid = hostUidDoc;
+          }
           if (announcementText.isNotEmpty) {
             _roomAnnouncement = announcementText;
           }
@@ -748,13 +759,12 @@ final packetRef = FirebaseFirestore.instance
           _pkData = pk;
           _musicData = music;
 
-          int? foundMySeat;
+int? foundMySeat;
           for (int i = 0; i < 30; i++) {
             final entry = activeMap['$i'];
             if (entry is Map) {
               final uid = (entry['uid'] ?? '').toString();
-
-final name = (entry['name'] ?? 'User').toString();
+              final name = (entry['name'] ?? 'User').toString();
               final muted = entry['isMuted'] == true;
               final numId = (entry['numericId'] as num?)?.toInt() ?? 0;
               final frame = (entry['frame'] ?? 'default').toString();
@@ -1144,7 +1154,6 @@ Future<void> _leaveMySeat(int index) async {
     await _agoraService.switchRole(isSpeaker: false);
   }
 
-  // Level 6: Daily Host Task Sheet (3 Hours / 7,000 Points)
   void _showHostTaskSheet() {
     final double ptsProgress = (_myPoints / 7000).clamp(0.0, 1.0);
     showModalBottomSheet(
@@ -1222,10 +1231,10 @@ Future<void> _leaveMySeat(int index) async {
                             color: Colors.white,
                             fontWeight: FontWeight.bold,
                             fontSize: 13.5,
-
-),
+                          ),
                         ),
-                        Text(
+
+Text(
                           "7,000 Pts / Day",
                           style: TextStyle(
                             color: kMintLive,
@@ -1291,7 +1300,7 @@ Future<void> _leaveMySeat(int index) async {
                   onPressed: () {
                     Navigator.pop(ctx);
                     if (_mySeatIndex == null) {
-                      _handleSeatTap(0);
+                      _handleSeatTap(_isRoomOwner ? 0 : 1);
                     }
                   },
                   child: Text(
@@ -1312,7 +1321,6 @@ Future<void> _leaveMySeat(int index) async {
     );
   }
 
-  // Level 6: Quick Game & Lucky Launcher Sheet
   void _showQuickGameSheet() {
     showModalBottomSheet(
       context: context,
@@ -1327,10 +1335,10 @@ Future<void> _leaveMySeat(int index) async {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
-
-children: [
+            children: [
               const Text(
-                "Party Games & Lucky Win 🎮",
+
+"Party Games & Lucky Win 🎮",
                 style: TextStyle(
                   color: kGoldBright,
                   fontSize: 18,
@@ -1416,10 +1424,10 @@ children: [
                       child: Container(
                         padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(
-
-color: kGlassCard,
+                          color: kGlassCard,
                           borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: kMintLive, width: 1.3),
+
+border: Border.all(color: kMintLive, width: 1.3),
                         ),
                         child: const Column(
                           children: [
@@ -1512,10 +1520,10 @@ color: kGlassCard,
                       color: Color(0xFF101C2C),
                       borderRadius:
                           BorderRadius.vertical(top: Radius.circular(26)),
-
-border: Border(
+                      border: Border(
                         top: BorderSide(color: kGoldBright, width: 1.5),
-                      ),
+
+),
                       boxShadow: [
                         BoxShadow(
                           color: Colors.black54,
@@ -1592,11 +1600,11 @@ border: Border(
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),
-
-),
+                              ),
                             ],
                             const SizedBox(width: 6),
-                            Container(
+
+Container(
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 9, vertical: 2.5),
                               decoration: BoxDecoration(
@@ -1670,10 +1678,10 @@ border: Border(
                                         color: kGoldBright.withOpacity(0.18),
                                       ),
                                       child: const Center(
-
-child: Text("👑",
+                                        child: Text("👑",
                                             style: TextStyle(fontSize: 20)),
-                                      ),
+
+),
                                     ),
                                     const SizedBox(width: 8),
                                     Column(
@@ -1741,11 +1749,11 @@ child: Text("👑",
                                         ),
                                       ],
                                     ),
-
-const SizedBox(height: 4),
+                                    const SizedBox(height: 4),
                                     const Row(
                                       children: [
-                                        Text("🌹",
+
+Text("🌹",
                                             style: TextStyle(fontSize: 16)),
                                         SizedBox(width: 6),
                                         Text("👑",
@@ -1813,11 +1821,11 @@ const SizedBox(height: 4),
                                       borderRadius: BorderRadius.circular(14),
                                     ),
                                   ),
-
-icon: const Icon(Icons.person_remove,
+                                  icon: const Icon(Icons.person_remove,
                                       size: 16),
                                   label: const Text(
-                                    "Remove Seat",
+
+"Remove Seat",
                                     style: TextStyle(
                                         fontSize: 12,
                                         fontWeight: FontWeight.bold),
@@ -1888,12 +1896,12 @@ icon: const Icon(Icons.person_remove,
                                   ),
                                 ),
                               ),
-
-),
+                            ),
                             const SizedBox(width: 12),
                             Expanded(
                               child: SizedBox(
-                                height: 46,
+
+height: 46,
                                 child: ElevatedButton.icon(
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: kGoldBright,
@@ -1970,6 +1978,19 @@ icon: const Icon(Icons.person_remove,
       return;
     }
 
+    // Rule 1: Seat 1 (index 0) is strictly reserved for the Room Owner ONLY
+    if (index == 0 && !_isRoomOwner) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            "👑 ወንበር ቁጥር 1 ለቤቱ ባለቤት (Host) ብቻ የተፈቀደ ነው!",
+          ),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
     final roomRef =
         FirebaseFirestore.instance.collection('rooms').doc(widget.roomId);
 
@@ -1988,10 +2009,9 @@ icon: const Icon(Icons.person_remove,
         _myAgoraUid > 0 ? _myAgoraUid : widget.userNumericId;
     final bool shouldMuteOnJoin = _allMicsClosed && !_isAdminUser;
 
-    setState(() {
+setState(() {
       if (oldIndex != null && oldIndex != index) {
-
-_seatGifts[index] = _seatGifts[oldIndex];
+        _seatGifts[index] = _seatGifts[oldIndex];
         _seatGifts[oldIndex] = 0;
         _seats[oldIndex] = null;
         _seatUids[oldIndex] = null;
@@ -2126,7 +2146,8 @@ _seatGifts[index] = _seatGifts[oldIndex];
     ));
 
     FirebaseFirestore.instance
-        .collection('rooms')
+
+.collection('rooms')
         .doc(widget.roomId)
         .collection('messages')
         .add({
@@ -2140,7 +2161,7 @@ _seatGifts[index] = _seatGifts[oldIndex];
     _chatController.clear();
   }
 
-void _startComboTimer() {
+  void _startComboTimer() {
     _comboTimer?.cancel();
     _comboRingController.reset();
     _comboRingController.forward();
@@ -2262,7 +2283,7 @@ void _startComboTimer() {
       ),
     );
 
-    final int netChange = -totalSpend + wonCoins;
+final int netChange = -totalSpend + wonCoins;
     FirebaseFirestore.instance.collection('users').doc(_resolvedUid).set({
       'coins': FieldValue.increment(netChange),
       'wealthExp': FieldValue.increment(totalSpend),
@@ -2277,7 +2298,7 @@ void _startComboTimer() {
           ]
         : targets;
 
-for (final seatIdx in activeTargets) {
+    for (final seatIdx in activeTargets) {
       if (seatIdx >= 0 && seatIdx < 30 && _seats[seatIdx] != null) {
         final targetUid = _seatUids[seatIdx] ?? _resolvedUid;
         FirebaseFirestore.instance.collection('users').doc(targetUid).set({
@@ -2387,7 +2408,7 @@ for (final seatIdx in activeTargets) {
         result.gift.icon,
       );
 
-      _fullscreenAnimStreamController.add(
+_fullscreenAnimStreamController.add(
         FullscreenGiftEvent(
           giftId: result.gift.id,
           giftName: "${result.gift.name} x${result.multiplier}",
@@ -2414,7 +2435,7 @@ for (final seatIdx in activeTargets) {
     }
   }
 
-void _executeMultiSeatSend({
+  void _executeMultiSeatSend({
     String giftId = "",
     required List<int> targetSeats,
     required bool isAll,
@@ -2526,7 +2547,8 @@ void _executeMultiSeatSend({
       _cleanupAndLeave();
     }
     _winnerMarqueeTimer?.cancel();
-    _pkTickerTimer?.cancel();
+
+_pkTickerTimer?.cancel();
     _luckyWinToastTimer?.cancel();
     _walletSubscription?.cancel();
     _roomLiveSubscription?.cancel();
@@ -2548,13 +2570,13 @@ void _executeMultiSeatSend({
     super.dispose();
   }
 
-  // Level 2: 3 Golden Crown Seats for Host, 6 Golden Crown Seats for Agent
   bool _isGoldenSeat(int index) {
     return index >= 1 && index <= _goldenSeatsCount;
   }
 
-Color _getSeatFrameColor(int index, bool isOccupied, bool isSpeaking) {
+  Color _getSeatFrameColor(int index, bool isOccupied, bool isSpeaking) {
     if (isSpeaking) return kGoldBright;
+    if (index == 0) return kGoldBright;
     if (_isGoldenSeat(index)) return kGoldBright;
     if (!isOccupied) return Colors.white38;
     final frame = _seatFrames[index];
@@ -2634,37 +2656,51 @@ Color _getSeatFrameColor(int index, bool isOccupied, bool isSpeaking) {
     final bool isCrownSeat = _isGoldenSeat(index);
     final Color frameColor = _getSeatFrameColor(index, isOccupied, isSpeaking);
     final bool hasCustomFrame = isOccupied && _seatFrames[index] != 'default';
-    final bool showGlow =
-        isSpeaking ? true : (hasCustomFrame ? true : isCrownSeat);
+    final bool showGlow = isSpeaking
+        ? true
+        : (hasCustomFrame ? true : (isCrownSeat ? true : isHostSeat));
 
-    return GestureDetector(
+return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: () => _handleSeatTap(index),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         mainAxisSize: MainAxisSize.min,
         children: [
+          // 1. Seat Circle on Top
           Stack(
             clipBehavior: Clip.none,
             alignment: Alignment.center,
             children: [
               if (isSpeaking) _buildSpeakingRippleRings(seatDimension),
-              if (isHostSeat && isOccupied)
+              if (isHostSeat)
                 Positioned(
-                  top: -seatDimension * 0.30,
-                  child: Image.asset(
-                    'assets/images/wikimediaimages-candy-2201920.jpg',
-                    width: seatDimension * 0.70,
-                    errorBuilder: (c, e, s) => const SizedBox.shrink(),
-                  ),
-
-),
-              if (isCrownSeat)
-                Positioned(
-                  top: -seatDimension * 0.24,
+                  top: -seatDimension * 0.22,
                   child: Container(
                     padding:
-                        const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                        const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFFFFD700), Color(0xFFFF8F00)],
+                      ),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      "HOST",
+                      style: TextStyle(
+                        color: Colors.black,
+                        fontSize: (seatDimension * 0.16).clamp(6.5, 9.5),
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                ),
+              if (isCrownSeat)
+                Positioned(
+                  top: -seatDimension * 0.22,
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 4, vertical: 0.5),
                     decoration: BoxDecoration(
                       color: const Color(0xFF1A1205),
                       borderRadius: BorderRadius.circular(8),
@@ -2673,7 +2709,7 @@ Color _getSeatFrameColor(int index, bool isOccupied, bool isSpeaking) {
                     child: Text(
                       "👑",
                       style: TextStyle(
-                          fontSize: (seatDimension * 0.22).clamp(8.0, 13.0)),
+                          fontSize: (seatDimension * 0.20).clamp(7.5, 12.0)),
                     ),
                   ),
                 ),
@@ -2685,15 +2721,20 @@ Color _getSeatFrameColor(int index, bool isOccupied, bool isSpeaking) {
                   gradient: LinearGradient(
                     colors: isOccupied
                         ? const [Color(0xFF2D2216), Color(0xFF120D08)]
-                        : (isCrownSeat
+                        : (isHostSeat
                             ? [
-                                const Color(0xFF3A2A10).withOpacity(0.75),
-                                const Color(0xFF1A1308).withOpacity(0.85),
+                                const Color(0xFF4A330D),
+                                const Color(0xFF1E1405),
                               ]
-                            : [
-                                Colors.white.withOpacity(0.11),
-                                Colors.black.withOpacity(0.32),
-                              ]),
+                            : (isCrownSeat
+                                ? [
+                                    const Color(0xFF3A2A10).withOpacity(0.75),
+                                    const Color(0xFF1A1308).withOpacity(0.85),
+                                  ]
+                                : [
+                                    Colors.white.withOpacity(0.11),
+                                    Colors.black.withOpacity(0.32),
+                                  ])),
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
@@ -2701,18 +2742,21 @@ Color _getSeatFrameColor(int index, bool isOccupied, bool isSpeaking) {
                     color: frameColor,
                     width: isSpeaking
                         ? 2.6
-                        : (hasCustomFrame
-                            ? 2.4
-                            : (isCrownSeat
-                                ? 1.8
-                                : (isOccupied ? 1.9 : 1.2))),
+                        : (isHostSeat
+                            ? 2.2
+                            : (hasCustomFrame
+                                ? 2.4
+                                : (isCrownSeat
+                                    ? 1.8
+                                    : (isOccupied ? 1.9 : 1.2)))),
                   ),
                   boxShadow: [
                     if (showGlow)
-                      BoxShadow(
-                        color: frameColor.withOpacity(0.55),
-                        blurRadius: 10,
-                        spreadRadius: 1.5,
+
+BoxShadow(
+                        color: frameColor.withOpacity(0.5),
+                        blurRadius: 9,
+                        spreadRadius: 1,
                       )
                     else
                       BoxShadow(
@@ -2726,14 +2770,18 @@ Color _getSeatFrameColor(int index, bool isOccupied, bool isSpeaking) {
                   child: Icon(
                     isOccupied
                         ? Icons.person
-                        : (_allMicsClosed
-                            ? Icons.lock_outline
-                            : Icons.chair_rounded),
+                        : (isHostSeat
+                            ? Icons.lock_person_rounded
+                            : (_allMicsClosed
+                                ? Icons.lock_outline
+                                : Icons.chair_rounded)),
                     color: isOccupied
                         ? frameColor
-                        : (isCrownSeat
+                        : (isHostSeat
                             ? kGoldBright
-                            : kGoldBright.withOpacity(0.72)),
+                            : (isCrownSeat
+                                ? kGoldBright
+                                : kGoldBright.withOpacity(0.72))),
                     size: seatDimension * 0.45,
                   ),
                 ),
@@ -2752,15 +2800,15 @@ Color _getSeatFrameColor(int index, bool isOccupied, bool isSpeaking) {
                     ),
                     child: Icon(
                       isMuted ? Icons.mic_off : Icons.mic,
-
-size: (seatDimension * 0.22).clamp(9.0, 15.0),
+                      size: (seatDimension * 0.22).clamp(9.0, 15.0),
                       color: Colors.white,
                     ),
                   ),
                 ),
             ],
           ),
-          const SizedBox(height: 2),
+          // 2. Seat Number or User Name Directly BELOW the Seat Circle
+          const SizedBox(height: 3),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 2),
             child: Text(
@@ -2768,9 +2816,12 @@ size: (seatDimension * 0.22).clamp(9.0, 15.0),
               style: TextStyle(
                 color: isOccupied
                     ? Colors.white
-                    : (isCrownSeat ? kGoldBright : Colors.white70),
+                    : ((isCrownSeat || isHostSeat)
+                        ? kGoldBright
+                        : Colors.white70),
                 fontSize: nameFontSize,
                 fontWeight: FontWeight.w800,
+                height: 1.05,
                 shadows: const [
                   Shadow(
                     color: Colors.black87,
@@ -2783,13 +2834,14 @@ size: (seatDimension * 0.22).clamp(9.0, 15.0),
               overflow: TextOverflow.ellipsis,
             ),
           ),
+          // 3. Gift Badge BELOW the Seat Number / Name
           Container(
-            margin: const EdgeInsets.only(top: 1.0),
+            margin: const EdgeInsets.only(top: 2.0),
             padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
             decoration: BoxDecoration(
               color: (giftsCount > 0 && isOccupied)
                   ? kGoldBlackBottom
-                  : Colors.black.withOpacity(0.35),
+                  : Colors.black.withOpacity(0.38),
               borderRadius: BorderRadius.circular(8),
               border: Border.all(
                 color: (giftsCount > 0 && isOccupied)
@@ -2801,9 +2853,10 @@ size: (seatDimension * 0.22).clamp(9.0, 15.0),
             child: FittedBox(
               fit: BoxFit.scaleDown,
               child: Row(
-                mainAxisSize: MainAxisSize.min,
+
+mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text("🎁", style: TextStyle(fontSize: badgeFontSize * 0.92)),
+                  Text("🎁", style: TextStyle(fontSize: badgeFontSize * 0.90)),
                   const SizedBox(width: 2),
                   Text(
                     isOccupied ? "$giftsCount" : "0",
@@ -2813,6 +2866,7 @@ size: (seatDimension * 0.22).clamp(9.0, 15.0),
                           : Colors.white70,
                       fontSize: badgeFontSize,
                       fontWeight: FontWeight.bold,
+                      height: 1.0,
                     ),
                   ),
                 ],
@@ -2824,7 +2878,6 @@ size: (seatDimension * 0.22).clamp(9.0, 15.0),
     );
   }
 
-  // Level 3: Top Lucky Winner Marquee Banner with Play > Button
   Widget _buildTopLuckyWinnerMarquee() {
     final String activeWinnerText = _winnerMarqueeItems.isNotEmpty
         ? _winnerMarqueeItems[_winnerMarqueeIndex % _winnerMarqueeItems.length]
@@ -2863,8 +2916,7 @@ size: (seatDimension * 0.22).clamp(9.0, 15.0),
                   opacity: anim,
                   child: SlideTransition(
                     position: Tween<Offset>(
-
-begin: const Offset(0.15, 0.0),
+                      begin: const Offset(0.15, 0.0),
                       end: Offset.zero,
                     ).animate(anim),
                     child: child,
@@ -2920,7 +2972,7 @@ begin: const Offset(0.15, 0.0),
     );
   }
 
-  Widget _buildPkScoreboard() {
+Widget _buildPkScoreboard() {
     if (_pkData == null) return const SizedBox.shrink();
     if (_pkData!['active'] != true) return const SizedBox.shrink();
     final int rScore = (_pkData!['redScore'] as num?)?.toInt() ?? 0;
@@ -2969,8 +3021,7 @@ begin: const Offset(0.15, 0.0),
               ),
               Text(
                 "$bScore :${_pkData!['blueName'] ?? 'Blue'}",
-
-style: const TextStyle(
+                style: const TextStyle(
                     color: Color(0xFF448AFF),
                     fontSize: 11,
                     fontWeight: FontWeight.bold),
@@ -3022,7 +3073,8 @@ style: const TextStyle(
               style: const TextStyle(
                   color: Colors.white,
                   fontSize: 11,
-                  fontWeight: FontWeight.bold),
+
+fontWeight: FontWeight.bold),
               overflow: TextOverflow.ellipsis,
             ),
           ),
@@ -3044,7 +3096,6 @@ style: const TextStyle(
     );
   }
 
-  // Level 4: Filter Chip Helper (All / Room / Chat)
   Widget _buildChatFilterPill(String label, int tabIdx) {
     final bool active = _chatFilterIndex == tabIdx;
     return GestureDetector(
@@ -3097,14 +3148,13 @@ style: const TextStyle(
     final int rowCount = (_totalSeats / crossAxis).ceil();
     final size = MediaQuery.of(context).size;
 
-final int comboTier = (_comboCount ~/ 5) + 1;
+    final int comboTier = (_comboCount ~/ 5) + 1;
     final double comboScale =
         (1.0 + ((comboTier - 1) * 0.08)).clamp(1.0, 1.45);
     final String audioStatus = _agoraService.isChannelJoined
         ? "Audio: Live"
         : (_isConnecting ? "Connecting..." : "Audio: Wait");
 
-    // Level 4: Filtered Chat Messages
     final List<RoomChatMessage> filteredMessages = _messages.where((m) {
       if (_chatFilterIndex == 1) return m.isSystem;
       if (_chatFilterIndex == 2) return !m.isSystem;
@@ -3146,7 +3196,8 @@ final int comboTier = (_comboCount ~/ 5) + 1;
               tooltip: "Minimize",
               onPressed: _minimizeRoom,
             ),
-            iconTheme: const IconThemeData(color: Colors.white),
+
+iconTheme: const IconThemeData(color: Colors.white),
             title: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -3200,8 +3251,7 @@ final int comboTier = (_comboCount ~/ 5) + 1;
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-
-const Icon(Icons.stars, color: kGoldBright, size: 12),
+                    const Icon(Icons.stars, color: kGoldBright, size: 12),
                     const SizedBox(width: 4),
                     Text(
                       "$_myPoints",
@@ -3243,7 +3293,8 @@ const Icon(Icons.stars, color: kGoldBright, size: 12),
                 color: kGlassDark,
                 onSelected: (int count) => _changeSeatCount(count),
                 itemBuilder: (context) => _allowedSeatOptions
-                    .map((int count) => PopupMenuItem<int>(
+
+.map((int count) => PopupMenuItem<int>(
                           value: count,
                           child: Text(
                             "$count Seats Layout",
@@ -3294,8 +3345,7 @@ const Icon(Icons.stars, color: kGoldBright, size: 12),
                     color: Colors.redAccent),
                 onPressed: () {
                   _cleanupAndLeave();
-
-Navigator.pop(context);
+                  Navigator.pop(context);
                 },
               ),
             ],
@@ -3325,101 +3375,102 @@ Navigator.pop(context);
                 ),
                 Column(
                   children: [
-                    // Level 3: Top Lucky Winner Marquee
                     _buildTopLuckyWinnerMarquee(),
                     _buildPkScoreboard(),
                     _buildMusicMiniBar(),
 
-                    // Level 2: Dynamic Seat Layout (1 Host + 3/6 Golden Crown + Regular)
+                    // Seat Grid: Seat 1 on the Left Side of the Golden Crown Row
                     Expanded(
                       flex: 6,
                       child: LayoutBuilder(
                         builder: (context, constraints) {
                           final double areaW = constraints.maxWidth - 12.0;
-                          final double areaH = constraints.maxHeight - 4.0;
-                          final double cellH = areaH / rowCount;
-
-                          final double nameFontSize =
-                              (cellH * 0.13).clamp(8.5, 14.0);
-                          final double badgeFontSize =
-                              (cellH * 0.11).clamp(7.5, 12.0);
-                          final double reservedLabelH =
-                              nameFontSize + badgeFontSize + 14.0;
+                          final double areaH = constraints.maxHeight - 8.0;
 
                           final int goldenCount =
                               min(_goldenSeatsCount, max(0, _totalSeats - 1));
-                          final int regularStart = 1 + goldenCount;
+                          final int topRowCount = 1 + goldenCount;
+
+final int regularStart = topRowCount;
                           final int regularCount =
                               max(0, _totalSeats - regularStart);
                           final int regularCols = _totalSeats <= 12 ? 4 : 6;
                           final int regularRows =
                               (regularCount / regularCols).ceil();
-                          final int totalVisualRows = 2 + regularRows;
-                          final double dynamicCellH = areaH / totalVisualRows;
+                          final int totalVisualRows = 1 + regularRows;
+
+                          final double rowSpacing = 6.0;
+                          final double usableH =
+                              areaH - (rowSpacing * max(0, totalVisualRows - 1));
+                          final double dynamicCellH = usableH / totalVisualRows;
+
+                          final double nameFontSize =
+                              (dynamicCellH * 0.14).clamp(8.5, 13.0);
+                          final double badgeFontSize =
+                              (dynamicCellH * 0.115).clamp(7.5, 11.5);
+                          final double reservedLabelH =
+                              nameFontSize + badgeFontSize + 18.0;
+
+                          final int maxColsInAnyRow =
+                              max(regularCols, topRowCount);
                           final double dynamicSeatDim = min(
-                            (dynamicCellH - reservedLabelH).clamp(24.0, 108.0),
-                            ((areaW / max(regularCols, goldenCount)) * 0.72)
-                                .clamp(24.0, 108.0),
+                            (dynamicCellH - reservedLabelH).clamp(24.0, 96.0),
+                            ((areaW / maxColsInAnyRow) * 0.70)
+                                .clamp(24.0, 96.0),
                           );
 
                           return Padding(
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 6.0, vertical: 2.0),
+                                horizontal: 6.0, vertical: 4.0),
                             child: Column(
+                              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                               children: [
-                                // Row 1: Main Host Seat (No. 1) Centered
+                                // Top Row: Seat 1 (Host Exclusive on Left Side) + 3 or 6 Golden Crown Seats
                                 Expanded(
-                                  child: Center(
-                                    child: _buildSingleSeat(
-                                      index: 0,
-                                      seatDimension: dynamicSeatDim * 1.12,
-                                      nameFontSize: nameFontSize,
-                                      badgeFontSize: badgeFontSize,
-                                    ),
+                                  child: Row(
+                                    children: List.generate(topRowCount, (idx) {
+                                      return Expanded(
+                                        child: Center(
+                                          child: _buildSingleSeat(
+                                            index: idx,
+                                            seatDimension: dynamicSeatDim,
+                                            nameFontSize: nameFontSize,
+                                            badgeFontSize: badgeFontSize,
+                                          ),
+                                        ),
+                                      );
+                                    }),
                                   ),
                                 ),
-                                // Row 2: Golden Crown Seats (3 for Host, 6 for Agent)
-
-if (goldenCount > 0)
-                                  Expanded(
-                                    child: Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.spaceEvenly,
-                                      children: List.generate(goldenCount, (g) {
-                                        final int gSeatIdx = g + 1;
-                                        return _buildSingleSeat(
-                                          index: gSeatIdx,
-                                          seatDimension: dynamicSeatDim,
-                                          nameFontSize: nameFontSize,
-                                          badgeFontSize: badgeFontSize,
-                                        );
-                                      }),
-                                    ),
-                                  ),
-                                // Remaining Rows: Regular Seats
+                                // Regular Seats Rows Below
                                 ...List.generate(regularRows, (r) {
                                   return Expanded(
-                                    child: Row(
-                                      children:
-                                          List.generate(regularCols, (c) {
-                                        final int seatIdx = regularStart +
-                                            (r * regularCols) +
-                                            c;
-                                        if (seatIdx >= _totalSeats) {
-                                          return const Expanded(
-                                              child: SizedBox.shrink());
-                                        }
-                                        return Expanded(
-                                          child: Center(
-                                            child: _buildSingleSeat(
-                                              index: seatIdx,
-                                              seatDimension: dynamicSeatDim,
-                                              nameFontSize: nameFontSize,
-                                              badgeFontSize: badgeFontSize,
+                                    child: Padding(
+                                      padding:
+                                          const EdgeInsets.only(top: 4.0),
+                                      child: Row(
+                                        children:
+                                            List.generate(regularCols, (c) {
+                                          final int seatIdx = regularStart +
+                                              (r * regularCols) +
+                                              c;
+                                          if (seatIdx >= _totalSeats) {
+                                            return const Expanded(
+                                                child: SizedBox.shrink());
+                                          }
+                                          return Expanded(
+
+child: Center(
+                                              child: _buildSingleSeat(
+                                                index: seatIdx,
+                                                seatDimension: dynamicSeatDim,
+                                                nameFontSize: nameFontSize,
+                                                badgeFontSize: badgeFontSize,
+                                              ),
                                             ),
-                                          ),
-                                        );
-                                      }),
+                                          );
+                                        }),
+                                      ),
                                     ),
                                   );
                                 }),
@@ -3430,7 +3481,7 @@ if (goldenCount > 0)
                       ),
                     ),
 
-                    // Level 4: Chat Box with Left Filters (All / Room / Chat) + Pinned Announcement
+                    // Chat Box with Left Filters (All / Room / Chat) + Pinned Announcement
                     Expanded(
                       flex: 3,
                       child: Padding(
@@ -3438,7 +3489,6 @@ if (goldenCount > 0)
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            // Left Filter Tabs (All / Room / Chat)
                             Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
@@ -3448,12 +3498,10 @@ if (goldenCount > 0)
                               ],
                             ),
                             const SizedBox(width: 8),
-                            // Chat Stream + Pinned Announcement
                             Expanded(
                               child: ListView.builder(
                                 controller: _chatScrollController,
-
-physics: const BouncingScrollPhysics(),
+                                physics: const BouncingScrollPhysics(),
                                 padding: const EdgeInsets.only(bottom: 6),
                                 itemCount: filteredMessages.length + 1,
                                 itemBuilder: (context, index) {
@@ -3482,7 +3530,8 @@ physics: const BouncingScrollPhysics(),
                                                 fontWeight: FontWeight.w900,
                                                 fontSize: 11.5,
                                               ),
-                                            ),
+
+),
                                             TextSpan(
                                               text: announcementBody,
                                               style: const TextStyle(
@@ -3515,8 +3564,7 @@ physics: const BouncingScrollPhysics(),
                                           color: item.isSystem
                                               ? kGoldBright.withOpacity(0.75)
                                               : Colors.white.withOpacity(0.16),
-
-width: 0.9,
+                                          width: 0.9,
                                         ),
                                       ),
                                       child: RichText(
@@ -3547,7 +3595,8 @@ width: 0.9,
                                             TextSpan(
                                               text: item.message,
                                               style: TextStyle(
-                                                color: item.isSystem
+
+color: item.isSystem
                                                     ? const Color(0xFFFFF3D1)
                                                     : Colors.white,
                                                 fontWeight: FontWeight.w600,
@@ -3589,8 +3638,7 @@ width: 0.9,
                                   : Colors.white10,
                               border: Border.all(
                                 color: _mySeatIndex != null
-
-? kGoldBorder
+                                    ? kGoldBorder
                                     : Colors.white24,
                               ),
                             ),
@@ -3627,7 +3675,8 @@ width: 0.9,
                                   fontWeight: FontWeight.w600,
                                 ),
                                 cursorColor: kGoldBright,
-                                decoration: const InputDecoration(
+
+decoration: const InputDecoration(
                                   hintText: "Say Hello...",
                                   hintStyle: TextStyle(color: Colors.white54),
                                   border: InputBorder.none,
@@ -3665,8 +3714,7 @@ width: 0.9,
                                   blurRadius: 8,
                                 ),
                               ],
-
-),
+                            ),
                             child: IconButton(
                               icon: const Icon(Icons.card_giftcard,
                                   color: Colors.black, size: 22),
@@ -3679,7 +3727,7 @@ width: 0.9,
                   ],
                 ),
 
-                // Level 6: Floating Task & Game Icons on the Right Side
+                // Floating Task & Game Icons on the Right Side
                 Positioned(
                   right: 10,
                   bottom: _showComboButton ? 148 : 74,
@@ -3708,7 +3756,8 @@ width: 0.9,
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Icon(Icons.assignment_turned_in_rounded,
-                                  color: kGoldBright, size: 20),
+
+color: kGoldBright, size: 20),
                               SizedBox(height: 2),
                               Text(
                                 "Task",
@@ -3749,8 +3798,7 @@ width: 0.9,
                               SizedBox(height: 2),
                               Text(
                                 "Game",
-
-style: TextStyle(
+                                style: TextStyle(
                                   color: Colors.white,
                                   fontSize: 9.5,
                                   fontWeight: FontWeight.w900,
@@ -3793,7 +3841,8 @@ style: TextStyle(
                             Text(
                               "${_activeRedPacket!['senderName'] ?? 'VIP'}",
                               style: const TextStyle(
-                                  color: Colors.white,
+
+color: Colors.white,
                                   fontSize: 10,
                                   fontWeight: FontWeight.bold),
                             ),
@@ -3844,7 +3893,6 @@ style: TextStyle(
                     ),
                   ),
 
-// Level 5: Joined Slide-in Banner with Lv.X Badge Above Chat
                 if (_entryBannerText != null)
                   Positioned(
                     bottom: 195,
@@ -3878,7 +3926,8 @@ style: TextStyle(
                                 decoration: BoxDecoration(
                                   color: kGoldBright,
                                   borderRadius: BorderRadius.circular(10),
-                                ),
+
+),
                                 child: Text(
                                   _entryBannerLevel,
                                   style: const TextStyle(
@@ -3928,7 +3977,7 @@ style: TextStyle(
                       final bool isImageAsset = gift.asset.isNotEmpty &&
                           !gift.asset.toLowerCase().endsWith('.mp4');
 
-return Positioned(
+                      return Positioned(
                         left: currentX - 35,
                         top: currentY - 35,
                         child: Opacity(
@@ -3966,7 +4015,8 @@ return Positioned(
                     child: Transform.scale(
                       scale: comboScale,
                       child: GestureDetector(
-                        onTap: _onComboTapped,
+
+onTap: _onComboTapped,
                         child: Stack(
                           alignment: Alignment.center,
                           children: [
@@ -4008,8 +4058,7 @@ return Positioned(
                                   BoxShadow(
                                     color: Colors.black.withOpacity(0.55),
                                     blurRadius: 10,
-
-spreadRadius: 1,
+                                    spreadRadius: 1,
                                   ),
                                 ],
                               ),
