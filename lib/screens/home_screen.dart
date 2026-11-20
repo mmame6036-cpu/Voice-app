@@ -340,7 +340,7 @@ decoration: BoxDecoration(
                 final title = r["title"].toString().toLowerCase();
                 final host = r["host"].toString().toLowerCase();
                 final id = r["id"].toString().toLowerCase();
-                return title.contains(q)  host.contains(q)  id.contains(q);
+                return title.contains(q) || host.contains(q) || id.contains(q);
               }
               if (_selectedTopTab == 0) {
                 return _followedRoomIds.contains(r["id"]);
