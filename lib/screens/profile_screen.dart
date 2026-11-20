@@ -1,7 +1,11 @@
+import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:image_picker/image_picker.dart';
 
 import 'wallet_screen.dart';
 import 'points_wallet_screen.dart';
@@ -15,7 +19,7 @@ import 'host_center_screen.dart';
 import 'agency_screen.dart';
 import 'coin_seller_screen.dart';
 import 'support_screen.dart';
-import 'account_settings_screen.dart';
+import 'settings_screen.dart';
 import '../widgets/lucky_island_dialog.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -34,7 +38,9 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   final User? _currentUser = FirebaseAuth.instance.currentUser;
+  final ImagePicker _picker = ImagePicker();
   late int _coins;
+  bool _isUploadingAvatar = false;
 
   @override
   void initState() {
@@ -47,12 +53,267 @@ class _ProfileScreenState extends State<ProfileScreen> {
     widget.onCoinsUpdated?.call(newAmount);
   }
 
-  void _copyId(String displayId) {
-    Clipboard.setData(ClipboardData(text: displayId));
+  void _showSnack(String message, {bool isError = false}) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text("ID $displayId copied to clipboard"),
-        duration: const Duration(seconds: 1),
+        content: Text(
+          message,
+          style: const TextStyle(fontWeight: FontWeight.w600),
+        ),
+        backgroundColor:
+            isError ? const Color(0xFFE54D42) : const Color(0xFF1F2329),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  void _copyId(String displayId) {
+    Clipboard.setData(ClipboardData(text: displayId));
+    _showSnack("ID $displayId copied to clipboard");
+  }
+
+  ImageProvider? _resolveAvatarProvider(String? avatarUrl) {
+    if (avatarUrl == null || avatarUrl.isEmpty) return null;
+    if (avatarUrl.startsWith('data:image')) {
+      try {
+        final commaIdx = avatarUrl.indexOf(',');
+        if (commaIdx != -1) {
+          final Uint8List bytes = base64Decode(avatarUrl.substring(commaIdx + 1));
+          return MemoryImage(bytes);
+        }
+      } catch (_) {
+        return null;
+      }
+    }
+    return NetworkImage(avatarUrl);
+  }
+
+  void _showAvatarPickerSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+        ),
+        child: SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 10),
+              Container(
+                width: 38,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.black12,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 14),
+                child: Text(
+                  "Change Profile Photo",
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF111827),
+                  ),
+                ),
+              ),
+              const Divider(height: 1, color: Color(0xFFF1F5F9)),
+              ListTile(
+                leading: const CircleAvatar(
+
+backgroundColor: Color(0xFFE6F9F5),
+                  child: Icon(Icons.photo_library_rounded,
+                      color: Color(0xFF14B8A6)),
+                ),
+                title: const Text(
+                  "Choose from Gallery",
+                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+                ),
+                subtitle: const Text(
+                  "Select a photo from your phone gallery",
+                  style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                ),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _pickAndSaveAvatar(ImageSource.gallery);
+                },
+              ),
+              const Divider(height: 1, indent: 16, color: Color(0xFFF1F5F9)),
+              ListTile(
+                leading: const CircleAvatar(
+                  backgroundColor: Color(0xFFFFF7E6),
+                  child: Icon(Icons.folder_open_rounded,
+                      color: Color(0xFFF59E0B)),
+                ),
+                title: const Text(
+                  "Choose from Files",
+                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+                ),
+                subtitle: const Text(
+                  "Browse device storage and image folders",
+                  style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                ),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _pickAndSaveAvatar(ImageSource.gallery, useMediaPicker: true);
+                },
+              ),
+              const Divider(height: 1, indent: 16, color: Color(0xFFF1F5F9)),
+              ListTile(
+                leading: const CircleAvatar(
+                  backgroundColor: Color(0xFFEEF2FF),
+                  child: Icon(Icons.camera_alt_rounded,
+                      color: Color(0xFF4F46E5)),
+                ),
+                title: const Text(
+                  "Take Photo",
+                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+                ),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _pickAndSaveAvatar(ImageSource.camera);
+                },
+              ),
+              Container(height: 8, color: const Color(0xFFF3F5F7)),
+              InkWell(
+                onTap: () => Navigator.pop(ctx),
+                child: const SizedBox(
+                  width: double.infinity,
+                  height: 52,
+                  child: Center(
+                    child: Text(
+                      "Cancel",
+                      style: TextStyle(
+                        fontSize: 15.5,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF64748B),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickAndSaveAvatar(
+    ImageSource source, {
+    bool useMediaPicker = false,
+  }) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      _showSnack("Please sign in to update your profile photo.", isError: true);
+      return;
+    }
+
+    try {
+      XFile? picked;
+      if (useMediaPicker) {
+        picked = await _picker.pickMedia(
+          maxWidth: 512,
+          maxHeight: 512,
+          imageQuality: 75,
+        );
+      } else {
+        picked = await _picker.pickImage(
+          source: source,
+          maxWidth: 512,
+          maxHeight: 512,
+          imageQuality: 75,
+        );
+      }
+
+      if (picked == null) return;
+
+      setState(() => _isUploadingAvatar = true);
+
+      final Uint8List imageBytes = await picked.readAsBytes();
+      String savedUrl = "";
+
+      try {
+        final storageRef = FirebaseStorage.instance
+            .ref()
+            .child('profile_avatars')
+            .child('${user.uid}_${DateTime.now().millisecondsSinceEpoch}.jpg');
+
+final uploadTask = await storageRef.putData(
+          imageBytes,
+          SettableMetadata(contentType: 'image/jpeg'),
+        );
+        savedUrl = await uploadTask.ref.getDownloadURL();
+      } catch (_) {
+        // Fallback to compact Base64 Data URI in Firestore if Storage bucket is restricted
+        if (imageBytes.length <= 700000) {
+          savedUrl = "data:image/jpeg;base64,${base64Encode(imageBytes)}";
+        } else {
+          final XFile? smaller = await _picker.pickImage(
+            source: source,
+            maxWidth: 256,
+            maxHeight: 256,
+            imageQuality: 60,
+          );
+          if (smaller != null) {
+            final smallBytes = await smaller.readAsBytes();
+            savedUrl = "data:image/jpeg;base64,${base64Encode(smallBytes)}";
+          }
+        }
+      }
+
+      if (savedUrl.isEmpty) {
+        throw Exception("Could not process selected image");
+      }
+
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+        'avatarUrl': savedUrl,
+        'photoURL': savedUrl,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      if (savedUrl.startsWith('http')) {
+        try {
+          await user.updatePhotoURL(savedUrl);
+        } catch (_) {}
+      }
+
+      _showSnack("Profile photo updated successfully!");
+    } catch (e) {
+      _showSnack("Failed to update photo: $e", isError: true);
+    } finally {
+      if (mounted) {
+        setState(() => _isUploadingAvatar = false);
+      }
+    }
+  }
+
+  void _openEditProfile({
+    required String currentName,
+    required String currentBio,
+    required String currentGender,
+    required String currentCountry,
+    required String? avatarUrl,
+    required int numericId,
+  }) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => _EditProfileScreen(
+          currentName: currentName,
+          currentBio: currentBio,
+          currentGender: currentGender,
+          currentCountry: currentCountry,
+          currentAvatarUrl: avatarUrl,
+          numericId: numericId,
+          onChangePhotoTap: _showAvatarPickerSheet,
+          resolveAvatar: _resolveAvatarProvider,
+        ),
       ),
     );
   }
@@ -73,20 +334,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  void _openAccountSettings({
-    required String currentName,
-    required String? avatarUrl,
-    required int numericId,
-  }) {
+  void _openSettings() {
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => AccountSettingsScreen(
-          currentName: currentName,
-          currentAvatarUrl: avatarUrl,
-          numericId: numericId,
-        ),
-      ),
+      MaterialPageRoute(builder: (_) => const SettingsScreen()),
     );
   }
 
@@ -105,168 +356,194 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF3F5F7),
-      body: StreamBuilder(
-        stream: userStream,
-        builder: (context, snapshot) {
-          DocumentSnapshot? docSnap;
-          if (snapshot.hasData) {
-            docSnap = snapshot.data as DocumentSnapshot?;
-          }
+      body: Stack(
+        children: [
+          StreamBuilder(
+            stream: userStream,
+            builder: (context, snapshot) {
+              DocumentSnapshot? docSnap;
+              if (snapshot.hasData) {
+                docSnap = snapshot.data as DocumentSnapshot?;
+              }
 
-          Object? rawData;
-          if (docSnap != null) {
-            if (docSnap.exists) {
-              rawData = docSnap.data();
-            }
-          }
-          final Map userData = rawData is Map ? rawData : {};
+              Object? rawData;
+              if (docSnap != null && docSnap.exists) {
+                rawData = docSnap.data();
+              }
+              final Map userData = rawData is Map ? rawData : {};
 
-          String fallbackName = "User";
-          if (_currentUser != null) {
-            if (_currentUser!.displayName != null) {
-              if (_currentUser!.displayName!.isNotEmpty) {
+              String fallbackName = "User";
+              if (_currentUser != null &&
+                  _currentUser!.displayName != null &&
+                  _currentUser!.displayName!.isNotEmpty) {
                 fallbackName = _currentUser!.displayName!;
               }
-            }
-          }
 
-          final String displayName =
-              (userData['name'] ?? userData['nickname'] ?? fallbackName)
-                  .toString();
+final String displayName =
+                  (userData['name'] ?? userData['nickname'] ?? fallbackName)
+                      .toString();
+              final String bio = (userData['bio'] ?? '').toString();
+              final String gender = (userData['gender'] ?? 'Male').toString();
+              final String country =
+                  (userData['country'] ?? 'Ethiopia 🇪🇹').toString();
 
-          final int numericId = (userData['numericId'] as num?)?.toInt() ?? 0;
-          String displayId = "000000";
-          if (numericId != 0) {
-            displayId = numericId.toString();
-          } else if (uid.length >= 6) {
-            displayId = uid.substring(0, 6).toUpperCase();
-          } else if (uid.isNotEmpty) {
-            displayId = uid;
-          }
+              final int numericId =
+                  (userData['numericId'] as num?)?.toInt() ?? 0;
+              String displayId = "000000";
+              if (numericId != 0) {
+                displayId = numericId.toString();
+              } else if (uid.length >= 6) {
+                displayId = uid.substring(0, 6).toUpperCase();
+              } else if (uid.isNotEmpty) {
+                displayId = uid;
+              }
 
-final int firestoreCoins =
-              (userData['coins'] as num?)?.toInt() ?? _coins;
-          final double points = (userData['diamonds'] as num?)?.toDouble() ??
-              (userData['points'] as num?)?.toDouble() ??
-              0.0;
+              final int firestoreCoins =
+                  (userData['coins'] as num?)?.toInt() ?? _coins;
+              final double points =
+                  (userData['diamonds'] as num?)?.toDouble() ??
+                      (userData['points'] as num?)?.toDouble() ??
+                      0.0;
 
-          final int followedCount =
-              (userData['followedCount'] as num?)?.toInt() ?? 0;
-          final int followingCount =
-              (userData['followingCount'] as num?)?.toInt() ?? 0;
-          final int friendsCount =
-              (userData['friendsCount'] as num?)?.toInt() ?? 0;
+              final int followedCount =
+                  (userData['followedCount'] as num?)?.toInt() ?? 0;
+              final int followingCount =
+                  (userData['followingCount'] as num?)?.toInt() ?? 0;
+              final int friendsCount =
+                  (userData['friendsCount'] as num?)?.toInt() ?? 0;
 
-          final int wealthLevel =
-              (userData['wealthLevel'] as num?)?.toInt() ?? 0;
-          final int charmLevel =
-              (userData['charmLevel'] as num?)?.toInt() ?? 0;
-          final int chatLevel = (userData['chatLevel'] as num?)?.toInt() ?? 0;
-          final String? agencyId = userData['agencyId']?.toString();
-          final String? avatarUrl = userData['avatarUrl']?.toString();
+              final int wealthLevel =
+                  (userData['wealthLevel'] as num?)?.toInt() ?? 0;
+              final int charmLevel =
+                  (userData['charmLevel'] as num?)?.toInt() ?? 0;
+              final int chatLevel =
+                  (userData['chatLevel'] as num?)?.toInt() ?? 0;
+              final String? agencyId = userData['agencyId']?.toString();
+              final String? avatarUrl =
+                  (userData['avatarUrl'] ?? userData['photoURL'])?.toString();
 
-          bool hasAgency = false;
-          if (agencyId != null) {
-            if (agencyId.isNotEmpty) {
-              hasAgency = true;
-            }
-          }
+              final bool hasAgency = agencyId != null && agencyId.isNotEmpty;
 
-          return SingleChildScrollView(
-            child: Column(
-              children: [
-                // 1. የላይኛው Mint-Teal Gradient ክፍል (Profile + Stats + VIP)
-                Container(
-                  padding: EdgeInsets.fromLTRB(
-                    16,
-                    MediaQuery.of(context).padding.top + 14,
-                    16,
-                    14,
-                  ),
-                  decoration: const BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        Color(0xFFC2ECE3),
-                        Color(0xFFE3F6F2),
-                        Color(0xFFF3F5F7),
-                      ],
-                    ),
-                  ),
-                  child: Column(
-                    children: [
-                      _buildHeaderSection(
-                        name: displayName,
-                        displayId: displayId,
-                        numericId: numericId,
-                        avatarUrl: avatarUrl,
-                        wealthLevel: wealthLevel,
-                        charmLevel: charmLevel,
-                        chatLevel: chatLevel,
-                        hasAgency: hasAgency,
-                        followed: followedCount,
-                        following: followingCount,
-                        friends: friendsCount,
+              return SingleChildScrollView(
+                child: Column(
+                  children: [
+                    // 1. Top Mint-Teal Gradient Section (Profile + Stats + VIP)
+                    Container(
+                      padding: EdgeInsets.fromLTRB(
+                        16,
+                        MediaQuery.of(context).padding.top + 14,
+                        16,
+                        14,
                       ),
-                      const SizedBox(height: 16),
-                      _buildVipClubCard(),
-                    ],
-                  ),
-                ),
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Color(0xFFC2ECE3),
+                            Color(0xFFE3F6F2),
+                            Color(0xFFF3F5F7),
+                          ],
+                        ),
+                      ),
+                      child: Column(
+                        children: [
+                          _buildHeaderSection(
+                            name: displayName,
+                            bio: bio,
+                            gender: gender,
+                            country: country,
+                            displayId: displayId,
+                            numericId: numericId,
+                            avatarUrl: avatarUrl,
+                            wealthLevel: wealthLevel,
+                            charmLevel: charmLevel,
+                            chatLevel: chatLevel,
+                            hasAgency: hasAgency,
+                            followed: followedCount,
+                            following: followingCount,
+                            friends: friendsCount,
+                          ),
+                          const SizedBox(height: 16),
+                          _buildVipClubCard(),
+                        ],
+                      ),
+                    ),
 
-                // 2. COINS & POINTS Card
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 14),
-                  child: _buildAssetsCard(
-                    coins: firestoreCoins,
-                    points: points,
-                    numericId: numericId,
-                  ),
-                ),
-                const SizedBox(height: 12),
+// 2. COINS & POINTS Card
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      child: _buildAssetsCard(
+                        coins: firestoreCoins,
+                        points: points,
+                        numericId: numericId,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
 
-                // 3. Main 8 Features Grid (ጉልት እና ባለ 3D መልክ)
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 14),
-                  child: _buildMainFeaturesGrid(
-                    coins: firestoreCoins,
-                    numericId: numericId,
-                  ),
-                ),
-                const SizedBox(height: 12),
+                    // 3. Main 8 Features Grid
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      child: _buildMainFeaturesGrid(
+                        coins: firestoreCoins,
+                        numericId: numericId,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
 
-                // 4. Promo Recharge Banner
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 14),
-                  child: _buildPromoRechargeBanner(
-                    coins: firestoreCoins,
-                    numericId: numericId,
-                  ),
-                ),
-                const SizedBox(height: 12),
+                    // 4. Promo Recharge Banner
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      child: _buildPromoRechargeBanner(
+                        coins: firestoreCoins,
+                        numericId: numericId,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
 
-// 5. Creator, Business & Settings Section (እንደ Hala ደማቅ Teal)
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 14),
-                  child: _buildBusinessSection(
-                    numericId: numericId,
-                    currentName: displayName,
-                    avatarUrl: avatarUrl,
-                  ),
+                    // 5. Creator, Business & Settings Section
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      child: _buildBusinessSection(numericId: numericId),
+                    ),
+                    const SizedBox(height: 28),
+                  ],
                 ),
-                const SizedBox(height: 28),
-              ],
+              );
+            },
+          ),
+          if (_isUploadingAvatar)
+            Container(
+              color: Colors.black45,
+              child: const Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CircularProgressIndicator(color: Color(0xFF14B8A6)),
+                    SizedBox(height: 12),
+                    Text(
+                      "Uploading profile photo...",
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
-          );
-        },
+        ],
       ),
     );
   }
 
-  // 1. Header Section
+  // 1. Header Section (Tapping Avatar opens Gallery/Files; Tapping Info opens Edit Profile)
   Widget _buildHeaderSection({
     required String name,
+    required String bio,
+    required String gender,
+    required String country,
     required String displayId,
     required int numericId,
     required String? avatarUrl,
@@ -278,120 +555,178 @@ final int firestoreCoins =
     required int following,
     required int friends,
   }) {
-    ImageProvider? avatarImg;
-    Widget? avatarPlaceholder = const Icon(
-      Icons.person_rounded,
-      size: 40,
-      color: Colors.white,
-    );
-
-    if (avatarUrl != null && avatarUrl.isNotEmpty) {
-      avatarImg = NetworkImage(avatarUrl);
-      avatarPlaceholder = null;
-    }
+    final ImageProvider? avatarImg = _resolveAvatarProvider(avatarUrl);
 
     return Column(
       children: [
-        GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: () => _openAccountSettings(
-            currentName: name,
-            avatarUrl: avatarUrl,
-            numericId: numericId,
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 70,
-                height: 70,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white, width: 2.5),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.12),
-                      blurRadius: 10,
-                      offset: const Offset(0, 3),
-                    ),
-                  ],
-                ),
-                child: CircleAvatar(
-                  backgroundColor: const Color(0xFF9B87B5),
-                  backgroundImage: avatarImg,
-                  child: avatarPlaceholder,
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      name,
-                      style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w900,
-                        color: Color(0xFF111827),
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 5),
-                    Wrap(
-                      spacing: 6,
-                      runSpacing: 4,
-                      children: [
-                        _buildLevelTag(Icons.shield, "$wealthLevel",
-                            const Color(0xFF14B8A6)),
-                        _buildLevelTag(Icons.arrow_upward, "$charmLevel",
-                            const Color(0xFF22C55E)),
-                        _buildLevelTag(Icons.auto_awesome, "$chatLevel",
-                            const Color(0xFF9333EA)),
-                        if (hasAgency)
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 7, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF2563EB),
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: const Text(
-
-"AGENCY",
-                              style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 9.5,
-                                  fontWeight: FontWeight.w800),
-                            ),
-                          ),
+        Row(
+          children: [
+            // Tappable Profile Picture with Camera Badge
+            GestureDetector(
+              onTap: _showAvatarPickerSheet,
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Container(
+                    width: 74,
+                    height: 74,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 2.8),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.14),
+                          blurRadius: 10,
+                          offset: const Offset(0, 3),
+                        ),
                       ],
+
+),
+                    child: CircleAvatar(
+                      backgroundColor: const Color(0xFF9B87B5),
+                      backgroundImage: avatarImg,
+                      child: avatarImg == null
+                          ? const Icon(
+                              Icons.person_rounded,
+                              size: 42,
+                              color: Colors.white,
+                            )
+                          : null,
                     ),
-                    const SizedBox(height: 6),
-                    GestureDetector(
-                      onTap: () => _copyId(displayId),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
+                  ),
+                  Positioned(
+                    bottom: 0,
+                    right: 0,
+                    child: Container(
+                      width: 25,
+                      height: 25,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF14B8A6),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 2),
+                      ),
+                      child: const Icon(
+                        Icons.camera_alt_rounded,
+                        color: Colors.white,
+                        size: 13,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 14),
+            // Tappable Profile Name & Details -> Edit Profile Page
+            Expanded(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => _openEditProfile(
+                  currentName: name,
+                  currentBio: bio,
+                  currentGender: gender,
+                  currentCountry: country,
+                  avatarUrl: avatarUrl,
+                  numericId: numericId,
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            "ID:$displayId",
-                            style: const TextStyle(
-                                fontSize: 13,
-                                color: Color(0xFF475569),
-                                fontWeight: FontWeight.w700),
+                          Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  name,
+                                  style: const TextStyle(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.w900,
+                                    color: Color(0xFF111827),
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              const Icon(
+                                Icons.edit_rounded,
+                                size: 16,
+                                color: Color(0xFF14B8A6),
+                              ),
+                            ],
                           ),
-                          const SizedBox(width: 6),
-                          const Icon(Icons.copy_rounded,
-                              size: 14, color: Color(0xFF475569)),
+                          const SizedBox(height: 5),
+                          Wrap(
+                            spacing: 6,
+                            runSpacing: 4,
+                            children: [
+                              _buildLevelTag(Icons.shield, "$wealthLevel",
+                                  const Color(0xFF14B8A6)),
+                              _buildLevelTag(Icons.arrow_upward, "$charmLevel",
+                                  const Color(0xFF22C55E)),
+                              _buildLevelTag(Icons.auto_awesome, "$chatLevel",
+                                  const Color(0xFF9333EA)),
+                              if (hasAgency)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 7, vertical: 2),
+
+decoration: BoxDecoration(
+                                    color: const Color(0xFF2563EB),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: const Text(
+                                    "AGENCY",
+                                    style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 9.5,
+                                        fontWeight: FontWeight.w800),
+                                  ),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          GestureDetector(
+                            onTap: () => _copyId(displayId),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  "ID:$displayId",
+                                  style: const TextStyle(
+                                      fontSize: 13,
+                                      color: Color(0xFF475569),
+                                      fontWeight: FontWeight.w700),
+                                ),
+                                const SizedBox(width: 6),
+                                const Icon(Icons.copy_rounded,
+                                    size: 14, color: Color(0xFF475569)),
+                              ],
+                            ),
+                          ),
+                          if (bio.isNotEmpty) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              bio,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: Color(0xFF64748B),
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
                         ],
                       ),
                     ),
+                    const Icon(Icons.chevron_right_rounded,
+                        color: Color(0xFF475569), size: 28),
                   ],
                 ),
               ),
-              const Icon(Icons.chevron_right_rounded,
-                  color: Color(0xFF475569), size: 28),
-            ],
-          ),
+            ),
+          ],
         ),
         const SizedBox(height: 18),
         Row(
@@ -438,7 +773,8 @@ final int firestoreCoins =
           style: const TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.w900,
-              color: Color(0xFF111827)),
+
+color: Color(0xFF111827)),
         ),
         const SizedBox(height: 2),
         Text(
@@ -476,8 +812,7 @@ final int firestoreCoins =
         children: [
           const Icon(Icons.workspace_premium,
               color: Color(0xFFFFD580), size: 32),
-
-const SizedBox(width: 12),
+          const SizedBox(width: 12),
           const Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -567,7 +902,8 @@ const SizedBox(width: 12),
                     children: [
                       Text(
                         "Coins",
-                        style: TextStyle(
+
+style: TextStyle(
                             fontSize: 13.5,
                             color: Color(0xFF334155),
                             fontWeight: FontWeight.w700),
@@ -593,8 +929,7 @@ const SizedBox(width: 12),
                     ],
                   ),
                 ],
-
-),
+              ),
             ),
           ),
           Container(width: 1, height: 40, color: const Color(0xFFE2E8F0)),
@@ -643,7 +978,7 @@ const SizedBox(width: 12),
     );
   }
 
-  // 4. Main 8 Features Grid (ጉልት እና 3D መልክ ያላቸው አዶዎች)
+  // 4. Main 8 Features Grid
   Widget _buildMainFeaturesGrid({required int coins, required int numericId}) {
     String currentUid = "";
     if (_currentUser != null) {
@@ -678,7 +1013,8 @@ const SizedBox(width: 12),
             onTap: () => Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (_) => WalletScreen(
+
+builder: (_) => WalletScreen(
                   currentCoins: coins,
                   userNumericId: numericId,
                   userUid: currentUid,
@@ -707,8 +1043,7 @@ const SizedBox(width: 12),
             colors: const [Color(0xFFFF758F), Color(0xFFC9184A)],
             label: "Invitation",
             onTap: () => Navigator.push(context,
-
-MaterialPageRoute(builder: (_) => const InvitationScreen())),
+                MaterialPageRoute(builder: (_) => const InvitationScreen())),
           ),
           _buildBoldFeatureTile(
             icon: Icons.backpack_rounded,
@@ -788,7 +1123,8 @@ MaterialPageRoute(builder: (_) => const InvitationScreen())),
           ],
         ),
         padding: const EdgeInsets.symmetric(horizontal: 18),
-        child: const Row(
+
+child: const Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Column(
@@ -820,13 +1156,8 @@ MaterialPageRoute(builder: (_) => const InvitationScreen())),
     );
   }
 
-  // 6. Creator, Business & Settings Section (ልክ እንደ Hala ደማቅ Teal)
-
-Widget _buildBusinessSection({
-    required int numericId,
-    required String currentName,
-    required String? avatarUrl,
-  }) {
+  // 6. Creator, Business & Settings Section
+  Widget _buildBusinessSection({required int numericId}) {
     final List<Widget> items = [
       _buildTealServiceTile(
         icon: Icons.stars_rounded,
@@ -863,11 +1194,7 @@ Widget _buildBusinessSection({
       _buildTealServiceTile(
         icon: Icons.settings_rounded,
         label: "Settings",
-        onTap: () => _openAccountSettings(
-          currentName: currentName,
-          avatarUrl: avatarUrl,
-          numericId: numericId,
-        ),
+        onTap: _openSettings,
       ),
     ];
 
@@ -921,7 +1248,8 @@ Widget _buildBusinessSection({
               boxShadow: [
                 BoxShadow(
                   color: colors.last.withOpacity(0.32),
-                  blurRadius: 6,
+
+blurRadius: 6,
                   offset: const Offset(0, 3),
                 ),
               ],
@@ -953,8 +1281,7 @@ Widget _buildBusinessSection({
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
-
-child: Column(
+      child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(
@@ -975,6 +1302,442 @@ child: Column(
             overflow: TextOverflow.ellipsis,
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ============================================================================
+// FULL EDIT PROFILE PAGE (Photo + Nickname + Bio + Gender + Country)
+// ============================================================================
+class _EditProfileScreen extends StatefulWidget {
+  final String currentName;
+  final String currentBio;
+  final String currentGender;
+  final String currentCountry;
+  final String? currentAvatarUrl;
+  final int numericId;
+  final VoidCallback onChangePhotoTap;
+  final ImageProvider? Function(String? url) resolveAvatar;
+
+  const _EditProfileScreen({
+    required this.currentName,
+    required this.currentBio,
+    required this.currentGender,
+    required this.currentCountry,
+    required this.currentAvatarUrl,
+    required this.numericId,
+    required this.onChangePhotoTap,
+    required this.resolveAvatar,
+  });
+
+  @override
+  State<_EditProfileScreen> createState() => _EditProfileScreenState();
+}
+
+class _EditProfileScreenState extends State<_EditProfileScreen> {
+  late TextEditingController _nameController;
+  late TextEditingController _bioController;
+  late String _selectedGender;
+  late String _selectedCountry;
+  bool _saving = false;
+
+  static const List<String> _countries = [
+    "Ethiopia 🇪🇹",
+    "Saudi Arabia 🇸🇦",
+    "UAE 🇦🇪",
+    "Kuwait 🇰🇼",
+    "Qatar 🇶🇦",
+    "USA 🇺🇸",
+    "UK 🇬🇧",
+    "Global 🌍",
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController(text: widget.currentName);
+    _bioController = TextEditingController(text: widget.currentBio);
+    _selectedGender = widget.currentGender.isNotEmpty
+        ? widget.currentGender
+        : "Male";
+    _selectedCountry = _countries.contains(widget.currentCountry)
+        ? widget.currentCountry
+        : "Ethiopia 🇪🇹";
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _bioController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _saveProfile() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final String newName = _nameController.text.trim();
+    if (newName.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Nickname cannot be empty.")),
+      );
+      return;
+    }
+
+    setState(() => _saving = true);
+    try {
+      final String newBio = _bioController.text.trim();
+      final String flagOnly = _selectedCountry.split(' ').last;
+
+await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+        'name': newName,
+        'nickname': newName,
+        'bio': newBio,
+        'gender': _selectedGender,
+        'country': _selectedCountry,
+        'flag': flagOnly,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      try {
+        await user.updateDisplayName(newName);
+      } catch (_) {}
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            backgroundColor: Color(0xFF14B8A6),
+            content: Text(
+              "Profile saved permanently!",
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ),
+        );
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Failed to save profile: $e")),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final user = FirebaseAuth.instance.currentUser;
+    final uid = user?.uid ?? "";
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFF3F5F7),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFFF3F5F7),
+        elevation: 0,
+        centerTitle: true,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new,
+              color: Color(0xFF111827), size: 19),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: const Text(
+          "Edit Profile",
+          style: TextStyle(
+            color: Color(0xFF111827),
+            fontSize: 18,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 12, top: 10, bottom: 10),
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF14B8A6),
+                foregroundColor: Colors.white,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              onPressed: _saving ? null : _saveProfile,
+              child: const Text(
+                "Save",
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5),
+              ),
+            ),
+          ),
+        ],
+      ),
+      body: StreamBuilder(
+        stream: uid.isNotEmpty
+            ? FirebaseFirestore.instance.collection('users').doc(uid).snapshots()
+            : null,
+        builder: (context, snapshot) {
+          String? liveAvatar = widget.currentAvatarUrl;
+          if (snapshot.hasData) {
+            final doc = snapshot.data as DocumentSnapshot?;
+            final data = doc?.data() as Map?;
+            if (data != null) {
+              liveAvatar =
+                  (data['avatarUrl'] ?? data['photoURL'] ?? liveAvatar)
+                      ?.toString();
+            }
+          }
+          final avatarImg = widget.resolveAvatar(liveAvatar);
+
+          return SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                // Avatar Picker Section
+                GestureDetector(
+                  onTap: widget.onChangePhotoTap,
+                  child: Column(
+                    children: [
+                      Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          Container(
+                            width: 96,
+                            height: 96,
+                            decoration: BoxDecoration(
+
+shape: BoxShape.circle,
+                              border:
+                                  Border.all(color: Colors.white, width: 3.5),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.12),
+                                  blurRadius: 12,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: CircleAvatar(
+                              backgroundColor: const Color(0xFF9B87B5),
+                              backgroundImage: avatarImg,
+                              child: avatarImg == null
+                                  ? const Icon(Icons.person_rounded,
+                                      size: 50, color: Colors.white)
+                                  : null,
+                            ),
+                          ),
+                          Positioned(
+                            bottom: 0,
+                            right: 0,
+                            child: Container(
+                              width: 30,
+                              height: 30,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF14B8A6),
+                                shape: BoxShape.circle,
+                                border:
+                                    Border.all(color: Colors.white, width: 2.2),
+                              ),
+                              child: const Icon(Icons.camera_alt_rounded,
+                                  color: Colors.white, size: 15),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        "Tap to change photo (Gallery / Files)",
+                        style: TextStyle(
+                          color: Color(0xFF14B8A6),
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 22),
+
+                // Form Card
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        "Nickname",
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF475569),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      TextField(
+                        controller: _nameController,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF111827),
+                        ),
+                        decoration: InputDecoration(
+                          hintText: "Enter your nickname",
+                          filled: true,
+                          fillColor: const Color(0xFFF3F5F7),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
+                          ),
+
+),
+                      ),
+                      const SizedBox(height: 16),
+                      const Text(
+                        "Gender",
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF475569),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: GestureDetector(
+                              onTap: () =>
+                                  setState(() => _selectedGender = "Male"),
+                              child: Container(
+                                height: 44,
+                                decoration: BoxDecoration(
+                                  color: _selectedGender == "Male"
+                                      ? const Color(0xFF14B8A6)
+                                      : const Color(0xFFF3F5F7),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    "♂ Male",
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      color: _selectedGender == "Male"
+                                          ? Colors.white
+                                          : const Color(0xFF475569),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: GestureDetector(
+                              onTap: () =>
+                                  setState(() => _selectedGender = "Female"),
+                              child: Container(
+                                height: 44,
+                                decoration: BoxDecoration(
+                                  color: _selectedGender == "Female"
+                                      ? const Color(0xFFEC4899)
+                                      : const Color(0xFFF3F5F7),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    "♀ Female",
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      color: _selectedGender == "Female"
+                                          ? Colors.white
+                                          : const Color(0xFF475569),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      const Text(
+                        "Country / Region",
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF475569),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14),
+
+decoration: BoxDecoration(
+                          color: const Color(0xFFF3F5F7),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            value: _selectedCountry,
+                            isExpanded: true,
+                            items: _countries
+                                .map((c) => DropdownMenuItem<String>(
+                                      value: c,
+                                      child: Text(
+                                        c,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          color: Color(0xFF111827),
+                                        ),
+                                      ),
+                                    ))
+                                .toList(),
+                            onChanged: (val) {
+                              if (val != null) {
+                                setState(() => _selectedCountry = val);
+                              }
+                            },
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      const Text(
+                        "Bio",
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF475569),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      TextField(
+                        controller: _bioController,
+                        maxLines: 3,
+                        maxLength: 100,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w500,
+                          color: Color(0xFF111827),
+                        ),
+                        decoration: InputDecoration(
+                          hintText: "Write something about yourself...",
+                          filled: true,
+                          fillColor: const Color(0xFFF3F5F7),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
       ),
     );
   }
