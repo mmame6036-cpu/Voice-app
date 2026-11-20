@@ -2391,7 +2391,7 @@ class _InteractionDetailScreenState extends State<InteractionDetailScreen> {
             .limit(30)
             .snapshots(),
         builder: (context, snapshot) {
-          final List> list = [];
+          final List list = [];
           if (snapshot.hasData && snapshot.data != null) {
             for (final doc in snapshot.data!.docs) {
               final raw = doc.data();
