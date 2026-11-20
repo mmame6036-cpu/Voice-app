@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
@@ -14,14 +15,13 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   final User? _currentUser = FirebaseAuth.instance.currentUser;
 
-  static const Color kBg = Color(0xFFF3F5F7);
+  static const Color kBg = Color(0xFFF5F6F8);
   static const Color kCard = Colors.white;
-  static const Color kDark = Color(0xFF182026);
-  static const Color kMuted = Color(0xFF7A869A);
-  static const Color kTeal = Color(0xFF00C875);
-  static const Color kCyan = Color(0xFF00B4D8);
-  static const Color kRed = Color(0xFFFF5252);
-  static const Color kDivider = Color(0xFFF0F2F5);
+  static const Color kDark = Color(0xFF1F2329);
+  static const Color kMuted = Color(0xFF86909C);
+  static const Color kTeal = Color(0xFF1ED7B5);
+  static const Color kRed = Color(0xFFE54D42);
+  static const Color kDivider = Color(0xFFF2F3F5);
 
   String _cacheSize = "12.4 MB";
 
@@ -50,7 +50,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => _AccountManagerPage(
+        builder: (_) => _AccountSettingsPage(
           userData: userData,
           onSaveField: _saveField,
           onToast: _toast,
@@ -64,9 +64,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context,
       MaterialPageRoute(
         builder: (_) => _MessageSettingsPage(
-          initialBanner: userData['topMessageBanner'] ?? true,
-          initialSounds: userData['roomSounds'] ?? true,
-          initialVibration: userData['vibrationEnabled'] ?? true,
+          initialBanner: userData['topMessageBanner'] != false,
+          initialSounds: userData['roomSounds'] != false,
+          initialVibration: userData['vibrationEnabled'] != false,
           onSaveField: _saveField,
         ),
       ),
@@ -81,7 +81,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           currentLanguage: currentLang,
           onSaved: (lang) async {
             await _saveField('appLanguage', lang);
-            _toast("Language updated to $lang");
+            _toast("Language saved: $lang");
           },
         ),
       ),
@@ -89,258 +89,119 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   void _openNetworkLine(String currentLine) {
-    final lines = [
-      {'name': 'Auto (Recommended)', 'ping': '24 ms'},
-      {'name': 'Line 1 - Africa & Middle East', 'ping': '32 ms'},
-      {'name': 'Line 2 - Europe Server', 'ping': '48 ms'},
-      {'name': 'Line 3 - Global Backup', 'ping': '65 ms'},
-    ];
+    final lines = ["Line1", "Line2"];
 
     showModalBottomSheet(
       context: context,
-      backgroundColor: kCard,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              "Network Line",
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: kDark),
-            ),
-            const SizedBox(height: 6),
-            const Text(
-              "Select the fastest voice routing server for your region:",
-              style: TextStyle(fontSize: 12.5, color: kMuted),
-            ),
-            const SizedBox(height: 12),
-            ...lines.map((line) {
-              final name = line['name']!;
-              final ping = line['ping']!;
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        decoration: const BoxDecoration(
+          color: kCard,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+        ),
+        child: SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 8),
+              ...lines.map((lineName) {
+                final bool isSelected = currentLine == lineName;
+                return Column(
+                  children: [
+                    InkWell(
+                      onTap: () async {
+                        Navigator.pop(ctx);
+                        await _saveField('networkLine', lineName);
+                        _toast("Connected to $lineName");
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            if (isSelected) ...[
+                              const Icon(Icons.check_circle,
 
-final selected = currentLine == name;
-              return ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: Icon(
-                  selected ? Icons.radio_button_checked : Icons.radio_button_off,
-                  color: selected ? kTeal : kMuted,
-                ),
-                title: Text(name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                trailing: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFEEF9F6),
-                    borderRadius: BorderRadius.circular(8),
+color: kTeal, size: 22),
+                              const SizedBox(width: 8),
+                            ],
+                            Text(
+                              lineName,
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: kDark,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 2.5),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFE8F9F4),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: const Text(
+                                "Good",
+                                style: TextStyle(
+                                  color: Color(0xFF00B578),
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const Divider(height: 1, color: kDivider),
+                  ],
+                );
+              }),
+              Container(height: 8, color: kBg),
+              InkWell(
+                onTap: () => Navigator.pop(ctx),
+                child: const SizedBox(
+                  width: double.infinity,
+                  height: 54,
+                  child: Center(
+                    child: Text(
+                      "Cancel",
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                        color: kDark,
+                      ),
+                    ),
                   ),
-                  child: Text(
-                    ping,
-                    style: const TextStyle(color: kTeal, fontSize: 11.5, fontWeight: FontWeight.bold),
-                  ),
                 ),
-                onTap: () async {
-                  Navigator.pop(ctx);
-                  await _saveField('networkLine', name);
-                  _toast("Switched to $name");
-                },
-              );
-            }),
-          ],
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
   void _openPrivilegeSettings(Map userData) {
-    bool hideOnline = userData['hideOnlineStatus'] == true;
-    bool invisibleEntry = userData['invisibleEntry'] == true;
-    bool hideLevel = userData['hideLevel'] == true;
-    bool blockStrangerDm = userData['blockStrangerDm'] == true;
-
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: kCard,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setS) => Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                "Privilege Settings",
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: kDark),
-              ),
-              const SizedBox(height: 8),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text("Hide Online Status", style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                subtitle: const Text("Appear offline to other users", style: TextStyle(fontSize: 12, color: kMuted)),
-                activeColor: kTeal,
-                value: hideOnline,
-                onChanged: (v) {
-                  setS(() => hideOnline = v);
-                  _saveField('hideOnlineStatus', v);
-                },
-              ),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text("Invisible Room Entry", style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                subtitle: const Text("Enter voice rooms without entry banner", style: TextStyle(fontSize: 12, color: kMuted)),
-                activeColor: kTeal,
-                value: invisibleEntry,
-                onChanged: (v) {
-                  setS(() => invisibleEntry = v);
-                  _saveField('invisibleEntry', v);
-                },
-              ),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text("Hide Wealth & Charm Level", style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                subtitle: const Text("Conceal level badges on profile card", style: TextStyle(fontSize: 12, color: kMuted)),
-                activeColor: kTeal,
-                value: hideLevel,
-                onChanged: (v) {
-                  setS(() => hideLevel = v);
-                  _saveField('hideLevel', v);
-
-},
-              ),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text("Block Stranger Messages", style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                subtitle: const Text("Only receive messages from friends", style: TextStyle(fontSize: 12, color: kMuted)),
-                activeColor: kTeal,
-                value: blockStrangerDm,
-                onChanged: (v) {
-                  setS(() => blockStrangerDm = v);
-                  _saveField('blockStrangerDm', v);
-                },
-              ),
-            ],
-          ),
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => _PrivilegeSettingsPage(
+          initialMysteryMan: userData['mysteryManOnRank'] == true,
+          initialHideOnline: userData['hideOnlineStatus'] == true,
+          initialInvisibleEntry: userData['invisibleEntry'] == true,
+          onSaveField: _saveField,
         ),
       ),
     );
   }
 
   void _openBlockedUsers() {
-    if (_currentUser == null) return;
-    final blockIdCtrl = TextEditingController();
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: kCard,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.only(
-          left: 20,
-          right: 20,
-          top: 20,
-          bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
-        ),
-        child: SizedBox(
-          height: MediaQuery.of(ctx).size.height * 0.6,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                "Blocked Users",
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: kDark),
-              ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: blockIdCtrl,
-                      keyboardType: TextInputType.number,
-                      decoration: InputDecoration(
-                        hintText: "Enter User ID to block",
-                        isDense: true,
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(backgroundColor: kRed, foregroundColor: Colors.white),
-                    onPressed: () async {
-                      final target = blockIdCtrl.text.trim();
-                      if (target.isEmpty) return;
-                      await FirebaseFirestore.instance
-                          .collection('users')
-                          .doc(_currentUser!.uid)
-                          .set({
-                        'blacklist': FieldValue.arrayUnion([target])
-                      }, SetOptions(merge: true));
-                      blockIdCtrl.clear();
-                      _toast("User $target added to blocked list.");
-                    },
-                    child: const Text("Block"),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Expanded(
-                child: StreamBuilder(
-                  stream: FirebaseFirestore.instance
-                      .collection('users')
-                      .doc(_currentUser!.uid)
-                      .snapshots(),
-                  builder: (context, AsyncSnapshot snap) {
-                    final doc = snap.data as DocumentSnapshot?;
-                    final data = doc?.data() as Map? ?? {};
-                    final List blocked = data['blacklist'] is List ? data['blacklist'] : [];
-
-                    if (blocked.isEmpty) {
-                      return const Center(
-                        child: Text("No blocked users.", style: TextStyle(color: kMuted)),
-                      );
-                    }
-
-return ListView.separated(
-                      itemCount: blocked.length,
-                      separatorBuilder: (_, __) => const Divider(height: 1),
-                      itemBuilder: (_, i) {
-                        final item = blocked[i].toString();
-                        return ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          leading: const CircleAvatar(
-                            backgroundColor: Color(0xFFFFEBEE),
-                            child: Icon(Icons.block, color: kRed, size: 20),
-                          ),
-                          title: Text("User ID: $item", style: const TextStyle(fontWeight: FontWeight.w600)),
-                          trailing: TextButton(
-                            onPressed: () async {
-                              await FirebaseFirestore.instance
-                                  .collection('users')
-                                  .doc(_currentUser!.uid)
-                                  .update({
-                                'blacklist': FieldValue.arrayRemove([item])
-                              });
-                              _toast("Unblocked $item");
-                            },
-                            child: const Text("Unblock", style: TextStyle(color: kTeal, fontWeight: FontWeight.bold)),
-                          ),
-                        );
-                      },
-                    );
-                  },
-                ),
-              ),
-            ],
-          ),
-        ),
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => _BlockedUsersPage(onToast: _toast),
       ),
     );
   }
@@ -349,7 +210,7 @@ return ListView.separated(
     PaintingBinding.instance.imageCache.clear();
     PaintingBinding.instance.imageCache.clearLiveImages();
     setState(() => _cacheSize = "0.0 MB");
-    _toast("Cache cleared successfully.");
+    _toast("Cache cleared.");
   }
 
   void _openAboutUs() {
@@ -367,34 +228,41 @@ return ListView.separated(
           children: [
             const Text(
               "About Us",
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: kDark),
+              style: TextStyle(
+                  fontSize: 18, fontWeight: FontWeight.bold, color: kDark),
             ),
             const SizedBox(height: 10),
             const Text(
-              "NILE Live - Global Voice Party & Social Platform",
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: kDark),
+              "NILE Live - Global Voice Chat & Party Platform",
+              style: TextStyle(
+
+fontWeight: FontWeight.bold, fontSize: 14, color: kDark),
             ),
             const SizedBox(height: 4),
-            const Text("Version: v1.0.4 (Build 26)", style: TextStyle(fontSize: 12.5, color: kMuted)),
+            const Text("Version: v1.0.5",
+                style: TextStyle(fontSize: 12.5, color: kMuted)),
             const SizedBox(height: 14),
             const Text(
-              "Terms & Privacy Policy",
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5, color: kDark),
+              "1. Community Guidelines: Respect all hosts and guests in voice rooms.\n"
+              "2. Wallet & Rewards: 10,000 Points = \$1.00 USD withdrawal value.\n"
+              "3. Real-Time Audio: Low-latency encrypted voice channels.",
+              style: TextStyle(fontSize: 12.5, color: kMuted, height: 1.45),
             ),
-            const SizedBox(height: 6),
-            const Text(
-              "1. Community Safety: Respect all hosts and listeners in voice rooms.\n"
-              "2. Virtual Economy: Coins and Points follow platform conversion rules (10,000 Points = \$1.00 USD).\n"
-              "3. Privacy: Real-time audio streams are encrypted and never stored without consent.",
-              style: TextStyle(fontSize: 12, color: kMuted, height: 1.45),
-            ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 18),
             SizedBox(
               width: double.infinity,
+              height: 46,
               child: ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: kTeal, foregroundColor: Colors.white),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: kTeal,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(23)),
+                ),
                 onPressed: () => Navigator.pop(ctx),
-                child: const Text("Close"),
+                child: const Text("Close",
+                    style: TextStyle(fontWeight: FontWeight.bold)),
               ),
             ),
           ],
@@ -412,20 +280,29 @@ return ListView.separated(
     );
   }
 
-void _confirmSignOut() {
+  void _confirmSignOut() {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
+        backgroundColor: kCard,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-        title: const Text("Sign Out", style: TextStyle(fontWeight: FontWeight.bold)),
-        content: const Text("Are you sure you want to sign out of your account?"),
+        title: const Text("Sign Out",
+            style: TextStyle(fontWeight: FontWeight.bold, color: kDark)),
+        content: const Text(
+          "Are you sure you want to sign out?",
+          style: TextStyle(color: kMuted),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
             child: const Text("Cancel", style: TextStyle(color: kMuted)),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: kRed, foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: kRed,
+              foregroundColor: Colors.white,
+              elevation: 0,
+            ),
             onPressed: () async {
               Navigator.pop(ctx);
               await FirebaseAuth.instance.signOut();
@@ -433,7 +310,8 @@ void _confirmSignOut() {
                 Navigator.of(context).popUntil((route) => route.isFirst);
               }
             },
-            child: const Text("Sign Out", style: TextStyle(fontWeight: FontWeight.bold)),
+            child: const Text("Sign Out",
+                style: TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -451,12 +329,13 @@ void _confirmSignOut() {
         elevation: 0,
         centerTitle: true,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, color: kDark, size: 20),
+          icon: const Icon(Icons.arrow_back_ios_new, color: kDark, size: 19),
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
           "Setting",
-          style: TextStyle(color: kDark, fontSize: 18, fontWeight: FontWeight.bold),
+          style: TextStyle(
+              color: kDark, fontSize: 18, fontWeight: FontWeight.w700),
         ),
       ),
       body: StreamBuilder(
@@ -466,14 +345,17 @@ void _confirmSignOut() {
         builder: (context, AsyncSnapshot snap) {
           final doc = snap.data as DocumentSnapshot?;
           final userData = doc?.data() as Map? ?? {};
-          final currentLang = (userData['appLanguage'] ?? 'Follow System').toString();
-          final currentLine = (userData['networkLine'] ?? 'Auto (Recommended)').toString();
+          final currentLang =
+              (userData['appLanguage'] ?? 'English').toString();
+          final currentLine =
+              (userData['networkLine'] ?? 'Line1').toString();
 
-          return SingleChildScrollView(
+return SingleChildScrollView(
             physics: const BouncingScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 28),
             child: Column(
               children: [
+                // Card 1: Account Manager
                 _cardGroup([
                   _settingRow(
                     title: "Account Manager",
@@ -481,6 +363,8 @@ void _confirmSignOut() {
                   ),
                 ]),
                 const SizedBox(height: 12),
+
+                // Card 2: Message, Language, Network, Privilege, Blocked
                 _cardGroup([
                   _settingRow(
                     title: "Message Settings",
@@ -495,7 +379,7 @@ void _confirmSignOut() {
                   const Divider(height: 1, indent: 16, color: kDivider),
                   _settingRow(
                     title: "Network Line",
-                    trailing: currentLine.split(' ').first,
+                    trailing: currentLine,
                     onTap: () => _openNetworkLine(currentLine),
                   ),
                   const Divider(height: 1, indent: 16, color: kDivider),
@@ -509,8 +393,9 @@ void _confirmSignOut() {
                     onTap: _openBlockedUsers,
                   ),
                 ]),
+                const SizedBox(height: 12),
 
-const SizedBox(height: 12),
+                // Card 3: Cache, About, Delete Account
                 _cardGroup([
                   _settingRow(
                     title: "Clear Cache",
@@ -520,7 +405,7 @@ const SizedBox(height: 12),
                   const Divider(height: 1, indent: 16, color: kDivider),
                   _settingRow(
                     title: "About Us",
-                    trailing: "v1.0.4",
+                    trailing: "v1.0.5",
                     onTap: _openAboutUs,
                   ),
                   const Divider(height: 1, indent: 16, color: kDivider),
@@ -530,10 +415,12 @@ const SizedBox(height: 12),
                     onTap: _openDeleteAccount,
                   ),
                 ]),
-                const SizedBox(height: 24),
+                const SizedBox(height: 18),
+
+                // Sign Out Card Button
                 SizedBox(
                   width: double.infinity,
-                  height: 50,
+                  height: 54,
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: kCard,
@@ -546,7 +433,8 @@ const SizedBox(height: 12),
                     onPressed: _confirmSignOut,
                     child: const Text(
                       "Sign Out",
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      style:
+                          TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                     ),
                   ),
                 ),
@@ -570,7 +458,7 @@ const SizedBox(height: 12),
     );
   }
 
-  Widget _settingRow({
+Widget _settingRow({
     required String title,
     String trailing = "",
     Color titleColor = kDark,
@@ -578,11 +466,11 @@ const SizedBox(height: 12),
   }) {
     return ListTile(
       onTap: onTap,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 3),
       title: Text(
         title,
         style: TextStyle(
-          fontSize: 15,
+          fontSize: 15.5,
           fontWeight: FontWeight.w500,
           color: titleColor,
         ),
@@ -593,7 +481,7 @@ const SizedBox(height: 12),
           if (trailing.isNotEmpty)
             Text(
               trailing,
-              style: const TextStyle(fontSize: 13, color: kMuted),
+              style: const TextStyle(fontSize: 13.5, color: kMuted),
             ),
           const SizedBox(width: 4),
           const Icon(Icons.chevron_right_rounded, color: kMuted, size: 22),
@@ -604,178 +492,109 @@ const SizedBox(height: 12),
 }
 
 // ============================================================================
-// 1. ACCOUNT MANAGER PAGE (Account Password, Security Password, Mail, Phone)
+// 1. ACCOUNT SETTINGS PAGE (Account Password, Security Password, Mail)
 // ============================================================================
-class _AccountManagerPage extends StatelessWidget {
+class _AccountSettingsPage extends StatelessWidget {
   final Map userData;
   final Future<void> Function(String key, dynamic val) onSaveField;
   final void Function(String msg) onToast;
 
-  const _AccountManagerPage({
+  const _AccountSettingsPage({
     required this.userData,
     required this.onSaveField,
     required this.onToast,
   });
 
-  void _openAccountPasswordDialog(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser;
-    final passCtrl = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-        title: const Text("Account Password", style: TextStyle(fontWeight: FontWeight.bold)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-
-children: [
-            const Text(
-              "Set a new login password (minimum 6 characters):",
-              style: TextStyle(fontSize: 12.5, color: Color(0xFF7A869A)),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: passCtrl,
-              obscureText: true,
-              decoration: InputDecoration(
-                hintText: "Enter new password",
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancel")),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF00C875),
-              foregroundColor: Colors.white,
-            ),
-            onPressed: () async {
-              final newPass = passCtrl.text.trim();
-              if (newPass.length < 6) {
-                onToast("Password must be at least 6 characters.");
-                return;
-              }
-              Navigator.pop(ctx);
-              try {
-                if (user != null) {
-                  await user.updatePassword(newPass);
-                }
-                await onSaveField('hasPassword', true);
-                onToast("Account password updated successfully.");
-              } catch (e) {
-                if (user?.email != null && user!.email!.isNotEmpty) {
-                  await FirebaseAuth.instance.sendPasswordResetEmail(email: user.email!);
-                  onToast("Password reset link sent to ${user.email}");
-                } else {
-                  onToast("Please sign in again to change password.");
-                }
-              }
-            },
-            child: const Text("Save"),
-          ),
-        ],
-      ),
-    );
+  String _maskEmail(String email) {
+    if (email.isEmpty || !email.contains('@')) return "Not Bound";
+    final parts = email.split('@');
+    final name = parts[0];
+    final domain = parts[1];
+    if (name.length <= 3) return "$name***@$domain";
+    return "${name.substring(0, 4)}***@$domain";
   }
 
-  void _openSecurityPasswordDialog(BuildContext context, bool hasPin) {
-    final pinCtrl = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-        title: Text(
-          hasPin ? "Change Security Password" : "Set Security Password",
-          style: const TextStyle(fontWeight: FontWeight.bold),
-        ),
-        content: TextField(
-          controller: pinCtrl,
-          keyboardType: TextInputType.number,
-          obscureText: true,
-          maxLength: 6,
-          decoration: InputDecoration(
-            hintText: "Enter 6-digit Security PIN",
-            counterText: "",
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancel")),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF00C875),
-              foregroundColor: Colors.white,
-            ),
-            onPressed: () async {
-              final pin = pinCtrl.text.trim();
-              if (pin.length != 6) {
-                onToast("Security password must be 6 digits.");
-                return;
-              }
-              Navigator.pop(ctx);
-              await onSaveField('paymentPin', pin);
-              onToast("Security password saved.");
-            },
-            child: const Text("Save"),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _openBindMailPage(BuildContext context, String existingMail) {
+  void _openSetPasswordScreen(BuildContext context, {required bool isSecurity}) {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => _BindMailPage(
-          existingEmail: existingMail,
-          onBound: (email) async {
-            await onSaveField('email', email);
-            await onSaveField('isEmailBound', true);
-            onToast("Mail bound successfully: $email");
-          },
+        builder: (_) => _SetPasswordPage(
+          isSecurityPassword: isSecurity,
+          onSaveField: onSaveField,
           onToast: onToast,
         ),
       ),
     );
   }
 
-void _openBindPhoneDialog(BuildContext context, String currentPhone) {
-    final phoneCtrl = TextEditingController(text: currentPhone);
-    showDialog(
+  void _openMailBottomSheet(BuildContext context, String currentMail) {
+    showModalBottomSheet(
       context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-        title: const Text("Bind Phone", style: TextStyle(fontWeight: FontWeight.bold)),
-        content: TextField(
-          controller: phoneCtrl,
-          keyboardType: TextInputType.phone,
-          decoration: InputDecoration(
-            hintText: "+2519...",
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+        ),
+        child: SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              InkWell(
+                onTap: () {
+                  Navigator.pop(ctx);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => _BindMailPage(
+                        existingEmail: currentMail,
+                        onBound: (newMail) async {
+                          await onSaveField('email', newMail);
+                          await onSaveField('isEmailBound', true);
+                          onToast("Email updated: $newMail");
+                        },
+                        onToast: onToast,
+                      ),
+                    ),
+                  );
+                },
+                child: const SizedBox(
+                  width: double.infinity,
+                  height: 58,
+                  child: Center(
+                    child: Text(
+                      "Reset Email",
+                      style: TextStyle(
+                        fontSize: 16.5,
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF1F2329),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              Container(height: 8, color: const Color(0xFFF5F6F8)),
+              InkWell(
+                onTap: () => Navigator.pop(ctx),
+
+child: const SizedBox(
+                  width: double.infinity,
+                  height: 54,
+                  child: Center(
+                    child: Text(
+                      "Cancel",
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF1F2329),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancel")),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF00C875),
-              foregroundColor: Colors.white,
-            ),
-            onPressed: () async {
-              final p = phoneCtrl.text.trim();
-              if (p.isEmpty) return;
-              Navigator.pop(ctx);
-              await onSaveField('phoneNumber', p);
-              onToast("Phone number saved.");
-            },
-            child: const Text("Save"),
-          ),
-        ],
       ),
     );
   }
@@ -786,18 +605,22 @@ void _openBindPhoneDialog(BuildContext context, String currentPhone) {
     final uid = user?.uid ?? "";
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF3F5F7),
+      backgroundColor: const Color(0xFFF5F6F8),
       appBar: AppBar(
-        backgroundColor: const Color(0xFFF3F5F7),
+        backgroundColor: const Color(0xFFF5F6F8),
         elevation: 0,
         centerTitle: true,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, color: Color(0xFF182026), size: 20),
+          icon: const Icon(Icons.arrow_back_ios_new,
+              color: Color(0xFF1F2329), size: 19),
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
-          "Account Manager",
-          style: TextStyle(color: Color(0xFF182026), fontSize: 18, fontWeight: FontWeight.bold),
+          "Account Settings",
+          style: TextStyle(
+              color: Color(0xFF1F2329),
+              fontSize: 18,
+              fontWeight: FontWeight.w700),
         ),
       ),
       body: StreamBuilder(
@@ -809,8 +632,8 @@ void _openBindPhoneDialog(BuildContext context, String currentPhone) {
           final live = doc?.data() as Map? ?? userData;
           final bool hasPass = live['hasPassword'] == true;
           final bool hasPin = (live['paymentPin'] ?? '').toString().isNotEmpty;
-          final String boundMail = (live['email'] ?? user?.email ?? '').toString();
-          final String phone = (live['phoneNumber'] ?? '').toString();
+          final String boundMail =
+              (live['email'] ?? user?.email ?? '').toString();
 
           return Padding(
             padding: const EdgeInsets.all(16),
@@ -823,60 +646,123 @@ void _openBindPhoneDialog(BuildContext context, String currentPhone) {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   ListTile(
-                    title: const Text("Account Password", style: TextStyle(fontWeight: FontWeight.w500)),
+                    contentPadding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    title: const Text(
+                      "Account Password",
+                      style: TextStyle(
+                        fontSize: 15.5,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF1F2329),
+                      ),
+                    ),
+                    subtitle: const Padding(
+                      padding: EdgeInsets.only(top: 4),
+                      child: Text(
+                        "This password is used for account login",
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          color: Color(0xFF86909C),
+                        ),
+                      ),
+                    ),
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(hasPass ? "Set" : "Not Set",
-                            style: const TextStyle(color: Color(0xFF7A869A), fontSize: 13)),
-                        const Icon(Icons.chevron_right_rounded, color: Color(0xFF7A869A)),
+                        Text(
+                          hasPass ? "Change" : "Set",
+                          style: const TextStyle(
+                            color: Color(0xFF86909C),
+                            fontSize: 14,
+                          ),
+                        ),
+                        const SizedBox(width: 2),
+                        const Icon(Icons.chevron_right_rounded,
+                            color: Color(0xFF86909C), size: 22),
                       ],
                     ),
-                    onTap: () => _openAccountPasswordDialog(context),
-                  ),
-                  const Divider(height: 1, indent: 16, color: Color(0xFFF0F2F5)),
-                  ListTile(
-                    title: const Text("Security Password", style: TextStyle(fontWeight: FontWeight.w500)),
+                    onTap: () =>
+                        _openSetPasswordScreen(context, isSecurity: false),
 
-trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(hasPin ? "Set" : "Not Set",
-                            style: const TextStyle(color: Color(0xFF7A869A), fontSize: 13)),
-                        const Icon(Icons.chevron_right_rounded, color: Color(0xFF7A869A)),
-                      ],
-                    ),
-                    onTap: () => _openSecurityPasswordDialog(context, hasPin),
-                  ),
-                  const Divider(height: 1, indent: 16, color: Color(0xFFF0F2F5)),
+),
+                  const Divider(height: 1, indent: 16, color: Color(0xFFF2F3F5)),
                   ListTile(
-                    title: const Text("Mail", style: TextStyle(fontWeight: FontWeight.w500)),
+                    contentPadding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    title: const Text(
+                      "Security Password",
+                      style: TextStyle(
+                        fontSize: 15.5,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF1F2329),
+                      ),
+                    ),
+                    subtitle: const Padding(
+                      padding: EdgeInsets.only(top: 4),
+                      child: Text(
+                        "This password is used for payments and transfers",
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          color: Color(0xFF86909C),
+                        ),
+                      ),
+                    ),
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
-                          boundMail.isNotEmpty ? boundMail : "Not Bound",
-                          style: const TextStyle(color: Color(0xFF7A869A), fontSize: 13),
+                          hasPin ? "Change" : "Set",
+                          style: const TextStyle(
+                            color: Color(0xFF86909C),
+                            fontSize: 14,
+                          ),
                         ),
-                        const Icon(Icons.chevron_right_rounded, color: Color(0xFF7A869A)),
+                        const SizedBox(width: 2),
+                        const Icon(Icons.chevron_right_rounded,
+                            color: Color(0xFF86909C), size: 22),
                       ],
                     ),
-                    onTap: () => _openBindMailPage(context, boundMail),
+                    onTap: () =>
+                        _openSetPasswordScreen(context, isSecurity: true),
                   ),
-                  const Divider(height: 1, indent: 16, color: Color(0xFFF0F2F5)),
+                  const Divider(height: 1, indent: 16, color: Color(0xFFF2F3F5)),
                   ListTile(
-                    title: const Text("Phone Number", style: TextStyle(fontWeight: FontWeight.w500)),
+                    contentPadding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    title: const Text(
+                      "Mail",
+                      style: TextStyle(
+                        fontSize: 15.5,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF1F2329),
+                      ),
+                    ),
+                    subtitle: Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(
+                        _maskEmail(boundMail),
+                        style: const TextStyle(
+                          fontSize: 12.5,
+                          color: Color(0xFF86909C),
+                        ),
+                      ),
+                    ),
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
-                          phone.isNotEmpty ? phone : "Not Bound",
-                          style: const TextStyle(color: Color(0xFF7A869A), fontSize: 13),
+                          boundMail.isNotEmpty ? "Reset" : "Bind",
+                          style: const TextStyle(
+                            color: Color(0xFF86909C),
+                            fontSize: 14,
+                          ),
                         ),
-                        const Icon(Icons.chevron_right_rounded, color: Color(0xFF7A869A)),
+                        const SizedBox(width: 2),
+                        const Icon(Icons.chevron_right_rounded,
+                            color: Color(0xFF86909C), size: 22),
                       ],
                     ),
-                    onTap: () => _openBindPhoneDialog(context, phone),
+                    onTap: () => _openMailBottomSheet(context, boundMail),
                   ),
                 ],
               ),
@@ -889,7 +775,183 @@ trailing: Row(
 }
 
 // ============================================================================
-// BIND MAIL SUB-PAGE (Matches Video: Email + Get Code + Bind Button)
+// SET PASSWORD FULL SCREEN (2 Rounded Inputs + Teal Pill "Set" Button)
+// ============================================================================
+class _SetPasswordPage extends StatefulWidget {
+  final bool isSecurityPassword;
+  final Future<void> Function(String key, dynamic val) onSaveField;
+  final void Function(String msg) onToast;
+
+  const _SetPasswordPage({
+    required this.isSecurityPassword,
+    required this.onSaveField,
+    required this.onToast,
+  });
+
+@override
+  State<_SetPasswordPage> createState() => _SetPasswordPageState();
+}
+
+class _SetPasswordPageState extends State<_SetPasswordPage> {
+  final TextEditingController _pass1Ctrl = TextEditingController();
+  final TextEditingController _pass2Ctrl = TextEditingController();
+  bool _saving = false;
+
+  @override
+  void dispose() {
+    _pass1Ctrl.dispose();
+    _pass2Ctrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final p1 = _pass1Ctrl.text.trim();
+    final p2 = _pass2Ctrl.text.trim();
+
+    if (p1.length < 6) {
+      widget.onToast("Password must be at least 6 characters.");
+      return;
+    }
+    if (p1 != p2) {
+      widget.onToast("Both passwords must match.");
+      return;
+    }
+
+    setState(() => _saving = true);
+    try {
+      if (widget.isSecurityPassword) {
+        await widget.onSaveField('paymentPin', p1);
+        widget.onToast("Security password saved successfully.");
+        if (mounted) Navigator.pop(context);
+      } else {
+        final user = FirebaseAuth.instance.currentUser;
+        try {
+          if (user != null) {
+            await user.updatePassword(p1);
+          }
+          await widget.onSaveField('hasPassword', true);
+          widget.onToast("Account password set successfully.");
+          if (mounted) Navigator.pop(context);
+        } catch (_) {
+          await widget.onSaveField('hasPassword', true);
+          if (user?.email != null && user!.email!.isNotEmpty) {
+            await FirebaseAuth.instance
+                .sendPasswordResetEmail(email: user.email!);
+            widget.onToast("Verification link sent to ${user.email}");
+          } else {
+            widget.onToast("Account password saved.");
+          }
+          if (mounted) Navigator.pop(context);
+        }
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF5F6F8),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFFF5F6F8),
+        elevation: 0,
+        centerTitle: true,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new,
+              color: Color(0xFF1F2329), size: 19),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: Text(
+          widget.isSecurityPassword ? "Security Password" : "Set",
+          style: const TextStyle(
+              color: Color(0xFF1F2329),
+              fontSize: 18,
+              fontWeight: FontWeight.w700),
+        ),
+      ),
+      body: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 22, 20, 20),
+        child: Column(
+          children: [
+            Container(
+              height: 52,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              decoration: BoxDecoration(
+                color: const Color(0xFFEDEEF2),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Center(
+                child: TextField(
+                  controller: _pass1Ctrl,
+                  obscureText: true,
+                  keyboardType: widget.isSecurityPassword
+                      ? TextInputType.number
+                      : TextInputType.text,
+                  decoration: const InputDecoration(
+                    hintText: "Password",
+                    hintStyle:
+                        TextStyle(color: Color(0xFF86909C), fontSize: 15),
+                    border: InputBorder.none,
+                    isDense: true,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              height: 52,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              decoration: BoxDecoration(
+                color: const Color(0xFFEDEEF2),
+
+borderRadius: BorderRadius.circular(14),
+              ),
+              child: Center(
+                child: TextField(
+                  controller: _pass2Ctrl,
+                  obscureText: true,
+                  keyboardType: widget.isSecurityPassword
+                      ? TextInputType.number
+                      : TextInputType.text,
+                  decoration: const InputDecoration(
+                    hintText: "Password",
+                    hintStyle:
+                        TextStyle(color: Color(0xFF86909C), fontSize: 15),
+                    border: InputBorder.none,
+                    isDense: true,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 28),
+            SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF1ED7B5),
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(25)),
+                ),
+                onPressed: _saving ? null : _submit,
+                child: const Text(
+                  "Set",
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ============================================================================
+// BIND / RESET MAIL PAGE
 // ============================================================================
 class _BindMailPage extends StatefulWidget {
   final String existingEmail;
@@ -952,24 +1014,29 @@ class _BindMailPageState extends State<_BindMailPage> {
         setState(() => _cooldown -= 1);
       }
     });
-    widget.onToast("Verification code sent: $code");
+    widget.onToast("Verification code: $code");
   }
 
-@override
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF3F5F7),
+      backgroundColor: const Color(0xFFF5F6F8),
       appBar: AppBar(
-        backgroundColor: const Color(0xFFF3F5F7),
+        backgroundColor: const Color(0xFFF5F6F8),
         elevation: 0,
         centerTitle: true,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, color: Color(0xFF182026), size: 20),
+          icon: const Icon(Icons.arrow_back_ios_new,
+              color: Color(0xFF1F2329), size: 19),
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
-          "Bind Mail",
-          style: TextStyle(color: Color(0xFF182026), fontSize: 18, fontWeight: FontWeight.bold),
+          "Reset Email",
+          style: TextStyle(
+              color: Color(0xFF1F2329),
+
+fontSize: 18,
+              fontWeight: FontWeight.w700),
         ),
       ),
       body: Padding(
@@ -988,11 +1055,11 @@ class _BindMailPageState extends State<_BindMailPage> {
                     controller: _emailCtrl,
                     keyboardType: TextInputType.emailAddress,
                     decoration: const InputDecoration(
-                      hintText: "Please enter your email",
+                      hintText: "Enter new email address",
                       border: InputBorder.none,
                     ),
                   ),
-                  const Divider(color: Color(0xFFF0F2F5)),
+                  const Divider(color: Color(0xFFF2F3F5)),
                   Row(
                     children: [
                       Expanded(
@@ -1010,7 +1077,7 @@ class _BindMailPageState extends State<_BindMailPage> {
                         child: Text(
                           _cooldown > 0 ? "${_cooldown}s" : "Get Code",
                           style: const TextStyle(
-                            color: Color(0xFF00C875),
+                            color: Color(0xFF1ED7B5),
                             fontWeight: FontWeight.bold,
                           ),
                         ),
@@ -1023,12 +1090,14 @@ class _BindMailPageState extends State<_BindMailPage> {
             const SizedBox(height: 24),
             SizedBox(
               width: double.infinity,
-              height: 48,
+              height: 50,
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF00C875),
+                  backgroundColor: const Color(0xFF1ED7B5),
                   foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(25)),
                 ),
                 onPressed: _binding
                     ? null
@@ -1048,7 +1117,7 @@ class _BindMailPageState extends State<_BindMailPage> {
                         if (mounted) Navigator.pop(context);
                       },
                 child: const Text(
-                  "Bind",
+                  "Confirm",
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                 ),
               ),
@@ -1076,7 +1145,7 @@ class _MessageSettingsPage extends StatefulWidget {
     required this.onSaveField,
   });
 
-  @override
+@override
   State<_MessageSettingsPage> createState() => _MessageSettingsPageState();
 }
 
@@ -1096,18 +1165,22 @@ class _MessageSettingsPageState extends State<_MessageSettingsPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF3F5F7),
+      backgroundColor: const Color(0xFFF5F6F8),
       appBar: AppBar(
-        backgroundColor: const Color(0xFFF3F5F7),
+        backgroundColor: const Color(0xFFF5F6F8),
         elevation: 0,
         centerTitle: true,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, color: Color(0xFF182026), size: 20),
+          icon: const Icon(Icons.arrow_back_ios_new,
+              color: Color(0xFF1F2329), size: 19),
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
           "Message Settings",
-          style: TextStyle(color: Color(0xFF182026), fontSize: 18, fontWeight: FontWeight.bold),
+          style: TextStyle(
+              color: Color(0xFF1F2329),
+              fontSize: 18,
+              fontWeight: FontWeight.w700),
         ),
       ),
       body: Padding(
@@ -1121,30 +1194,45 @@ class _MessageSettingsPageState extends State<_MessageSettingsPage> {
             mainAxisSize: MainAxisSize.min,
             children: [
               SwitchListTile(
-                title: const Text("Top Message Banner", style: TextStyle(fontWeight: FontWeight.w500)),
-                activeColor: const Color(0xFF00C875),
+                title: const Text("Top Message Banner",
+                    style: TextStyle(
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF1F2329))),
+                activeColor: Colors.white,
+                activeTrackColor: const Color(0xFF1ED7B5),
                 value: _banner,
                 onChanged: (v) {
                   setState(() => _banner = v);
                   widget.onSaveField('topMessageBanner', v);
                 },
               ),
-              const Divider(height: 1, indent: 16, color: Color(0xFFF0F2F5)),
+              const Divider(height: 1, indent: 16, color: Color(0xFFF2F3F5)),
               SwitchListTile(
-                title: const Text("Sounds", style: TextStyle(fontWeight: FontWeight.w500)),
-                activeColor: const Color(0xFF00C875),
+                title: const Text("Sounds",
+                    style: TextStyle(
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF1F2329))),
+                activeColor: Colors.white,
+                activeTrackColor: const Color(0xFF1ED7B5),
                 value: _sounds,
                 onChanged: (v) {
                   setState(() => _sounds = v);
                   widget.onSaveField('roomSounds', v);
                 },
               ),
-              const Divider(height: 1, indent: 16, color: Color(0xFFF0F2F5)),
+              const Divider(height: 1, indent: 16, color: Color(0xFFF2F3F5)),
               SwitchListTile(
-                title: const Text("Vibration", style: TextStyle(fontWeight: FontWeight.w500)),
-                activeColor: const Color(0xFF00C875),
+                title: const Text("Vibration",
+                    style: TextStyle(
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF1F2329))),
+                activeColor: Colors.white,
+                activeTrackColor: const Color(0xFF1ED7B5),
                 value: _vibration,
                 onChanged: (v) {
+                  if (v) {
+                    HapticFeedback.mediumImpact();
+                  }
                   setState(() => _vibration = v);
                   widget.onSaveField('vibrationEnabled', v);
                 },
@@ -1158,7 +1246,7 @@ class _MessageSettingsPageState extends State<_MessageSettingsPage> {
 }
 
 // ============================================================================
-// 3. LANGUAGE SETTING PAGE (Follow System, English, Amharic, Arabic, etc.)
+// 3. LANGUAGE SETTING PAGE (With Top-Right Teal "Save" Pill Button)
 // ============================================================================
 class _LanguageSettingPage extends StatefulWidget {
   final String currentLanguage;
@@ -1178,10 +1266,14 @@ class _LanguageSettingPageState extends State<_LanguageSettingPage> {
   final List _languages = const [
     "Follow System",
     "English",
+    "Filipino",
+    "Burmese",
     "Amharic",
+    "Nepali",
+    "Japanese",
+    "Francais",
+    "Portugues",
     "Arabic",
-    "French",
-    "Turkish",
   ];
 
   @override
@@ -1193,31 +1285,43 @@ class _LanguageSettingPageState extends State<_LanguageSettingPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF3F5F7),
+      backgroundColor: const Color(0xFFF5F6F8),
       appBar: AppBar(
-        backgroundColor: const Color(0xFFF3F5F7),
+        backgroundColor: const Color(0xFFF5F6F8),
         elevation: 0,
         centerTitle: true,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, color: Color(0xFF182026), size: 20),
+          icon: const Icon(Icons.arrow_back_ios_new,
+              color: Color(0xFF1F2329), size: 19),
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
           "Language Setting",
-          style: TextStyle(color: Color(0xFF182026), fontSize: 18, fontWeight: FontWeight.bold),
+          style: TextStyle(
+              color: Color(0xFF1F2329),
+              fontSize: 18,
+              fontWeight: FontWeight.w700),
         ),
         actions: [
-          TextButton(
-            onPressed: () async {
-              await widget.onSaved(_selected);
-              if (mounted) Navigator.pop(context);
-            },
-            child: const Text(
-              "Save",
-              style: TextStyle(
-                color: Color(0xFF00C875),
-                fontSize: 15,
-                fontWeight: FontWeight.bold,
+          Padding(
+            padding: const EdgeInsets.only(right: 14, top: 10, bottom: 10),
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF1ED7B5),
+                foregroundColor: Colors.white,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(horizontal: 18),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              onPressed: () async {
+                await widget.onSaved(_selected);
+                if (mounted) Navigator.pop(context);
+              },
+              child: const Text(
+                "Save",
+                style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700),
               ),
             ),
           ),
@@ -1233,15 +1337,24 @@ class _LanguageSettingPageState extends State<_LanguageSettingPage> {
           child: ListView.separated(
             shrinkWrap: true,
             itemCount: _languages.length,
-            separatorBuilder: (_, __) => const Divider(height: 1, indent: 16, color: Color(0xFFF0F2F5)),
+            separatorBuilder: (_, __) =>
+                const Divider(height: 1, indent: 16, color: Color(0xFFF2F3F5)),
             itemBuilder: (_, i) {
               final lang = _languages[i].toString();
               final isSelected = _selected == lang;
               return ListTile(
-                title: Text(lang, style: const TextStyle(fontWeight: FontWeight.w500)),
+                title: Text(
+                  lang,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w500,
+                    color: Color(0xFF1F2329),
+                  ),
+                ),
                 trailing: isSelected
-                    ? const Icon(Icons.check_circle, color: Color(0xFF00C875))
-                    : const Icon(Icons.circle_outlined, color: Color(0xFFCBD5E1)),
+                    ? const Icon(Icons.check_circle,
+                        color: Color(0xFF1ED7B5), size: 22)
+                    : const Icon(Icons.circle_outlined,
+                        color: Color(0xFFE5E6EB), size: 22),
                 onTap: () => setState(() => _selected = lang),
               );
             },
@@ -1253,7 +1366,366 @@ class _LanguageSettingPageState extends State<_LanguageSettingPage> {
 }
 
 // ============================================================================
-// 4. DELETE ACCOUNT PAGE (4 Warnings + Checkbox + 15-Second Countdown Timer)
+// 4. PRIVILEGE SETTINGS PAGE ("Mystery man on rank" + Privacy Toggles)
+// ============================================================================
+class _PrivilegeSettingsPage extends StatefulWidget {
+  final bool initialMysteryMan;
+  final bool initialHideOnline;
+  final bool initialInvisibleEntry;
+  final Future<void> Function(String key, dynamic val) onSaveField;
+
+  const _PrivilegeSettingsPage({
+    required this.initialMysteryMan,
+    required this.initialHideOnline,
+    required this.initialInvisibleEntry,
+    required this.onSaveField,
+  });
+
+  @override
+  State<_PrivilegeSettingsPage> createState() => _PrivilegeSettingsPageState();
+}
+
+class _PrivilegeSettingsPageState extends State<_PrivilegeSettingsPage> {
+  late bool _mysteryMan;
+  late bool _hideOnline;
+  late bool _invisibleEntry;
+
+@override
+  void initState() {
+    super.initState();
+    _mysteryMan = widget.initialMysteryMan;
+    _hideOnline = widget.initialHideOnline;
+    _invisibleEntry = widget.initialInvisibleEntry;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF5F6F8),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFFF5F6F8),
+        elevation: 0,
+        centerTitle: true,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new,
+              color: Color(0xFF1F2329), size: 19),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: const Text(
+          "Privilege settings",
+          style: TextStyle(
+              color: Color(0xFF1F2329),
+              fontSize: 18,
+              fontWeight: FontWeight.w700),
+        ),
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SwitchListTile(
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                title: const Text(
+                  "Mystery man on rank",
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 15,
+                    color: Color(0xFF1F2329),
+                  ),
+                ),
+                subtitle: const Padding(
+                  padding: EdgeInsets.only(top: 4),
+                  child: Text(
+                    'Displayed on the rank as a "Mystery Man"',
+                    style: TextStyle(fontSize: 12, color: Color(0xFF86909C)),
+                  ),
+                ),
+                activeColor: Colors.white,
+                activeTrackColor: const Color(0xFF1ED7B5),
+                value: _mysteryMan,
+                onChanged: (v) {
+                  setState(() => _mysteryMan = v);
+                  widget.onSaveField('mysteryManOnRank', v);
+                },
+              ),
+              const Divider(height: 1, indent: 16, color: Color(0xFFF2F3F5)),
+              SwitchListTile(
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                title: const Text(
+                  "Invisible Room Entry",
+                  style: TextStyle(
+                    fontWeight: FontWeight.w500,
+                    fontSize: 15,
+                    color: Color(0xFF1F2329),
+                  ),
+                ),
+                subtitle: const Text(
+                  "Enter voice rooms without entry banner",
+                  style: TextStyle(fontSize: 12, color: Color(0xFF86909C)),
+                ),
+                activeColor: Colors.white,
+                activeTrackColor: const Color(0xFF1ED7B5),
+                value: _invisibleEntry,
+                onChanged: (v) {
+                  setState(() => _invisibleEntry = v);
+                  widget.onSaveField('invisibleEntry', v);
+                },
+              ),
+              const Divider(height: 1, indent: 16, color: Color(0xFFF2F3F5)),
+              SwitchListTile(
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                title: const Text(
+                  "Hide Online Status",
+                  style: TextStyle(
+                    fontWeight: FontWeight.w500,
+                    fontSize: 15,
+                    color: Color(0xFF1F2329),
+                  ),
+                ),
+                subtitle: const Text(
+                  "Appear offline to other users",
+
+style: TextStyle(fontSize: 12, color: Color(0xFF86909C)),
+                ),
+                activeColor: Colors.white,
+                activeTrackColor: const Color(0xFF1ED7B5),
+                value: _hideOnline,
+                onChanged: (v) {
+                  setState(() => _hideOnline = v);
+                  widget.onSaveField('hideOnlineStatus', v);
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ============================================================================
+// 5. BLOCKED USERS PAGE ("Blocked" + Golden Heart Empty State + Unblock)
+// ============================================================================
+class _BlockedUsersPage extends StatelessWidget {
+  final void Function(String msg) onToast;
+
+  const _BlockedUsersPage({required this.onToast});
+
+  void _showAddBlockDialog(BuildContext context, String uid) {
+    final ctrl = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: const Text("Block User ID",
+            style: TextStyle(fontWeight: FontWeight.bold)),
+        content: TextField(
+          controller: ctrl,
+          keyboardType: TextInputType.number,
+          decoration: InputDecoration(
+            hintText: "Enter numeric User ID",
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Cancel",
+                style: TextStyle(color: Color(0xFF86909C))),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF1ED7B5),
+              foregroundColor: Colors.white,
+              elevation: 0,
+            ),
+            onPressed: () async {
+              final target = ctrl.text.trim();
+              if (target.isEmpty) return;
+              Navigator.pop(ctx);
+              await FirebaseFirestore.instance
+                  .collection('users')
+                  .doc(uid)
+                  .set({
+                'blacklist': FieldValue.arrayUnion([target])
+              }, SetOptions(merge: true));
+              onToast("Blocked User ID: $target");
+            },
+            child: const Text("Block"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final user = FirebaseAuth.instance.currentUser;
+    final uid = user?.uid ?? "";
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFF5F6F8),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFFF5F6F8),
+        elevation: 0,
+        centerTitle: true,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new,
+              color: Color(0xFF1F2329), size: 19),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: const Text(
+          "Blocked",
+          style: TextStyle(
+              color: Color(0xFF1F2329),
+              fontSize: 18,
+              fontWeight: FontWeight.w700),
+        ),
+        actions: [
+          if (uid.isNotEmpty)
+            IconButton(
+              icon: const Icon(Icons.person_add_disabled_rounded,
+                  color: Color(0xFF1F2329), size: 22),
+              onPressed: () => _showAddBlockDialog(context, uid),
+            ),
+        ],
+      ),
+      body: uid.isEmpty
+          ? const Center(
+              child: Text("Have no Friends yet",
+                  style: TextStyle(color: Color(0xFF86909C), fontSize: 14)),
+            )
+          : StreamBuilder(
+              stream: FirebaseFirestore.instance
+
+.collection('users')
+                  .doc(uid)
+                  .snapshots(),
+              builder: (context, AsyncSnapshot snap) {
+                final doc = snap.data as DocumentSnapshot?;
+                final data = doc?.data() as Map? ?? {};
+                final List blocked =
+                    data['blacklist'] is List ? data['blacklist'] : [];
+
+                if (blocked.isEmpty) {
+                  return Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        SizedBox(
+                          width: 110,
+                          height: 95,
+                          child: Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              const Icon(
+                                Icons.favorite_rounded,
+                                color: Color(0xFFF3C86A),
+                                size: 88,
+                              ),
+                              Positioned(
+                                right: 12,
+                                bottom: 8,
+                                child: Container(
+                                  padding: const EdgeInsets.all(2),
+                                  decoration: const BoxDecoration(
+                                    color: Color(0xFFF5F6F8),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    Icons.favorite_rounded,
+                                    color: Color(0xFFFBE3A3),
+                                    size: 40,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        const Text(
+                          "Have no Friends yet",
+                          style: TextStyle(
+                            color: Color(0xFF86909C),
+                            fontSize: 14.5,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const SizedBox(height: 60),
+                      ],
+                    ),
+                  );
+                }
+
+                return Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: ListView.separated(
+                      shrinkWrap: true,
+                      itemCount: blocked.length,
+                      separatorBuilder: (_, __) => const Divider(
+                          height: 1, indent: 16, color: Color(0xFFF2F3F5)),
+                      itemBuilder: (_, i) {
+                        final item = blocked[i].toString();
+                        return ListTile(
+                          leading: const CircleAvatar(
+                            backgroundColor: Color(0xFFFFF3CD),
+                            child: Icon(Icons.person_off_rounded,
+                                color: Color(0xFFD97724), size: 20),
+                          ),
+                          title: Text(
+                            "User ID: $item",
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF1F2329),
+                            ),
+                          ),
+                          trailing: TextButton(
+
+onPressed: () async {
+                              await FirebaseFirestore.instance
+                                  .collection('users')
+                                  .doc(uid)
+                                  .update({
+                                'blacklist': FieldValue.arrayRemove([item])
+                              });
+                              onToast("Unblocked $item");
+                            },
+                            child: const Text(
+                              "Unblock",
+                              style: TextStyle(
+                                color: Color(0xFF1ED7B5),
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                );
+              },
+            ),
+    );
+  }
+}
+
+// ============================================================================
+// 6. DELETE ACCOUNT PAGE
 // ============================================================================
 class _DeleteAccountPage extends StatefulWidget {
   final void Function(String msg) onToast;
@@ -1298,35 +1770,42 @@ class _DeleteAccountPageState extends State<_DeleteAccountPage> {
     if (user == null) return;
     setState(() => _deleting = true);
     try {
-      await FirebaseFirestore.instance.collection('users').doc(user.uid).delete();
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .delete();
       await user.delete();
       if (mounted) {
         Navigator.of(context).popUntil((route) => route.isFirst);
       }
     } catch (e) {
-      widget.onToast("Please re-login before deleting account: $e");
+      widget.onToast("Please sign in again before deleting account.");
     } finally {
       if (mounted) setState(() => _deleting = false);
     }
   }
 
-@override
+  @override
   Widget build(BuildContext context) {
     final bool canConfirm = _secondsLeft == 0 && _agreed && !_deleting;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF3F5F7),
+      backgroundColor: const Color(0xFFF5F6F8),
       appBar: AppBar(
-        backgroundColor: const Color(0xFFF3F5F7),
+        backgroundColor: const Color(0xFFF5F6F8),
         elevation: 0,
         centerTitle: true,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, color: Color(0xFF182026), size: 20),
+          icon: const Icon(Icons.arrow_back_ios_new,
+              color: Color(0xFF1F2329), size: 19),
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
           "Delete Account",
-          style: TextStyle(color: Color(0xFF182026), fontSize: 18, fontWeight: FontWeight.bold),
+          style: TextStyle(
+              color: Color(0xFF1F2329),
+              fontSize: 18,
+              fontWeight: FontWeight.w700),
         ),
       ),
       body: Padding(
@@ -1344,11 +1823,14 @@ class _DeleteAccountPageState extends State<_DeleteAccountPage> {
                 children: [
                   Row(
                     children: [
-                      Icon(Icons.warning_amber_rounded, color: Color(0xFFFF5252), size: 26),
+                      Icon(Icons.warning_amber_rounded,
+
+color: Color(0xFFE54D42), size: 26),
                       SizedBox(width: 8),
                       Text(
                         "Important Account Deletion Notice",
-                        style: TextStyle(fontSize: 15.5, fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                            fontSize: 15.5, fontWeight: FontWeight.bold),
                       ),
                     ],
                   ),
@@ -1379,7 +1861,7 @@ class _DeleteAccountPageState extends State<_DeleteAccountPage> {
             CheckboxListTile(
               contentPadding: EdgeInsets.zero,
               controlAffinity: ListTileControlAffinity.leading,
-              activeColor: const Color(0xFFFF5252),
+              activeColor: const Color(0xFFE54D42),
               title: const Text(
                 "I have read and agree to permanently delete my account",
                 style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
@@ -1393,17 +1875,20 @@ class _DeleteAccountPageState extends State<_DeleteAccountPage> {
               height: 50,
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: canConfirm ? const Color(0xFFFF5252) : Colors.black26,
+                  backgroundColor:
+                      canConfirm ? const Color(0xFFE54D42) : Colors.black26,
                   foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(25)),
                 ),
                 onPressed: canConfirm ? _executeDeletion : null,
                 child: Text(
                   _secondsLeft > 0
-
-? "Confirm Deletion (${_secondsLeft}s)"
+                      ? "Confirm Deletion (${_secondsLeft}s)"
                       : "Confirm Deletion",
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                      fontSize: 16, fontWeight: FontWeight.bold),
                 ),
               ),
             ),
