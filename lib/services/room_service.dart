@@ -9,6 +9,19 @@ class RoomService {
     return _roomsCollection.doc(roomId).snapshots();
   }
 
+  Future<bool> _checkIsAgent(String uid) async {
+    try {
+      final userDoc = await _firestore.collection('users').doc(uid).get();
+      if (userDoc.exists && userDoc.data() != null) {
+        final uData = userDoc.data()!;
+        if (uData['isAgent'] == true) return true;
+        if (uData['isAgency'] == true) return true;
+        if (uData['role'] == 'agent') return true;
+      }
+    } catch (_) {}
+    return false;
+  }
+
   Future<void> enterMyRoom({
     required String roomId,
     required String roomTitle,
@@ -17,6 +30,8 @@ class RoomService {
   }) async {
     final roomRef = _roomsCollection.doc(roomId);
     final doc = await roomRef.get();
+    final bool isAgent = await _checkIsAgent(hostUid);
+    final int goldenSeats = isAgent ? 6 : 3;
 
     if (!doc.exists) {
       final List<dynamic> seatsList = List.filled(30, null);
@@ -32,6 +47,8 @@ class RoomService {
         'title': roomTitle,
         'hostUid': hostUid,
         'hostName': hostName,
+        'isAgentHost': isAgent,
+        'goldenSeatCount': goldenSeats,
         'totalSeats': 30,
         'seats': seatsList,
         'isLive': true,
@@ -59,6 +76,8 @@ class RoomService {
         transaction.update(roomRef, {
           'seats': seats,
           'isLive': true,
+          'isAgentHost': isAgent,
+          'goldenSeatCount': goldenSeats,
         });
       });
     }
@@ -122,7 +141,7 @@ class RoomService {
     });
   }
 
-  Future<void> toggleSeatMute({
+Future<void> toggleSeatMute({
     required String roomId,
     required int seatIndex,
     required bool isMuted,
@@ -143,7 +162,7 @@ class RoomService {
     });
   }
 
-Future<void> kickUserFromSeat({
+  Future<void> kickUserFromSeat({
     required String roomId,
     required int seatIndex,
   }) async {
