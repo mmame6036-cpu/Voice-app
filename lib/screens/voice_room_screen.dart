@@ -1983,7 +1983,7 @@ height: 46,
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            "👑 ወንበር ቁጥር 1 ለቤቱ ባለቤት (Host) ብቻ የተፈቀደ ነው!",
+            "👑 Seat 1 is reserved for the Host only!",
           ),
           duration: Duration(seconds: 2),
         ),
