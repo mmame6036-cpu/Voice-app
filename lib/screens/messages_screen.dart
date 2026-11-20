@@ -2239,7 +2239,7 @@ class _NoticeDetailScreenState extends State<NoticeDetailScreen> {
             .limit(20)
             .snapshots(),
         builder: (context, txnSnap) {
-          final List> items = [];
+          final List items = [];
 
           if (txnSnap.hasData && txnSnap.data != null) {
             for (final doc in txnSnap.data!.docs) {
