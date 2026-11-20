@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
+import 'package:audioplayers/audioplayers.dart';
 
 class FullscreenGiftEvent {
   final String giftId;
@@ -38,7 +39,7 @@ class _FullscreenGiftAnimatorState extends State<FullscreenGiftAnimator> {
   bool _useFallbackVisual = false;
   String _fallbackImagePath = "";
   double _opacity = 0.0;
-  double _scale = 0.4;
+  double _scale = 0.5;
 
   @override
   void initState() {
@@ -57,6 +58,23 @@ class _FullscreenGiftAnimatorState extends State<FullscreenGiftAnimator> {
           .replaceAll('.mp4', '.jpg');
     }
     return assetPath;
+  }
+
+  Future<void> _playLoudGiftSound() async {
+    try {
+      final AudioPlayer player = AudioPlayer();
+      await player.setPlayerMode(PlayerMode.mediaPlayer);
+      await player.setVolume(1.0);
+      try {
+        await player.play(AssetSource('sounds/Five_win.mp3'));
+      } catch (_) {
+        await player.play(AssetSource('sounds/five_win.mp3'));
+      }
+      await player.setVolume(1.0);
+      player.onPlayerComplete.listen((_) {
+        player.dispose();
+      });
+    } catch (_) {}
   }
 
   Future<void> _disposeCurrentVideo() async {
@@ -88,7 +106,7 @@ class _FullscreenGiftAnimatorState extends State<FullscreenGiftAnimator> {
       _useFallbackVisual = false;
       _fallbackImagePath = _toFallbackImage(assetPath);
       _opacity = 1.0;
-      _scale = 0.45;
+      _scale = 0.55;
     });
 
     Future.delayed(const Duration(milliseconds: 50), () {
@@ -100,10 +118,11 @@ class _FullscreenGiftAnimatorState extends State<FullscreenGiftAnimator> {
     });
 
     if (!isMp4) {
+      _playLoudGiftSound();
       setState(() {
         _useFallbackVisual = true;
       });
-      _dismissTimer = Timer(const Duration(milliseconds: 2400), () {
+      _dismissTimer = Timer(const Duration(milliseconds: 2600), () {
         _finishCurrentGift(currentToken);
       });
       return;
@@ -133,7 +152,7 @@ class _FullscreenGiftAnimatorState extends State<FullscreenGiftAnimator> {
       _videoController = ctrl;
       ctrl.addListener(_onVideoProgress);
 
-      final int durMs = ctrl.value.duration.inMilliseconds;
+final int durMs = ctrl.value.duration.inMilliseconds;
       if (durMs > 300) {
         _dismissTimer?.cancel();
         _dismissTimer = Timer(Duration(milliseconds: durMs + 250), () {
@@ -144,24 +163,25 @@ class _FullscreenGiftAnimatorState extends State<FullscreenGiftAnimator> {
       await ctrl.setLooping(false);
       await ctrl.setVolume(1.0);
       await ctrl.play();
+      await ctrl.setVolume(1.0);
 
       if (mounted) {
         if (_playToken == currentToken) {
           setState(() {
             _isVideoReady = true;
-
-});
+          });
         }
       }
     } catch (_) {
       if (mounted) {
         if (_playToken == currentToken) {
+          _playLoudGiftSound();
           setState(() {
             _isVideoReady = false;
             _useFallbackVisual = true;
           });
           _dismissTimer?.cancel();
-          _dismissTimer = Timer(const Duration(milliseconds: 2400), () {
+          _dismissTimer = Timer(const Duration(milliseconds: 2600), () {
             _finishCurrentGift(currentToken);
           });
         }
@@ -226,14 +246,14 @@ class _FullscreenGiftAnimatorState extends State<FullscreenGiftAnimator> {
 
   Widget _buildIconCenterpiece(String icon) {
     return Container(
-      width: 190,
-      height: 190,
+      width: 310,
+      height: 310,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         gradient: RadialGradient(
           colors: [
-            const Color(0xFFFFD700).withOpacity(0.45),
-            const Color(0xFFFF8C00).withOpacity(0.15),
+            const Color(0xFFFFD700).withOpacity(0.55),
+            const Color(0xFFFF8C00).withOpacity(0.22),
             Colors.transparent,
           ],
         ),
@@ -241,7 +261,7 @@ class _FullscreenGiftAnimatorState extends State<FullscreenGiftAnimator> {
       child: Center(
         child: Text(
           icon,
-          style: const TextStyle(fontSize: 105),
+          style: const TextStyle(fontSize: 165),
         ),
       ),
     );
@@ -280,9 +300,9 @@ class _FullscreenGiftAnimatorState extends State<FullscreenGiftAnimator> {
                       height: videoH,
                       child: VideoPlayer(ctrl),
                     ),
-                  ),
-                ),
 
+),
+                ),
               if (_useFallbackVisual)
                 Center(
                   child: AnimatedScale(
@@ -290,29 +310,41 @@ class _FullscreenGiftAnimatorState extends State<FullscreenGiftAnimator> {
                     duration: const Duration(milliseconds: 380),
                     curve: Curves.easeOutBack,
                     child: _fallbackImagePath.isNotEmpty
-                        ? ClipOval(
-                            child: Image.asset(
-                              _fallbackImagePath,
-                              width: 210,
-                              height: 210,
-
-fit: BoxFit.cover,
-                              errorBuilder: (ctx, err, stack) =>
-                                  _buildIconCenterpiece(activeIcon),
+                        ? Container(
+                            width: 300,
+                            height: 300,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              gradient: RadialGradient(
+                                colors: [
+                                  const Color(0xFFFFD700).withOpacity(0.45),
+                                  const Color(0xFFFF8C00).withOpacity(0.15),
+                                  Colors.transparent,
+                                ],
+                              ),
+                            ),
+                            child: Center(
+                              child: Image.asset(
+                                _fallbackImagePath,
+                                width: 270,
+                                height: 270,
+                                fit: BoxFit.contain,
+                                errorBuilder: (ctx, err, stack) =>
+                                    _buildIconCenterpiece(activeIcon),
+                              ),
                             ),
                           )
                         : _buildIconCenterpiece(activeIcon),
                   ),
                 ),
-
               Positioned(
-                top: 16,
-                left: 16,
-                right: 16,
+                top: 18,
+                left: 14,
+                right: 14,
                 child: Center(
                   child: Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 18, vertical: 7),
+                        horizontal: 20, vertical: 9),
                     decoration: BoxDecoration(
                       gradient: const LinearGradient(
                         colors: [Color(0xFFFFD700), Color(0xFFFF8C00)],
@@ -320,7 +352,7 @@ fit: BoxFit.cover,
                       borderRadius: BorderRadius.circular(24),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.45),
+                          color: Colors.black.withOpacity(0.5),
                           blurRadius: 12,
                           offset: const Offset(0, 3),
                         ),
@@ -331,7 +363,7 @@ fit: BoxFit.cover,
                       style: const TextStyle(
                         color: Colors.black,
                         fontWeight: FontWeight.w900,
-                        fontSize: 13,
+                        fontSize: 14.5,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
