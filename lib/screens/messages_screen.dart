@@ -1,7 +1,15 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+
+import 'settings_screen.dart';
+import 'voice_room_screen.dart';
+import '../services/user_id_service.dart';
+import '../services/room_session_manager.dart';
 
 class MessagesScreen extends StatefulWidget {
   const MessagesScreen({super.key});
@@ -16,26 +24,35 @@ class _MessagesScreenState extends State<MessagesScreen> {
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
 
-  int _unreadSystemCount = 1;
-  int _unreadOfficialCount = 1;
+  int _unreadSystemCount = 0;
+  int _unreadOfficialCount = 0;
   int _unreadSupportCount = 0;
 
-  int _unreadNoticeCount = 2;
-  int _unreadInteractionCount = 5;
-  int _unreadFollowerCount = 3;
+  int _unreadNoticeCount = 0;
+  int _unreadInteractionCount = 0;
+  int _unreadFollowerCount = 0;
 
   String _latestSystemSubtitle = "WELCOME to NILE Live!";
-  String _latestSystemTime = "08-10 19:29";
+  String _latestSystemTime = "";
 
-  String _latestOfficialSubtitle = "NILE Live 1st Anniversary & Bonus";
+  String _latestOfficialSubtitle = "NILE Live Official Events & Bonuses";
   String _latestOfficialTime = "Today";
 
   String _latestSupportSubtitle = "Tap to chat with NILE Live Support";
   String _latestSupportTime = "";
 
+  List> _directChats = [];
+  List> _searchedUsers = [];
+  bool _isSearchingUsers = false;
+
   StreamSubscription? _systemSub;
   StreamSubscription? _officialSub;
   StreamSubscription? _supportSub;
+  StreamSubscription? _noticeSub;
+  StreamSubscription? _interactionSub;
+  StreamSubscription? _followerSub;
+  StreamSubscription? _dmSub;
+  Timer? _searchDebounce;
 
   String get _uid => FirebaseAuth.instance.currentUser?.uid ?? 'guest_user';
 
@@ -50,6 +67,11 @@ class _MessagesScreenState extends State<MessagesScreen> {
     _systemSub?.cancel();
     _officialSub?.cancel();
     _supportSub?.cancel();
+    _noticeSub?.cancel();
+    _interactionSub?.cancel();
+    _followerSub?.cancel();
+    _dmSub?.cancel();
+    _searchDebounce?.cancel();
     _searchController.dispose();
     super.dispose();
   }
@@ -57,33 +79,37 @@ class _MessagesScreenState extends State<MessagesScreen> {
   void _initFirebaseListeners() {
     final db = FirebaseFirestore.instance;
 
+    // 1. System Messages Listener
     _systemSub = db
         .collection('users')
         .doc(_uid)
         .collection('system_messages')
         .orderBy('timestamp', descending: true)
+        .limit(20)
         .snapshots()
         .listen((snap) {
       if (!mounted) return;
-      if (snap.docs.isEmpty) return;
       int unread = 0;
       for (final d in snap.docs) {
         if (d.data()['unread'] == true) unread++;
       }
-      final latest = snap.docs.first.data();
       setState(() {
         _unreadSystemCount = unread;
-        _latestSystemSubtitle =
-            (latest['subtitle'] ?? latest['title'] ?? _latestSystemSubtitle)
-                .toString();
-        _latestSystemTime = _formatTime(latest['timestamp']);
+        if (snap.docs.isNotEmpty) {
+          final latest = snap.docs.first.data();
+          _latestSystemSubtitle =
+              (latest['subtitle'] ?? latest['title'] ?? _latestSystemSubtitle)
+                  .toString();
+          _latestSystemTime = _formatTime(latest['timestamp']);
+        }
       });
     }, onError: (_) {});
 
+    // 2. Official Notifications Listener
     _officialSub = db
         .collection('official_notifications')
         .orderBy('timestamp', descending: true)
-        .limit(10)
+        .limit(15)
         .snapshots()
         .listen((snap) {
       if (!mounted) return;
@@ -96,20 +122,133 @@ class _MessagesScreenState extends State<MessagesScreen> {
       });
     }, onError: (_) {});
 
+    // 3. Customer Service Chat Listener
     _supportSub = db
         .collection('support_chats')
         .doc(_uid)
         .snapshots()
         .listen((doc) {
-      if (!mounted) return;
-      if (!doc.exists) return;
-      if (doc.data() == null) return;
+      if (!mounted  !doc.exists  doc.data() == null) return;
       final data = doc.data()!;
-      setState(() {
-        _latestSupportSubtitle =
-            (data['lastMessage'] ?? _latestSupportSubtitle).toString();
+
+setState(() {
+        final rawLast = (data['lastMessage'] ?? '').toString().trim();
+        if (rawLast.isNotEmpty) {
+          _latestSupportSubtitle = rawLast;
+        }
         _latestSupportTime = _formatTime(data['updatedAt']);
-        _unreadSupportCount = (data['userUnread'] ?? 0) as int;
+        _unreadSupportCount = (data['userUnread'] as num?)?.toInt() ?? 0;
+      });
+    }, onError: (_) {});
+
+    // 4. Notices Subcollection Unread Count
+    _noticeSub = db
+        .collection('users')
+        .doc(_uid)
+        .collection('notices')
+        .limit(30)
+        .snapshots()
+        .listen((snap) {
+      if (!mounted) return;
+      int unread = 0;
+      for (final d in snap.docs) {
+        if (d.data()['unread'] == true) unread++;
+      }
+      setState(() => _unreadNoticeCount = unread);
+    }, onError: (_) {});
+
+    // 5. Interactions Subcollection Unread Count
+    _interactionSub = db
+        .collection('users')
+        .doc(_uid)
+        .collection('interactions')
+        .limit(30)
+        .snapshots()
+        .listen((snap) {
+      if (!mounted) return;
+      int unread = 0;
+      for (final d in snap.docs) {
+        if (d.data()['unread'] == true) unread++;
+      }
+      setState(() => _unreadInteractionCount = unread);
+    }, onError: (_) {});
+
+    // 6. Followers Subcollection Unread Count
+    _followerSub = db
+        .collection('users')
+        .doc(_uid)
+        .collection('followers')
+        .limit(50)
+        .snapshots()
+        .listen((snap) {
+      if (!mounted) return;
+      int unread = 0;
+      for (final d in snap.docs) {
+        if (d.data()['unread'] == true) unread++;
+      }
+      setState(() => _unreadFollowerCount = unread);
+    }, onError: (_) {});
+
+    // 7. 1-on-1 Direct Message Conversations Listener
+    _dmSub = db
+        .collection('direct_chats')
+        .where('participants', arrayContains: _uid)
+        .snapshots()
+        .listen((snap) {
+      if (!mounted) return;
+      final List> chats = [];
+      for (final doc in snap.docs) {
+        final d = doc.data();
+        final List participants =
+            d['participants'] is List ? d['participants'] as List : [];
+        String peerUid = '';
+        for (final p in participants) {
+          if (p.toString() != _uid) {
+            peerUid = p.toString();
+            break;
+          }
+        }
+        if (peerUid.isEmpty) continue;
+
+        final Map namesMap =
+            d['participantNames'] is Map ? d['participantNames'] as Map : {};
+        final Map avatarsMap = d['participantAvatars'] is Map
+            ? d['participantAvatars'] as Map
+            : {};
+        final Map unreadMap =
+            d['unreadCounts'] is Map ? d['unreadCounts'] as Map : {};
+
+        final String peerName =
+            (namesMap[peerUid] ?? 'User').toString();
+        final String peerAvatar =
+            (avatarsMap[peerUid] ?? '').toString();
+        final int unread = (unreadMap[_uid] as num?)?.toInt() ?? 0;
+
+        int updatedMs = 0;
+        final rawTs = d['updatedAt'];
+        if (rawTs is Timestamp) {
+          updatedMs = rawTs.millisecondsSinceEpoch;
+        } else if (rawTs is int) {
+          updatedMs = rawTs;
+        }
+
+        chats.add({
+          'chatId': doc.id,
+          'peerUid': peerUid,
+          'peerName': peerName,
+          'peerAvatar': peerAvatar,
+          'lastMessage': (d['lastMessage'] ?? '').toString(),
+          'time': _formatTime(rawTs),
+          'updatedMs': updatedMs,
+          'unread': unread,
+        });
+      }
+
+      chats.sort(
+          (a, b) => (b['updatedMs'] as int).compareTo(a['updatedMs'] as int));
+
+      setState(() {
+        _directChats = chats;
       });
     }, onError: (_) {});
   }
@@ -120,7 +259,10 @@ class _MessagesScreenState extends State<MessagesScreen> {
     if (ts is Timestamp) {
       dt = ts.toDate();
     } else if (ts is DateTime) {
-      dt = ts;
+
+dt = ts;
+    } else if (ts is int) {
+      dt = DateTime.fromMillisecondsSinceEpoch(ts);
     } else {
       return ts.toString();
     }
@@ -131,7 +273,78 @@ class _MessagesScreenState extends State<MessagesScreen> {
     return "$m-$d $h:$min";
   }
 
-Future<void> _markAllAsRead() async {
+  void _onSearchChanged(String val) {
+    setState(() => _searchQuery = val);
+    _searchDebounce?.cancel();
+    final trimmed = val.trim();
+    if (trimmed.isEmpty) {
+      setState(() {
+        _searchedUsers = [];
+        _isSearchingUsers = false;
+      });
+      return;
+    }
+
+    _searchDebounce = Timer(const Duration(milliseconds: 350), () async {
+      if (!mounted) return;
+      setState(() => _isSearchingUsers = true);
+      try {
+        final db = FirebaseFirestore.instance;
+        final List> found = [];
+        final Set<String> seenUids = {_uid};
+
+        final int? numQuery = int.tryParse(trimmed);
+        if (numQuery != null) {
+          final byIdSnap = await db
+              .collection('users')
+              .where('numericId', isEqualTo: numQuery)
+              .limit(10)
+              .get();
+          for (final doc in byIdSnap.docs) {
+            if (seenUids.contains(doc.id)) continue;
+            seenUids.add(doc.id);
+            final d = doc.data();
+            found.add({
+              'uid': doc.id,
+              'name': (d['name'] ?? d['nickname'] ?? 'User').toString(),
+              'numericId': (d['numericId'] as num?)?.toInt() ?? 0,
+              'avatarUrl': (d['avatarUrl'] ?? d['photoURL'] ?? '').toString(),
+            });
+          }
+        }
+
+        final recentUsers = await db.collection('users').limit(40).get();
+        final qLower = trimmed.toLowerCase();
+        for (final doc in recentUsers.docs) {
+          if (seenUids.contains(doc.id)) continue;
+          final d = doc.data();
+          final name = (d['name'] ?? d['nickname'] ?? '').toString();
+          final numIdStr = ((d['numericId'] as num?)?.toInt() ?? 0).toString();
+          if (name.toLowerCase().contains(qLower) ||
+              numIdStr.contains(trimmed)) {
+            seenUids.add(doc.id);
+            found.add({
+              'uid': doc.id,
+              'name': name.isNotEmpty ? name : 'User',
+              'numericId': (d['numericId'] as num?)?.toInt() ?? 0,
+              'avatarUrl': (d['avatarUrl'] ?? d['photoURL'] ?? '').toString(),
+            });
+          }
+        }
+
+        if (mounted) {
+          setState(() {
+            _searchedUsers = found;
+            _isSearchingUsers = false;
+          });
+        }
+      } catch (_) {
+        if (mounted) setState(() => _isSearchingUsers = false);
+      }
+    });
+  }
+
+  Future<void> _markAllAsRead() async {
     setState(() {
       _unreadSystemCount = 0;
       _unreadOfficialCount = 0;
@@ -139,6 +352,9 @@ Future<void> _markAllAsRead() async {
       _unreadNoticeCount = 0;
       _unreadInteractionCount = 0;
       _unreadFollowerCount = 0;
+      for (final c in _directChats) {
+        c['unread'] = 0;
+      }
     });
 
     try {
@@ -152,6 +368,46 @@ Future<void> _markAllAsRead() async {
       for (final doc in sysSnap.docs) {
         await doc.reference.update({'unread': false});
       }
+
+      final noticeSnap = await db
+          .collection('users')
+          .doc(_uid)
+          .collection('notices')
+          .where('unread', isEqualTo: true)
+          .get();
+      for (final doc in noticeSnap.docs) {
+        await doc.reference.update({'unread': false});
+      }
+
+      final interSnap = await db
+          .collection('users')
+          .doc(_uid)
+          .collection('interactions')
+          .where('unread', isEqualTo: true)
+          .get();
+      for (final doc in interSnap.docs) {
+        await doc.reference.update({'unread': false});
+      }
+
+final folSnap = await db
+          .collection('users')
+          .doc(_uid)
+          .collection('followers')
+          .where('unread', isEqualTo: true)
+          .get();
+      for (final doc in folSnap.docs) {
+        await doc.reference.update({'unread': false});
+      }
+
+      for (final c in _directChats) {
+        final cid = (c['chatId'] ?? '').toString();
+        if (cid.isNotEmpty) {
+          await db.collection('direct_chats').doc(cid).set({
+            'unreadCounts': {_uid: 0}
+          }, SetOptions(merge: true));
+        }
+      }
+
       await db.collection('support_chats').doc(_uid).set(
         {'userUnread': 0},
         SetOptions(merge: true),
@@ -167,45 +423,20 @@ Future<void> _markAllAsRead() async {
     );
   }
 
-  void _openSettingsSheet() {
-    bool soundOn = true;
-    bool systemAlertsOn = true;
-
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setModalState) => Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                "Message Settings",
-                style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 12),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                activeColor: const Color(0xFF00B4DB),
-                title: const Text("System & Official Alerts"),
-                subtitle:
-                    const Text("Receive wallet, security & event updates"),
-                value: systemAlertsOn,
-                onChanged: (v) => setModalState(() => systemAlertsOn = v),
-              ),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                activeColor: const Color(0xFF00B4DB),
-                title: const Text("Message Sound & Vibration"),
-                value: soundOn,
-                onChanged: (v) => setModalState(() => soundOn = v),
-              ),
-            ],
-          ),
+  void _openDirectChat({
+    required String peerUid,
+    required String peerName,
+    String peerAvatar = '',
+  }) {
+    if (peerUid.isEmpty || peerUid == _uid) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => DirectChatScreen(
+          myUid: _uid,
+          peerUid: peerUid,
+          peerName: peerName,
+          peerAvatar: peerAvatar,
         ),
       ),
     );
@@ -253,8 +484,7 @@ Future<void> _markAllAsRead() async {
         'bgColor': const Color(0xFF26A69A),
         'title': 'Customer Service',
         'subtitle': _latestSupportSubtitle,
-
-'time': _latestSupportTime,
+        'time': _latestSupportTime,
         'unread': _unreadSupportCount,
         'onTap': () async {
           setState(() => _unreadSupportCount = 0);
@@ -274,16 +504,27 @@ Future<void> _markAllAsRead() async {
         final q = _searchQuery.toLowerCase();
         final t = ch['title'].toString().toLowerCase();
         final s = ch['subtitle'].toString().toLowerCase();
-        if (t.contains(q)) return true;
-        return s.contains(q);
+        return t.contains(q) || s.contains(q);
       }
       return true;
     }).toList();
 
-    return Scaffold(
+    final filteredDms = _directChats.where((dm) {
+      if (!_showAll && (dm['unread'] as int) == 0) return false;
+      if (_searchQuery.isNotEmpty) {
+        final q = _searchQuery.toLowerCase();
+        final name = dm['peerName'].toString().toLowerCase();
+        final last = dm['lastMessage'].toString().toLowerCase();
+        return name.contains(q) || last.contains(q);
+      }
+      return true;
+    }).toList();
+
+return Scaffold(
       backgroundColor: const Color(0xFFF5F7F9),
       body: Column(
         children: [
+          // Top Gradient Header
           Container(
             padding: EdgeInsets.only(
               top: MediaQuery.of(context).padding.top + 8,
@@ -327,11 +568,20 @@ Future<void> _markAllAsRead() async {
                   icon: const Icon(Icons.settings_outlined,
                       color: Colors.white, size: 23),
                   tooltip: 'Settings',
-                  onPressed: _openSettingsSheet,
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const SettingsScreen(),
+                      ),
+                    );
+                  },
                 ),
               ],
             ),
           ),
+
+          // Main White Container
           Expanded(
             child: Container(
               transform: Matrix4.translationValues(0, -10, 0),
@@ -341,6 +591,7 @@ Future<void> _markAllAsRead() async {
               ),
               child: Column(
                 children: [
+                  // Filter Tabs (All / Unread) + Search Button
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
                     child: Row(
@@ -362,10 +613,10 @@ Future<void> _markAllAsRead() async {
                           onPressed: () {
                             setState(() {
                               _isSearching = !_isSearching;
-
-if (!_isSearching) {
+                              if (!_isSearching) {
                                 _searchQuery = '';
                                 _searchController.clear();
+                                _searchedUsers = [];
                               }
                             });
                           },
@@ -373,15 +624,17 @@ if (!_isSearching) {
                       ],
                     ),
                   ),
+
+// Search Bar (Searches Messages & Finds Users by ID/Name to Chat)
                   if (_isSearching)
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
                       child: TextField(
                         controller: _searchController,
                         autofocus: true,
-                        onChanged: (val) => setState(() => _searchQuery = val),
+                        onChanged: _onSearchChanged,
                         decoration: InputDecoration(
-                          hintText: 'Search messages...',
+                          hintText: 'Search messages or User ID / Name...',
                           prefixIcon: const Icon(Icons.search, size: 20),
                           filled: true,
                           fillColor: const Color(0xFFF3F6F8),
@@ -394,6 +647,8 @@ if (!_isSearching) {
                         ),
                       ),
                     ),
+
+                  // 3 Quick Action Circles: Notice, Interaction, Followers
                   Padding(
                     padding:
                         const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -410,7 +665,7 @@ if (!_isSearching) {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (_) => const NoticeDetailScreen(),
+                                builder: (_) => NoticeDetailScreen(uid: _uid),
                               ),
                             );
                           },
@@ -425,7 +680,8 @@ if (!_isSearching) {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (_) => const InteractionDetailScreen(),
+                                builder: (_) =>
+                                    InteractionDetailScreen(uid: _uid),
                               ),
                             );
                           },
@@ -440,7 +696,17 @@ if (!_isSearching) {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (_) => const FollowersListScreen(),
+                                builder: (_) => FollowersListScreen(
+                                  uid: _uid,
+                                  onMessageUser: (pUid, pName, pAvatar) {
+                                    _openDirectChat(
+                                      peerUid: pUid,
+                                      peerName: pName,
+                                      peerAvatar: pAvatar,
+
+);
+                                  },
+                                ),
                               ),
                             );
                           },
@@ -449,34 +715,142 @@ if (!_isSearching) {
                     ),
                   ),
 
-const Divider(height: 1, color: Color(0xFFEEEEEE)),
+                  const Divider(height: 1, color: Color(0xFFEEEEEE)),
+
+                  // Channels + Direct Message Threads + User Search Results
                   Expanded(
-                    child: filteredChannels.isEmpty
-                        ? Center(
+                    child: ListView(
+                      padding: const EdgeInsets.only(top: 4, bottom: 20),
+                      children: [
+                        // User Search Results when typing in Search
+                        if (_isSearching && _searchQuery.trim().isNotEmpty) ...[
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
                             child: Text(
-                              _showAll
-                                  ? 'No matching messages'
-                                  : 'No unread messages',
+                              _isSearchingUsers
+                                  ? "Searching users..."
+                                  : "Users Found (${_searchedUsers.length})",
                               style: const TextStyle(
-                                  color: Colors.black45, fontSize: 14),
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF159A8C),
+                              ),
                             ),
-                          )
-                        : ListView.builder(
-                            padding: const EdgeInsets.only(top: 4),
-                            itemCount: filteredChannels.length,
-                            itemBuilder: (context, index) {
-                              final item = filteredChannels[index];
-                              return _buildMessageTile(
-                                icon: item['icon'] as IconData,
-                                iconBgColor: item['bgColor'] as Color,
-                                title: item['title'] as String,
-                                subtitle: item['subtitle'] as String,
-                                time: item['time'] as String,
-                                unreadCount: item['unread'] as int,
-                                onTap: item['onTap'] as VoidCallback,
-                              );
-                            },
                           ),
+                          ..._searchedUsers.map((u) {
+                            final pUid = u['uid'].toString();
+                            final pName = u['name'].toString();
+                            final pId = (u['numericId'] as int);
+                            final pAvatar = u['avatarUrl'].toString();
+                            return ListTile(
+                              leading: CircleAvatar(
+                                backgroundColor: const Color(0xFFD9F3F0),
+                                backgroundImage: _buildAvatarImage(pAvatar),
+                                child: _buildAvatarImage(pAvatar) == null
+                                    ? Text(
+                                        pName.isNotEmpty
+                                            ? pName[0].toUpperCase()
+                                            : 'U',
+                                        style: const TextStyle(
+                                          color: Color(0xFF159A8C),
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      )
+                                    : null,
+                              ),
+                              title: Text(
+                                pName,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 14.5,
+                                ),
+                              ),
+                              subtitle: Text(
+                                "ID: $pId",
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.black54,
+                                ),
+                              ),
+                              trailing: ElevatedButton(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF1BB3C8),
+                                  foregroundColor: Colors.white,
+                                  elevation: 0,
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 14),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16),
+
+),
+                                ),
+                                onPressed: () => _openDirectChat(
+                                  peerUid: pUid,
+                                  peerName: pName,
+                                  peerAvatar: pAvatar,
+                                ),
+                                child: const Text(
+                                  "Chat",
+                                  style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            );
+                          }),
+                          const Divider(height: 12, color: Color(0xFFEEEEEE)),
+                        ],
+
+                        // Official & System Channels
+                        ...filteredChannels.map((item) {
+                          return _buildMessageTile(
+                            icon: item['icon'] as IconData,
+                            iconBgColor: item['bgColor'] as Color,
+                            title: item['title'] as String,
+                            subtitle: item['subtitle'] as String,
+                            time: item['time'] as String,
+                            unreadCount: item['unread'] as int,
+                            verified: true,
+                            onTap: item['onTap'] as VoidCallback,
+                          );
+                        }),
+
+                        // 1-on-1 Direct Message Conversations
+                        ...filteredDms.map((dm) {
+                          final peerUid = dm['peerUid'].toString();
+                          final peerName = dm['peerName'].toString();
+                          final peerAvatar = dm['peerAvatar'].toString();
+                          return _buildDirectChatTile(
+                            peerName: peerName,
+                            peerAvatar: peerAvatar,
+                            subtitle: dm['lastMessage'].toString(),
+                            time: dm['time'].toString(),
+                            unreadCount: dm['unread'] as int,
+                            onTap: () => _openDirectChat(
+                              peerUid: peerUid,
+                              peerName: peerName,
+                              peerAvatar: peerAvatar,
+                            ),
+                          );
+                        }),
+
+                        if (filteredChannels.isEmpty &&
+                            filteredDms.isEmpty &&
+                            _searchedUsers.isEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 60),
+                            child: Center(
+                              child: Text(
+                                _showAll
+                                    ? 'No matching messages'
+                                    : 'No unread messages',
+                                style: const TextStyle(
+                                    color: Colors.black45, fontSize: 14),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
                 ],
               ),
@@ -487,7 +861,26 @@ const Divider(height: 1, color: Color(0xFFEEEEEE)),
     );
   }
 
-  Widget _buildTabButton(String text, bool isSelected, VoidCallback onTap) {
+  ImageProvider? _buildAvatarImage(String url) {
+    if (url.isEmpty) return null;
+    if (url.startsWith('data:image')) {
+      try {
+        final idx = url.indexOf(',');
+        if (idx != -1) {
+          final Uint8List bytes = base64Decode(url.substring(idx + 1));
+          return MemoryImage(bytes);
+        }
+      } catch (_) {
+        return null;
+      }
+    }
+    if (url.startsWith('http')) {
+      return NetworkImage(url);
+    }
+    return null;
+  }
+
+Widget _buildTabButton(String text, bool isSelected, VoidCallback onTap) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -515,6 +908,7 @@ const Divider(height: 1, color: Color(0xFFEEEEEE)),
     required String subtitle,
     required String time,
     required int unreadCount,
+    bool verified = true,
     required VoidCallback onTap,
   }) {
     return InkWell(
@@ -554,11 +948,12 @@ const Divider(height: 1, color: Color(0xFFEEEEEE)),
                           ),
                           overflow: TextOverflow.ellipsis,
                         ),
-
-),
-                      const SizedBox(width: 5),
-                      const Icon(Icons.verified,
-                          color: Color(0xFF29B6F6), size: 17),
+                      ),
+                      if (verified) ...[
+                        const SizedBox(width: 5),
+                        const Icon(Icons.verified,
+                            color: Color(0xFF29B6F6), size: 17),
+                      ],
                     ],
                   ),
                   if (subtitle.isNotEmpty) ...[
@@ -573,6 +968,105 @@ const Divider(height: 1, color: Color(0xFFEEEEEE)),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ],
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                if (time.isNotEmpty)
+                  Text(
+                    time,
+                    style: const TextStyle(color: Colors.black38, fontSize: 12),
+                  ),
+                const SizedBox(height: 6),
+                if (unreadCount > 0)
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFE53935),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Text(
+                      unreadCount > 99 ? '99+' : '$unreadCount',
+
+style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDirectChatTile({
+    required String peerName,
+    required String peerAvatar,
+    required String subtitle,
+    required String time,
+    required int unreadCount,
+    required VoidCallback onTap,
+  }) {
+    final avatarImg = _buildAvatarImage(peerAvatar);
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          border:
+              Border(bottom: BorderSide(color: Color(0xFFF3F4F6), width: 1)),
+        ),
+        child: Row(
+          children: [
+            CircleAvatar(
+              radius: 26,
+              backgroundColor: const Color(0xFF9B87B5),
+              backgroundImage: avatarImg,
+              child: avatarImg == null
+                  ? Text(
+                      peerName.isNotEmpty ? peerName[0].toUpperCase() : 'U',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18,
+                      ),
+                    )
+                  : null,
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    peerName,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 16,
+                      color: Colors.black87,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    subtitle.isNotEmpty ? subtitle : "Tap to chat",
+                    style: const TextStyle(
+                      color: Colors.black45,
+                      fontSize: 13.5,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ],
               ),
             ),
@@ -617,7 +1111,8 @@ const Divider(height: 1, color: Color(0xFFEEEEEE)),
     required Color color,
     required int badgeCount,
     required VoidCallback onTap,
-  }) {
+
+}) {
     return GestureDetector(
       onTap: onTap,
       child: Column(
@@ -677,6 +1172,398 @@ const Divider(height: 1, color: Color(0xFFEEEEEE)),
   }
 }
 
+// ============================================================================
+// 1-ON-1 DIRECT MESSAGE SCREEN (Connected to Settings Privacy & VoiceRoom)
+// ============================================================================
+class DirectChatScreen extends StatefulWidget {
+  final String myUid;
+  final String peerUid;
+  final String peerName;
+  final String peerAvatar;
+
+  const DirectChatScreen({
+    super.key,
+    required this.myUid,
+    required this.peerUid,
+    required this.peerName,
+    this.peerAvatar = '',
+  });
+
+  @override
+  State<DirectChatScreen> createState() => _DirectChatScreenState();
+}
+
+class _DirectChatScreenState extends State<DirectChatScreen> {
+  final TextEditingController _msgCtrl = TextEditingController();
+  final ScrollController _scrollCtrl = ScrollController();
+  bool _isSending = false;
+
+  String get _chatId {
+    final ids = [widget.myUid, widget.peerUid]..sort();
+    return "${ids[0]}_${ids[1]}";
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _markChatRead();
+  }
+
+  @override
+  void dispose() {
+    _msgCtrl.dispose();
+    _scrollCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _markChatRead() async {
+    try {
+      await FirebaseFirestore.instance
+          .collection('direct_chats')
+          .doc(_chatId)
+          .set({
+        'unreadCounts': {widget.myUid: 0}
+      }, SetOptions(merge: true));
+    } catch (_) {}
+  }
+
+  Future<void> _sendDirectMessage({String? roomInviteId, String? roomInviteTitle}) async {
+    final text = roomInviteId != null
+        ? "🎙️ Join my Voice Room: ${roomInviteTitle ?? 'Party Lounge'}"
+        : _msgCtrl.text.trim();
+    if (text.isEmpty || _isSending) return;
+
+    setState(() => _isSending = true);
+    if (roomInviteId == null) _msgCtrl.clear();
+
+    try {
+      final db = FirebaseFirestore.instance;
+
+      // Check Peer Privacy & Blocked Users from SettingsScreen
+      final peerDoc = await db.collection('users').doc(widget.peerUid).get();
+      final myDoc = await db.collection('users').doc(widget.myUid).get();
+
+      final peerData = peerDoc.data() ?? {};
+      final myData = myDoc.data() ?? {};
+
+final String myNumIdStr =
+          ((myData['numericId'] as num?)?.toInt() ?? 0).toString();
+      final List peerBlacklist =
+          peerData['blacklist'] is List ? peerData['blacklist'] as List : [];
+
+      if (peerBlacklist.contains(widget.myUid) ||
+          (myNumIdStr != '0' && peerBlacklist.contains(myNumIdStr))) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              backgroundColor: Colors.redAccent,
+              content: Text("Message could not be delivered (Blocked by user)."),
+            ),
+          );
+        }
+        return;
+      }
+
+      final bool blockStrangers = peerData['blockStrangerDm'] == true;
+      if (blockStrangers) {
+        final followCheck = await db
+            .collection('users')
+            .doc(widget.peerUid)
+            .collection('following')
+            .doc(widget.myUid)
+            .get();
+        if (!followCheck.exists) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                backgroundColor: Colors.orangeAccent,
+                content: Text(
+                  "This user only accepts messages from friends.",
+                  style: TextStyle(color: Colors.black),
+                ),
+              ),
+            );
+          }
+          return;
+        }
+      }
+
+      // Check SettingsScreen Vibration preference
+      if (myData['vibrationEnabled'] != false) {
+        HapticFeedback.lightImpact();
+      }
+
+      final String myName = (myData['name'] ??
+              myData['nickname'] ??
+              FirebaseAuth.instance.currentUser?.displayName ??
+              'User')
+          .toString();
+      final String myAvatar =
+          (myData['avatarUrl'] ?? myData['photoURL'] ?? '').toString();
+
+      final chatRef = db.collection('direct_chats').doc(_chatId);
+      await chatRef.collection('messages').add({
+        'senderUid': widget.myUid,
+        'text': text,
+        'roomId': roomInviteId ?? '',
+        'roomTitle': roomInviteTitle ?? '',
+        'timestamp': FieldValue.serverTimestamp(),
+      });
+
+      await chatRef.set({
+        'participants': [widget.myUid, widget.peerUid],
+        'participantNames': {
+          widget.myUid: myName,
+          widget.peerUid: widget.peerName,
+        },
+        'participantAvatars': {
+          widget.myUid: myAvatar,
+          widget.peerUid: widget.peerAvatar,
+        },
+        'lastMessage': text,
+        'updatedAt': FieldValue.serverTimestamp(),
+        'unreadCounts': {
+          widget.peerUid: FieldValue.increment(1),
+          widget.myUid: 0,
+        },
+      }, SetOptions(merge: true));
+
+      if (_scrollCtrl.hasClients) {
+        _scrollCtrl.animateTo(
+          _scrollCtrl.position.maxScrollExtent + 100,
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOut,
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error sending message: $e")),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSending = false);
+    }
+  }
+
+  Future<void> _joinInvitedRoom(String roomId, String roomTitle) async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      final myUid = user?.uid ?? widget.myUid;
+      final myName = user?.displayName ?? 'User';
+      final numId = await UserIdService.getOrCreatePermanentId(
+        myUid,
+        defaultName: myName,
+      );
+      if (!mounted) return;
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => VoiceRoomScreen(
+            roomTitle: roomTitle.isNotEmpty ? roomTitle : "Party Lounge",
+            roomId: roomId,
+            hostName: widget.peerName,
+            userNumericId: numId,
+            userUid: myUid,
+            userName: myName,
+          ),
+        ),
+      );
+    } catch (_) {}
+  }
+
+@override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF2F5F8),
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0.5,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios, color: Colors.black, size: 18),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: Text(
+          widget.peerName,
+          style: const TextStyle(
+            color: Colors.black,
+            fontSize: 16.5,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        centerTitle: true,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.mic_rounded, color: Color(0xFF1BB3C8)),
+            tooltip: "Invite to Voice Room",
+            onPressed: () {
+              final mgr = RoomSessionManager.instance;
+              final activeRoomId =
+                  mgr.hasActiveRoom ? mgr.roomId : 'room_${widget.myUid}';
+              final activeRoomTitle =
+                  mgr.hasActiveRoom ? mgr.roomTitle : 'VIP Party Lounge';
+              _sendDirectMessage(
+                roomInviteId: activeRoomId,
+                roomInviteTitle: activeRoomTitle,
+              );
+            },
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          Expanded(
+            child: StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('direct_chats')
+                  .doc(_chatId)
+                  .collection('messages')
+                  .orderBy('timestamp', descending: false)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                if (!snapshot.hasData) {
+                  return const Center(
+                    child: CircularProgressIndicator(color: Color(0xFF1BB3C8)),
+                  );
+                }
+                final docs = snapshot.data!.docs;
+                if (docs.isEmpty) {
+                  return Center(
+                    child: Text(
+                      "Say hello to ${widget.peerName}!",
+                      style:
+                          const TextStyle(color: Colors.black45, fontSize: 14),
+                    ),
+                  );
+                }
+
+                return ListView.builder(
+                  controller: _scrollCtrl,
+                  padding: const EdgeInsets.all(14),
+                  itemCount: docs.length,
+                  itemBuilder: (context, index) {
+                    final raw = docs[index].data();
+                    final Map data = raw is Map ? raw : {};
+                    final bool isMe = data['senderUid'] == widget.myUid;
+                    final String text = (data['text'] ?? '').toString();
+                    final String roomId = (data['roomId'] ?? '').toString();
+                    final String roomTitle =
+                        (data['roomTitle'] ?? 'Party Lounge').toString();
+
+                    return Align(
+                      alignment:
+                          isMe ? Alignment.centerRight : Alignment.centerLeft,
+                      child: GestureDetector(
+                        onTap: roomId.isNotEmpty
+                            ? () => _joinInvitedRoom(roomId, roomTitle)
+                            : null,
+                        child: Container(
+                          margin: const EdgeInsets.only(bottom: 10),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 10),
+                          constraints: BoxConstraints(
+                            maxWidth: MediaQuery.of(context).size.width * 0.76,
+                          ),
+                          decoration: BoxDecoration(
+                            color: roomId.isNotEmpty
+
+? const Color(0xFF182026)
+                                : (isMe
+                                    ? const Color(0xFF1BB3C8)
+                                    : Colors.white),
+                            borderRadius: BorderRadius.circular(16),
+                            border: roomId.isNotEmpty
+                                ? Border.all(
+                                    color: const Color(0xFFFFD700), width: 1.2)
+                                : null,
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                text,
+                                style: TextStyle(
+                                  color: roomId.isNotEmpty
+                                      ? const Color(0xFFFFD700)
+                                      : (isMe ? Colors.white : Colors.black87),
+                                  fontSize: 14,
+                                  fontWeight: roomId.isNotEmpty
+                                      ? FontWeight.bold
+                                      : FontWeight.normal,
+                                ),
+                              ),
+                              if (roomId.isNotEmpty) ...[
+                                const SizedBox(height: 6),
+                                const Text(
+                                  "Tap to enter voice room >",
+                                  style: TextStyle(
+                                    color: Color(0xFF26E6C8),
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+          SafeArea(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                border: Border(top: BorderSide(color: Color(0xFFEEEEEE))),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _msgCtrl,
+                      textInputAction: TextInputAction.send,
+                      onSubmitted: (_) => _sendDirectMessage(),
+                      decoration: InputDecoration(
+                        hintText: 'Write a message...',
+                        hintStyle: const TextStyle(fontSize: 14),
+                        filled: true,
+                        fillColor: const Color(0xFFF3F6F8),
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 10),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(24),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  CircleAvatar(
+                    radius: 22,
+                    backgroundColor: const Color(0xFF1BB3C8),
+                    child: IconButton(
+                      icon:
+                          const Icon(Icons.send, color: Colors.white, size: 20),
+                      onPressed: () => _sendDirectMessage(),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ============================================================================
+// SYSTEM MESSAGE SCREEN
+// ============================================================================
 class SystemMessageScreen extends StatefulWidget {
   final String uid;
   const SystemMessageScreen({super.key, required this.uid});
@@ -689,17 +1576,17 @@ class _SystemMessageScreenState extends State<SystemMessageScreen> {
   final List _defaultSystemMessages = [
     {
       'title': 'WELCOME to NILE Live!',
-      'time': '08-10 19:29:14',
+      'time': 'Today',
       'body':
-          'Welcome to NILE Live Voice Party! Enjoy 30-seat live voice lounges, exciting mini-games like Ocean Hunt, and daily host rewards. Never share your OTP code or password with anyone.',
+          'Welcome to NILE Live Voice Party! Enjoy 30-seat live voice lounges, exciting gifts, and daily host rewards. Never share your password with anyone.',
       'icon': Icons.verified_user,
       'color': const Color(0xFF29B6F6),
     },
     {
       'title': 'Account Security Reminder',
-      'time': 'Yesterday 14:10',
+      'time': 'System',
       'body':
-          'Official NILE Live administrators will never ask for your account password or Telebirr PIN. Keep your account safe.',
+          'Official NILE Live administrators will never ask for your account password or Security PIN. Keep your account safe.',
       'icon': Icons.security,
       'color': Colors.orangeAccent,
     },
@@ -787,7 +1674,8 @@ class _SystemMessageScreenState extends State<SystemMessageScreen> {
             itemCount: items.length,
             itemBuilder: (context, index) {
               final msg = items[index];
-              return Container(
+
+return Container(
                 margin: const EdgeInsets.only(bottom: 14),
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
@@ -795,8 +1683,7 @@ class _SystemMessageScreenState extends State<SystemMessageScreen> {
                   borderRadius: BorderRadius.circular(14),
                   boxShadow: [
                     BoxShadow(
-
-color: Colors.black.withOpacity(0.03),
+                      color: Colors.black.withOpacity(0.03),
                       blurRadius: 8,
                       offset: const Offset(0, 3),
                     ),
@@ -846,6 +1733,9 @@ color: Colors.black.withOpacity(0.03),
   }
 }
 
+// ============================================================================
+// OFFICIAL NOTIFICATION SCREEN
+// ============================================================================
 class OfficialNotificationScreen extends StatelessWidget {
   const OfficialNotificationScreen({super.key});
 
@@ -857,16 +1747,16 @@ class OfficialNotificationScreen extends StatelessWidget {
         'time': 'Today',
         'subtitle': 'Join VIP voice rooms & win exclusive anniversary frames.',
         'details':
-            'Celebrate NILE Live 1st Anniversary with us! Host daily voice rooms, send special anniversary gifts, and climb the leaderboard to win VIP badges, entrance vehicles, and bonus coins.',
+            'Celebrate NILE Live 1st Anniversary with us! Host daily voice rooms, send special anniversary gifts, and climb the leaderboard to win VIP badges and bonus coins.',
         'icon': Icons.celebration,
         'color': const Color(0xFF26C6DA),
       },
       {
-        'title': 'Telebirr Recharge Bonus +20%',
-        'time': 'Yesterday',
-        'subtitle': 'Get 20% extra coins on every top-up today.',
+        'title': 'Official Agency Recharge Bonus +20%',
+        'time': 'Offer',
+        'subtitle': 'Get up to 20% extra coins on USDT top-ups.',
         'details':
-            'Top up your NILE Live wallet using Telebirr or CBE Birr and receive an instant 20% bonus coin reward! Valid for all coin packages.',
+            'Top up your NILE Live wallet via verified USDT payment and receive instant bonus coin rewards!',
         'icon': Icons.monetization_on,
         'color': const Color(0xFFFFB300),
       },
@@ -885,7 +1775,8 @@ class OfficialNotificationScreen extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              'Official Notification',
+
+'Official Notification',
               style: TextStyle(
                   color: Colors.black,
                   fontSize: 17,
@@ -905,7 +1796,7 @@ class OfficialNotificationScreen extends StatelessWidget {
         builder: (context, snapshot) {
           final List list = [];
 
-if (snapshot.hasData && snapshot.data != null) {
+          if (snapshot.hasData && snapshot.data != null) {
             for (final doc in snapshot.data!.docs) {
               final raw = doc.data();
               final Map d = raw is Map ? raw : {};
@@ -983,11 +1874,14 @@ if (snapshot.hasData && snapshot.data != null) {
   }
 }
 
+// ============================================================================
+// CUSTOMER SERVICE CHAT SCREEN (Connected to Admin Dashboard)
+// ============================================================================
 class CustomerServiceChatScreen extends StatefulWidget {
   final String uid;
   const CustomerServiceChatScreen({super.key, required this.uid});
 
-  @override
+@override
   State<CustomerServiceChatScreen> createState() =>
       _CustomerServiceChatScreenState();
 }
@@ -998,25 +1892,24 @@ class _CustomerServiceChatScreenState extends State<CustomerServiceChatScreen> {
 
   final List _quickFaqs = [
     {
-      'q': '💰 Coin Recharge / Telebirr',
+      'q': '💰 Coin Recharge (USDT)',
       'a':
-          'To recharge coins: Go to Me > Wallet > Select Coin Package > Pay via Telebirr or Bank. Coins arrive immediately!',
+          'To recharge coins: Go to Me > Recharge > Select Coin Package > Pay via Binance Pay (USDT). Coins arrive immediately upon verification!',
     },
     {
       'q': '🎙️ Host Salary & Agency',
       'a':
-          'Hosts earn diamonds from gifts in live voice rooms. Reach your daily target and withdraw via Agency Center or Wallet.',
-
-},
+          'Hosts earn points from gifts in live voice rooms (7,000 pts/day target, 100,000 pts minimum withdrawal).',
+    },
     {
       'q': '🔒 Account & Password Help',
       'a':
-          'You can update your phone/password in Settings > Account Security. Our support team is here if you need manual recovery.',
+          'You can update your password, security PIN, or email in Setting > Account Manager.',
     },
     {
       'q': '🚨 Report User / Room',
       'a':
-          'Please send us the User ID or Room ID here along with a brief description, and our moderation team will take immediate action.',
+          'Please send the User ID or Room ID here with details, and our moderation team will review it promptly.',
     },
   ];
 
@@ -1089,11 +1982,7 @@ class _CustomerServiceChatScreenState extends State<CustomerServiceChatScreen> {
       }
 
       if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent + 120,
-          duration: const Duration(milliseconds: 250),
-          curve: Curves.easeOut,
-        );
+        _scrollCtrlScroll();
       }
     } catch (e) {
       if (!mounted) return;
@@ -1103,6 +1992,14 @@ class _CustomerServiceChatScreenState extends State<CustomerServiceChatScreen> {
     }
   }
 
+  void _scrollCtrlScroll() {
+    _scrollController.animateTo(
+      _scrollController.position.maxScrollExtent + 120,
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeOut,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -1110,7 +2007,8 @@ class _CustomerServiceChatScreenState extends State<CustomerServiceChatScreen> {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0.5,
-        leading: IconButton(
+
+leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios, color: Colors.black, size: 18),
           onPressed: () => Navigator.pop(context),
         ),
@@ -1131,8 +2029,7 @@ class _CustomerServiceChatScreenState extends State<CustomerServiceChatScreen> {
                   fontWeight: FontWeight.bold),
             ),
             SizedBox(width: 4),
-
-Icon(Icons.verified, color: Color(0xFF29B6F6), size: 16),
+            Icon(Icons.verified, color: Color(0xFF29B6F6), size: 16),
           ],
         ),
         centerTitle: true,
@@ -1148,12 +2045,7 @@ Icon(Icons.verified, color: Color(0xFF29B6F6), size: 16),
                   .orderBy('timestamp', descending: false)
                   .snapshots(),
               builder: (context, snapshot) {
-                if (!snapshot.hasData) {
-                  return const Center(
-                    child: CircularProgressIndicator(color: Color(0xFF26A69A)),
-                  );
-                }
-                if (snapshot.data == null) {
+                if (!snapshot.hasData || snapshot.data == null) {
                   return const Center(
                     child: CircularProgressIndicator(color: Color(0xFF26A69A)),
                   );
@@ -1205,7 +2097,8 @@ Icon(Icons.verified, color: Color(0xFF29B6F6), size: 16),
                             fontSize: 14,
                             height: 1.4,
                           ),
-                        ),
+
+),
                       ),
                     );
                   },
@@ -1222,8 +2115,7 @@ Icon(Icons.verified, color: Color(0xFF29B6F6), size: 16),
               itemCount: _quickFaqs.length,
               separatorBuilder: (_, __) => const SizedBox(width: 8),
               itemBuilder: (context, index) {
-
-final faq = _quickFaqs[index];
+                final faq = _quickFaqs[index];
                 return ActionChip(
                   backgroundColor: const Color(0xFFE0F7FA),
                   label: Text(
@@ -1290,32 +2182,40 @@ final faq = _quickFaqs[index];
   }
 }
 
-class NoticeDetailScreen extends StatelessWidget {
-  const NoticeDetailScreen({super.key});
+// ============================================================================
+// NOTICE DETAIL SCREEN (Connected to Wallet Transactions & User Notices)
+// ============================================================================
+class NoticeDetailScreen extends StatefulWidget {
+  final String uid;
+  const NoticeDetailScreen({super.key, required this.uid});
 
   @override
-  Widget build(BuildContext context) {
-    final notices = [
-      {
-        "title": "System Security Maintenance Completed",
-        "date": "Today 08:30 AM",
-        "body":
-            "Our audio routing servers have been upgraded for low latency Agora audio streaming across all 30-seat rooms.",
-      },
-      {
-        "title": "Community Guidelines Update",
-        "date": "Yesterday 04:15 PM",
-        "body":
-            "Respect fellow broadcasters and guests. Any form of harassment in live audio lounges will result in room locks.",
-      },
-      {
-        "title": "Welcome Gift Package Available",
-        "date": "3 days ago",
-        "body":
-            "Check your wallet to claim the newly registered broadcaster badge and bonus gifts.",
-      },
-    ];
+  State<NoticeDetailScreen> createState() => _NoticeDetailScreenState();
+}
 
+class _NoticeDetailScreenState extends State<NoticeDetailScreen> {
+  @override
+  void initState() {
+    super.initState();
+    _markNoticesRead();
+  }
+
+  Future<void> _markNoticesRead() async {
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.uid)
+          .collection('notices')
+          .where('unread', isEqualTo: true)
+          .get();
+      for (final doc in snap.docs) {
+        await doc.reference.update({'unread': false});
+      }
+    } catch (_) {}
+  }
+
+@override
+  Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF7FBFB),
       appBar: AppBar(
@@ -1326,46 +2226,91 @@ class NoticeDetailScreen extends StatelessWidget {
                 fontWeight: FontWeight.bold)),
         backgroundColor: Colors.white,
         elevation: 0.5,
+        centerTitle: true,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios, color: Colors.black, size: 18),
-
-onPressed: () => Navigator.pop(context),
+          onPressed: () => Navigator.pop(context),
         ),
       ),
-      body: ListView.builder(
-        padding: const EdgeInsets.all(14),
-        itemCount: notices.length,
-        itemBuilder: (context, index) {
-          final item = notices[index];
-          return Card(
-            margin: const EdgeInsets.only(bottom: 12),
-            elevation: 0.5,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            child: Padding(
-              padding: const EdgeInsets.all(14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    item["title"]!,
-                    style: const TextStyle(
-                        fontWeight: FontWeight.bold, fontSize: 14),
+      body: StreamBuilder<QuerySnapshot>(
+        stream: FirebaseFirestore.instance
+            .collection('recharge_transactions')
+            .where('userUid', isEqualTo: widget.uid)
+            .limit(20)
+            .snapshots(),
+        builder: (context, txnSnap) {
+          final List> items = [];
+
+          if (txnSnap.hasData && txnSnap.data != null) {
+            for (final doc in txnSnap.data!.docs) {
+              final raw = doc.data();
+              final Map d = raw is Map ? raw : {};
+              final coins = (d['coins'] as num?)?.toInt() ?? 0;
+              final amount = (d['amount'] ?? '').toString();
+              final status = (d['status'] ?? 'VERIFIED').toString();
+              items.add({
+                "title": "Wallet Recharge: +$coins Coins",
+                "date": status,
+                "body":
+                    "Your recharge of $coins Coins ($amount) via Binance Pay (USDT) has been processed.",
+              });
+            }
+          }
+
+          items.addAll([
+            {
+              "title": "Audio Routing Servers Upgraded",
+              "date": "System",
+              "body":
+                  "Real-time Agora voice channels are active across all 30-seat party lounges.",
+            },
+            {
+              "title": "Host Daily Task & Payout Rules",
+              "date": "Policy",
+              "body":
+                  "Complete 3 hours daily for 7 consecutive days and earn 7,000+ points daily. Minimum withdrawal threshold is 100,000 points.",
+            },
+          ]);
+
+          return ListView.builder(
+            padding: const EdgeInsets.all(14),
+            itemCount: items.length,
+            itemBuilder: (context, index) {
+              final item = items[index];
+              return Card(
+                margin: const EdgeInsets.only(bottom: 12),
+                elevation: 0.5,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        item["title"]!,
+                        style: const TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 14),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        item["date"]!,
+                        style: const TextStyle(
+                            color: Color(0xFF159A8C),
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        item["body"]!,
+                        style: const TextStyle(
+                            color: Colors.black87, fontSize: 13, height: 1.3),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    item["date"]!,
-                    style: const TextStyle(color: Colors.black38, fontSize: 11),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    item["body"]!,
-                    style: const TextStyle(
-                        color: Colors.black87, fontSize: 13, height: 1.3),
-                  ),
-                ],
-              ),
-            ),
+                ),
+              );
+            },
           );
         },
       ),
@@ -1373,32 +2318,51 @@ onPressed: () => Navigator.pop(context),
   }
 }
 
-class InteractionDetailScreen extends StatelessWidget {
-  const InteractionDetailScreen({super.key});
+// ============================================================================
+
+// INTERACTION DETAIL SCREEN (Connected to VoiceRoom Gifts & Invites)
+// ============================================================================
+class InteractionDetailScreen extends StatefulWidget {
+  final String uid;
+  const InteractionDetailScreen({super.key, required this.uid});
+
+  @override
+  State<InteractionDetailScreen> createState() =>
+      _InteractionDetailScreenState();
+}
+
+class _InteractionDetailScreenState extends State<InteractionDetailScreen> {
+  @override
+  void initState() {
+    super.initState();
+    _markInteractionsRead();
+  }
+
+  Future<void> _markInteractionsRead() async {
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.uid)
+          .collection('interactions')
+          .where('unread', isEqualTo: true)
+          .get();
+      for (final doc in snap.docs) {
+        await doc.reference.update({'unread': false});
+      }
+    } catch (_) {}
+  }
 
   @override
   Widget build(BuildContext context) {
-    final interactions = [
+    final fallbackInteractions = [
       {
         "user": "Amina",
-        "action": "sent you a Rose gift in Dessie VIP Chill",
-        "time": "15m ago",
+        "action": "sent a gift in Dessie VIP Chill",
+        "time": "Recent",
         "icon": Icons.card_giftcard,
         "color": Colors.pinkAccent,
-      },
-      {
-        "user": "Yonas",
-        "action": "joined your 30-seat voice lounge",
-        "time": "1h ago",
-        "icon": Icons.meeting_room,
-        "color": Colors.blueAccent,
-      },
-      {
-        "user": "Selam",
-        "action": "liked your room audio stream",
-        "time": "3h ago",
-        "icon": Icons.favorite,
-        "color": Colors.redAccent,
+        "roomId": "room_dessie_vip",
+        "roomTitle": "Dessie VIP Chill 🎧",
       },
     ];
 
@@ -1412,40 +2376,107 @@ class InteractionDetailScreen extends StatelessWidget {
                 fontWeight: FontWeight.bold)),
         backgroundColor: Colors.white,
         elevation: 0.5,
+        centerTitle: true,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios, color: Colors.black, size: 18),
           onPressed: () => Navigator.pop(context),
         ),
       ),
-      body: ListView.separated(
-        padding: const EdgeInsets.all(12),
-        itemCount: interactions.length,
-        separatorBuilder: (_, __) =>
-            const Divider(height: 1, color: Color(0xFFE8ECEF)),
-        itemBuilder: (context, index) {
-          final item = interactions[index];
-          return ListTile(
-            leading: CircleAvatar(
-              backgroundColor: (item["color"] as Color).withOpacity(0.15),
-              child: Icon(item["icon"] as IconData,
-                  color: item["color"] as Color, size: 20),
-            ),
-            title: RichText(
-              text: TextSpan(
-                style: const TextStyle(color: Colors.black87, fontSize: 13),
-                children: [
-                  TextSpan(
-                    text: "${item["user"]} ",
-                    style: const TextStyle(fontWeight: FontWeight.bold),
+      body: StreamBuilder<QuerySnapshot>(
+        stream: FirebaseFirestore.instance
+            .collection('users')
+            .doc(widget.uid)
+            .collection('interactions')
+            .orderBy('timestamp', descending: true)
+            .limit(30)
+            .snapshots(),
+        builder: (context, snapshot) {
+          final List> list = [];
+          if (snapshot.hasData && snapshot.data != null) {
+            for (final doc in snapshot.data!.docs) {
+              final raw = doc.data();
+              final Map d = raw is Map ? raw : {};
+              list.add({
+                "user": (d['senderName'] ?? 'User').toString(),
+                "action": (d['action'] ?? 'interacted with you').toString(),
+                "time": d['timestamp'] is Timestamp
+                    ? (d['timestamp'] as Timestamp)
+                        .toDate()
+                        .toString()
+                        .substring(11, 16)
+                    : 'New',
+                "icon": Icons.favorite,
+                "color": Colors.pinkAccent,
+                "roomId": (d['roomId'] ?? '').toString(),
+                "roomTitle": (d['roomTitle'] ?? 'Party Lounge').toString(),
+              });
+            }
+          }
+          if (list.isEmpty) {
+            list.addAll(fallbackInteractions);
+          }
+
+          return ListView.separated(
+            padding: const EdgeInsets.all(12),
+            itemCount: list.length,
+            separatorBuilder: (_, __) =>
+                const Divider(height: 1, color: Color(0xFFE8ECEF)),
+            itemBuilder: (context, index) {
+              final item = list[index];
+              final roomId = (item["roomId"] ?? "").toString();
+              return ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: (item["color"] as Color).withOpacity(0.15),
+                  child: Icon(item["icon"] as IconData,
+                      color: item["color"] as Color, size: 20),
+
+),
+                title: RichText(
+                  text: TextSpan(
+                    style: const TextStyle(color: Colors.black87, fontSize: 13),
+                    children: [
+                      TextSpan(
+                        text: "${item["user"]} ",
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      TextSpan(text: item["action"].toString()),
+                    ],
                   ),
-                  TextSpan(text: item["action"].toString()),
-                ],
-              ),
-            ),
-            trailing: Text(
-              item["time"].toString(),
-              style: const TextStyle(color: Colors.black38, fontSize: 11),
-            ),
+                ),
+                trailing: Text(
+                  item["time"].toString(),
+                  style: const TextStyle(color: Colors.black38, fontSize: 11),
+                ),
+                onTap: roomId.isNotEmpty
+                    ? () async {
+                        final user = FirebaseAuth.instance.currentUser;
+                        final myUid = user?.uid ?? widget.uid;
+                        final myName = user?.displayName ?? 'User';
+                        final numId =
+                            await UserIdService.getOrCreatePermanentId(
+                          myUid,
+                          defaultName: myName,
+                        );
+                        if (!context.mounted) return;
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => VoiceRoomScreen(
+                              roomTitle:
+                                  (item["roomTitle"] ?? "Party Lounge")
+                                      .toString(),
+                              roomId: roomId,
+                              hostName: item["user"].toString(),
+                              userNumericId: numId,
+                              userUid: myUid,
+                              userName: myName,
+                            ),
+                          ),
+                        );
+                      }
+                    : null,
+              );
+            },
           );
         },
       ),
@@ -1453,31 +2484,108 @@ class InteractionDetailScreen extends StatelessWidget {
   }
 }
 
+// ============================================================================
+// FOLLOWERS LIST SCREEN (Synced with ProfileScreen Followed/Following/Friends)
+// ============================================================================
 class FollowersListScreen extends StatefulWidget {
-  const FollowersListScreen({super.key});
+  final String uid;
+  final void Function(String peerUid, String peerName, String peerAvatar)
+      onMessageUser;
+
+  const FollowersListScreen({
+    super.key,
+    required this.uid,
+    required this.onMessageUser,
+  });
 
   @override
   State<FollowersListScreen> createState() => _FollowersListScreenState();
 }
 
 class _FollowersListScreenState extends State<FollowersListScreen> {
-  final _followers = [
-    {
-      "name": "Hamza Voice",
-      "bio": "Host Agency Lead • Dessie",
-      "isFollowing": true,
-    },
-    {
-      "name": "Sara Ahmed",
-      "bio": "Music & Lounge Enthusiast",
-      "isFollowing": false,
-    },
-    {
-      "name": "DJ Mike",
-      "bio": "Broadcasting live parties every night",
-      "isFollowing": true,
-    },
-  ];
+  final Set<String> _followingUids = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _markFollowersRead();
+    _loadFollowing();
+  }
+
+  Future<void> _markFollowersRead() async {
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.uid)
+          .collection('followers')
+          .where('unread', isEqualTo: true)
+          .get();
+      for (final doc in snap.docs) {
+        await doc.reference.update({'unread': false});
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _loadFollowing() async {
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.uid)
+          .collection('following')
+          .get();
+      if (!mounted) return;
+      setState(() {
+        for (final d in snap.docs) {
+          _followingUids.add(d.id);
+        }
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _toggleFollowBack(
+      String peerUid, String peerName, String peerAvatar) async {
+    final db = FirebaseFirestore.instance;
+    final bool currentlyFollowing = _followingUids.contains(peerUid);
+
+    setState(() {
+      if (currentlyFollowing) {
+        _followingUids.remove(peerUid);
+      } else {
+        _followingUids.add(peerUid);
+      }
+    });
+
+try {
+      final myUserRef = db.collection('users').doc(widget.uid);
+      final peerUserRef = db.collection('users').doc(peerUid);
+
+      if (currentlyFollowing) {
+        await myUserRef.collection('following').doc(peerUid).delete();
+        await peerUserRef.collection('followers').doc(widget.uid).delete();
+        await myUserRef.set({
+          'followingCount': FieldValue.increment(-1),
+          'friendsCount': FieldValue.increment(-1),
+        }, SetOptions(merge: true));
+      } else {
+        await myUserRef.collection('following').doc(peerUid).set({
+          'uid': peerUid,
+          'name': peerName,
+          'avatarUrl': peerAvatar,
+          'timestamp': FieldValue.serverTimestamp(),
+        });
+        await peerUserRef.collection('followers').doc(widget.uid).set({
+          'uid': widget.uid,
+          'name': FirebaseAuth.instance.currentUser?.displayName ?? 'User',
+          'unread': true,
+          'timestamp': FieldValue.serverTimestamp(),
+        });
+        await myUserRef.set({
+          'followingCount': FieldValue.increment(1),
+          'friendsCount': FieldValue.increment(1),
+        }, SetOptions(merge: true));
+      }
+    } catch (_) {}
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1491,66 +2599,108 @@ class _FollowersListScreenState extends State<FollowersListScreen> {
                 fontWeight: FontWeight.bold)),
         backgroundColor: Colors.white,
         elevation: 0.5,
+        centerTitle: true,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios, color: Colors.black, size: 18),
           onPressed: () => Navigator.pop(context),
         ),
       ),
-      body: ListView.builder(
-        padding: const EdgeInsets.all(12),
-        itemCount: _followers.length,
-        itemBuilder: (context, index) {
-          final person = _followers[index];
-          final bool isFollowing = person["isFollowing"] as bool;
+      body: StreamBuilder<QuerySnapshot>(
+        stream: FirebaseFirestore.instance
+            .collection('users')
+            .doc(widget.uid)
+            .collection('followers')
+            .snapshots(),
+        builder: (context, snapshot) {
+          if (!snapshot.hasData) {
+            return const Center(
+              child: CircularProgressIndicator(color: Color(0xFF00C9A7)),
+            );
+          }
+          final docs = snapshot.data!.docs;
+          if (docs.isEmpty) {
+            return const Center(
+              child: Text(
+                "No followers yet",
+                style: TextStyle(color: Colors.black45, fontSize: 14),
+              ),
+            );
+          }
 
-          return Card(
-            elevation: 0.3,
-            margin: const EdgeInsets.symmetric(vertical: 4),
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            child: ListTile(
-              leading: CircleAvatar(
-                backgroundColor: const Color(0xFF261D45),
-                child: Text(
-                  person["name"].toString()[0],
-                  style: const TextStyle(
-                      color: Color(0xFFFFD700), fontWeight: FontWeight.bold),
+          return ListView.builder(
+            padding: const EdgeInsets.all(12),
+            itemCount: docs.length,
+            itemBuilder: (context, index) {
+              final raw = docs[index].data();
+              final Map person = raw is Map ? raw : {};
+              final peerUid = docs[index].id;
+              final peerName = (person['name'] ?? 'User').toString();
+              final peerBio = (person['bio'] ?? 'NILE Live Member').toString();
+              final peerAvatar = (person['avatarUrl'] ?? '').toString();
+              final bool isFollowing = _followingUids.contains(peerUid);
+
+              return Card(
+                elevation: 0.3,
+                margin: const EdgeInsets.symmetric(vertical: 4),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+                child: ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: const Color(0xFF261D45),
+                    child: Text(
+                      peerName.isNotEmpty ? peerName[0].toUpperCase() : 'U',
+                      style: const TextStyle(
+                          color: Color(0xFFFFD700),
+                          fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  title: Text(
+
+peerName,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold, fontSize: 14),
+                  ),
+                  subtitle: Text(
+                    peerBio,
+                    style: const TextStyle(fontSize: 12, color: Colors.black54),
+                  ),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.chat_bubble_outline_rounded,
+                            color: Color(0xFF1BB3C8), size: 20),
+                        onPressed: () {
+                          Navigator.pop(context);
+                          widget.onMessageUser(peerUid, peerName, peerAvatar);
+                        },
+                      ),
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          elevation: 0,
+                          backgroundColor: isFollowing
+                              ? const Color(0xFFE8ECEF)
+                              : const Color(0xFF00C9A7),
+                          foregroundColor:
+                              isFollowing ? Colors.black87 : Colors.white,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(18)),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 8),
+                        ),
+                        onPressed: () =>
+                            _toggleFollowBack(peerUid, peerName, peerAvatar),
+                        child: Text(
+                          isFollowing ? "Friends" : "Follow Back",
+                          style: const TextStyle(
+                              fontSize: 11, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              title: Text(
-                person["name"].toString(),
-                style:
-                    const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-              ),
-              subtitle: Text(
-                person["bio"].toString(),
-                style: const TextStyle(fontSize: 12, color: Colors.black54),
-              ),
-              trailing: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  elevation: 0,
-                  backgroundColor: isFollowing
-                      ? const Color(0xFFE8ECEF)
-                      : const Color(0xFF00C9A7),
-                  foregroundColor:
-                      isFollowing ? Colors.black87 : Colors.white,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(18)),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                ),
-                onPressed: () {
-                  setState(() {
-                    person["isFollowing"] = !isFollowing;
-                  });
-                },
-                child: Text(
-                  isFollowing ? "Following" : "Follow Back",
-                  style: const TextStyle(
-                      fontSize: 11, fontWeight: FontWeight.bold),
-                ),
-              ),
-            ),
+              );
+            },
           );
         },
       ),
@@ -1558,6 +2708,9 @@ class _FollowersListScreenState extends State<FollowersListScreen> {
   }
 }
 
+// ============================================================================
+// NOTICE CONTENT SCREEN
+// ============================================================================
 class NoticeContentScreen extends StatelessWidget {
   final String title;
   final String time;
@@ -1581,8 +2734,7 @@ class NoticeContentScreen extends StatelessWidget {
       appBar: AppBar(
         title: Text(title,
             style: const TextStyle(
-
-color: Colors.black,
+                color: Colors.black,
                 fontSize: 16,
                 fontWeight: FontWeight.bold)),
         backgroundColor: Colors.white,
@@ -1610,7 +2762,8 @@ color: Colors.black,
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
+
+mainAxisSize: MainAxisSize.min,
             children: [
               Row(
                 children: [
