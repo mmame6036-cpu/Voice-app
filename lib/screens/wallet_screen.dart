@@ -30,19 +30,29 @@ class _WalletScreenState extends State<WalletScreen> {
   int _todayPoints = 0;
 
   int _selectedPackageIdx = 0;
+  String _selectedCountry = "All country";
   late TextEditingController _userIdController;
   bool _isProcessingPayment = false;
   StreamSubscription? _walletSub;
 
   final String _serverUrl = "https://nile-token-server.onrender.com";
 
+  static const Color kPageBg = Color(0xFFF6F7F9);
+  static const Color kCardWhite = Color(0xFFFFFFFF);
+  static const Color kInputFill = Color(0xFFEDEEF2);
+  static const Color kTextDark = Color(0xFF1F2329);
+  static const Color kTextMuted = Color(0xFF7A818E);
+  static const Color kTealAccent = Color(0xFF00BFA5);
+  static const Color kPriceCoral = Color(0xFFE85A3C);
+  static const Color kGoldCoin = Color(0xFFF3BA2F);
+
   static const _binancePackages = [
-    {"coins": 35000, "price": "\$5", "usd": 5, "bonus": "+0%"},
-    {"coins": 70000, "price": "\$10", "usd": 10, "bonus": "+5%"},
-    {"coins": 210000, "price": "\$30", "usd": 30, "bonus": "+8%"},
-    {"coins": 350000, "price": "\$50", "usd": 50, "bonus": "+10%"},
-    {"coins": 700000, "price": "\$100", "usd": 100, "bonus": "+15%"},
-    {"coins": 3500000, "price": "\$500", "usd": 500, "bonus": "+25%"},
+    {"coins": 35000, "label": "35,000", "price": "\$5", "usd": 5, "bonus": "+0%"},
+    {"coins": 70000, "label": "70,000", "price": "\$10", "usd": 10, "bonus": "+5%"},
+    {"coins": 210000, "label": "210,000", "price": "\$30", "usd": 30, "bonus": "+8%"},
+    {"coins": 350000, "label": "350,000", "price": "\$50", "usd": 50, "bonus": "+10%"},
+    {"coins": 700000, "label": "700,000", "price": "\$100", "usd": 100, "bonus": "+15%"},
+    {"coins": 3500000, "label": "3,500,000", "price": "\$500", "usd": 500, "bonus": "+25%"},
   ];
 
   static const _exchangeOptions = [
@@ -114,7 +124,7 @@ class _WalletScreenState extends State<WalletScreen> {
           SetOptions(merge: true));
     }
 
-    batch.set(txnRef, {
+batch.set(txnRef, {
       'txnId': orderRef,
       'orderRef': orderRef,
       'userUid': widget.userUid,
@@ -134,8 +144,7 @@ class _WalletScreenState extends State<WalletScreen> {
   }
 
   void _processBinancePay() {
-
-final pkg = _binancePackages[_selectedPackageIdx];
+    final pkg = _binancePackages[_selectedPackageIdx];
     final int coinsToAdd = pkg["coins"] as int;
     final String priceStr = pkg["price"] as String;
     final int usdAmount = pkg["usd"] as int;
@@ -156,16 +165,17 @@ final pkg = _binancePackages[_selectedPackageIdx];
       context: context,
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1E1638),
+        backgroundColor: kCardWhite,
         shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-            side: const BorderSide(color: Color(0xFFF3BA2F), width: 1.2)),
+          borderRadius: BorderRadius.circular(20),
+          side: const BorderSide(color: kTealAccent, width: 1.4),
+        ),
         title: Row(
           children: [
             Container(
               padding: const EdgeInsets.all(6),
               decoration: const BoxDecoration(
-                color: Color(0xFFF3BA2F),
+                color: kGoldCoin,
                 shape: BoxShape.circle,
               ),
               child: const Icon(Icons.currency_bitcoin,
@@ -177,7 +187,7 @@ final pkg = _binancePackages[_selectedPackageIdx];
               style: TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 18,
-                  color: Colors.white),
+                  color: kTextDark),
             ),
           ],
         ),
@@ -186,35 +196,35 @@ final pkg = _binancePackages[_selectedPackageIdx];
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text("Recharge Account: ID $targetNumericId",
-                style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                style: const TextStyle(color: kTextMuted, fontSize: 13)),
             const SizedBox(height: 10),
             Text("Package: 🪙 $coinsToAdd Coins",
                 style: const TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 16,
-                    color: Colors.white)),
+                    color: kTextDark)),
             const SizedBox(height: 4),
             Text("Price: $priceStr (USDT)",
                 style: const TextStyle(
-                    color: Color(0xFFF3BA2F),
+                    color: kPriceCoral,
                     fontWeight: FontWeight.bold,
                     fontSize: 18)),
             const SizedBox(height: 14),
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.black26,
+                color: kPageBg,
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: Colors.white12),
+                border: Border.all(color: Colors.black12),
               ),
               child: const Row(
                 children: [
-                  Icon(Icons.verified_user, size: 16, color: Color(0xFF00E5FF)),
+                  Icon(Icons.verified_user, size: 16, color: kTealAccent),
                   SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       "Secured by Binance Pay server verification. Coins are credited after admin payment confirmation.",
-                      style: TextStyle(fontSize: 11, color: Colors.white70),
+                      style: TextStyle(fontSize: 11, color: kTextMuted),
                     ),
                   ),
                 ],
@@ -225,18 +235,17 @@ final pkg = _binancePackages[_selectedPackageIdx];
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child:
-                const Text("Cancel", style: TextStyle(color: Colors.white54)),
+
+child: const Text("Cancel", style: TextStyle(color: kTextMuted)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFF3BA2F),
-              foregroundColor: Colors.black,
+              backgroundColor: kTealAccent,
+              foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12)),
               padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-
-),
+            ),
             onPressed: () async {
               Navigator.pop(ctx);
               await _initiateServerBinanceOrder(
@@ -308,11 +317,11 @@ final pkg = _binancePackages[_selectedPackageIdx];
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              backgroundColor: const Color(0xFF00C9A7),
+              backgroundColor: kTealAccent,
               content: Text(
                 "Payment verified! 🪙 $coinsToAdd Coins credited.",
                 style: const TextStyle(
-                    color: Colors.black, fontWeight: FontWeight.bold),
+                    color: Colors.white, fontWeight: FontWeight.bold),
               ),
             ),
           );
@@ -339,7 +348,8 @@ final pkg = _binancePackages[_selectedPackageIdx];
 
       final String errMsg =
           (res['error'] ?? res['message'] ?? 'Order creation failed').toString();
-      throw Exception(errMsg);
+
+throw Exception(errMsg);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -359,7 +369,7 @@ final pkg = _binancePackages[_selectedPackageIdx];
     }
   }
 
-void _showPendingVerificationDialog({
+  void _showPendingVerificationDialog({
     required String orderRef,
     required int coinsToAdd,
     required String priceStr,
@@ -376,15 +386,15 @@ void _showPendingVerificationDialog({
       context: context,
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1E1638),
+        backgroundColor: kCardWhite,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
-          side: const BorderSide(color: Color(0xFFF3BA2F), width: 1.2),
+          side: const BorderSide(color: kTealAccent, width: 1.4),
         ),
         title: const Text(
           "Complete Binance Payment",
           style: TextStyle(
-              color: Colors.white, fontWeight: FontWeight.bold, fontSize: 17),
+              color: kTextDark, fontWeight: FontWeight.bold, fontSize: 17),
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -392,21 +402,24 @@ void _showPendingVerificationDialog({
           children: [
             Text(
               "Send exact $priceStr USDT for 🪙 $coinsToAdd Coins.",
-              style: const TextStyle(color: Colors.white70, fontSize: 13),
+              style: const TextStyle(color: kTextMuted, fontSize: 13),
             ),
             const SizedBox(height: 8),
             Text(
               "Order Ref: $orderRef",
-              style: const TextStyle(color: Color(0xFF00E5FF), fontSize: 11.5),
+              style: const TextStyle(
+                  color: kTealAccent,
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.bold),
             ),
             if (paymentTarget.isNotEmpty) ...[
               const SizedBox(height: 12),
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: Colors.black26,
+                  color: kPageBg,
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: Colors.white12),
+                  border: Border.all(color: Colors.black12),
                 ),
                 child: Row(
                   children: [
@@ -416,13 +429,12 @@ void _showPendingVerificationDialog({
                         children: [
                           const Text(
                             "Binance Pay ID:",
-                            style:
-                                TextStyle(color: Colors.white54, fontSize: 10),
+                            style: TextStyle(color: kTextMuted, fontSize: 10),
                           ),
                           Text(
                             paymentTarget,
                             style: const TextStyle(
-                                color: Color(0xFFF3BA2F),
+                                color: kTextDark,
                                 fontSize: 14,
                                 fontWeight: FontWeight.bold),
                             maxLines: 2,
@@ -433,7 +445,7 @@ void _showPendingVerificationDialog({
                     ),
                     IconButton(
                       icon: const Icon(Icons.copy,
-                          color: Color(0xFFF3BA2F), size: 18),
+                          color: kTealAccent, size: 18),
                       onPressed: () {
                         Clipboard.setData(ClipboardData(text: paymentTarget));
                         ScaffoldMessenger.of(context).showSnackBar(
@@ -441,28 +453,27 @@ void _showPendingVerificationDialog({
                         );
                       },
                     ),
-                  ],
+
+],
                 ),
               ),
             ],
             const SizedBox(height: 10),
             const Text(
               "Order sent to Admin Dashboard. After sending USDT in Binance app, tap 'Verify Payment' below.",
-              style: TextStyle(color: Colors.white60, fontSize: 11.5),
+              style: TextStyle(color: kTextMuted, fontSize: 11.5),
             ),
           ],
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child:
-                const Text("Close", style: TextStyle(color: Colors.white54)),
+            child: const Text("Close", style: TextStyle(color: kTextMuted)),
           ),
           ElevatedButton(
-
-style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF00C9A7),
-              foregroundColor: Colors.black,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: kTealAccent,
+              foregroundColor: Colors.white,
             ),
             onPressed: () async {
               Navigator.pop(ctx);
@@ -520,11 +531,11 @@ style: ElevatedButton.styleFrom(
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              backgroundColor: const Color(0xFF00C9A7),
+              backgroundColor: kTealAccent,
               content: Text(
                 "Payment approved! 🪙 $coinsToAdd Coins added to your wallet.",
                 style: const TextStyle(
-                    color: Colors.black, fontWeight: FontWeight.bold),
+                    color: Colors.white, fontWeight: FontWeight.bold),
               ),
             ),
           );
@@ -571,7 +582,7 @@ style: ElevatedButton.styleFrom(
       return;
     }
 
-    setState(() => _isProcessingPayment = true);
+setState(() => _isProcessingPayment = true);
     try {
       final db = FirebaseFirestore.instance;
       final userRef = db.collection('users').doc(widget.userUid);
@@ -588,7 +599,7 @@ style: ElevatedButton.styleFrom(
         });
       });
 
-await db.collection('point_transactions').add({
+      await db.collection('point_transactions').add({
         'userUid': widget.userUid,
         'userNumericId': widget.userNumericId,
         'type': 'EXCHANGE_TO_COINS',
@@ -602,11 +613,11 @@ await db.collection('point_transactions').add({
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            backgroundColor: const Color(0xFF00C9A7),
+            backgroundColor: kTealAccent,
             content: Text(
               "Exchanged 💎 $pointsCost Points to 🪙 $coinsGain Coins!",
               style: const TextStyle(
-                  color: Colors.black, fontWeight: FontWeight.bold),
+                  color: Colors.white, fontWeight: FontWeight.bold),
             ),
           ),
         );
@@ -652,15 +663,15 @@ await db.collection('point_transactions').add({
           }
 
           return AlertDialog(
-            backgroundColor: const Color(0xFF1E1638),
+            backgroundColor: kCardWhite,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(20),
-              side: const BorderSide(color: Color(0xFF00E5FF), width: 1.2),
+              side: const BorderSide(color: kTealAccent, width: 1.4),
             ),
             title: const Text(
               "Withdraw Points (💎)",
               style: TextStyle(
-                  color: Colors.white,
+                  color: kTextDark,
                   fontWeight: FontWeight.bold,
                   fontSize: 17),
             ),
@@ -672,18 +683,21 @@ await db.collection('point_transactions').add({
                   Text(
                     "Available: 💎 $_points Points (\$${(_points / 10000).toStringAsFixed(2)})",
                     style: const TextStyle(
-                        color: Color(0xFF00E5FF), fontSize: 13),
+                        color: kTealAccent,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13),
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField(
                     value: selectedMethod,
-                    dropdownColor: const Color(0xFF261D45),
-                    style: const TextStyle(color: Colors.white, fontSize: 13),
-                    decoration: InputDecoration(
+                    dropdownColor: kCardWhite,
+                    style: const TextStyle(color: kTextDark, fontSize: 13),
+
+decoration: InputDecoration(
                       labelText: "Payment Method",
-                      labelStyle: const TextStyle(color: Colors.white60),
+                      labelStyle: const TextStyle(color: kTextMuted),
                       filled: true,
-                      fillColor: Colors.black26,
+                      fillColor: kPageBg,
                       border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12)),
                     ),
@@ -692,8 +706,7 @@ await db.collection('point_transactions').add({
                           value: "USDT (TRC20)", child: Text("USDT (TRC20)")),
                       DropdownMenuItem(
                           value: "Telebirr", child: Text("Telebirr (ETB)")),
-
-DropdownMenuItem(
+                      DropdownMenuItem(
                           value: "Binance ID", child: Text("Binance Pay ID")),
                     ],
                     onChanged: (val) {
@@ -706,12 +719,12 @@ DropdownMenuItem(
                   TextField(
                     controller: pointsController,
                     keyboardType: TextInputType.number,
-                    style: const TextStyle(color: Colors.white),
+                    style: const TextStyle(color: kTextDark),
                     decoration: InputDecoration(
                       labelText: "Points Amount (Min 100,000)",
-                      labelStyle: const TextStyle(color: Colors.white60),
+                      labelStyle: const TextStyle(color: kTextMuted),
                       filled: true,
-                      fillColor: Colors.black26,
+                      fillColor: kPageBg,
                       border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12)),
                     ),
@@ -719,12 +732,12 @@ DropdownMenuItem(
                   const SizedBox(height: 10),
                   TextField(
                     controller: addressController,
-                    style: const TextStyle(color: Colors.white),
+                    style: const TextStyle(color: kTextDark),
                     decoration: InputDecoration(
                       labelText: accountLabel,
-                      labelStyle: const TextStyle(color: Colors.white60),
+                      labelStyle: const TextStyle(color: kTextMuted),
                       filled: true,
-                      fillColor: Colors.black26,
+                      fillColor: kPageBg,
                       border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12)),
                     ),
@@ -735,13 +748,13 @@ DropdownMenuItem(
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
-                child: const Text("Cancel",
-                    style: TextStyle(color: Colors.white54)),
+                child:
+                    const Text("Cancel", style: TextStyle(color: kTextMuted)),
               ),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF00E5FF),
-                  foregroundColor: Colors.black,
+                  backgroundColor: kTealAccent,
+                  foregroundColor: Colors.white,
                 ),
                 onPressed: () async {
                   final reqPoints =
@@ -771,7 +784,7 @@ DropdownMenuItem(
                   Navigator.pop(ctx);
                   setState(() => _isProcessingPayment = true);
 
-                  try {
+try {
                     final db = FirebaseFirestore.instance;
                     final userRef = db.collection('users').doc(widget.userUid);
                     final usdAmount = reqPoints / 10000.0;
@@ -782,7 +795,7 @@ DropdownMenuItem(
                       final data = snap.data();
                       final cur = (data?['points'] as num?)?.toInt() ?? 0;
 
-if (cur < reqPoints) {
+                      if (cur < reqPoints) {
                         throw Exception("Insufficient points");
                       }
                       final rawName = (data?['name'] ?? '').toString().trim();
@@ -809,11 +822,11 @@ if (cur < reqPoints) {
                     if (mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
-                          backgroundColor: Color(0xFF00C9A7),
+                          backgroundColor: kTealAccent,
                           content: Text(
                             "Withdrawal request submitted! It will be processed after admin approval.",
                             style: TextStyle(
-                                color: Colors.black,
+                                color: Colors.white,
                                 fontWeight: FontWeight.bold),
                           ),
                         ),
@@ -841,114 +854,63 @@ if (cur < reqPoints) {
 
   @override
   Widget build(BuildContext context) {
-    const goldColor = Color(0xFFF3BA2F);
-    const diamondColor = Color(0xFF00E5FF);
-
-    Color coinsTabBg = Colors.transparent;
-    Color coinsTabText = Colors.white70;
-    if (_activeTab == 0) {
-      coinsTabBg = goldColor;
-      coinsTabText = Colors.black;
-    }
-
-    Color pointsTabBg = Colors.transparent;
-    Color pointsTabText = Colors.white70;
-    if (_activeTab == 1) {
-      pointsTabBg = diamondColor;
-      pointsTabText = Colors.black;
-    }
-
     return Scaffold(
-      backgroundColor: const Color(0xFF0F0B1E),
+      backgroundColor: kPageBg,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF18122B),
+        backgroundColor: kPageBg,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new,
-              color: Colors.white, size: 18),
+              color: kTextDark, size: 18),
           onPressed: () => Navigator.pop(context, _coins),
         ),
-        title: const Text(
-          "NILE Live Wallet",
-          style: TextStyle(
-              color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+        title: Text(
+          _activeTab == 0 ? "Recharge" : "Points",
+          style: const TextStyle(
+              color: kTextDark, fontSize: 17, fontWeight: FontWeight.w700),
         ),
         centerTitle: true,
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: Center(
+              child: GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _activeTab = _activeTab == 0 ? 1 : 0;
+                  });
+                },
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+
+decoration: BoxDecoration(
+                    color: kCardWhite,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: kTealAccent, width: 1.1),
+                  ),
+                  child: Text(
+                    _activeTab == 0 ? "💎 $_points" : "🪙 $_coins",
+                    style: const TextStyle(
+                      color: kTextDark,
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
       body: Stack(
         children: [
-          Column(
-            children: [
-              Container(
-                margin: const EdgeInsets.fromLTRB(16, 12, 16, 6),
-                padding: const EdgeInsets.all(4),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF18122B),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: Colors.white12),
-                ),
-
-child: Row(
-                  children: [
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () => setState(() => _activeTab = 0),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 10),
-                          decoration: BoxDecoration(
-                            color: coinsTabBg,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Center(
-                            child: Text(
-                              "🪙 Coins ($_coins)",
-                              style: TextStyle(
-                                color: coinsTabText,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 13,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () => setState(() => _activeTab = 1),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 10),
-                          decoration: BoxDecoration(
-                            color: pointsTabBg,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Center(
-                            child: Text(
-                              "💎 Points ($_points)",
-                              style: TextStyle(
-                                color: pointsTabText,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 13,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Expanded(
-                child: _activeTab == 0
-                    ? _buildCoinsTab(goldColor)
-                    : _buildPointsTab(diamondColor),
-              ),
-            ],
-          ),
+          _activeTab == 0 ? _buildCoinsTab() : _buildPointsTab(),
           if (_isProcessingPayment)
             Container(
-              color: Colors.black54,
+              color: Colors.black26,
               child: const Center(
-                child: CircularProgressIndicator(color: goldColor),
+                child: CircularProgressIndicator(color: kTealAccent),
               ),
             ),
         ],
@@ -956,89 +918,41 @@ child: Row(
     );
   }
 
-  Widget _buildCoinsTab(Color brandColor) {
+  Widget _buildCoinsTab() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(18),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF281E4B), Color(0xFF130E26)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
+          // 1. User ID Section
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                "User ID",
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: kTextDark,
+                ),
               ),
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: Colors.white12),
-              boxShadow: [
-                BoxShadow(
-                  color: brandColor.withOpacity(0.12),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
+              Text(
+                "Balance: 🪙 $_coins",
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: kTextMuted,
                 ),
-              ],
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text("Available Coins",
-                        style: TextStyle(color: Colors.white60, fontSize: 12)),
-
-const SizedBox(height: 6),
-                    Row(
-                      children: [
-                        const Text("🪙", style: TextStyle(fontSize: 24)),
-                        const SizedBox(width: 8),
-                        Text(
-                          "$_coins",
-                          style: const TextStyle(
-                            color: Color(0xFFFFD700),
-                            fontSize: 26,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.08),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Text(
-                    "ID: ${widget.userNumericId}",
-                    style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 18),
-          const Text(
-            "Recharge Target User ID",
-            style: TextStyle(
-                fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white),
+              ),
+            ],
           ),
           const SizedBox(height: 8),
           Container(
             height: 48,
             padding: const EdgeInsets.symmetric(horizontal: 14),
             decoration: BoxDecoration(
-              color: const Color(0xFF1E1638),
+              color: kInputFill,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.white12),
             ),
             child: Row(
               children: [
@@ -1047,9 +961,10 @@ const SizedBox(height: 6),
                     controller: _userIdController,
                     keyboardType: TextInputType.number,
                     style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                        color: Colors.white),
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14.5,
+                      color: kTextDark,
+                    ),
                     decoration: const InputDecoration(
                       border: InputBorder.none,
                       isDense: true,
@@ -1058,107 +973,276 @@ const SizedBox(height: 6),
                 ),
                 GestureDetector(
                   onTap: () {
+                    FocusScope.of(context).unfocus();
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                          content: Text(
-                              "Target confirmed: ${_userIdController.text}")),
+                        backgroundColor: kTealAccent,
+                        content: Text(
+                          "Target confirmed: ${_userIdController.text}",
+                          style: const TextStyle(color: Colors.white),
+                        ),
+                      ),
                     );
                   },
-                  child: Text(
+                  child: const Text(
                     "Confirm",
                     style: TextStyle(
-                      color: brandColor,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13,
+                      color: kTealAccent,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13.5,
                     ),
                   ),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 18),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            decoration: BoxDecoration(
-              color: const Color(0xFF1E1638),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: brandColor.withOpacity(0.4)),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    color: brandColor,
-                    shape: BoxShape.circle,
-                  ),
 
-child: const Icon(Icons.currency_bitcoin,
-                      color: Colors.black, size: 18),
+          const SizedBox(height: 18),
+
+          // 2. Country/Region Section
+          const Text(
+            "Country/Region",
+
+style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: kTextDark,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Container(
+            height: 48,
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            decoration: BoxDecoration(
+              color: kInputFill,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton(
+                value: _selectedCountry,
+                isExpanded: true,
+                icon: const Icon(Icons.arrow_drop_down,
+                    color: kTextDark, size: 24),
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: kTextDark,
                 ),
-                const SizedBox(width: 10),
-                const Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        "Binance Pay (Verified Crypto)",
+                items: const [
+                  DropdownMenuItem(
+                      value: "All country", child: Text("All country")),
+                  DropdownMenuItem(value: "Ethiopia", child: Text("Ethiopia")),
+                  DropdownMenuItem(value: "Global", child: Text("Global")),
+                ],
+                onChanged: (val) {
+                  if (val != null) {
+                    setState(() => _selectedCountry = val.toString());
+                  }
+                },
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 12),
+
+          // 3. Official Agency Recharge Banner
+          GestureDetector(
+            onTap: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text(
+                      "Official Agency Recharge: Verified USDT settlement via Binance Pay."),
+                  duration: Duration(seconds: 2),
+                ),
+              );
+            },
+            child: Container(
+              height: 44,
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFBEFD4),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 22,
+                    height: 22,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFE5533D),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Center(
+                      child: Text(
+                        "%",
                         style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13),
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w900,
+                        ),
                       ),
-                      Text(
-                        "Settlement in USDT • Instant Server Verification",
-                        style: TextStyle(color: Colors.white54, fontSize: 11),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  const Expanded(
+                    child: Text(
+                      "Official Agency Recharge",
+                      style: TextStyle(
+                        color: Color(0xFF4A3B22),
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  const Text(
+                    "20% off >",
+                    style: TextStyle(
+                      color: Color(0xFFD97724),
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 18),
+
+          // 4. Recharge Method Cards (2-Column Grid Structure)
+          const Text(
+            "Recharge",
+            style: TextStyle(
+
+fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: kTextDark,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: Container(
+                  height: 52,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(
+                    color: kCardWhite,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: kTealAccent, width: 1.6),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 28,
+                        height: 28,
+                        decoration: const BoxDecoration(
+                          color: kGoldCoin,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.currency_bitcoin,
+                            color: Colors.black, size: 18),
+                      ),
+                      const SizedBox(width: 10),
+                      const Expanded(
+                        child: Text(
+                          "Binance Pay",
+                          style: TextStyle(
+                            color: kTextDark,
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                     ],
                   ),
                 ),
-                Icon(Icons.verified, color: brandColor, size: 20),
-              ],
-            ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Container(
+                  height: 52,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(
+                    color: kCardWhite,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.black12, width: 1.0),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 28,
+                        height: 28,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFF26A17B),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Center(
+                          child: Text(
+                            "₮",
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      const Expanded(
+                        child: Text(
+                          "USDT",
+                          style: TextStyle(
+                            color: kTextDark,
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
+
           const SizedBox(height: 18),
-          const Text(
-            "Select Package",
-            style: TextStyle(
-                fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white),
-          ),
-          const SizedBox(height: 10),
+
+          // 5. Coin Packages Grid (3-Column White Cards)
           GridView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             itemCount: _binancePackages.length,
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 3,
+
+crossAxisCount: 3,
               mainAxisSpacing: 10,
               crossAxisSpacing: 10,
-              childAspectRatio: 0.92,
+              childAspectRatio: 0.96,
             ),
             itemBuilder: (context, idx) {
               final pkg = _binancePackages[idx];
               final isSelected = _selectedPackageIdx == idx;
 
-              Color cardBg = const Color(0xFF1E1638);
-              Color borderCol = Colors.white12;
-              double borderW = 1.0;
-              if (isSelected) {
-                cardBg = const Color(0xFF261D45);
-                borderCol = brandColor;
-                borderW = 1.8;
-              }
-
               return GestureDetector(
                 onTap: () => setState(() => _selectedPackageIdx = idx),
                 child: Container(
                   decoration: BoxDecoration(
-                    color: cardBg,
-                    borderRadius: BorderRadius.circular(14),
+                    color: kCardWhite,
+                    borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                      color: borderCol,
-                      width: borderW,
+                      color: isSelected ? kTealAccent : Colors.transparent,
+                      width: isSelected ? 1.8 : 1.0,
                     ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.03),
+                        blurRadius: 6,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
                   ),
                   child: Stack(
                     children: [
@@ -1166,46 +1250,57 @@ child: const Icon(Icons.currency_bitcoin,
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            const Text("🪙", style: TextStyle(fontSize: 22)),
-                            const SizedBox(height: 6),
+                            Container(
+                              width: 26,
+                              height: 26,
+                              decoration: const BoxDecoration(
+                                color: Color(0xFFFFF3CD),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Center(
+                                child: Text("🪙",
+                                    style: TextStyle(fontSize: 16)),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
                             Text(
-                              "${pkg['coins']}",
+                              "${pkg['label']}",
                               style: const TextStyle(
-                                fontSize: 12.5,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
+                                fontSize: 14.5,
+                                fontWeight: FontWeight.w700,
+                                color: kTextDark,
                               ),
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              "${pkg['price']} USDT",
-                              style: TextStyle(
-                                fontSize: 11.5,
-                                fontWeight: FontWeight.bold,
-                                color: brandColor,
+                              "${pkg['price']}",
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: kPriceCoral,
                               ),
                             ),
                           ],
                         ),
                       ),
-
-if (pkg['bonus'] != "+0%")
+                      if (pkg['bonus'] != "+0%")
                         Positioned(
-                          top: 6,
-                          right: 6,
+                          top: 5,
+                          right: 5,
                           child: Container(
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 5, vertical: 1.5),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFFF2A85),
+                              color: const Color(0xFFFFEFEA),
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Text(
                               "${pkg['bonus']}",
                               style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 8.5,
-                                  fontWeight: FontWeight.bold),
+                                color: kPriceCoral,
+                                fontSize: 8.5,
+                                fontWeight: FontWeight.w800,
+                              ),
                             ),
                           ),
                         ),
@@ -1215,23 +1310,26 @@ if (pkg['bonus'] != "+0%")
               );
             },
           ),
-          const SizedBox(height: 24),
+
+          const SizedBox(height: 22),
+
+// Proceed Button
           SizedBox(
             width: double.infinity,
-            height: 50,
+            height: 48,
             child: ElevatedButton(
               style: ElevatedButton.styleFrom(
-                backgroundColor: brandColor,
-                foregroundColor: Colors.black,
+                backgroundColor: kTealAccent,
+                foregroundColor: Colors.white,
                 elevation: 0,
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(25)),
+                    borderRadius: BorderRadius.circular(24)),
               ),
               onPressed: _isProcessingPayment ? null : _processBinancePay,
               child: Text(
-                "Pay with Binance (${_binancePackages[_selectedPackageIdx]['price']} USDT)",
+                "Recharge (${_binancePackages[_selectedPackageIdx]['price']} USDT)",
                 style: const TextStyle(
-                    fontSize: 14.5, fontWeight: FontWeight.w900),
+                    fontSize: 15, fontWeight: FontWeight.w700),
               ),
             ),
           ),
@@ -1241,7 +1339,7 @@ if (pkg['bonus'] != "+0%")
     );
   }
 
-  Widget _buildPointsTab(Color diamondColor) {
+  Widget _buildPointsTab() {
     final double usdValue = _points / 10000.0;
 
     return SingleChildScrollView(
@@ -1253,13 +1351,9 @@ if (pkg['bonus'] != "+0%")
             width: double.infinity,
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF0E3954), Color(0xFF130E26)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: diamondColor.withOpacity(0.4)),
+              color: kCardWhite,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: kTealAccent.withOpacity(0.4)),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1268,35 +1362,34 @@ if (pkg['bonus'] != "+0%")
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     const Text("My Earned Points",
-                        style: TextStyle(color: Colors.white70, fontSize: 12)),
+                        style: TextStyle(color: kTextMuted, fontSize: 12.5)),
                     Container(
                       padding: const EdgeInsets.symmetric(
                           horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
-                        color: diamondColor.withOpacity(0.15),
+                        color: kTealAccent.withOpacity(0.12),
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: Text(
                         "≈ \$${usdValue.toStringAsFixed(2)} USD",
-                        style: TextStyle(
-                          color: diamondColor,
+                        style: const TextStyle(
+                          color: kTealAccent,
                           fontWeight: FontWeight.bold,
                           fontSize: 12,
                         ),
                       ),
                     ),
                   ],
-
-),
+                ),
                 const SizedBox(height: 8),
                 Row(
                   children: [
-                    const Text("💎", style: TextStyle(fontSize: 26)),
+                    const Text("💎", style: TextStyle(fontSize: 24)),
                     const SizedBox(width: 8),
                     Text(
                       "$_points",
-                      style: TextStyle(
-                        color: diamondColor,
+                      style: const TextStyle(
+                        color: kTextDark,
                         fontSize: 28,
                         fontWeight: FontWeight.w900,
                       ),
@@ -1304,33 +1397,34 @@ if (pkg['bonus'] != "+0%")
                   ],
                 ),
                 const SizedBox(height: 14),
-                const Divider(color: Colors.white12, height: 1),
+                const Divider(color: Colors.black12, height: 1),
                 const SizedBox(height: 12),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
                       "Today's Points: 💎 $_todayPoints",
-                      style:
-                          const TextStyle(color: Colors.white70, fontSize: 12),
+                      style: const TextStyle(color: kTextMuted, fontSize: 12),
                     ),
                     const Text(
                       "10,000 Pts = \$1",
-                      style: TextStyle(color: Colors.white54, fontSize: 11),
+                      style: TextStyle(color: kTextMuted, fontSize: 11.5),
                     ),
                   ],
                 ),
               ],
             ),
-          ),
+
+),
           const SizedBox(height: 16),
           SizedBox(
             width: double.infinity,
             height: 48,
             child: ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
-                backgroundColor: diamondColor,
-                foregroundColor: Colors.black,
+                backgroundColor: kTealAccent,
+                foregroundColor: Colors.white,
+                elevation: 0,
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14)),
               ),
@@ -1338,7 +1432,7 @@ if (pkg['bonus'] != "+0%")
               icon: const Icon(Icons.account_balance_wallet, size: 20),
               label: const Text(
                 "Withdraw Cash (Min 100,000 Points)",
-                style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13.5),
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5),
               ),
             ),
           ),
@@ -1346,9 +1440,7 @@ if (pkg['bonus'] != "+0%")
           const Text(
             "Exchange Points to Coins (Instant)",
             style: TextStyle(
-                fontSize: 13.5,
-                fontWeight: FontWeight.bold,
-                color: Colors.white),
+                fontSize: 14, fontWeight: FontWeight.w700, color: kTextDark),
           ),
           const SizedBox(height: 10),
           GridView.builder(
@@ -1371,9 +1463,9 @@ if (pkg['bonus'] != "+0%")
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF1E1638),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: Colors.white12),
+                    color: kCardWhite,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.black12),
                   ),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -1381,17 +1473,16 @@ if (pkg['bonus'] != "+0%")
                       Text(
                         "🪙 $cns Coins",
                         style: const TextStyle(
-                          color: Color(0xFFFFD700),
+                          color: kTextDark,
                           fontWeight: FontWeight.bold,
                           fontSize: 14,
                         ),
-
-),
+                      ),
                       const SizedBox(height: 4),
                       Text(
                         "Use 💎 $pts Pts",
-                        style: TextStyle(
-                          color: diamondColor,
+                        style: const TextStyle(
+                          color: kPriceCoral,
                           fontSize: 11.5,
                           fontWeight: FontWeight.w600,
                         ),
@@ -1406,9 +1497,7 @@ if (pkg['bonus'] != "+0%")
           const Text(
             "Recent Points Activity",
             style: TextStyle(
-                fontSize: 13.5,
-                fontWeight: FontWeight.bold,
-                color: Colors.white),
+                fontSize: 14, fontWeight: FontWeight.w700, color: kTextDark),
           ),
           const SizedBox(height: 8),
           StreamBuilder(
@@ -1424,8 +1513,9 @@ if (pkg['bonus'] != "+0%")
                   padding: EdgeInsets.all(16),
                   child: Center(
                     child: Text("Loading points history...",
-                        style: TextStyle(color: Colors.white54, fontSize: 12)),
-                  ),
+                        style: TextStyle(color: kTextMuted, fontSize: 12)),
+
+),
                 );
               }
               if (snapshot.data == null) {
@@ -1438,13 +1528,13 @@ if (pkg['bonus'] != "+0%")
                   width: double.infinity,
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF18122B),
+                    color: kCardWhite,
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: const Center(
                     child: Text(
                       "No points received yet. Go live in a voice room to earn!",
-                      style: TextStyle(color: Colors.white54, fontSize: 12),
+                      style: TextStyle(color: kTextMuted, fontSize: 12),
                     ),
                   ),
                 );
@@ -1465,10 +1555,10 @@ if (pkg['bonus'] != "+0%")
                     titleText = "Exchanged to Coins";
                   }
                   String ptsLabel = "+💎 $pts";
-                  Color ptsColor = const Color(0xFF00E5FF);
+                  Color ptsColor = kTealAccent;
                   if (pts < 0) {
                     ptsLabel = "💎 $pts";
-                    ptsColor = Colors.orangeAccent;
+                    ptsColor = kPriceCoral;
                   }
 
                   return Container(
@@ -1476,17 +1566,16 @@ if (pkg['bonus'] != "+0%")
                     padding: const EdgeInsets.symmetric(
                         horizontal: 14, vertical: 10),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF18122B),
+                      color: kCardWhite,
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-
-Text(
+                        Text(
                           titleText,
-                          style: const TextStyle(
-                              color: Colors.white, fontSize: 13),
+                          style:
+                              const TextStyle(color: kTextDark, fontSize: 13),
                         ),
                         Text(
                           ptsLabel,
