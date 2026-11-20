@@ -29,9 +29,8 @@ class _HomeScreenState extends State<HomeScreen> {
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
-  final Set<String> _followedRoomIds = {'room_dessie_vip'};
+  final Set _followedRoomIds = {'room_dessie_vip'};
 
-  // HALA-Inspired Luxury Turquoise, Emerald & Gold Palette
   static const Color kTopTurquoise = Color(0xFF00BFA5);
   static const Color kMidEmerald = Color(0xFF00695C);
   static const Color kDeepTeal = Color(0xFF062426);
@@ -41,7 +40,7 @@ class _HomeScreenState extends State<HomeScreen> {
   static const Color kGoldSoft = Color(0xFFE5B84B);
   static const Color kMintGlow = Color(0xFF26E6C8);
 
-  final List> _defaultRooms = [
+  final List _defaultRooms = [
     {
       "id": "room_dessie_vip",
       "title": "Dessie VIP Chill 🎧",
@@ -74,7 +73,7 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  Future<void> _handleEnterMyRoom() async {
+  Future _handleEnterMyRoom() async {
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -132,7 +131,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Future<void> _joinExistingRoom(Map<String, dynamic> roomItem) async {
+  Future _joinExistingRoom(Map roomItem) async {
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -178,16 +177,17 @@ try {
     }
   }
 
-  List> _mergeWithLiveRooms(
-      QuerySnapshot>? snapshot) {
-    final List> combined =
-        _defaultRooms.map((e) => Map<String, dynamic>.from(e)).toList();
-    final Set<String> existingIds =
-        combined.map((e) => e["id"].toString()).toSet();
+  List _mergeWithLiveRooms(QuerySnapshot? snapshot) {
+    final List combined =
+        _defaultRooms.map((e) => Map.from(e as Map)).toList();
+    final Set existingIds =
+        combined.map((e) => (e as Map)["id"].toString()).toSet();
 
     if (snapshot != null) {
       for (final doc in snapshot.docs) {
-        final data = doc.data();
+        final rawData = doc.data();
+        if (rawData is! Map) continue;
+        final data = rawData;
         final String id = doc.id;
         final String title =
             (data['roomTitle'] ?? data['title'] ?? '').toString().trim();
@@ -203,12 +203,13 @@ try {
         }
 
         if (existingIds.contains(id)) {
-          final idx = combined.indexWhere((r) => r["id"] == id);
+          final idx = combined.indexWhere((r) => (r as Map)["id"] == id);
           if (idx != -1) {
-            combined[idx]["title"] = title;
-            combined[idx]["host"] = host;
+            final target = combined[idx] as Map;
+            target["title"] = title;
+            target["host"] = host;
             if (activeCount > 1) {
-              combined[idx]["members"] = activeCount;
+              target["members"] = activeCount;
             }
           }
         } else {
@@ -225,7 +226,7 @@ try {
     return combined;
   }
 
-  void _showRankSheet(List> roomsList) {
+  void _showRankSheet(List roomsList) {
     showModalBottomSheet(
       context: context,
       backgroundColor: kCardDeep,
@@ -256,14 +257,15 @@ try {
                 ],
               ),
               const SizedBox(height: 12),
-              ...roomsList.map((r) {
+              ...roomsList.map((item) {
+                final r = item as Map;
                 return Container(
                   margin: const EdgeInsets.only(bottom: 8),
-                  decoration: BoxDecoration(
+
+decoration: BoxDecoration(
                     color: kCardDark,
                     borderRadius: BorderRadius.circular(14),
-
-border: Border.all(
+                    border: Border.all(
                       color: kGoldSoft.withOpacity(0.45),
                       width: 1,
                     ),
@@ -320,21 +322,25 @@ border: Border.all(
         ),
       ),
       child: SafeArea(
-        child: StreamBuilder<QuerySnapshot>>(
+        child: StreamBuilder(
           stream: FirebaseFirestore.instance
               .collection('rooms')
               .limit(30)
               .snapshots(),
           builder: (context, snapshot) {
-            final allRooms = _mergeWithLiveRooms(snapshot.data);
+            final QuerySnapshot? querySnap = snapshot.data is QuerySnapshot
+                ? snapshot.data as QuerySnapshot
+                : null;
+            final allRooms = _mergeWithLiveRooms(querySnap);
             final String q = _searchQuery.trim().toLowerCase();
 
-            final visibleRooms = allRooms.where((r) {
+            final visibleRooms = allRooms.where((item) {
+              final r = item as Map;
               if (q.isNotEmpty) {
                 final title = r["title"].toString().toLowerCase();
                 final host = r["host"].toString().toLowerCase();
                 final id = r["id"].toString().toLowerCase();
-                return [title, host, id].any((field) => field.contains(q));
+                return title.contains(q)  host.contains(q)  id.contains(q);
               }
               if (_selectedTopTab == 0) {
                 return _followedRoomIds.contains(r["id"]);
@@ -346,7 +352,6 @@ border: Border.all(
               children: [
                 Column(
                   children: [
-                    // Top Navigation & Search Header
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
                       child: Row(
@@ -361,12 +366,12 @@ border: Border.all(
                                     fontSize: _selectedTopTab == 0 ? 20 : 17,
                                     fontWeight: FontWeight.w900,
                                     color: _selectedTopTab == 0
-                                        ? Colors.white
+
+? Colors.white
                                         : Colors.white70,
                                     shadows: const [
                                       Shadow(
-
-color: Colors.black38,
+                                        color: Colors.black38,
                                         blurRadius: 4,
                                         offset: Offset(0, 1),
                                       ),
@@ -438,13 +443,13 @@ color: Colors.black38,
                                       : Colors.white38,
                                   width: 1.2,
                                 ),
-                              ),
+
+),
                               child: Icon(
                                 _isSearching
                                     ? Icons.close_rounded
                                     : Icons.search_rounded,
-
-color:
+                                color:
                                     _isSearching ? Colors.black : Colors.white,
                                 size: 22,
                               ),
@@ -479,8 +484,6 @@ color:
                         ],
                       ),
                     ),
-
-                    // Functional Live Search Bar
                     if (_isSearching)
                       Padding(
                         padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
@@ -519,11 +522,11 @@ color:
                             contentPadding:
                                 const EdgeInsets.symmetric(vertical: 10),
                             enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(14),
+
+borderRadius: BorderRadius.circular(14),
                               borderSide: const BorderSide(
                                   color: kGoldSoft, width: 1.2),
-
-),
+                            ),
                             focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(14),
                               borderSide: const BorderSide(
@@ -534,8 +537,6 @@ color:
                               setState(() => _searchQuery = val),
                         ),
                       ),
-
-                    // Story Tray on High-Contrast Translucent Strip
                     Container(
                       margin: const EdgeInsets.symmetric(horizontal: 12),
                       padding: const EdgeInsets.symmetric(vertical: 4),
@@ -555,15 +556,11 @@ color:
                         },
                       ),
                     ),
-
                     const SizedBox(height: 8),
-
-                    // Main Content Area
                     Expanded(
                       child: ListView(
                         padding: const EdgeInsets.fromLTRB(16, 4, 16, 90),
                         children: [
-                          // Vibrant Built-in Luxury Banner (Always Crisp, Zero Network Lag)
                           GestureDetector(
                             onTap: () => _showRankSheet(allRooms),
                             child: Container(
@@ -658,9 +655,7 @@ children: [
                               ),
                             ),
                           ),
-
                           const SizedBox(height: 18),
-
                           Row(
                             children: [
                               Text(
@@ -704,9 +699,7 @@ offset: Offset(0, 1),
                               ),
                             ],
                           ),
-
                           const SizedBox(height: 12),
-
                           if (visibleRooms.isEmpty)
                             Container(
                               padding: const EdgeInsets.all(28),
@@ -748,7 +741,7 @@ offset: Offset(0, 1),
                                 childAspectRatio: 0.96,
                               ),
                               itemBuilder: (context, index) {
-                                final item = visibleRooms[index];
+                                final item = visibleRooms[index] as Map;
                                 final roomId = item["id"].toString();
                                 final roomTitle = item["title"].toString();
                                 final roomHost = item["host"].toString();
@@ -901,8 +894,6 @@ style: const TextStyle(
                     ),
                   ],
                 ),
-
-                // Floating Create / Enter My Room Mic Button
                 Positioned(
                   bottom: 24,
                   right: 18,
