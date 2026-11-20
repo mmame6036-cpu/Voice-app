@@ -101,6 +101,8 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
   String _roomAnnouncement = "";
   String _equippedFrame = "default";
   final List<String> _seatFrames = List.filled(30, 'default');
+  final GlobalKey _roomStackKey = GlobalKey();
+  final List<GlobalKey> _seatKeys = List.generate(30, (_) => GlobalKey());
   bool _isRoomOwnerAgent = false;
   int get _goldenSeatsCount => _isRoomOwnerAgent ? 6 : 3;
 
@@ -189,7 +191,6 @@ StreamSubscription? _walletSubscription;
     return "guest_${widget.userNumericId}";
   }
 
-  // Strict Room Owner Check: Only the true room owner can sit on Seat 1
   bool get _isRoomOwner {
     if (widget.roomId == 'room_$_resolvedUid') return true;
     if (_roomHostUid.isNotEmpty && _resolvedUid == _roomHostUid) return true;
@@ -265,8 +266,7 @@ StreamSubscription? _walletSubscription;
     );
 
     _entryMarqueeController = AnimationController(
-
-vsync: this,
+      vsync: this,
       duration: const Duration(milliseconds: 3400),
     );
     _entryMarqueeAnimation = Tween(
@@ -277,7 +277,7 @@ vsync: this,
       curve: Curves.easeInOut,
     ));
 
-    _entryMarqueeController.addStatusListener((status) {
+_entryMarqueeController.addStatusListener((status) {
       if (status == AnimationStatus.completed && mounted) {
         setState(() => _entryBannerText = null);
       }
@@ -377,6 +377,7 @@ vsync: this,
       } catch (_) {
         await player.play(AssetSource('sounds/five_win.mp3'));
       }
+      await player.setVolume(1.0);
       player.onPlayerComplete.listen((_) {
         player.dispose();
       });
@@ -407,7 +408,10 @@ vsync: this,
 
   void _ensureSpeakerLoud() {
     try {
-      (_agoraService as dynamic).engine?.setEnableSpeakerphone(true);
+      final eng = (_agoraService as dynamic).engine;
+      eng?.setDefaultAudioRouteToSpeakerphone(true);
+      eng?.setEnableSpeakerphone(true);
+      eng?.adjustPlaybackSignalVolume(100);
     } catch (_) {}
   }
 
@@ -927,6 +931,7 @@ if (wonCoins > 0) {
       _myAgoraUid = effectiveUid;
 
       if (_resumedFromMinimize && _agoraService.isChannelJoined) {
+        _ensureSpeakerLoud();
         if (mounted) setState(() => _isConnecting = false);
         return;
       }
@@ -935,6 +940,7 @@ if (wonCoins > 0) {
 
       await _agoraService.initEngine(
         onUserJoined: (uid) {
+          _ensureSpeakerLoud();
           if (mounted) setState(() {});
         },
         onUserOffline: (uid) {
@@ -996,9 +1002,9 @@ if (wonCoins > 0) {
     final String rId = widget.roomId;
     final String rTitle = _liveRoomTitle;
     final String hName = widget.hostName;
-    final int uNumId = widget.userNumericId;
 
-final String uUid = widget.userUid;
+final int uNumId = widget.userNumericId;
+    final String uUid = widget.userUid;
     final String uName = widget.userName;
     final String resolvedU = _resolvedUid;
     final int activeNumId = _myAgoraUid > 0 ? _myAgoraUid : uNumId;
@@ -1098,7 +1104,7 @@ final String uUid = widget.userUid;
   }) {
     final controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 900),
+      duration: const Duration(milliseconds: 950),
     );
 
     final animation = CurvedAnimation(
@@ -1978,13 +1984,10 @@ height: 46,
       return;
     }
 
-    // Rule 1: Seat 1 (index 0) is strictly reserved for the Room Owner ONLY
     if (index == 0 && !_isRoomOwner) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text(
-            "👑 Seat 1 is reserved for the Host only!",
-          ),
+          content: Text("👑 Seat 1 is reserved for the Host only!"),
           duration: Duration(seconds: 2),
         ),
       );
@@ -2254,6 +2257,7 @@ setState(() {
     for (int i = 0; i < max(1, seatCount); i++) {
       wonCoins += _rollLuckyWin(unitPrice);
     }
+    _ensureSpeakerLoud();
     _playLuckyCoinSound();
 
     final String giftIconStr = (config['icon'] ?? "🎁").toString();
@@ -2667,7 +2671,6 @@ return GestureDetector(
         mainAxisAlignment: MainAxisAlignment.center,
         mainAxisSize: MainAxisSize.min,
         children: [
-          // 1. Seat Circle on Top
           Stack(
             clipBehavior: Clip.none,
             alignment: Alignment.center,
@@ -2714,6 +2717,7 @@ return GestureDetector(
                   ),
                 ),
               Container(
+                key: _seatKeys[index],
                 width: seatDimension,
                 height: seatDimension,
                 decoration: BoxDecoration(
@@ -2807,7 +2811,6 @@ BoxShadow(
                 ),
             ],
           ),
-          // 2. Seat Number or User Name Directly BELOW the Seat Circle
           const SizedBox(height: 3),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 2),
@@ -2834,7 +2837,6 @@ BoxShadow(
               overflow: TextOverflow.ellipsis,
             ),
           ),
-          // 3. Gift Badge BELOW the Seat Number / Name
           Container(
             margin: const EdgeInsets.only(top: 2.0),
             padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
@@ -2853,11 +2855,11 @@ BoxShadow(
             child: FittedBox(
               fit: BoxFit.scaleDown,
               child: Row(
-
-mainAxisSize: MainAxisSize.min,
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   Text("🎁", style: TextStyle(fontSize: badgeFontSize * 0.90)),
-                  const SizedBox(width: 2),
+
+const SizedBox(width: 2),
                   Text(
                     isOccupied ? "$giftsCount" : "0",
                     style: TextStyle(
@@ -2972,9 +2974,10 @@ mainAxisSize: MainAxisSize.min,
     );
   }
 
-Widget _buildPkScoreboard() {
+  Widget _buildPkScoreboard() {
     if (_pkData == null) return const SizedBox.shrink();
-    if (_pkData!['active'] != true) return const SizedBox.shrink();
+
+if (_pkData!['active'] != true) return const SizedBox.shrink();
     final int rScore = (_pkData!['redScore'] as num?)?.toInt() ?? 0;
     final int bScore = (_pkData!['blueScore'] as num?)?.toInt() ?? 0;
     final int total = rScore + bScore;
@@ -3073,10 +3076,10 @@ Widget _buildPkScoreboard() {
               style: const TextStyle(
                   color: Colors.white,
                   fontSize: 11,
-
-fontWeight: FontWeight.bold),
+                  fontWeight: FontWeight.bold),
               overflow: TextOverflow.ellipsis,
-            ),
+
+),
           ),
           if (_isAdminUser)
             GestureDetector(
@@ -3144,8 +3147,6 @@ fontWeight: FontWeight.bold),
 
   @override
   Widget build(BuildContext context) {
-    final int crossAxis = _getColsForSeats(_totalSeats);
-    final int rowCount = (_totalSeats / crossAxis).ceil();
     final size = MediaQuery.of(context).size;
 
     final int comboTier = (_comboCount ~/ 5) + 1;
@@ -3196,14 +3197,14 @@ fontWeight: FontWeight.bold),
               tooltip: "Minimize",
               onPressed: _minimizeRoom,
             ),
-
-iconTheme: const IconThemeData(color: Colors.white),
+            iconTheme: const IconThemeData(color: Colors.white),
             title: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
-                    Flexible(
+
+Flexible(
                       child: Text(
                         _liveRoomTitle,
                         style: const TextStyle(
@@ -3293,12 +3294,12 @@ iconTheme: const IconThemeData(color: Colors.white),
                 color: kGlassDark,
                 onSelected: (int count) => _changeSeatCount(count),
                 itemBuilder: (context) => _allowedSeatOptions
-
-.map((int count) => PopupMenuItem<int>(
+                    .map((int count) => PopupMenuItem<int>(
                           value: count,
                           child: Text(
                             "$count Seats Layout",
-                            style: TextStyle(
+
+style: TextStyle(
                               color: count == _totalSeats
                                   ? kGoldBright
                                   : Colors.white,
@@ -3352,6 +3353,7 @@ iconTheme: const IconThemeData(color: Colors.white),
           ),
           body: SafeArea(
             child: Stack(
+              key: _roomStackKey,
               children: [
                 Positioned(
                   top: -60,
@@ -3378,8 +3380,6 @@ iconTheme: const IconThemeData(color: Colors.white),
                     _buildTopLuckyWinnerMarquee(),
                     _buildPkScoreboard(),
                     _buildMusicMiniBar(),
-
-                    // Seat Grid: Seat 1 on the Left Side of the Golden Crown Row
                     Expanded(
                       flex: 6,
                       child: LayoutBuilder(
@@ -3390,8 +3390,7 @@ iconTheme: const IconThemeData(color: Colors.white),
                           final int goldenCount =
                               min(_goldenSeatsCount, max(0, _totalSeats - 1));
                           final int topRowCount = 1 + goldenCount;
-
-final int regularStart = topRowCount;
+                          final int regularStart = topRowCount;
                           final int regularCount =
                               max(0, _totalSeats - regularStart);
                           final int regularCols = _totalSeats <= 12 ? 4 : 6;
@@ -3399,7 +3398,7 @@ final int regularStart = topRowCount;
                               (regularCount / regularCols).ceil();
                           final int totalVisualRows = 1 + regularRows;
 
-                          final double rowSpacing = 6.0;
+final double rowSpacing = 6.0;
                           final double usableH =
                               areaH - (rowSpacing * max(0, totalVisualRows - 1));
                           final double dynamicCellH = usableH / totalVisualRows;
@@ -3425,7 +3424,6 @@ final int regularStart = topRowCount;
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                               children: [
-                                // Top Row: Seat 1 (Host Exclusive on Left Side) + 3 or 6 Golden Crown Seats
                                 Expanded(
                                   child: Row(
                                     children: List.generate(topRowCount, (idx) {
@@ -3442,7 +3440,6 @@ final int regularStart = topRowCount;
                                     }),
                                   ),
                                 ),
-                                // Regular Seats Rows Below
                                 ...List.generate(regularRows, (r) {
                                   return Expanded(
                                     child: Padding(
@@ -3459,8 +3456,7 @@ final int regularStart = topRowCount;
                                                 child: SizedBox.shrink());
                                           }
                                           return Expanded(
-
-child: Center(
+                                            child: Center(
                                               child: _buildSingleSeat(
                                                 index: seatIdx,
                                                 seatDimension: dynamicSeatDim,
@@ -3470,7 +3466,8 @@ child: Center(
                                             ),
                                           );
                                         }),
-                                      ),
+
+),
                                     ),
                                   );
                                 }),
@@ -3480,8 +3477,6 @@ child: Center(
                         },
                       ),
                     ),
-
-                    // Chat Box with Left Filters (All / Room / Chat) + Pinned Announcement
                     Expanded(
                       flex: 3,
                       child: Padding(
@@ -3530,8 +3525,7 @@ child: Center(
                                                 fontWeight: FontWeight.w900,
                                                 fontSize: 11.5,
                                               ),
-
-),
+                                            ),
                                             TextSpan(
                                               text: announcementBody,
                                               style: const TextStyle(
@@ -3546,7 +3540,7 @@ child: Center(
                                     );
                                   }
 
-                                  final item = filteredMessages[index - 1];
+final item = filteredMessages[index - 1];
                                   return Align(
                                     alignment: Alignment.centerLeft,
                                     child: Container(
@@ -3595,8 +3589,7 @@ child: Center(
                                             TextSpan(
                                               text: item.message,
                                               style: TextStyle(
-
-color: item.isSystem
+                                                color: item.isSystem
                                                     ? const Color(0xFFFFF3D1)
                                                     : Colors.white,
                                                 fontWeight: FontWeight.w600,
@@ -3610,13 +3603,12 @@ color: item.isSystem
                                   );
                                 },
                               ),
-                            ),
+
+),
                           ],
                         ),
                       ),
                     ),
-
-                    // Bottom Control Bar
                     Container(
                       padding: const EdgeInsets.symmetric(
                           horizontal: 12, vertical: 8),
@@ -3675,8 +3667,7 @@ color: item.isSystem
                                   fontWeight: FontWeight.w600,
                                 ),
                                 cursorColor: kGoldBright,
-
-decoration: const InputDecoration(
+                                decoration: const InputDecoration(
                                   hintText: "Say Hello...",
                                   hintStyle: TextStyle(color: Colors.white54),
                                   border: InputBorder.none,
@@ -3691,7 +3682,8 @@ decoration: const InputDecoration(
                           const SizedBox(width: 6),
                           Container(
                             decoration: BoxDecoration(
-                              shape: BoxShape.circle,
+
+shape: BoxShape.circle,
                               color: kGoldBlackBottom,
                               border: Border.all(color: kGoldBorder),
                             ),
@@ -3726,8 +3718,6 @@ decoration: const InputDecoration(
                     ),
                   ],
                 ),
-
-                // Floating Task & Game Icons on the Right Side
                 Positioned(
                   right: 10,
                   bottom: _showComboButton ? 148 : 74,
@@ -3756,8 +3746,7 @@ decoration: const InputDecoration(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Icon(Icons.assignment_turned_in_rounded,
-
-color: kGoldBright, size: 20),
+                                  color: kGoldBright, size: 20),
                               SizedBox(height: 2),
                               Text(
                                 "Task",
@@ -3777,7 +3766,8 @@ color: kGoldBright, size: 20),
                         child: Container(
                           width: 44,
                           padding: const EdgeInsets.symmetric(vertical: 6),
-                          decoration: BoxDecoration(
+
+decoration: BoxDecoration(
                             gradient: const LinearGradient(
                               colors: [Color(0xFF00796B), Color(0xFF004D40)],
                             ),
@@ -3811,7 +3801,6 @@ color: kGoldBright, size: 20),
                     ],
                   ),
                 ),
-
                 if (_activeRedPacket != null)
                   Positioned(
                     top: 64,
@@ -3841,8 +3830,7 @@ color: kGoldBright, size: 20),
                             Text(
                               "${_activeRedPacket!['senderName'] ?? 'VIP'}",
                               style: const TextStyle(
-
-color: Colors.white,
+                                  color: Colors.white,
                                   fontSize: 10,
                                   fontWeight: FontWeight.bold),
                             ),
@@ -3859,7 +3847,8 @@ color: Colors.white,
                                 style: TextStyle(
                                     color: Colors.black,
                                     fontSize: 9.5,
-                                    fontWeight: FontWeight.w900),
+
+fontWeight: FontWeight.w900),
                               ),
                             ),
                           ],
@@ -3892,7 +3881,6 @@ color: Colors.white,
                       ),
                     ),
                   ),
-
                 if (_entryBannerText != null)
                   Positioned(
                     bottom: 195,
@@ -3926,8 +3914,7 @@ color: Colors.white,
                                 decoration: BoxDecoration(
                                   color: kGoldBright,
                                   borderRadius: BorderRadius.circular(10),
-
-),
+                                ),
                                 child: Text(
                                   _entryBannerLevel,
                                   style: const TextStyle(
@@ -3946,13 +3933,13 @@ color: Colors.white,
                                   fontWeight: FontWeight.w900,
                                 ),
                               ),
-                            ],
+
+],
                           ),
                         ),
                       ),
                     ),
                   ),
-
                 ..._activeFlyingGifts.map((gift) {
                   return AnimatedBuilder(
                     animation: gift.controller,
@@ -3960,44 +3947,65 @@ color: Colors.white,
                       final t = gift.flightAnimation.value;
 
                       final centerX = size.width * 0.5;
-                      final centerY = size.height * 0.42;
+                      final centerY = size.height * 0.45;
 
-                      final col = gift.targetSeatIndex % crossAxis;
-                      final row = gift.targetSeatIndex ~/ crossAxis;
-                      final colWidth = (size.width - 12.0) / crossAxis;
-                      final rowHeight = (size.height * 0.52) / rowCount;
+                      Offset? exactTarget;
+                      if (gift.targetSeatIndex >= 0 &&
+                          gift.targetSeatIndex < _seatKeys.length) {
+                        final seatCtx =
+                            _seatKeys[gift.targetSeatIndex].currentContext;
+                        final stackCtx = _roomStackKey.currentContext;
+                        if (seatCtx != null && stackCtx != null) {
+                          final seatBox =
+                              seatCtx.findRenderObject() as RenderBox?;
+                          final stackBox =
+                              stackCtx.findRenderObject() as RenderBox?;
+                          if (seatBox != null &&
+                              seatBox.hasSize &&
+                              stackBox != null &&
+                              stackBox.hasSize) {
+                            final globalCenter = seatBox.localToGlobal(
+                              Offset(seatBox.size.width / 2,
+                                  seatBox.size.height / 2),
+                            );
+                            exactTarget = stackBox.globalToLocal(globalCenter);
+                          }
+                        }
+                      }
 
-                      final targetX = 6.0 + (col + 0.5) * colWidth;
-                      final targetY = 8.0 + (row + 0.5) * rowHeight;
+                      final double targetX =
+                          exactTarget?.dx ?? (size.width * 0.5);
+                      final double targetY =
+                          exactTarget?.dy ?? (size.height * 0.25);
 
                       final currentX = centerX + (targetX - centerX) * t;
                       final currentY = centerY + (targetY - centerY) * t;
-                      final scale = 1.45 - (0.85 * t);
+                      final scale = 1.75 - (0.95 * t);
 
                       final bool isImageAsset = gift.asset.isNotEmpty &&
                           !gift.asset.toLowerCase().endsWith('.mp4');
 
                       return Positioned(
-                        left: currentX - 35,
-                        top: currentY - 35,
+                        left: currentX - 60,
+                        top: currentY - 60,
                         child: Opacity(
-                          opacity: (1.0 - (t * 0.25)).clamp(0.0, 1.0),
+                          opacity: (1.0 - (t * 0.20)).clamp(0.0, 1.0),
                           child: Transform.scale(
-                            scale: scale.clamp(0.4, 1.8),
+                            scale: scale.clamp(0.55, 2.0),
                             child: isImageAsset
                                 ? Image.asset(
                                     gift.asset,
-                                    width: 68,
-                                    height: 68,
+                                    width: 120,
+                                    height: 120,
                                     fit: BoxFit.contain,
                                     errorBuilder: (c, e, s) => Text(
                                       gift.icon,
-                                      style: const TextStyle(fontSize: 44),
+                                      style: const TextStyle(fontSize: 76),
                                     ),
                                   )
                                 : Text(
                                     gift.icon,
-                                    style: const TextStyle(fontSize: 44),
+                                    style: const TextStyle(fontSize: 76),
                                   ),
                           ),
                         ),
@@ -4011,12 +4019,12 @@ color: Colors.white,
                 if (_showComboButton)
                   Positioned(
                     bottom: 66,
-                    right: 14,
+
+right: 14,
                     child: Transform.scale(
                       scale: comboScale,
                       child: GestureDetector(
-
-onTap: _onComboTapped,
+                        onTap: _onComboTapped,
                         child: Stack(
                           alignment: Alignment.center,
                           children: [
