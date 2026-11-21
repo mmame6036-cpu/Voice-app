@@ -21,9 +21,11 @@ class _PointsWalletScreenState extends State<PointsWalletScreen>
   int _userCoins = 0;
   String _userDisplayName = "User";
   int _userNumericId = 0;
+  String _savedSecurityPin = "";
   bool _usesLegacyDiamonds = false;
 
   static const int pointsPerUsd = 10000;
+  static const double etbPerUsd = 135.0;
 
   static const Color shiroBg = Color(0xFFF7F4EB);
   static const Color cardColor = Color(0xFFEFE9DA);
@@ -33,6 +35,7 @@ class _PointsWalletScreenState extends State<PointsWalletScreen>
 
   // Cash out state
   final TextEditingController _cashOutController = TextEditingController();
+  final TextEditingController _fullNameController = TextEditingController();
   final TextEditingController _accountNumberController =
       TextEditingController();
   dynamic _selectedMethod;
@@ -94,6 +97,13 @@ class _PointsWalletScreenState extends State<PointsWalletScreen>
     },
   ];
 
+  bool get _isEtbSelected {
+    if (_selectedMethod == null) return false;
+    return _selectedMethod['currency'].toString() == "ETB";
+  }
+
+  double get _calculatedEtb => _calculatedUsd * etbPerUsd;
+
   @override
   void initState() {
     super.initState();
@@ -110,8 +120,7 @@ class _PointsWalletScreenState extends State<PointsWalletScreen>
         .doc(user.uid)
         .snapshots()
         .listen((doc) {
-      if (!doc.exists) return;
-      if (!mounted) return;
+      if (!doc.exists || !mounted) return;
 
       final raw = doc.data();
       if (raw == null) return;
@@ -121,14 +130,12 @@ class _PointsWalletScreenState extends State<PointsWalletScreen>
       int legacyDmnds = (data['diamonds'] as num?)?.toInt() ?? 0;
       bool useLegacy = false;
 
-      if (pts == 0) {
-        if (legacyDmnds > 0) {
-          pts = legacyDmnds;
-          useLegacy = true;
-        }
+      if (pts == 0 && legacyDmnds > 0) {
+        pts = legacyDmnds;
+        useLegacy = true;
       }
 
-      int frozen = (data['frozenPoints'] as num?)?.toInt() ?? 0;
+int frozen = (data['frozenPoints'] as num?)?.toInt() ?? 0;
       if (frozen == 0) {
         frozen = (data['frozenDiamonds'] as num?)?.toInt() ?? 0;
       }
@@ -140,13 +147,14 @@ class _PointsWalletScreenState extends State<PointsWalletScreen>
         nameVal = data['nickname'].toString();
       }
 
-setState(() {
+      setState(() {
         _totalPoints = pts;
         _frozenPoints = frozen;
         _usesLegacyDiamonds = useLegacy;
         _userCoins = (data['coins'] as num?)?.toInt() ?? 0;
         _userDisplayName = nameVal;
         _userNumericId = (data['numericId'] as num?)?.toInt() ?? 0;
+        _savedSecurityPin = (data['paymentPin'] ?? '').toString().trim();
       });
     });
   }
@@ -156,6 +164,7 @@ setState(() {
     _userSub?.cancel();
     _tabController.dispose();
     _cashOutController.dispose();
+    _fullNameController.dispose();
     _accountNumberController.dispose();
     _exchangeController.dispose();
     _targetIdController.dispose();
@@ -163,7 +172,221 @@ setState(() {
     super.dispose();
   }
 
-  // Submit Withdraw Request to Firestore
+  // Verify (or set if first time) Security Password for Cash Out, Exchange & Transfer
+  Future<bool> _verifySecurityPassword(String actionTitle) async {
+    final user = _user;
+    if (user == null) return false;
+
+    String latestPin = _savedSecurityPin;
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+      if (doc.exists && doc.data() != null) {
+        latestPin = (doc.data()!['paymentPin'] ?? '').toString().trim();
+        _savedSecurityPin = latestPin;
+      }
+    } catch (_) {}
+
+    if (!mounted) return false;
+
+    // If user hasn't set a Security Password yet, allow them to create it first
+    if (latestPin.isEmpty) {
+      final newPinCtrl = TextEditingController();
+      final confirmPinCtrl = TextEditingController();
+      final bool? created = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: cardColor,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Row(
+            children: [
+              Icon(Icons.lock_outline, color: primaryPurple),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  "Set Security Password",
+                  style: TextStyle(
+                      color: textDark,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                "Please set a 6-digit Security Password to protect your withdrawals, exchanges, and transfers:",
+                style: TextStyle(color: textMuted, fontSize: 12.5),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: newPinCtrl,
+                keyboardType: TextInputType.number,
+                obscureText: true,
+                maxLength: 6,
+                style: const TextStyle(color: textDark, fontWeight: FontWeight.bold),
+                decoration: InputDecoration(
+                  hintText: "Enter 6-digit Security Password",
+                  counterText: "",
+                  filled: true,
+                  fillColor: shiroBg,
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: confirmPinCtrl,
+
+keyboardType: TextInputType.number,
+                obscureText: true,
+                maxLength: 6,
+                style: const TextStyle(color: textDark, fontWeight: FontWeight.bold),
+                decoration: InputDecoration(
+                  hintText: "Confirm Security Password",
+                  counterText: "",
+                  filled: true,
+                  fillColor: shiroBg,
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text("Cancel", style: TextStyle(color: textMuted)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: primaryPurple,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () async {
+                final p1 = newPinCtrl.text.trim();
+                final p2 = confirmPinCtrl.text.trim();
+                if (p1.length != 6 || p1 != p2) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      backgroundColor: Colors.redAccent,
+                      content: Text("Enter matching 6-digit passwords."),
+                    ),
+                  );
+                  return;
+                }
+                await FirebaseFirestore.instance
+                    .collection('users')
+                    .doc(user.uid)
+                    .set({'paymentPin': p1}, SetOptions(merge: true));
+                _savedSecurityPin = p1;
+                if (ctx.mounted) Navigator.pop(ctx, true);
+              },
+              child: const Text("Save & Continue",
+                  style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      );
+      return created == true;
+    }
+
+    // Ask user for existing Security Password
+    final pinCtrl = TextEditingController();
+    final bool? verified = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: cardColor,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            const Icon(Icons.security_rounded, color: primaryPurple),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                "Security Password ($actionTitle)",
+                style: const TextStyle(
+                    color: textDark,
+                    fontSize: 15.5,
+                    fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              "Enter your 6-digit Security Password to authorize this transaction:",
+              style: TextStyle(color: textMuted, fontSize: 12.5),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: pinCtrl,
+              autofocus: true,
+              keyboardType: TextInputType.number,
+              obscureText: true,
+              maxLength: 6,
+              style: const TextStyle(
+                  color: textDark,
+                  fontSize: 18,
+                  letterSpacing: 4,
+                  fontWeight: FontWeight.bold),
+              decoration: InputDecoration(
+                hintText: "••••••",
+                counterText: "",
+                filled: true,
+                fillColor: shiroBg,
+                border:
+                    OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+
+),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text("Cancel", style: TextStyle(color: textMuted)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: primaryPurple,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () {
+              final entered = pinCtrl.text.trim();
+              if (entered != latestPin) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    backgroundColor: Colors.redAccent,
+                    content: Text("Incorrect Security Password!"),
+                  ),
+                );
+                return;
+              }
+              Navigator.pop(ctx, true);
+            },
+            child: const Text("Verify",
+                style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    return verified == true;
+  }
+
+  // 1. Submit Withdraw Request to Firestore (Requires Full Name + ETB + Security Password)
   Future<void> _submitWithdrawRequest() async {
     final user = _user;
     if (user == null) return;
@@ -171,6 +394,15 @@ setState(() {
     if (_selectedMethod == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Please select a payment method")),
+      );
+      return;
+    }
+
+    final fullName = _fullNameController.text.trim();
+    if (fullName.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text("Please enter your Full Name (Account Holder)")),
       );
       return;
     }
@@ -189,7 +421,7 @@ setState(() {
     if (points < pointsPerUsd) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-            content: Text("Minimum withdrawal is 10,000 Points (\$1 USD)")),
+            content: Text("Minimum withdrawal is 10,000 Points")),
       );
       return;
     }
@@ -201,12 +433,21 @@ setState(() {
       return;
     }
 
+    // Require Security Password before submitting Cash Out
+    final bool authorized = await _verifySecurityPassword("Cash out");
+    if (!authorized) return;
+
     setState(() => _isSubmittingWithdraw = true);
 
     try {
       final double usdAmount = points / pointsPerUsd;
-      final batch = FirebaseFirestore.instance.batch();
+      final bool isEtb = _selectedMethod['currency'].toString() == "ETB";
+      final double etbAmount = usdAmount * etbPerUsd;
+      final String formattedPayout = isEtb
+          ? "${etbAmount.toStringAsFixed(2)} ETB"
+          : "\$${usdAmount.toStringAsFixed(2)} USD";
 
+      final batch = FirebaseFirestore.instance.batch();
       final userRef =
           FirebaseFirestore.instance.collection('users').doc(user.uid);
 
@@ -229,9 +470,14 @@ setState(() {
         'userUid': user.uid,
         'uid': user.uid,
         'userNumericId': _userNumericId,
-        'userName': _userDisplayName,
+
+'userName': _userDisplayName,
+        'fullName': fullName,
+        'accountHolderName': fullName,
         'points': points,
         'usdAmount': usdAmount,
+        'etbAmount': isEtb ? etbAmount : 0.0,
+        'payoutDisplay': formattedPayout,
         'method': _selectedMethod['name'],
         'currency': _selectedMethod['currency'],
         'account': accountDetail,
@@ -243,6 +489,7 @@ setState(() {
       await batch.commit();
 
       _cashOutController.clear();
+      _fullNameController.clear();
       _accountNumberController.clear();
       setState(() {
         _calculatedUsd = 0.0;
@@ -265,9 +512,8 @@ setState(() {
               ],
             ),
             content: Text(
-              "Your withdrawal request of $points Points (\$${usdAmount.toStringAsFixed(2)} USD) via ${requestRef.id} has been submitted for admin review.",
-
-style: const TextStyle(color: textMuted, fontSize: 13),
+              "Full Name: $fullName\nAmount: $points Points ($formattedPayout)\nRef: ${requestRef.id}\n\nSubmitted for admin review.",
+              style: const TextStyle(color: textMuted, fontSize: 13),
             ),
             actions: [
               TextButton(
@@ -337,6 +583,7 @@ style: const TextStyle(color: textMuted, fontSize: 13),
     }
   }
 
+  // 2. Execute Transfer (Requires Security Password)
   Future<void> _executeTransfer() async {
     final user = _user;
     if (user == null) return;
@@ -355,7 +602,7 @@ style: const TextStyle(color: textMuted, fontSize: 13),
       return;
     }
 
-    final amount = int.tryParse(_transferAmountController.text.trim()) ?? 0;
+final amount = int.tryParse(_transferAmountController.text.trim()) ?? 0;
     if (amount <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Enter a valid points amount")),
@@ -369,6 +616,10 @@ style: const TextStyle(color: textMuted, fontSize: 13),
       );
       return;
     }
+
+    // Require Security Password before executing Transfer
+    final bool authorized = await _verifySecurityPassword("Transfer");
+    if (!authorized) return;
 
     final fee = (amount * 0.02).round();
     final received = amount - fee;
@@ -406,12 +657,18 @@ style: const TextStyle(color: textMuted, fontSize: 13),
     }
   }
 
+  // 3. Execute Exchange (Requires Security Password)
   Future<void> _executeExchange() async {
     final user = _user;
     if (user == null) return;
 
-final points = int.tryParse(_exchangeController.text.trim()) ?? 0;
-    if (points <= 0) return;
+    final points = int.tryParse(_exchangeController.text.trim()) ?? 0;
+    if (points <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Enter a valid points amount")),
+      );
+      return;
+    }
 
     if (points > _totalPoints) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -419,6 +676,10 @@ final points = int.tryParse(_exchangeController.text.trim()) ?? 0;
       );
       return;
     }
+
+    // Require Security Password before executing Exchange
+    final bool authorized = await _verifySecurityPassword("Exchange");
+    if (!authorized) return;
 
     final coinsToAdd = ((points / 10000) * 9000).round();
 
@@ -467,7 +728,8 @@ final points = int.tryParse(_exchangeController.text.trim()) ?? 0;
       builder: (ctx) => Container(
         height: MediaQuery.of(context).size.height * 0.65,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        child: Column(
+
+child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Center(
@@ -518,8 +780,7 @@ final points = int.tryParse(_exchangeController.text.trim()) ?? 0;
                         ),
                         const SizedBox(width: 12),
                         Expanded(
-
-child: Column(
+                          child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
@@ -550,7 +811,14 @@ child: Column(
                             elevation: 0,
                           ),
                           onPressed: () {
-                            setState(() => _selectedMethod = method);
+                            setState(() {
+                              _selectedMethod = method;
+                              if (_fullNameController.text.trim().isEmpty &&
+                                  _userDisplayName != "User") {
+
+_fullNameController.text = _userDisplayName;
+                              }
+                            });
                             Navigator.pop(ctx);
                           },
                           child: const Text("Select",
@@ -620,8 +888,7 @@ child: Column(
                     ),
                   ],
                 ),
-
-const SizedBox(height: 12),
+                const SizedBox(height: 12),
                 Text(
                   "$_totalPoints",
                   style: const TextStyle(
@@ -671,13 +938,21 @@ const SizedBox(height: 12),
     );
   }
 
-  Widget _buildCashOutTab() {
+Widget _buildCashOutTab() {
     String chosenMethodName = "Select Payment Method";
     String accountHint = "Account details (Select method first)";
     if (_selectedMethod != null) {
       chosenMethodName = _selectedMethod['name'].toString();
       accountHint = _selectedMethod['accountLabel'].toString();
     }
+
+    final String equivalentText = _isEtbSelected
+        ? "Equivalent: ${_calculatedEtb.toStringAsFixed(2)} ETB"
+        : "Equivalent: \$${_calculatedUsd.toStringAsFixed(2)} USD";
+
+    final String rateText = _isEtbSelected
+        ? "${etbPerUsd.toStringAsFixed(0)} ETB = 10,000 Points"
+        : "1 USD = 10,000 Points";
 
     VoidCallback? withdrawAction = _submitWithdrawRequest;
     Widget withdrawLabel = const Text(
@@ -697,7 +972,7 @@ const SizedBox(height: 12),
     return ListView(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       children: [
-        // 1. Payment Method Selector Card
+        // 1. Payment Method, Full Name & Account Details Card
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
@@ -732,17 +1007,45 @@ const SizedBox(height: 12),
                     children: [
                       const Icon(Icons.account_balance,
                           color: primaryPurple, size: 20),
-
-const SizedBox(width: 8),
-                      Text(
-                        chosenMethodName,
-                        style: const TextStyle(
-                            color: primaryPurple,
-                            fontSize: 13.5,
-                            fontWeight: FontWeight.bold),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          chosenMethodName,
+                          style: const TextStyle(
+                              color: primaryPurple,
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.bold),
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                     ],
                   ),
+                ),
+              ),
+              const Divider(color: Colors.black12),
+              const SizedBox(height: 6),
+              const Text(
+                "Full Name (Account Holder):",
+                style: TextStyle(
+                    color: textMuted,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 4),
+              TextField(
+                controller: _fullNameController,
+                textCapitalization: TextCapitalization.words,
+                style: const TextStyle(
+                    color: textDark,
+                    fontSize: 15,
+
+fontWeight: FontWeight.w600),
+                decoration: const InputDecoration(
+                  hintText: "Enter Full Name",
+                  hintStyle: TextStyle(color: Colors.black38, fontSize: 13),
+                  isDense: true,
+                  contentPadding: EdgeInsets.symmetric(vertical: 8),
+                  border: InputBorder.none,
                 ),
               ),
               if (_selectedMethod != null) ...[
@@ -755,7 +1058,7 @@ const SizedBox(width: 8),
                       fontSize: 12,
                       fontWeight: FontWeight.bold),
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 4),
                 TextField(
                   controller: _accountNumberController,
                   style: const TextStyle(
@@ -777,7 +1080,7 @@ const SizedBox(width: 8),
         ),
         const SizedBox(height: 14),
 
-        // 2. Points Amount Card
+        // 2. Points Amount Card (ETB for Ethiopian banks/Telebirr, USD for USDT)
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
@@ -831,20 +1134,22 @@ const SizedBox(width: 8),
                   ),
                 ],
               ),
-              const Divider(color: Colors.black12),
 
-Row(
+const Divider(color: Colors.black12),
+              Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    "Equivalent: \$${_calculatedUsd.toStringAsFixed(2)} USD",
+                    equivalentText,
                     style: const TextStyle(
                         color: textDark,
-                        fontSize: 12,
+                        fontSize: 12.5,
                         fontWeight: FontWeight.bold),
                   ),
-                  const Text("1 USD = 10,000 Points",
-                      style: TextStyle(color: textMuted, fontSize: 11)),
+                  Text(
+                    rateText,
+                    style: const TextStyle(color: textMuted, fontSize: 11),
+                  ),
                 ],
               ),
             ],
@@ -940,9 +1245,9 @@ Row(
           height: 50,
           child: ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: primaryPurple,
 
-foregroundColor: Colors.white,
+backgroundColor: primaryPurple,
+              foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(25)),
               elevation: 2,
@@ -1044,9 +1349,9 @@ foregroundColor: Colors.white,
                       fontWeight: FontWeight.w600)),
               const SizedBox(height: 6),
               TextField(
-                controller: _transferAmountController,
 
-keyboardType: TextInputType.number,
+controller: _transferAmountController,
+                keyboardType: TextInputType.number,
                 style: const TextStyle(
                     color: textDark, fontSize: 18, fontWeight: FontWeight.bold),
                 decoration: const InputDecoration(
