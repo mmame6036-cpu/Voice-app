@@ -8,7 +8,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 import 'settings_screen.dart';
 import 'voice_room_screen.dart';
-import '../services/user_id_service.dart';
 import '../services/room_session_manager.dart';
 
 class MessagesScreen extends StatefulWidget {
@@ -33,9 +32,9 @@ class _MessagesScreenState extends State<MessagesScreen> {
   int _unreadFollowerCount = 0;
 
   String _latestSystemSubtitle = "WELCOME to NILE Live!";
-  String _latestSystemTime = "";
+  String _latestSystemTime = "08-10 19:29";
 
-  String _latestOfficialSubtitle = "NILE Live Official Events & Bonuses";
+  String _latestOfficialSubtitle = "NILE Live 1st Anniversary & Bonus";
   String _latestOfficialTime = "Today";
 
   String _latestSupportSubtitle = "Tap to chat with NILE Live Support";
@@ -79,7 +78,6 @@ class _MessagesScreenState extends State<MessagesScreen> {
   void _initFirebaseListeners() {
     final db = FirebaseFirestore.instance;
 
-    // 1. System Messages Listener
     _systemSub = db
         .collection('users')
         .doc(_uid)
@@ -89,27 +87,25 @@ class _MessagesScreenState extends State<MessagesScreen> {
         .snapshots()
         .listen((snap) {
       if (!mounted) return;
+      if (snap.docs.isEmpty) return;
       int unread = 0;
       for (final d in snap.docs) {
         if (d.data()['unread'] == true) unread++;
       }
+      final latest = snap.docs.first.data();
       setState(() {
         _unreadSystemCount = unread;
-        if (snap.docs.isNotEmpty) {
-          final latest = snap.docs.first.data();
-          _latestSystemSubtitle =
-              (latest['subtitle'] ?? latest['title'] ?? _latestSystemSubtitle)
-                  .toString();
-          _latestSystemTime = _formatTime(latest['timestamp']);
-        }
+        _latestSystemSubtitle =
+            (latest['subtitle'] ?? latest['title'] ?? _latestSystemSubtitle)
+                .toString();
+        _latestSystemTime = _formatTime(latest['timestamp']);
       });
     }, onError: (_) {});
 
-    // 2. Official Notifications Listener
     _officialSub = db
         .collection('official_notifications')
         .orderBy('timestamp', descending: true)
-        .limit(15)
+        .limit(10)
         .snapshots()
         .listen((snap) {
       if (!mounted) return;
@@ -122,27 +118,24 @@ class _MessagesScreenState extends State<MessagesScreen> {
       });
     }, onError: (_) {});
 
-    // 3. Customer Service Chat Listener
     _supportSub = db
         .collection('support_chats')
         .doc(_uid)
         .snapshots()
         .listen((doc) {
-      if (!mounted  !doc.exists  doc.data() == null) return;
+      if (!mounted) return;
+      if (!doc.exists) return;
+      if (doc.data() == null) return;
       final data = doc.data()!;
-
-setState(() {
-        final rawLast = (data['lastMessage'] ?? '').toString().trim();
-        if (rawLast.isNotEmpty) {
-          _latestSupportSubtitle = rawLast;
-        }
+      setState(() {
+        _latestSupportSubtitle =
+            (data['lastMessage'] ?? _latestSupportSubtitle).toString();
         _latestSupportTime = _formatTime(data['updatedAt']);
         _unreadSupportCount = (data['userUnread'] as num?)?.toInt() ?? 0;
       });
     }, onError: (_) {});
 
-    // 4. Notices Subcollection Unread Count
-    _noticeSub = db
+_noticeSub = db
         .collection('users')
         .doc(_uid)
         .collection('notices')
@@ -157,7 +150,6 @@ setState(() {
       setState(() => _unreadNoticeCount = unread);
     }, onError: (_) {});
 
-    // 5. Interactions Subcollection Unread Count
     _interactionSub = db
         .collection('users')
         .doc(_uid)
@@ -173,7 +165,6 @@ setState(() {
       setState(() => _unreadInteractionCount = unread);
     }, onError: (_) {});
 
-    // 6. Followers Subcollection Unread Count
     _followerSub = db
         .collection('users')
         .doc(_uid)
@@ -189,7 +180,6 @@ setState(() {
       setState(() => _unreadFollowerCount = unread);
     }, onError: (_) {});
 
-    // 7. 1-on-1 Direct Message Conversations Listener
     _dmSub = db
         .collection('direct_chats')
         .where('participants', arrayContains: _uid)
@@ -242,8 +232,8 @@ setState(() {
         });
       }
 
-      chats.sort(
-          (a, b) => (b['updatedMs'] as int).compareTo(a['updatedMs'] as int));
+      chats.sort((a, b) => ((b['updatedMs'] as num?)?.toInt() ?? 0)
+          .compareTo((a['updatedMs'] as num?)?.toInt() ?? 0));
 
       setState(() {
         _directChats = chats;
@@ -258,8 +248,7 @@ setState(() {
       dt = ts.toDate();
     } else if (ts is DateTime) {
       dt = ts;
-
-} else if (ts is int) {
+    } else if (ts is int) {
       dt = DateTime.fromMillisecondsSinceEpoch(ts);
     } else {
       return ts.toString();
@@ -283,7 +272,7 @@ setState(() {
       return;
     }
 
-    _searchDebounce = Timer(const Duration(milliseconds: 350), () async {
+_searchDebounce = Timer(const Duration(milliseconds: 350), () async {
       if (!mounted) return;
       setState(() => _isSearchingUsers = true);
       try {
@@ -342,7 +331,7 @@ setState(() {
     });
   }
 
-  Future<void> _markAllAsRead() async {
+  Future _markAllAsRead() async {
     setState(() {
       _unreadSystemCount = 0;
       _unreadOfficialCount = 0;
@@ -387,7 +376,7 @@ setState(() {
         await doc.reference.update({'unread': false});
       }
 
-final folSnap = await db
+      final folSnap = await db
           .collection('users')
           .doc(_uid)
           .collection('followers')
@@ -412,7 +401,7 @@ final folSnap = await db
       );
     } catch (_) {}
 
-    if (!mounted) return;
+if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text("All messages marked as read"),
@@ -502,7 +491,8 @@ final folSnap = await db
         final q = _searchQuery.toLowerCase();
         final t = ch['title'].toString().toLowerCase();
         final s = ch['subtitle'].toString().toLowerCase();
-        return t.contains(q) || s.contains(q);
+        if (t.contains(q)) return true;
+        return s.contains(q);
       }
       return true;
     }).toList();
@@ -518,11 +508,10 @@ final folSnap = await db
       return true;
     }).toList();
 
-return Scaffold(
+    return Scaffold(
       backgroundColor: const Color(0xFFF5F7F9),
       body: Column(
         children: [
-          // Top Gradient Header
           Container(
             padding: EdgeInsets.only(
               top: MediaQuery.of(context).padding.top + 8,
@@ -539,7 +528,8 @@ return Scaffold(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
-            ),
+
+),
             child: Row(
               children: [
                 const SizedBox(width: 72),
@@ -578,8 +568,6 @@ return Scaffold(
               ],
             ),
           ),
-
-          // Main White Container
           Expanded(
             child: Container(
               transform: Matrix4.translationValues(0, -10, 0),
@@ -589,7 +577,6 @@ return Scaffold(
               ),
               child: Column(
                 children: [
-                  // Filter Tabs (All / Unread) + Search Button
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
                     child: Row(
@@ -622,8 +609,6 @@ return Scaffold(
                       ],
                     ),
                   ),
-
-// Search Bar
                   if (_isSearching)
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
@@ -639,14 +624,13 @@ return Scaffold(
                           contentPadding:
                               const EdgeInsets.symmetric(vertical: 0),
                           border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
+
+borderRadius: BorderRadius.circular(12),
                             borderSide: BorderSide.none,
                           ),
                         ),
                       ),
                     ),
-
-                  // 3 Quick Action Circles: Notice, Interaction, Followers
                   Padding(
                     padding:
                         const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -711,10 +695,7 @@ return Scaffold(
                       ],
                     ),
                   ),
-
-const Divider(height: 1, color: Color(0xFFEEEEEE)),
-
-                  // Channels + Direct Message Threads + User Search Results
+                  const Divider(height: 1, color: Color(0xFFEEEEEE)),
                   Expanded(
                     child: ListView(
                       padding: const EdgeInsets.only(top: 4, bottom: 20),
@@ -726,7 +707,8 @@ const Divider(height: 1, color: Color(0xFFEEEEEE)),
                               _isSearchingUsers
                                   ? "Searching users..."
                                   : "Users Found (${_searchedUsers.length})",
-                              style: const TextStyle(
+
+style: const TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.bold,
                                 color: Color(0xFF159A8C),
@@ -736,7 +718,8 @@ const Divider(height: 1, color: Color(0xFFEEEEEE)),
                           ..._searchedUsers.map((u) {
                             final pUid = u['uid'].toString();
                             final pName = u['name'].toString();
-                            final pId = (u['numericId'] as int);
+                            final int pId =
+                                (u['numericId'] as num?)?.toInt() ?? 0;
                             final pAvatar = u['avatarUrl'].toString();
                             return ListTile(
                               leading: CircleAvatar(
@@ -784,8 +767,7 @@ const Divider(height: 1, color: Color(0xFFEEEEEE)),
                                   peerName: pName,
                                   peerAvatar: pAvatar,
                                 ),
-
-child: const Text(
+                                child: const Text(
                                   "Chat",
                                   style: TextStyle(
                                       fontSize: 12,
@@ -796,20 +778,18 @@ child: const Text(
                           }),
                           const Divider(height: 12, color: Color(0xFFEEEEEE)),
                         ],
-
                         ...filteredChannels.map((item) {
                           return _buildMessageTile(
                             icon: item['icon'] as IconData,
-                            iconBgColor: item['bgColor'] as Color,
+
+iconBgColor: item['bgColor'] as Color,
                             title: item['title'] as String,
                             subtitle: item['subtitle'] as String,
                             time: item['time'] as String,
                             unreadCount: item['unread'] as int,
-                            verified: true,
                             onTap: item['onTap'] as VoidCallback,
                           );
                         }),
-
                         ...filteredDms.map((dm) {
                           final peerUid = dm['peerUid'].toString();
                           final peerName = dm['peerName'].toString();
@@ -827,7 +807,6 @@ child: const Text(
                             ),
                           );
                         }),
-
                         if (filteredChannels.isEmpty &&
                             filteredDms.isEmpty &&
                             _searchedUsers.isEmpty)
@@ -882,8 +861,7 @@ child: const Text(
         decoration: BoxDecoration(
           color: isSelected ? const Color(0xFFD9F3F0) : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
-
-),
+        ),
         child: Text(
           text,
           style: TextStyle(
@@ -903,7 +881,6 @@ child: const Text(
     required String subtitle,
     required String time,
     required int unreadCount,
-    bool verified = true,
     required VoidCallback onTap,
   }) {
     return InkWell(
@@ -911,7 +888,8 @@ child: const Text(
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: const BoxDecoration(
-          color: Colors.white,
+
+color: Colors.white,
           border:
               Border(bottom: BorderSide(color: Color(0xFFF3F4F6), width: 1)),
         ),
@@ -944,11 +922,9 @@ child: const Text(
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      if (verified) ...[
-                        const SizedBox(width: 5),
-                        const Icon(Icons.verified,
-                            color: Color(0xFF29B6F6), size: 17),
-                      ],
+                      const SizedBox(width: 5),
+                      const Icon(Icons.verified,
+                          color: Color(0xFF29B6F6), size: 17),
                     ],
                   ),
                   if (subtitle.isNotEmpty) ...[
@@ -1001,7 +977,7 @@ child: const Text(
     );
   }
 
-Widget _buildDirectChatTile({
+  Widget _buildDirectChatTile({
     required String peerName,
     required String peerAvatar,
     required String subtitle,
@@ -1026,7 +1002,8 @@ Widget _buildDirectChatTile({
               backgroundColor: const Color(0xFF9B87B5),
               backgroundImage: avatarImg,
               child: avatarImg == null
-                  ? Text(
+
+? Text(
                       peerName.isNotEmpty ? peerName[0].toUpperCase() : 'U',
                       style: const TextStyle(
                         color: Colors.white,
@@ -1118,8 +1095,7 @@ Widget _buildDirectChatTile({
                 height: 48,
                 decoration: BoxDecoration(
                   color: color.withOpacity(0.12),
-
-shape: BoxShape.circle,
+                  shape: BoxShape.circle,
                 ),
                 child: Icon(icon, color: color, size: 24),
               ),
@@ -1140,7 +1116,8 @@ shape: BoxShape.circle,
                     child: Center(
                       child: Text(
                         badgeCount > 99 ? "99+" : "$badgeCount",
-                        style: const TextStyle(
+
+style: const TextStyle(
                           color: Colors.white,
                           fontSize: 10,
                           fontWeight: FontWeight.bold,
@@ -1166,9 +1143,6 @@ shape: BoxShape.circle,
   }
 }
 
-// ============================================================================
-// 1-ON-1 DIRECT MESSAGE SCREEN
-// ============================================================================
 class DirectChatScreen extends StatefulWidget {
   final String myUid;
   final String peerUid;
@@ -1210,7 +1184,7 @@ class _DirectChatScreenState extends State<DirectChatScreen> {
     super.dispose();
   }
 
-  Future<void> _markChatRead() async {
+  Future _markChatRead() async {
     try {
       await FirebaseFirestore.instance
           .collection('direct_chats')
@@ -1221,7 +1195,7 @@ class _DirectChatScreenState extends State<DirectChatScreen> {
     } catch (_) {}
   }
 
-  Future<void> _sendDirectMessage(
+  Future _sendDirectMessage(
       {String? roomInviteId, String? roomInviteTitle}) async {
     final text = roomInviteId != null
         ? "🎙️ Join my Voice Room: ${roomInviteTitle ?? 'Party Lounge'}"
@@ -1248,8 +1222,7 @@ class _DirectChatScreenState extends State<DirectChatScreen> {
       if (peerBlacklist.contains(widget.myUid) ||
           (myNumIdStr != '0' && peerBlacklist.contains(myNumIdStr))) {
         if (mounted) {
-
-ScaffoldMessenger.of(context).showSnackBar(
+          ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               backgroundColor: Colors.redAccent,
               content:
@@ -1288,7 +1261,7 @@ ScaffoldMessenger.of(context).showSnackBar(
         HapticFeedback.lightImpact();
       }
 
-      final String myName = (myData['name'] ??
+final String myName = (myData['name'] ??
               myData['nickname'] ??
               FirebaseAuth.instance.currentUser?.displayName ??
               'User')
@@ -1341,15 +1314,20 @@ ScaffoldMessenger.of(context).showSnackBar(
     }
   }
 
-  Future<void> _joinInvitedRoom(String roomId, String roomTitle) async {
+  Future _joinInvitedRoom(String roomId, String roomTitle) async {
     try {
       final user = FirebaseAuth.instance.currentUser;
       final myUid = user?.uid ?? widget.myUid;
-      final myName = user?.displayName ?? 'User';
-      final numId = await UserIdService.getOrCreatePermanentId(
-        myUid,
-        defaultName: myName,
-      );
+      final myDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(myUid)
+          .get();
+      final d = myDoc.data() ?? {};
+      final myName =
+          (d['name'] ?? d['nickname'] ?? user?.displayName ?? 'User')
+              .toString();
+      final int numId = (d['numericId'] as num?)?.toInt() ?? 100001;
+
       if (!mounted) return;
       Navigator.push(
         context,
@@ -1376,8 +1354,7 @@ ScaffoldMessenger.of(context).showSnackBar(
         elevation: 0.5,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios, color: Colors.black, size: 18),
-
-onPressed: () => Navigator.pop(context),
+          onPressed: () => Navigator.pop(context),
         ),
         title: Text(
           widget.peerName,
@@ -1401,7 +1378,8 @@ onPressed: () => Navigator.pop(context),
               _sendDirectMessage(
                 roomInviteId: activeRoomId,
                 roomInviteTitle: activeRoomTitle,
-              );
+
+);
             },
           ),
         ],
@@ -1422,7 +1400,7 @@ onPressed: () => Navigator.pop(context),
                     child: CircularProgressIndicator(color: Color(0xFF1BB3C8)),
                   );
                 }
-                final QuerySnapshot qSnap = snapshot.data as QuerySnapshot;
+                final qSnap = snapshot.data as QuerySnapshot;
                 final docs = qSnap.docs;
                 if (docs.isEmpty) {
                   return Center(
@@ -1468,8 +1446,7 @@ onPressed: () => Navigator.pop(context),
                                     ? const Color(0xFF1BB3C8)
                                     : Colors.white),
                             borderRadius: BorderRadius.circular(16),
-
-border: roomId.isNotEmpty
+                            border: roomId.isNotEmpty
                                 ? Border.all(
                                     color: const Color(0xFFFFD700), width: 1.2)
                                 : null,
@@ -1486,7 +1463,8 @@ border: roomId.isNotEmpty
                                   fontSize: 14,
                                   fontWeight: roomId.isNotEmpty
                                       ? FontWeight.bold
-                                      : FontWeight.normal,
+
+: FontWeight.normal,
                                 ),
                               ),
                               if (roomId.isNotEmpty) ...[
@@ -1558,9 +1536,6 @@ border: roomId.isNotEmpty
   }
 }
 
-// ============================================================================
-// SYSTEM MESSAGE SCREEN
-// ============================================================================
 class SystemMessageScreen extends StatefulWidget {
   final String uid;
   const SystemMessageScreen({super.key, required this.uid});
@@ -1573,15 +1548,15 @@ class _SystemMessageScreenState extends State<SystemMessageScreen> {
   final List _defaultSystemMessages = [
     {
       'title': 'WELCOME to NILE Live!',
-      'time': 'Today',
+      'time': '08-10 19:29:14',
       'body':
-          'Welcome to NILE Live Voice Party! Enjoy 30-seat live voice lounges, exciting gifts, and daily host rewards. Never share your password with anyone.',
+          'Welcome to NILE Live Voice Party! Enjoy 30-seat live voice lounges, exciting mini-games, and daily host rewards. Never share your password with anyone.',
       'icon': Icons.verified_user,
       'color': const Color(0xFF29B6F6),
     },
     {
       'title': 'Account Security Reminder',
-      'time': 'System',
+      'time': 'Yesterday 14:10',
       'body':
           'Official NILE Live administrators will never ask for your account password or Security PIN. Keep your account safe.',
       'icon': Icons.security,
@@ -1595,8 +1570,9 @@ class _SystemMessageScreenState extends State<SystemMessageScreen> {
     _markSystemMessagesRead();
   }
 
-  Future<void> _markSystemMessagesRead() async {
-    try {
+  Future _markSystemMessagesRead() async {
+
+try {
       final snap = await FirebaseFirestore.instance
           .collection('users')
           .doc(widget.uid)
@@ -1647,7 +1623,7 @@ class _SystemMessageScreenState extends State<SystemMessageScreen> {
           final List items = [];
 
           if (snapshot.hasData && snapshot.data != null) {
-            final QuerySnapshot qSnap = snapshot.data as QuerySnapshot;
+            final qSnap = snapshot.data as QuerySnapshot;
             for (final doc in qSnap.docs) {
               final raw = doc.data();
               final Map d = raw is Map ? raw : {};
@@ -1680,8 +1656,7 @@ class _SystemMessageScreenState extends State<SystemMessageScreen> {
                   borderRadius: BorderRadius.circular(14),
                   boxShadow: [
                     BoxShadow(
-
-color: Colors.black.withOpacity(0.03),
+                      color: Colors.black.withOpacity(0.03),
                       blurRadius: 8,
                       offset: const Offset(0, 3),
                     ),
@@ -1703,7 +1678,8 @@ color: Colors.black.withOpacity(0.03),
                         Expanded(
                           child: Text(
                             msg['title'].toString(),
-                            style: const TextStyle(
+
+style: const TextStyle(
                                 fontWeight: FontWeight.bold, fontSize: 15),
                           ),
                         ),
@@ -1731,9 +1707,6 @@ color: Colors.black.withOpacity(0.03),
   }
 }
 
-// ============================================================================
-// OFFICIAL NOTIFICATION SCREEN
-// ============================================================================
 class OfficialNotificationScreen extends StatelessWidget {
   const OfficialNotificationScreen({super.key});
 
@@ -1751,8 +1724,8 @@ class OfficialNotificationScreen extends StatelessWidget {
       },
       {
         'title': 'Official Agency Recharge Bonus +20%',
-        'time': 'Offer',
-        'subtitle': 'Get up to 20% extra coins on USDT top-ups.',
+        'time': 'Yesterday',
+        'subtitle': 'Get 20% extra coins on USDT top-ups.',
         'details':
             'Top up your NILE Live wallet via verified USDT payment and receive instant bonus coin rewards!',
         'icon': Icons.monetization_on,
@@ -1793,8 +1766,8 @@ class OfficialNotificationScreen extends StatelessWidget {
         builder: (context, snapshot) {
           final List list = [];
 
-if (snapshot.hasData && snapshot.data != null) {
-            final QuerySnapshot qSnap = snapshot.data as QuerySnapshot;
+          if (snapshot.hasData && snapshot.data != null) {
+            final qSnap = snapshot.data as QuerySnapshot;
             for (final doc in qSnap.docs) {
               final raw = doc.data();
               final Map d = raw is Map ? raw : {};
@@ -1815,7 +1788,7 @@ if (snapshot.hasData && snapshot.data != null) {
           }
           list.addAll(defaultAnnouncements);
 
-          return ListView.builder(
+return ListView.builder(
             padding: const EdgeInsets.all(14),
             itemCount: list.length,
             itemBuilder: (context, index) {
@@ -1872,9 +1845,6 @@ if (snapshot.hasData && snapshot.data != null) {
   }
 }
 
-// ============================================================================
-// CUSTOMER SERVICE CHAT SCREEN
-// ============================================================================
 class CustomerServiceChatScreen extends StatefulWidget {
   final String uid;
   const CustomerServiceChatScreen({super.key, required this.uid});
@@ -1889,8 +1859,7 @@ class _CustomerServiceChatScreenState extends State<CustomerServiceChatScreen> {
   final ScrollController _scrollController = ScrollController();
 
   final List _quickFaqs = [
-
-{
+    {
       'q': '💰 Coin Recharge (USDT)',
       'a':
           'To recharge coins: Go to Me > Recharge > Select Coin Package > Pay via Binance Pay (USDT). Coins arrive immediately upon verification!',
@@ -1908,7 +1877,7 @@ class _CustomerServiceChatScreenState extends State<CustomerServiceChatScreen> {
     {
       'q': '🚨 Report User / Room',
       'a':
-          'Please send the User ID or Room ID here with details, and our moderation team will review it promptly.',
+          'Please send the User ID or Room ID here with details, and our moderation team will take immediate action.',
     },
   ];
 
@@ -1925,13 +1894,13 @@ class _CustomerServiceChatScreenState extends State<CustomerServiceChatScreen> {
     super.dispose();
   }
 
-  Future<void> _ensureWelcomeMessage() async {
+  Future _ensureWelcomeMessage() async {
     try {
       final db = FirebaseFirestore.instance;
       final chatRef = db.collection('support_chats').doc(widget.uid);
       await chatRef.set({'userUnread': 0}, SetOptions(merge: true));
 
-      final msgs = await chatRef.collection('messages').limit(1).get();
+final msgs = await chatRef.collection('messages').limit(1).get();
       if (msgs.docs.isEmpty) {
         await chatRef.collection('messages').add({
           'text':
@@ -1943,7 +1912,7 @@ class _CustomerServiceChatScreenState extends State<CustomerServiceChatScreen> {
     } catch (_) {}
   }
 
-  Future<void> _sendMessage(String text, {String? autoReply}) async {
+  Future _sendMessage(String text, {String? autoReply}) async {
     final trimmed = text.trim();
     if (trimmed.isEmpty) return;
     _msgController.clear();
@@ -2013,8 +1982,7 @@ class _CustomerServiceChatScreenState extends State<CustomerServiceChatScreen> {
               radius: 15,
               backgroundColor: Color(0xFF26A69A),
               child: Icon(Icons.headset_mic, color: Colors.white, size: 16),
-
-),
+            ),
             SizedBox(width: 8),
             Text(
               'Customer Service',
@@ -2045,9 +2013,10 @@ class _CustomerServiceChatScreenState extends State<CustomerServiceChatScreen> {
                     child: CircularProgressIndicator(color: Color(0xFF26A69A)),
                   );
                 }
-                final QuerySnapshot qSnap = snapshot.data as QuerySnapshot;
+                final qSnap = snapshot.data as QuerySnapshot;
                 final docs = qSnap.docs;
-                return ListView.builder(
+
+return ListView.builder(
                   controller: _scrollController,
                   padding: const EdgeInsets.all(14),
                   itemCount: docs.length,
@@ -2107,8 +2076,7 @@ class _CustomerServiceChatScreenState extends State<CustomerServiceChatScreen> {
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-
-itemCount: _quickFaqs.length,
+              itemCount: _quickFaqs.length,
               separatorBuilder: (_, __) => const SizedBox(width: 8),
               itemBuilder: (context, index) {
                 final faq = _quickFaqs[index] as Map;
@@ -2137,7 +2105,8 @@ itemCount: _quickFaqs.length,
                 color: Colors.white,
                 border: Border(top: BorderSide(color: Color(0xFFEEEEEE))),
               ),
-              child: Row(
+
+child: Row(
                 children: [
                   Expanded(
                     child: TextField(
@@ -2178,9 +2147,6 @@ itemCount: _quickFaqs.length,
   }
 }
 
-// ============================================================================
-// NOTICE DETAIL SCREEN
-// ============================================================================
 class NoticeDetailScreen extends StatefulWidget {
   final String uid;
   const NoticeDetailScreen({super.key, required this.uid});
@@ -2196,7 +2162,7 @@ class _NoticeDetailScreenState extends State<NoticeDetailScreen> {
     _markNoticesRead();
   }
 
-  Future<void> _markNoticesRead() async {
+  Future _markNoticesRead() async {
     try {
       final snap = await FirebaseFirestore.instance
           .collection('users')
@@ -2218,8 +2184,7 @@ class _NoticeDetailScreenState extends State<NoticeDetailScreen> {
         title: const Text("Notices",
             style: TextStyle(
                 color: Colors.black,
-
-fontSize: 17,
+                fontSize: 17,
                 fontWeight: FontWeight.bold)),
         backgroundColor: Colors.white,
         elevation: 0.5,
@@ -2239,7 +2204,7 @@ fontSize: 17,
           final List items = [];
 
           if (txnSnap.hasData && txnSnap.data != null) {
-            final QuerySnapshot qSnap = txnSnap.data as QuerySnapshot;
+            final qSnap = txnSnap.data as QuerySnapshot;
             for (final doc in qSnap.docs) {
               final raw = doc.data();
               final Map d = raw is Map ? raw : {};
@@ -2255,18 +2220,18 @@ fontSize: 17,
             }
           }
 
-          items.addAll([
+items.addAll([
             {
-              "title": "Audio Routing Servers Upgraded",
+              "title": "System Security Maintenance Completed",
               "date": "System",
               "body":
-                  "Real-time Agora voice channels are active across all 30-seat party lounges.",
+                  "Our audio routing servers are active for low-latency Agora voice streaming across all 30-seat rooms.",
             },
             {
-              "title": "Host Daily Task & Payout Rules",
+              "title": "Community Guidelines Update",
               "date": "Policy",
               "body":
-                  "Complete 3 hours daily for 7 consecutive days and earn 7,000+ points daily. Minimum withdrawal threshold is 100,000 points.",
+                  "Respect fellow broadcasters and guests in live audio lounges.",
             },
           ]);
 
@@ -2316,9 +2281,6 @@ fontSize: 17,
   }
 }
 
-// ============================================================================
-// INTERACTION DETAIL SCREEN
-// ============================================================================
 class InteractionDetailScreen extends StatefulWidget {
   final String uid;
   const InteractionDetailScreen({super.key, required this.uid});
@@ -2335,7 +2297,7 @@ class _InteractionDetailScreenState extends State<InteractionDetailScreen> {
     _markInteractionsRead();
   }
 
-  Future<void> _markInteractionsRead() async {
+  Future _markInteractionsRead() async {
     try {
       final snap = await FirebaseFirestore.instance
           .collection('users')
@@ -2354,7 +2316,7 @@ class _InteractionDetailScreenState extends State<InteractionDetailScreen> {
     final fallbackInteractions = [
       {
         "user": "Amina",
-        "action": "sent a gift in Dessie VIP Chill",
+        "action": "sent you a Rose gift in Dessie VIP Chill",
         "time": "Recent",
         "icon": Icons.card_giftcard,
         "color": Colors.pinkAccent,
@@ -2376,7 +2338,8 @@ class _InteractionDetailScreenState extends State<InteractionDetailScreen> {
         centerTitle: true,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios, color: Colors.black, size: 18),
-          onPressed: () => Navigator.pop(context),
+
+onPressed: () => Navigator.pop(context),
         ),
       ),
       body: StreamBuilder(
@@ -2390,7 +2353,7 @@ class _InteractionDetailScreenState extends State<InteractionDetailScreen> {
         builder: (context, snapshot) {
           final List list = [];
           if (snapshot.hasData && snapshot.data != null) {
-            final QuerySnapshot qSnap = snapshot.data as QuerySnapshot;
+            final qSnap = snapshot.data as QuerySnapshot;
             for (final doc in qSnap.docs) {
               final raw = doc.data();
               final Map d = raw is Map ? raw : {};
@@ -2435,8 +2398,7 @@ class _InteractionDetailScreenState extends State<InteractionDetailScreen> {
                       TextSpan(
                         text: "${item["user"]} ",
                         style: const TextStyle(fontWeight: FontWeight.bold),
-
-),
+                      ),
                       TextSpan(text: item["action"].toString()),
                     ],
                   ),
@@ -2449,20 +2411,26 @@ class _InteractionDetailScreenState extends State<InteractionDetailScreen> {
                     ? () async {
                         final user = FirebaseAuth.instance.currentUser;
                         final myUid = user?.uid ?? widget.uid;
-                        final myName = user?.displayName ?? 'User';
-                        final numId =
-                            await UserIdService.getOrCreatePermanentId(
-                          myUid,
-                          defaultName: myName,
-                        );
+                        final myDoc = await FirebaseFirestore.instance
+                            .collection('users')
+                            .doc(myUid)
+                            .get();
+                        final d = myDoc.data() ?? {};
+                        final myName = (d['name'] ??
+                                d['nickname'] ??
+                                user?.displayName ??
+                                'User')
+                            .toString();
+                        final int numId =
+                            (d['numericId'] as num?)?.toInt() ?? 100001;
                         if (!context.mounted) return;
                         Navigator.push(
                           context,
                           MaterialPageRoute(
                             builder: (_) => VoiceRoomScreen(
-                              roomTitle:
-                                  (item["roomTitle"] ?? "Party Lounge")
-                                      .toString(),
+
+roomTitle: (item["roomTitle"] ?? "Party Lounge")
+                                  .toString(),
                               roomId: roomId,
                               hostName: item["user"].toString(),
                               userNumericId: numId,
@@ -2482,9 +2450,6 @@ class _InteractionDetailScreenState extends State<InteractionDetailScreen> {
   }
 }
 
-// ============================================================================
-// FOLLOWERS LIST SCREEN
-// ============================================================================
 class FollowersListScreen extends StatefulWidget {
   final String uid;
   final void Function(String peerUid, String peerName, String peerAvatar)
@@ -2510,7 +2475,7 @@ class _FollowersListScreenState extends State<FollowersListScreen> {
     _loadFollowing();
   }
 
-  Future<void> _markFollowersRead() async {
+  Future _markFollowersRead() async {
     try {
       final snap = await FirebaseFirestore.instance
           .collection('users')
@@ -2524,7 +2489,7 @@ class _FollowersListScreenState extends State<FollowersListScreen> {
     } catch (_) {}
   }
 
-  Future<void> _loadFollowing() async {
+  Future _loadFollowing() async {
     try {
       final snap = await FirebaseFirestore.instance
           .collection('users')
@@ -2540,7 +2505,7 @@ class _FollowersListScreenState extends State<FollowersListScreen> {
     } catch (_) {}
   }
 
-  Future<void> _toggleFollowBack(
+  Future _toggleFollowBack(
       String peerUid, String peerName, String peerAvatar) async {
     final db = FirebaseFirestore.instance;
     final bool currentlyFollowing = _followingUids.contains(peerUid);
@@ -2559,8 +2524,7 @@ class _FollowersListScreenState extends State<FollowersListScreen> {
 
       if (currentlyFollowing) {
         await myUserRef.collection('following').doc(peerUid).delete();
-
-await peerUserRef.collection('followers').doc(widget.uid).delete();
+        await peerUserRef.collection('followers').doc(widget.uid).delete();
         await myUserRef.set({
           'followingCount': FieldValue.increment(-1),
           'friendsCount': FieldValue.increment(-1),
@@ -2596,7 +2560,8 @@ await peerUserRef.collection('followers').doc(widget.uid).delete();
                 color: Colors.black,
                 fontSize: 17,
                 fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.white,
+
+backgroundColor: Colors.white,
         elevation: 0.5,
         centerTitle: true,
         leading: IconButton(
@@ -2616,7 +2581,7 @@ await peerUserRef.collection('followers').doc(widget.uid).delete();
               child: CircularProgressIndicator(color: Color(0xFF00C9A7)),
             );
           }
-          final QuerySnapshot qSnap = snapshot.data as QuerySnapshot;
+          final qSnap = snapshot.data as QuerySnapshot;
           final docs = qSnap.docs;
           if (docs.isEmpty) {
             return const Center(
@@ -2659,8 +2624,7 @@ await peerUserRef.collection('followers').doc(widget.uid).delete();
                     style: const TextStyle(
                         fontWeight: FontWeight.bold, fontSize: 14),
                   ),
-
-subtitle: Text(
+                  subtitle: Text(
                     peerBio,
                     style: const TextStyle(fontSize: 12, color: Colors.black54),
                   ),
@@ -2686,7 +2650,8 @@ subtitle: Text(
                           shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(18)),
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 8),
+
+horizontal: 12, vertical: 8),
                         ),
                         onPressed: () =>
                             _toggleFollowBack(peerUid, peerName, peerAvatar),
@@ -2708,9 +2673,6 @@ subtitle: Text(
   }
 }
 
-// ============================================================================
-// NOTICE CONTENT SCREEN
-// ============================================================================
 class NoticeContentScreen extends StatelessWidget {
   final String title;
   final String time;
@@ -2768,8 +2730,7 @@ class NoticeContentScreen extends StatelessWidget {
                 children: [
                   CircleAvatar(
                     backgroundColor: color.withOpacity(0.15),
-
-radius: 24,
+                    radius: 24,
                     child: Icon(icon, color: color, size: 26),
                   ),
                   const SizedBox(width: 14),
@@ -2809,7 +2770,8 @@ radius: 24,
               ),
               const SizedBox(height: 24),
               SizedBox(
-                width: double.infinity,
+
+width: double.infinity,
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF16122C),
