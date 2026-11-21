@@ -22,6 +22,18 @@ import 'support_screen.dart';
 import 'settings_screen.dart';
 import '../widgets/lucky_island_dialog.dart';
 
+bool _gte(num a, num b) {
+  return a.compareTo(b).sign != -1;
+}
+
+bool _lte(num a, num b) {
+  return a.compareTo(b).sign != 1;
+}
+
+dynamic _d(Object? v) {
+  return v;
+}
+
 class ProfileScreen extends StatefulWidget {
   final int currentCoins;
   final Function(int)? onCoinsUpdated;
@@ -33,24 +45,34 @@ class ProfileScreen extends StatefulWidget {
   });
 
   @override
-  State<ProfileScreen> createState() => _ProfileScreenState();
+  State createState() {
+    return _ProfileScreenState();
+  }
 }
 
-class _ProfileScreenState extends State<ProfileScreen> {
+class _ProfileScreenState extends State {
+  ProfileScreen get _w {
+    return widget as ProfileScreen;
+  }
+
   final User? _currentUser = FirebaseAuth.instance.currentUser;
   final ImagePicker _picker = ImagePicker();
   late int _coins;
   bool _isUploadingAvatar = false;
+  bool _isAgencyOwnerFromDb = false;
+  String _checkedAgentCacheKey = "";
 
   @override
   void initState() {
     super.initState();
-    _coins = widget.currentCoins;
+    _coins = _w.currentCoins;
   }
 
   void _updateCoins(int newAmount) {
-    setState(() => _coins = newAmount);
-    widget.onCoinsUpdated?.call(newAmount);
+    setState(() {
+      _coins = newAmount;
+    });
+    _w.onCoinsUpdated?.call(newAmount);
   }
 
   void _showSnack(String message, {bool isError = false}) {
@@ -73,13 +95,63 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _showSnack("ID $displayId copied to clipboard");
   }
 
-  ImageProvider? _resolveAvatarProvider(String? avatarUrl) {
-    if (avatarUrl == null || avatarUrl.isEmpty) return null;
+  bool _isUserAgentFromMap(Map data) {
+    if (data['isAgent'] == true) return true;
+    if (data['isCoinSeller'] == true) return true;
+    final String role = (data['role'] ?? '').toString().trim().toLowerCase();
+    if (role == 'agent') return true;
+    if (role == 'agency') return true;
+    if (role == 'coinseller') return true;
+    if (role == 'agency_owner') return true;
+    return false;
+  }
+
+  Future _verifyAgencyOwnershipFromDb(String uid, int numericId) async {
+    if (uid.isEmpty) return;
+    final String cacheKey = "${uid}_$numericId";
+    if (_checkedAgentCacheKey == cacheKey) return;
+    _checkedAgentCacheKey = cacheKey;
+
+    try {
+      final byUid = await FirebaseFirestore.instance
+          .collection('agencies')
+          .where('ownerUid', isEqualTo: uid)
+          .limit(1)
+          .get();
+      if (byUid.docs.isNotEmpty) {
+        if (mounted) {
+          setState(() {
+            _isAgencyOwnerFromDb = true;
+          });
+        }
+        return;
+      }
+      if (numericId != 0) {
+        final byNum = await FirebaseFirestore.instance
+            .collection('agencies')
+            .where('ownerNumericId', isEqualTo: numericId)
+            .limit(1)
+            .get();
+        if (byNum.docs.isNotEmpty) {
+          if (mounted) {
+            setState(() {
+              _isAgencyOwnerFromDb = true;
+            });
+          }
+        }
+      }
+    } catch (_) {}
+  }
+
+ImageProvider? _resolveAvatarProvider(String? avatarUrl) {
+    if (avatarUrl == null) return null;
+    if (avatarUrl.isEmpty) return null;
     if (avatarUrl.startsWith('data:image')) {
       try {
         final commaIdx = avatarUrl.indexOf(',');
         if (commaIdx != -1) {
-          final Uint8List bytes = base64Decode(avatarUrl.substring(commaIdx + 1));
+          final Uint8List bytes =
+              base64Decode(avatarUrl.substring(commaIdx + 1));
           return MemoryImage(bytes);
         }
       } catch (_) {
@@ -93,118 +165,123 @@ class _ProfileScreenState extends State<ProfileScreen> {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
-        ),
-        child: SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const SizedBox(height: 10),
-              Container(
-                width: 38,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.black12,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 14),
-                child: Text(
-                  "Change Profile Photo",
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                    color: Color(0xFF111827),
+      builder: (ctx) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+          ),
+          child: SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(height: 10),
+                Container(
+                  width: 38,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.black12,
+                    borderRadius: BorderRadius.circular(2),
                   ),
                 ),
-              ),
-              const Divider(height: 1, color: Color(0xFFF1F5F9)),
-              ListTile(
-                leading: const CircleAvatar(
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 14),
+                  child: Text(
+                    "Change Profile Photo",
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF111827),
+                    ),
+                  ),
+                ),
+                const Divider(height: 1, color: Color(0xFFF1F5F9)),
+                ListTile(
+                  leading: const CircleAvatar(
+                    backgroundColor: Color(0xFFE6F9F5),
+                    child: Icon(Icons.photo_library_rounded,
+                        color: Color(0xFF14B8A6)),
+                  ),
+                  title: const Text(
+                    "Choose from Gallery",
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+                  ),
+                  subtitle: const Text(
+                    "Select a photo from your phone gallery",
+                    style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                  ),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _pickAndSaveAvatar(ImageSource.gallery);
+                  },
+                ),
+                const Divider(height: 1, indent: 16, color: Color(0xFFF1F5F9)),
+                ListTile(
+                  leading: const CircleAvatar(
+                    backgroundColor: Color(0xFFFFF7E6),
+                    child: Icon(Icons.folder_open_rounded,
+                        color: Color(0xFFF59E0B)),
+                  ),
+                  title: const Text(
+                    "Choose from Files",
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+                  ),
+                  subtitle: const Text(
+                    "Browse device storage and image folders",
+                    style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                  ),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _pickAndSaveAvatar(ImageSource.gallery,
+                        useMediaPicker: true);
+                  },
+                ),
+                const Divider(height: 1, indent: 16, color: Color(0xFFF1F5F9)),
+                ListTile(
+                  leading: const CircleAvatar(
+                    backgroundColor: Color(0xFFEEF2FF),
+                    child: Icon(Icons.camera_alt_rounded,
+                        color: Color(0xFF4F46E5)),
 
-backgroundColor: Color(0xFFE6F9F5),
-                  child: Icon(Icons.photo_library_rounded,
-                      color: Color(0xFF14B8A6)),
+),
+                  title: const Text(
+                    "Take Photo",
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+                  ),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _pickAndSaveAvatar(ImageSource.camera);
+                  },
                 ),
-                title: const Text(
-                  "Choose from Gallery",
-                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
-                ),
-                subtitle: const Text(
-                  "Select a photo from your phone gallery",
-                  style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
-                ),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _pickAndSaveAvatar(ImageSource.gallery);
-                },
-              ),
-              const Divider(height: 1, indent: 16, color: Color(0xFFF1F5F9)),
-              ListTile(
-                leading: const CircleAvatar(
-                  backgroundColor: Color(0xFFFFF7E6),
-                  child: Icon(Icons.folder_open_rounded,
-                      color: Color(0xFFF59E0B)),
-                ),
-                title: const Text(
-                  "Choose from Files",
-                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
-                ),
-                subtitle: const Text(
-                  "Browse device storage and image folders",
-                  style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
-                ),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _pickAndSaveAvatar(ImageSource.gallery, useMediaPicker: true);
-                },
-              ),
-              const Divider(height: 1, indent: 16, color: Color(0xFFF1F5F9)),
-              ListTile(
-                leading: const CircleAvatar(
-                  backgroundColor: Color(0xFFEEF2FF),
-                  child: Icon(Icons.camera_alt_rounded,
-                      color: Color(0xFF4F46E5)),
-                ),
-                title: const Text(
-                  "Take Photo",
-                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
-                ),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _pickAndSaveAvatar(ImageSource.camera);
-                },
-              ),
-              Container(height: 8, color: const Color(0xFFF3F5F7)),
-              InkWell(
-                onTap: () => Navigator.pop(ctx),
-                child: const SizedBox(
-                  width: double.infinity,
-                  height: 52,
-                  child: Center(
-                    child: Text(
-                      "Cancel",
-                      style: TextStyle(
-                        fontSize: 15.5,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF64748B),
+                Container(height: 8, color: const Color(0xFFF3F5F7)),
+                InkWell(
+                  onTap: () {
+                    Navigator.pop(ctx);
+                  },
+                  child: const SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: Center(
+                      child: Text(
+                        "Cancel",
+                        style: TextStyle(
+                          fontSize: 15.5,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF64748B),
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
-  Future<void> _pickAndSaveAvatar(
+  Future _pickAndSaveAvatar(
     ImageSource source, {
     bool useMediaPicker = false,
   }) async {
@@ -233,7 +310,9 @@ backgroundColor: Color(0xFFE6F9F5),
 
       if (picked == null) return;
 
-      setState(() => _isUploadingAvatar = true);
+      setState(() {
+        _isUploadingAvatar = true;
+      });
 
       final Uint8List imageBytes = await picked.readAsBytes();
       String savedUrl = "";
@@ -244,14 +323,13 @@ backgroundColor: Color(0xFFE6F9F5),
             .child('profile_avatars')
             .child('${user.uid}_${DateTime.now().millisecondsSinceEpoch}.jpg');
 
-final uploadTask = await storageRef.putData(
+        final uploadTask = await storageRef.putData(
           imageBytes,
           SettableMetadata(contentType: 'image/jpeg'),
         );
         savedUrl = await uploadTask.ref.getDownloadURL();
       } catch (_) {
-        // Fallback to compact Base64 Data URI in Firestore if Storage bucket is restricted
-        if (imageBytes.length <= 700000) {
+        if (_lte(imageBytes.length, 700000)) {
           savedUrl = "data:image/jpeg;base64,${base64Encode(imageBytes)}";
         } else {
           final XFile? smaller = await _picker.pickImage(
@@ -272,9 +350,9 @@ final uploadTask = await storageRef.putData(
       }
 
       await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
-        'avatarUrl': savedUrl,
-        'photoURL': savedUrl,
-        'updatedAt': FieldValue.serverTimestamp(),
+        'avatarUrl': _d(savedUrl),
+        'photoURL': _d(savedUrl),
+        'updatedAt': _d(FieldValue.serverTimestamp()),
       }, SetOptions(merge: true));
 
       if (savedUrl.startsWith('http')) {
@@ -288,7 +366,9 @@ final uploadTask = await storageRef.putData(
       _showSnack("Failed to update photo: $e", isError: true);
     } finally {
       if (mounted) {
-        setState(() => _isUploadingAvatar = false);
+        setState(() {
+          _isUploadingAvatar = false;
+        });
       }
     }
   }
@@ -297,23 +377,26 @@ final uploadTask = await storageRef.putData(
     required String currentName,
     required String currentBio,
     required String currentGender,
-    required String currentCountry,
+
+required String currentCountry,
     required String? avatarUrl,
     required int numericId,
   }) {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => _EditProfileScreen(
-          currentName: currentName,
-          currentBio: currentBio,
-          currentGender: currentGender,
-          currentCountry: currentCountry,
-          currentAvatarUrl: avatarUrl,
-          numericId: numericId,
-          onChangePhotoTap: _showAvatarPickerSheet,
-          resolveAvatar: _resolveAvatarProvider,
-        ),
+        builder: (_) {
+          return _EditProfileScreen(
+            currentName: currentName,
+            currentBio: currentBio,
+            currentGender: currentGender,
+            currentCountry: currentCountry,
+            currentAvatarUrl: avatarUrl,
+            numericId: numericId,
+            onChangePhotoTap: _showAvatarPickerSheet,
+            resolveAvatar: _resolveAvatarProvider,
+          );
+        },
       ),
     );
   }
@@ -323,21 +406,31 @@ final uploadTask = await storageRef.putData(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => const LuckyIslandDialog(),
+      builder: (_) {
+        return const LuckyIslandDialog();
+      },
     );
   }
 
   void _openPointsWallet() {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => const PointsWalletScreen()),
+      MaterialPageRoute(
+        builder: (_) {
+          return const PointsWalletScreen();
+        },
+      ),
     );
   }
 
   void _openSettings() {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => const SettingsScreen()),
+      MaterialPageRoute(
+        builder: (_) {
+          return const SettingsScreen();
+        },
+      ),
     );
   }
 
@@ -367,19 +460,23 @@ final uploadTask = await storageRef.putData(
               }
 
               Object? rawData;
-              if (docSnap != null && docSnap.exists) {
-                rawData = docSnap.data();
+              if (docSnap != null) {
+                if (docSnap.exists) {
+                  rawData = docSnap.data();
+                }
               }
               final Map userData = rawData is Map ? rawData : {};
 
               String fallbackName = "User";
-              if (_currentUser != null &&
-                  _currentUser!.displayName != null &&
-                  _currentUser!.displayName!.isNotEmpty) {
-                fallbackName = _currentUser!.displayName!;
+              if (_currentUser != null) {
+                if (_currentUser!.displayName != null) {
+                  if (_currentUser!.displayName!.isNotEmpty) {
+                    fallbackName = _currentUser!.displayName!;
+                  }
+                }
               }
 
-final String displayName =
+              final String displayName =
                   (userData['name'] ?? userData['nickname'] ?? fallbackName)
                       .toString();
               final String bio = (userData['bio'] ?? '').toString();
@@ -392,10 +489,16 @@ final String displayName =
               String displayId = "000000";
               if (numericId != 0) {
                 displayId = numericId.toString();
-              } else if (uid.length >= 6) {
+              } else if (_gte(uid.length, 6)) {
                 displayId = uid.substring(0, 6).toUpperCase();
               } else if (uid.isNotEmpty) {
                 displayId = uid;
+              }
+
+              _verifyAgencyOwnershipFromDb(uid, numericId);
+              bool isAuthorizedAgent = _isUserAgentFromMap(userData);
+              if (_isAgencyOwnerFromDb) {
+                isAuthorizedAgent = true;
               }
 
               final int firestoreCoins =
@@ -405,7 +508,7 @@ final String displayName =
                       (userData['points'] as num?)?.toDouble() ??
                       0.0;
 
-              final int followedCount =
+final int followedCount =
                   (userData['followedCount'] as num?)?.toInt() ?? 0;
               final int followingCount =
                   (userData['followingCount'] as num?)?.toInt() ?? 0;
@@ -422,12 +525,16 @@ final String displayName =
               final String? avatarUrl =
                   (userData['avatarUrl'] ?? userData['photoURL'])?.toString();
 
-              final bool hasAgency = agencyId != null && agencyId.isNotEmpty;
+              bool hasAgency = false;
+              if (agencyId != null) {
+                if (agencyId.isNotEmpty) {
+                  hasAgency = true;
+                }
+              }
 
               return SingleChildScrollView(
                 child: Column(
                   children: [
-                    // 1. Top Mint-Teal Gradient Section (Profile + Stats + VIP)
                     Container(
                       padding: EdgeInsets.fromLTRB(
                         16,
@@ -470,7 +577,6 @@ final String displayName =
                       ),
                     ),
 
-// 2. COINS & POINTS Card
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 14),
                       child: _buildAssetsCard(
@@ -481,7 +587,6 @@ final String displayName =
                     ),
                     const SizedBox(height: 12),
 
-                    // 3. Main 8 Features Grid
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 14),
                       child: _buildMainFeaturesGrid(
@@ -491,7 +596,6 @@ final String displayName =
                     ),
                     const SizedBox(height: 12),
 
-                    // 4. Promo Recharge Banner
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 14),
                       child: _buildPromoRechargeBanner(
@@ -501,10 +605,12 @@ final String displayName =
                     ),
                     const SizedBox(height: 12),
 
-                    // 5. Creator, Business & Settings Section
-                    Padding(
+Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 14),
-                      child: _buildBusinessSection(numericId: numericId),
+                      child: _buildBusinessSection(
+                        numericId: numericId,
+                        showCoinSeller: isAuthorizedAgent,
+                      ),
                     ),
                     const SizedBox(height: 28),
                   ],
@@ -538,7 +644,6 @@ final String displayName =
     );
   }
 
-  // 1. Header Section (Tapping Avatar opens Gallery/Files; Tapping Info opens Edit Profile)
   Widget _buildHeaderSection({
     required String name,
     required String bio,
@@ -561,7 +666,6 @@ final String displayName =
       children: [
         Row(
           children: [
-            // Tappable Profile Picture with Camera Badge
             GestureDetector(
               onTap: _showAvatarPickerSheet,
               child: Stack(
@@ -580,8 +684,7 @@ final String displayName =
                           offset: const Offset(0, 3),
                         ),
                       ],
-
-),
+                    ),
                     child: CircleAvatar(
                       backgroundColor: const Color(0xFF9B87B5),
                       backgroundImage: avatarImg,
@@ -616,18 +719,20 @@ final String displayName =
               ),
             ),
             const SizedBox(width: 14),
-            // Tappable Profile Name & Details -> Edit Profile Page
             Expanded(
-              child: GestureDetector(
+
+child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
-                onTap: () => _openEditProfile(
-                  currentName: name,
-                  currentBio: bio,
-                  currentGender: gender,
-                  currentCountry: country,
-                  avatarUrl: avatarUrl,
-                  numericId: numericId,
-                ),
+                onTap: () {
+                  _openEditProfile(
+                    currentName: name,
+                    currentBio: bio,
+                    currentGender: gender,
+                    currentCountry: country,
+                    avatarUrl: avatarUrl,
+                    numericId: numericId,
+                  );
+                },
                 child: Row(
                   children: [
                     Expanded(
@@ -671,8 +776,7 @@ final String displayName =
                                 Container(
                                   padding: const EdgeInsets.symmetric(
                                       horizontal: 7, vertical: 2),
-
-decoration: BoxDecoration(
+                                  decoration: BoxDecoration(
                                     color: const Color(0xFF2563EB),
                                     borderRadius: BorderRadius.circular(10),
                                   ),
@@ -688,7 +792,9 @@ decoration: BoxDecoration(
                           ),
                           const SizedBox(height: 6),
                           GestureDetector(
-                            onTap: () => _copyId(displayId),
+                            onTap: () {
+                              _copyId(displayId);
+                            },
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
@@ -697,7 +803,8 @@ decoration: BoxDecoration(
                                   style: const TextStyle(
                                       fontSize: 13,
                                       color: Color(0xFF475569),
-                                      fontWeight: FontWeight.w700),
+
+fontWeight: FontWeight.w700),
                                 ),
                                 const SizedBox(width: 6),
                                 const Icon(Icons.copy_rounded,
@@ -773,8 +880,7 @@ decoration: BoxDecoration(
           style: const TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.w900,
-
-color: Color(0xFF111827)),
+              color: Color(0xFF111827)),
         ),
         const SizedBox(height: 2),
         Text(
@@ -788,7 +894,6 @@ color: Color(0xFF111827)),
     );
   }
 
-  // 2. VIP Club Banner
   Widget _buildVipClubCard() {
     return Container(
       width: double.infinity,
@@ -818,7 +923,8 @@ color: Color(0xFF111827)),
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  "VIP Club",
+
+"VIP Club",
                   style: TextStyle(
                       color: Color(0xFFFFE099),
                       fontSize: 15.5,
@@ -856,7 +962,6 @@ color: Color(0xFF111827)),
     );
   }
 
-  // 3. Coins & Points Card
   Widget _buildAssetsCard({
     required int coins,
     required double points,
@@ -884,17 +989,21 @@ color: Color(0xFF111827)),
         children: [
           Expanded(
             child: InkWell(
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => WalletScreen(
-                    currentCoins: coins,
-                    userNumericId: numericId,
-                    userUid: currentUid,
-                    onCoinsRecharged: _updateCoins,
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) {
+                      return WalletScreen(
+                        currentCoins: coins,
+                        userNumericId: numericId,
+                        userUid: currentUid,
+                        onCoinsRecharged: _updateCoins,
+                      );
+                    },
                   ),
-                ),
-              ),
+                );
+              },
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -902,8 +1011,7 @@ color: Color(0xFF111827)),
                     children: [
                       Text(
                         "Coins",
-
-style: TextStyle(
+                        style: TextStyle(
                             fontSize: 13.5,
                             color: Color(0xFF334155),
                             fontWeight: FontWeight.w700),
@@ -933,7 +1041,8 @@ style: TextStyle(
             ),
           ),
           Container(width: 1, height: 40, color: const Color(0xFFE2E8F0)),
-          const SizedBox(width: 18),
+
+const SizedBox(width: 18),
           Expanded(
             child: InkWell(
               onTap: _openPointsWallet,
@@ -978,7 +1087,6 @@ style: TextStyle(
     );
   }
 
-  // 4. Main 8 Features Grid
   Widget _buildMainFeaturesGrid({required int coins, required int numericId}) {
     String currentUid = "";
     if (_currentUser != null) {
@@ -1010,47 +1118,71 @@ style: TextStyle(
             icon: Icons.account_balance_wallet_rounded,
             colors: const [Color(0xFFFFB703), Color(0xFFFB8500)],
             label: "Recharge",
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(
-
-builder: (_) => WalletScreen(
-                  currentCoins: coins,
-                  userNumericId: numericId,
-                  userUid: currentUid,
-                  onCoinsRecharged: _updateCoins,
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) {
+                    return WalletScreen(
+                      currentCoins: coins,
+                      userNumericId: numericId,
+                      userUid: currentUid,
+                      onCoinsRecharged: _updateCoins,
+                    );
+                  },
                 ),
-              ),
-            ),
+              );
+            },
           ),
           _buildBoldFeatureTile(
             icon: Icons.storefront_rounded,
             colors: const [Color(0xFFFF5A5F), Color(0xFFE01E37)],
             label: "Store",
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => StoreScreen(
-                  userCoins: coins,
-                  userNumericId: numericId,
-                  onCoinsDeducted: _updateCoins,
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) {
+                    return StoreScreen(
+                      userCoins: coins,
+                      userNumericId: numericId,
+                      onCoinsDeducted: _updateCoins,
+                    );
+                  },
                 ),
-              ),
-            ),
+              );
+            },
           ),
           _buildBoldFeatureTile(
             icon: Icons.mark_email_unread_rounded,
             colors: const [Color(0xFFFF758F), Color(0xFFC9184A)],
             label: "Invitation",
-            onTap: () => Navigator.push(context,
-                MaterialPageRoute(builder: (_) => const InvitationScreen())),
+
+onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) {
+                    return const InvitationScreen();
+                  },
+                ),
+              );
+            },
           ),
           _buildBoldFeatureTile(
             icon: Icons.backpack_rounded,
             colors: const [Color(0xFF4CC9F0), Color(0xFF3A86FF)],
             label: "Backpack",
-            onTap: () => Navigator.push(context,
-                MaterialPageRoute(builder: (_) => const BackpackScreen())),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) {
+                    return const BackpackScreen();
+                  },
+                ),
+              );
+            },
           ),
           _buildBoldFeatureTile(
             icon: Icons.beach_access_rounded,
@@ -1062,29 +1194,52 @@ builder: (_) => WalletScreen(
             icon: Icons.military_tech_rounded,
             colors: const [Color(0xFFB5179E), Color(0xFF7209B7)],
             label: "Level",
-            onTap: () => Navigator.push(context,
-                MaterialPageRoute(builder: (_) => const LevelScreen())),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) {
+                    return const LevelScreen();
+                  },
+                ),
+              );
+            },
           ),
           _buildBoldFeatureTile(
             icon: Icons.event_available_rounded,
             colors: const [Color(0xFF2EC4B6), Color(0xFF0096C7)],
             label: "Task",
-            onTap: () => Navigator.push(
-                context, MaterialPageRoute(builder: (_) => const TaskScreen())),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) {
+                    return const TaskScreen();
+                  },
+                ),
+              );
+            },
           ),
           _buildBoldFeatureTile(
             icon: Icons.verified_rounded,
             colors: const [Color(0xFFFF9E00), Color(0xFFFF6D00)],
             label: "Badge",
-            onTap: () => Navigator.push(context,
-                MaterialPageRoute(builder: (_) => const BadgeScreen())),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) {
+                    return const BadgeScreen();
+                  },
+                ),
+              );
+            },
           ),
         ],
       ),
     );
   }
 
-  // 5. Promo Carousel Banner
   Widget _buildPromoRechargeBanner(
       {required int coins, required int numericId}) {
     String currentUid = "";
@@ -1093,17 +1248,21 @@ builder: (_) => WalletScreen(
     }
 
     return GestureDetector(
-      onTap: () => Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => WalletScreen(
-            currentCoins: coins,
-            userNumericId: numericId,
-            userUid: currentUid,
-            onCoinsRecharged: _updateCoins,
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) {
+              return WalletScreen(
+                currentCoins: coins,
+                userNumericId: numericId,
+                userUid: currentUid,
+                onCoinsRecharged: _updateCoins,
+              );
+            },
           ),
-        ),
-      ),
+        );
+      },
       child: Container(
         width: double.infinity,
         height: 94,
@@ -1123,14 +1282,14 @@ builder: (_) => WalletScreen(
           ],
         ),
         padding: const EdgeInsets.symmetric(horizontal: 18),
-
-child: const Row(
+        child: const Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Column(
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
+
+children: [
                 Text(
                   "UP TO 60% OFF",
                   style: TextStyle(
@@ -1156,9 +1315,11 @@ child: const Row(
     );
   }
 
-  // 6. Creator, Business & Settings Section
-  Widget _buildBusinessSection({required int numericId}) {
-    final List<Widget> items = [
+  Widget _buildBusinessSection({
+    required int numericId,
+    required bool showCoinSeller,
+  }) {
+    final List items = [
       _buildTealServiceTile(
         icon: Icons.stars_rounded,
         label: "Points Wallet",
@@ -1167,29 +1328,59 @@ child: const Row(
       _buildTealServiceTile(
         icon: Icons.record_voice_over_rounded,
         label: "Host Center",
-        onTap: () => Navigator.push(context,
-            MaterialPageRoute(builder: (_) => const HostCenterScreen())),
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) {
+                return const HostCenterScreen();
+              },
+            ),
+          );
+        },
       ),
       _buildTealServiceTile(
         icon: Icons.business_center_rounded,
         label: "Agency",
-        onTap: () => Navigator.push(
-          context,
-          MaterialPageRoute(
-              builder: (_) => AgencyScreen(userNumericId: numericId)),
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) {
+                return AgencyScreen(userNumericId: numericId);
+              },
+            ),
+          );
+        },
+      ),
+      if (showCoinSeller)
+        _buildTealServiceTile(
+          icon: Icons.currency_exchange_rounded,
+          label: "Coin Seller",
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) {
+                  return const CoinSellerScreen();
+                },
+              ),
+            );
+          },
         ),
-      ),
-      _buildTealServiceTile(
-        icon: Icons.currency_exchange_rounded,
-        label: "Coin Seller",
-        onTap: () => Navigator.push(context,
-            MaterialPageRoute(builder: (_) => const CoinSellerScreen())),
-      ),
       _buildTealServiceTile(
         icon: Icons.headset_mic_rounded,
         label: "Support",
-        onTap: () => Navigator.push(context,
-            MaterialPageRoute(builder: (_) => const SupportScreen())),
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) {
+                return const SupportScreen();
+              },
+            ),
+          );
+        },
       ),
       _buildTealServiceTile(
         icon: Icons.settings_rounded,
@@ -1218,23 +1409,31 @@ child: const Row(
         mainAxisSpacing: 16,
         crossAxisSpacing: 6,
         childAspectRatio: 0.9,
-        children: items,
+        children: List.generate(items.length, (i) {
+          return items[i] as Widget;
+        }),
       ),
     );
   }
 
   Widget _buildBoldFeatureTile({
     required IconData icon,
-    required List<Color> colors,
+    required List colors,
     required String label,
     required VoidCallback onTap,
   }) {
+    final List typedColors = List.generate(colors.length, (i) {
+      return colors[i] as Color;
+    });
+    final Color lastColor = typedColors.last as Color;
+
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
-        children: [
+
+children: [
           Container(
             width: 50,
             height: 50,
@@ -1242,14 +1441,16 @@ child: const Row(
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: colors,
+                colors: [
+                  typedColors[0] as Color,
+                  lastColor,
+                ],
               ),
               borderRadius: BorderRadius.circular(16),
               boxShadow: [
                 BoxShadow(
-                  color: colors.last.withOpacity(0.32),
-
-blurRadius: 6,
+                  color: lastColor.withOpacity(0.32),
+                  blurRadius: 6,
                   offset: const Offset(0, 3),
                 ),
               ],
@@ -1332,17 +1533,23 @@ class _EditProfileScreen extends StatefulWidget {
   });
 
   @override
-  State<_EditProfileScreen> createState() => _EditProfileScreenState();
+  State createState() {
+    return _EditProfileScreenState();
+  }
 }
 
-class _EditProfileScreenState extends State<_EditProfileScreen> {
+class _EditProfileScreenState extends State {
+  _EditProfileScreen get _w {
+    return widget as _EditProfileScreen;
+  }
+
   late TextEditingController _nameController;
   late TextEditingController _bioController;
   late String _selectedGender;
   late String _selectedCountry;
   bool _saving = false;
 
-  static const List<String> _countries = [
+  static const List _countries = [
     "Ethiopia 🇪🇹",
     "Saudi Arabia 🇸🇦",
     "UAE 🇦🇪",
@@ -1356,13 +1563,12 @@ class _EditProfileScreenState extends State<_EditProfileScreen> {
   @override
   void initState() {
     super.initState();
-    _nameController = TextEditingController(text: widget.currentName);
-    _bioController = TextEditingController(text: widget.currentBio);
-    _selectedGender = widget.currentGender.isNotEmpty
-        ? widget.currentGender
-        : "Male";
-    _selectedCountry = _countries.contains(widget.currentCountry)
-        ? widget.currentCountry
+    _nameController = TextEditingController(text: _w.currentName);
+    _bioController = TextEditingController(text: _w.currentBio);
+    _selectedGender =
+        _w.currentGender.isNotEmpty ? _w.currentGender : "Male";
+    _selectedCountry = _countries.contains(_w.currentCountry)
+        ? _w.currentCountry
         : "Ethiopia 🇪🇹";
   }
 
@@ -1373,11 +1579,11 @@ class _EditProfileScreenState extends State<_EditProfileScreen> {
     super.dispose();
   }
 
-  Future<void> _saveProfile() async {
+  Future _saveProfile() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    final String newName = _nameController.text.trim();
+final String newName = _nameController.text.trim();
     if (newName.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Nickname cannot be empty.")),
@@ -1385,19 +1591,21 @@ class _EditProfileScreenState extends State<_EditProfileScreen> {
       return;
     }
 
-    setState(() => _saving = true);
+    setState(() {
+      _saving = true;
+    });
     try {
       final String newBio = _bioController.text.trim();
       final String flagOnly = _selectedCountry.split(' ').last;
 
-await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
-        'name': newName,
-        'nickname': newName,
-        'bio': newBio,
-        'gender': _selectedGender,
-        'country': _selectedCountry,
-        'flag': flagOnly,
-        'updatedAt': FieldValue.serverTimestamp(),
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+        'name': _d(newName),
+        'nickname': _d(newName),
+        'bio': _d(newBio),
+        'gender': _d(_selectedGender),
+        'country': _d(_selectedCountry),
+        'flag': _d(flagOnly),
+        'updatedAt': _d(FieldValue.serverTimestamp()),
       }, SetOptions(merge: true));
 
       try {
@@ -1423,7 +1631,11 @@ await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
         );
       }
     } finally {
-      if (mounted) setState(() => _saving = false);
+      if (mounted) {
+        setState(() {
+          _saving = false;
+        });
+      }
     }
   }
 
@@ -1441,7 +1653,9 @@ await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new,
               color: Color(0xFF111827), size: 19),
-          onPressed: () => Navigator.pop(context),
+          onPressed: () {
+            Navigator.pop(context);
+          },
         ),
         title: const Text(
           "Edit Profile",
@@ -1478,7 +1692,7 @@ await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
             ? FirebaseFirestore.instance.collection('users').doc(uid).snapshots()
             : null,
         builder: (context, snapshot) {
-          String? liveAvatar = widget.currentAvatarUrl;
+          String? liveAvatar = _w.currentAvatarUrl;
           if (snapshot.hasData) {
             final doc = snapshot.data as DocumentSnapshot?;
             final data = doc?.data() as Map?;
@@ -1488,15 +1702,15 @@ await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
                       ?.toString();
             }
           }
-          final avatarImg = widget.resolveAvatar(liveAvatar);
+          final avatarImg = _w.resolveAvatar(liveAvatar);
 
           return SingleChildScrollView(
             padding: const EdgeInsets.all(16),
             child: Column(
-              children: [
-                // Avatar Picker Section
+
+children: [
                 GestureDetector(
-                  onTap: widget.onChangePhotoTap,
+                  onTap: _w.onChangePhotoTap,
                   child: Column(
                     children: [
                       Stack(
@@ -1506,8 +1720,7 @@ await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
                             width: 96,
                             height: 96,
                             decoration: BoxDecoration(
-
-shape: BoxShape.circle,
+                              shape: BoxShape.circle,
                               border:
                                   Border.all(color: Colors.white, width: 3.5),
                               boxShadow: [
@@ -1559,7 +1772,6 @@ shape: BoxShape.circle,
                 ),
                 const SizedBox(height: 22),
 
-                // Form Card
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
@@ -1584,7 +1796,8 @@ shape: BoxShape.circle,
                           fontWeight: FontWeight.w700,
                           color: Color(0xFF111827),
                         ),
-                        decoration: InputDecoration(
+
+decoration: InputDecoration(
                           hintText: "Enter your nickname",
                           filled: true,
                           fillColor: const Color(0xFFF3F5F7),
@@ -1592,8 +1805,7 @@ shape: BoxShape.circle,
                             borderRadius: BorderRadius.circular(12),
                             borderSide: BorderSide.none,
                           ),
-
-),
+                        ),
                       ),
                       const SizedBox(height: 16),
                       const Text(
@@ -1609,8 +1821,11 @@ shape: BoxShape.circle,
                         children: [
                           Expanded(
                             child: GestureDetector(
-                              onTap: () =>
-                                  setState(() => _selectedGender = "Male"),
+                              onTap: () {
+                                setState(() {
+                                  _selectedGender = "Male";
+                                });
+                              },
                               child: Container(
                                 height: 44,
                                 decoration: BoxDecoration(
@@ -1636,8 +1851,11 @@ shape: BoxShape.circle,
                           const SizedBox(width: 12),
                           Expanded(
                             child: GestureDetector(
-                              onTap: () =>
-                                  setState(() => _selectedGender = "Female"),
+                              onTap: () {
+                                setState(() {
+                                  _selectedGender = "Female";
+                                });
+                              },
                               child: Container(
                                 height: 44,
                                 decoration: BoxDecoration(
@@ -1659,7 +1877,8 @@ shape: BoxShape.circle,
                                 ),
                               ),
                             ),
-                          ),
+
+),
                         ],
                       ),
                       const SizedBox(height: 16),
@@ -1674,30 +1893,32 @@ shape: BoxShape.circle,
                       const SizedBox(height: 6),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 14),
-
-decoration: BoxDecoration(
+                        decoration: BoxDecoration(
                           color: const Color(0xFFF3F5F7),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: DropdownButtonHideUnderline(
-                          child: DropdownButton<String>(
+                          child: DropdownButton(
                             value: _selectedCountry,
                             isExpanded: true,
-                            items: _countries
-                                .map((c) => DropdownMenuItem<String>(
-                                      value: c,
-                                      child: Text(
-                                        c,
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.w600,
-                                          color: Color(0xFF111827),
-                                        ),
-                                      ),
-                                    ))
-                                .toList(),
+                            items: _countries.map((rawC) {
+                              final String c = rawC.toString();
+                              return DropdownMenuItem(
+                                value: c,
+                                child: Text(
+                                  c,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF111827),
+                                  ),
+                                ),
+                              );
+                            }).toList(),
                             onChanged: (val) {
                               if (val != null) {
-                                setState(() => _selectedCountry = val);
+                                setState(() {
+                                  _selectedCountry = val.toString();
+                                });
                               }
                             },
                           ),
