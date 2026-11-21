@@ -4,10 +4,31 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:video_player/video_player.dart';
 import 'wallet_screen.dart';
+import '../widgets/dragon_tiger_dialog.dart';
 import '../widgets/lucky_wheel_dialog.dart';
 import '../widgets/teen_patti_dialog.dart';
 import '../widgets/room_control_sheets.dart';
 import '../services/agora_service.dart';
+
+bool _gt(num a, num b) {
+  return a.compareTo(b).sign == 1;
+}
+
+bool _lt(num a, num b) {
+  return a.compareTo(b).sign == -1;
+}
+
+bool _gte(num a, num b) {
+  return a.compareTo(b).sign != -1;
+}
+
+bool _lte(num a, num b) {
+  return a.compareTo(b).sign != 1;
+}
+
+dynamic _d(Object? v) {
+  return v;
+}
 
 const String channelName = "habesha_vip_room";
 
@@ -29,7 +50,7 @@ class GiftModel {
   });
 }
 
-const List<GiftModel> availableGifts = [
+const List availableGifts = [
   GiftModel(
     id: "1",
     name: "Rocket",
@@ -61,7 +82,7 @@ const List<GiftModel> availableGifts = [
   ),
 ];
 
-const List<int> giftMultipliers = [1, 3, 7, 10, 33, 77, 100];
+const List giftMultipliers = [1, 3, 7, 10, 33, 77, 100];
 
 class GiftComboData {
   final String senderName;
@@ -94,11 +115,16 @@ class RoomScreen extends StatefulWidget {
   });
 
   @override
-  State<RoomScreen> createState() => _RoomScreenState();
+  State createState() {
+    return _RoomScreenState();
+  }
 }
 
-class _RoomScreenState extends State<RoomScreen>
-    with TickerProviderStateMixin {
+class _RoomScreenState extends State with TickerProviderStateMixin {
+  RoomScreen get _w {
+    return widget as RoomScreen;
+  }
+
   final User? _currentUser = FirebaseAuth.instance.currentUser;
   final AgoraService _agoraService = AgoraService();
 
@@ -106,13 +132,13 @@ class _RoomScreenState extends State<RoomScreen>
   late int _activeSeatCount;
   bool _isMicMuted = false;
   int? _mySeatIndex;
-  late List<String?> _seats;
-  late List<String?> _seatUids;
-  late List<int> _seatGiftsCount;
+  late List _seats;
+  late List _seatUids;
+  late List _seatGiftsCount;
 
   bool _isAllSeatsTargeted = false;
 
-  final List<String> _chatMessages = [
+  final List _chatMessages = [
     "System: Please protect your privacy and stay safe.",
     "Announcement: Welcome to VIP Live Party!"
   ];
@@ -127,20 +153,19 @@ class _RoomScreenState extends State<RoomScreen>
   GiftComboData? _activeComboData;
   Timer? _comboDismissTimer;
   late AnimationController _comboScaleController;
-  late Animation<double> _comboScaleAnimation;
   int _currentComboStreak = 0;
   DateTime? _lastGiftTimestamp;
   String? _lastGiftTargetKey;
 
   late AnimationController _pulseController;
-  final Set<int> _speakingSeatIndices = {};
-  final Set<int> _mutedSeats = {};
+  final Set _speakingSeatIndices = {};
+  final Set _mutedSeats = {};
 
   late RoomSettingsData _roomSettings;
 
   Timer? _micTrackerTimer;
-  StreamSubscription<DocumentSnapshot>? _roomSubscription;
-  StreamSubscription<QuerySnapshot>? _chatSubscription;
+  StreamSubscription? _roomSubscription;
+  StreamSubscription? _chatSubscription;
 
   static const Color bgColor = Color(0xFFF5EFEB);
   static const Color cardBg = Colors.white;
@@ -149,23 +174,29 @@ class _RoomScreenState extends State<RoomScreen>
   static const Color borderColor = Color(0xFFE2D6C5);
   static const Color buttonDark = Color(0xFF4A3528);
 
-  @override
+@override
   void initState() {
     super.initState();
-    _currentCoins = widget.initialCoins;
-    _activeSeatCount = widget.seatCount;
-    _seats = List.filled(_activeSeatCount, null);
-    _seatUids = List.filled(_activeSeatCount, null);
-    _seatGiftsCount = List.filled(_activeSeatCount, 0);
+    _currentCoins = _w.initialCoins;
+    _activeSeatCount = _w.seatCount;
+    _seats = List.generate(_activeSeatCount, (i) {
+      return null;
+    }, growable: true);
+    _seatUids = List.generate(_activeSeatCount, (i) {
+      return null;
+    }, growable: true);
+    _seatGiftsCount = List.generate(_activeSeatCount, (i) {
+      return 0;
+    }, growable: true);
 
-if (_currentUser != null) {
+    if (_currentUser != null) {
       _myUid = (_currentUser!.uid.hashCode.abs() % 899999) + 100000;
     } else {
       _myUid = 100001;
     }
 
     _roomSettings = RoomSettingsData(
-      roomName: widget.roomTitle,
+      roomName: _w.roomTitle,
       roomDescription: "Welcome to our room!",
       seatCount: _activeSeatCount,
     );
@@ -180,25 +211,17 @@ if (_currentUser != null) {
       duration: const Duration(milliseconds: 250),
     );
 
-    _comboScaleAnimation = TweenSequence<double>([
-      TweenSequenceItem(tween: Tween(begin: 1.0, end: 1.55), weight: 50),
-      TweenSequenceItem(tween: Tween(begin: 1.55, end: 1.0), weight: 50),
-    ]).animate(CurvedAnimation(
-      parent: _comboScaleController,
-      curve: Curves.easeOutBack,
-    ));
-
     _bootRoom();
   }
 
-  Future<void> _bootRoom() async {
+  Future _bootRoom() async {
     await _fetchUserProfile();
     await _initVoiceEngine();
     _syncRoomWithFirestore();
     _listenToLiveRoomChats();
   }
 
-  Future<void> _fetchUserProfile() async {
+  Future _fetchUserProfile() async {
     final user = _currentUser;
     if (user == null) return;
 
@@ -220,7 +243,7 @@ if (_currentUser != null) {
 
           if (mounted) {
             setState(() {
-              if (fetchedId > 0) {
+              if (_gt(fetchedId, 0)) {
                 _myUid = fetchedId;
               }
               _myDisplayName = fetchedName;
@@ -252,14 +275,14 @@ if (_currentUser != null) {
           int? updatedSeat;
 
           setState(() {
-            for (int i = 0; i < _activeSeatCount; i++) {
-              if (i < incomingSeats.length) {
+            for (int i = 0; _lt(i, _activeSeatCount); i++) {
+              if (_lt(i, incomingSeats.length)) {
                 _seats[i] = incomingSeats[i];
               }
-              if (i < incomingUids.length) {
+              if (_lt(i, incomingUids.length)) {
                 _seatUids[i] = incomingUids[i];
               }
-              if (i < incomingGifts.length) {
+              if (_lt(i, incomingGifts.length)) {
                 _seatGiftsCount[i] = (incomingGifts[i] as num).toInt();
               }
             }
@@ -285,10 +308,9 @@ if (_currentUser != null) {
     });
   }
 
-  void _listenToLiveRoomChats() {
+void _listenToLiveRoomChats() {
     _chatSubscription = FirebaseFirestore.instance
-
-.collection('rooms')
+        .collection('rooms')
         .doc(channelName)
         .collection('chats')
         .orderBy('timestamp', descending: true)
@@ -297,7 +319,7 @@ if (_currentUser != null) {
         .listen((querySnapshot) {
       if (querySnapshot.docs.isNotEmpty) {
         if (mounted) {
-          final List<String> loadedMsgs = [];
+          final List loadedMsgs = [];
           for (var doc in querySnapshot.docs.reversed) {
             final d = doc.data();
             String sender = "User";
@@ -329,7 +351,8 @@ if (_currentUser != null) {
       if (_mySeatIndex == null) return;
       if (_isMicMuted) return;
 
-      final userRef = FirebaseFirestore.instance.collection('users').doc(user.uid);
+      final userRef =
+          FirebaseFirestore.instance.collection('users').doc(user.uid);
       final snap = await userRef.get();
       if (!snap.exists) return;
       final data = snap.data() ?? {};
@@ -351,18 +374,27 @@ if (_currentUser != null) {
           crownInit = 1;
         }
         await userRef.set({
-          'lastMicDate': todayKey,
-          'todayMicMinutes': 1,
-          'todayCrownMinutes': crownInit,
+          'lastMicDate': _d(todayKey),
+          'todayMicMinutes': _d(1),
+          'todayCrownMinutes': _d(crownInit),
         }, SetOptions(merge: true));
       } else {
-        final Map<String, dynamic> incData = {
-          'todayMicMinutes': FieldValue.increment(1),
+        final Map incData = {
+          'todayMicMinutes': _d(FieldValue.increment(1)),
         };
         if (_mySeatIndex == 0) {
-          incData['todayCrownMinutes'] = FieldValue.increment(1);
+          incData['todayCrownMinutes'] = _d(FieldValue.increment(1));
         }
-        await userRef.set(incData, SetOptions(merge: true));
+        await userRef.set(
+          {'todayMicMinutes': _d(FieldValue.increment(1))},
+          SetOptions(merge: true),
+        );
+        if (_mySeatIndex == 0) {
+          await userRef.set(
+            {'todayCrownMinutes': _d(FieldValue.increment(1))},
+            SetOptions(merge: true),
+          );
+        }
       }
     });
   }
@@ -371,7 +403,7 @@ if (_currentUser != null) {
     _micTrackerTimer?.cancel();
   }
 
-  Future<void> _initVoiceEngine() async {
+  Future _initVoiceEngine() async {
     try {
       _agoraService.onErrorCallback = (String errMsg) {
         if (mounted) {
@@ -402,7 +434,7 @@ if (_currentUser != null) {
               _speakingSeatIndices.clear();
               for (var speaker in speakers) {
                 final int vol = speaker.volume ?? 0;
-                if (vol > 4) {
+                if (_gt(vol, 4)) {
                   bool isLocalSpeaker = false;
                   if (speaker.uid == 0) {
                     isLocalSpeaker = true;
@@ -410,7 +442,7 @@ if (_currentUser != null) {
                     isLocalSpeaker = true;
                   }
 
-                  if (isLocalSpeaker) {
+if (isLocalSpeaker) {
                     if (_mySeatIndex != null) {
                       _speakingSeatIndices.add(_mySeatIndex!);
                     }
@@ -426,7 +458,7 @@ if (_currentUser != null) {
         channelId: channelName,
         uid: _myUid,
         isSpeaker: _mySeatIndex != null,
-        roomTitle: widget.roomTitle,
+        roomTitle: _w.roomTitle,
         seatCount: _activeSeatCount,
       );
 
@@ -440,7 +472,7 @@ if (_currentUser != null) {
     }
   }
 
-  Future<void> _updateBroadcasterRole(bool isSpeaker) async {
+  Future _updateBroadcasterRole(bool isSpeaker) async {
     await _agoraService.switchRole(isSpeaker: isSpeaker);
   }
 
@@ -456,7 +488,7 @@ if (_currentUser != null) {
       }
     }
 
-    final user = _seats[index];
+    final String? user = _seats[index]?.toString();
     if (user != null) {
       if (_mySeatIndex != index) {
         _openSeatUserAction(index, user);
@@ -464,7 +496,7 @@ if (_currentUser != null) {
       }
     }
 
-if (_seats[index] == null) {
+    if (_seats[index] == null) {
       if (_mySeatIndex != null) {
         _seats[_mySeatIndex!] = null;
         _seatUids[_mySeatIndex!] = null;
@@ -489,13 +521,13 @@ if (_seats[index] == null) {
     }
 
     await FirebaseFirestore.instance.collection('rooms').doc(channelName).set({
-      'seats': _seats,
-      'seatUids': _seatUids,
-      'seatGifts': _seatGiftsCount,
+      'seats': _d(_seats),
+      'seatUids': _d(_seatUids),
+      'seatGifts': _d(_seatGiftsCount),
     }, SetOptions(merge: true));
   }
 
-  Future<void> _toggleMic() async {
+  Future _toggleMic() async {
     setState(() {
       _isMicMuted = !_isMicMuted;
     });
@@ -509,7 +541,7 @@ if (_seats[index] == null) {
     }
   }
 
-  Future<void> _toggleRoomVoice() async {
+  Future _toggleRoomVoice() async {
     setState(() {
       _roomSettings.isRoomAudioMuted = !_roomSettings.isRoomAudioMuted;
     });
@@ -555,59 +587,66 @@ if (_seats[index] == null) {
     }
     final passCtrl = TextEditingController(text: currentPass);
     showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        backgroundColor: bgColor,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text("Set Room Password",
-            style: TextStyle(color: primaryBrown, fontWeight: FontWeight.bold)),
-        content: TextField(
-          controller: passCtrl,
-          keyboardType: TextInputType.number,
-          style: const TextStyle(color: primaryBrown),
-          decoration: InputDecoration(
-            hintText: "Enter 4-digit code (Leave blank to remove)",
-            hintStyle: const TextStyle(color: Colors.black38, fontSize: 12),
-            filled: true,
-            fillColor: cardBg,
-            border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: borderColor)),
-            enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: borderColor)),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Cancel", style: TextStyle(color: Colors.black54)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: buttonDark),
 
-onPressed: () {
-              setState(() {
-                final txt = passCtrl.text.trim();
-                if (txt.isEmpty) {
-                  _roomSettings.password = null;
-                } else {
-                  _roomSettings.password = txt;
-                }
-              });
-              Navigator.pop(context);
-              String statusMsg = "Password set successfully";
-              if (_roomSettings.password == null) {
-                statusMsg = "Password removed";
-              }
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text(statusMsg)),
-              );
-            },
-            child: const Text("Save", style: TextStyle(color: Colors.white)),
+context: context,
+      builder: (_) {
+        return AlertDialog(
+          backgroundColor: bgColor,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text("Set Room Password",
+              style:
+                  TextStyle(color: primaryBrown, fontWeight: FontWeight.bold)),
+          content: TextField(
+            controller: passCtrl,
+            keyboardType: TextInputType.number,
+            style: const TextStyle(color: primaryBrown),
+            decoration: InputDecoration(
+              hintText: "Enter 4-digit code (Leave blank to remove)",
+              hintStyle: const TextStyle(color: Colors.black38, fontSize: 12),
+              filled: true,
+              fillColor: cardBg,
+              border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: borderColor)),
+              enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: borderColor)),
+            ),
           ),
-        ],
-      ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+              },
+              child:
+                  const Text("Cancel", style: TextStyle(color: Colors.black54)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: buttonDark),
+              onPressed: () {
+                setState(() {
+                  final txt = passCtrl.text.trim();
+                  if (txt.isEmpty) {
+                    _roomSettings.password = null;
+                  } else {
+                    _roomSettings.password = txt;
+                  }
+                });
+                Navigator.pop(context);
+                String statusMsg = "Password set successfully";
+                if (_roomSettings.password == null) {
+                  statusMsg = "Password removed";
+                }
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(statusMsg)),
+                );
+              },
+              child: const Text("Save", style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -615,93 +654,95 @@ onPressed: () {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
-      builder: (_) => Container(
-        height: 340,
-        padding: const EdgeInsets.all(18),
-        decoration: const BoxDecoration(
-          color: bgColor,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                  width: 44,
-                  height: 4,
-                  decoration: BoxDecoration(
-                      color: Colors.black26,
-                      borderRadius: BorderRadius.circular(2))),
-            ),
-            const SizedBox(height: 14),
-            const Text(
-              "Room Administrators",
-              style: TextStyle(
-                  color: primaryBrown,
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 12),
-            Expanded(
-              child: ListView.builder(
-                itemCount: _seats.length,
-                itemBuilder: (context, idx) {
-                  final u = _seats[idx];
-                  if (u == null) return const SizedBox.shrink();
-                  final isAdmin = _roomSettings.admins.contains(u);
-                  Color btnBg = const Color(0xFF107C41);
-                  String btnTxt = "Make Admin";
-                  if (isAdmin) {
-                    btnBg = Colors.redAccent;
-                    btnTxt = "Remove Admin";
-                  }
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 8),
+      builder: (_) {
+        return Container(
+          height: 340,
+          padding: const EdgeInsets.all(18),
+          decoration: const BoxDecoration(
+            color: bgColor,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                    width: 44,
+                    height: 4,
                     decoration: BoxDecoration(
-                      color: cardBg,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: borderColor),
-                    ),
-                    child: ListTile(
-                      leading: const CircleAvatar(
-                        backgroundColor: bgColor,
-                        child: Icon(Icons.person, color: primaryBrown),
-                      ),
-                      title: Text(u,
-                          style: const TextStyle(
-                              color: primaryBrown,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 13)),
-                      trailing: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: btnBg,
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10)),
-                          elevation: 0,
-                        ),
-                        onPressed: () {
-                          setState(() {
-                            if (isAdmin) {
-                              _roomSettings.admins.remove(u);
-                            } else {
-                              _roomSettings.admins.add(u);
-
-}
-                          });
-                          Navigator.pop(context);
-                        },
-                        child: Text(btnTxt,
-                            style: const TextStyle(
-                                color: Colors.white, fontSize: 11)),
-                      ),
-                    ),
-                  );
-                },
+                        color: Colors.black26,
+                        borderRadius: BorderRadius.circular(2))),
               ),
-            ),
-          ],
-        ),
-      ),
+              const SizedBox(height: 14),
+              const Text(
+                "Room Administrators",
+                style: TextStyle(
+                    color: primaryBrown,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 12),
+              Expanded(
+                child: ListView.builder(
+                  itemCount: _seats.length,
+                  itemBuilder: (context, idx) {
+                    final String? u = _seats[idx]?.toString();
+                    if (u == null) return const SizedBox.shrink();
+                    final isAdmin = _roomSettings.admins.contains(u);
+
+Color btnBg = const Color(0xFF107C41);
+                    String btnTxt = "Make Admin";
+                    if (isAdmin) {
+                      btnBg = Colors.redAccent;
+                      btnTxt = "Remove Admin";
+                    }
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      decoration: BoxDecoration(
+                        color: cardBg,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: borderColor),
+                      ),
+                      child: ListTile(
+                        leading: const CircleAvatar(
+                          backgroundColor: bgColor,
+                          child: Icon(Icons.person, color: primaryBrown),
+                        ),
+                        title: Text(u,
+                            style: const TextStyle(
+                                color: primaryBrown,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13)),
+                        trailing: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: btnBg,
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10)),
+                            elevation: 0,
+                          ),
+                          onPressed: () {
+                            setState(() {
+                              if (isAdmin) {
+                                _roomSettings.admins.remove(u);
+                              } else {
+                                _roomSettings.admins.add(u);
+                              }
+                            });
+                            Navigator.pop(context);
+                          },
+                          child: Text(btnTxt,
+                              style: const TextStyle(
+                                  color: Colors.white, fontSize: 11)),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -713,144 +754,156 @@ onPressed: () {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => StatefulBuilder(
-        builder: (ctx, setDialogState) => Container(
-          padding: const EdgeInsets.all(20),
-          decoration: const BoxDecoration(
-            color: bgColor,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 44,
-                  height: 4,
-                  decoration: BoxDecoration(
-                      color: Colors.black26,
-                      borderRadius: BorderRadius.circular(2)),
-                ),
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            return Container(
+              padding: const EdgeInsets.all(20),
+              decoration: const BoxDecoration(
+                color: bgColor,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
               ),
-              const SizedBox(height: 16),
-              const Center(
-                child: Text(
-                  "Send Red Packet",
-                  style: TextStyle(
-                      color: primaryBrown,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold),
-                ),
-              ),
-              const SizedBox(height: 16),
-              const Text("Total Coins in Red Packets",
-                  style: TextStyle(color: Colors.black54, fontSize: 12.5)),
-              const SizedBox(height: 8),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [100, 500, 1000].map((amt) {
-                  final sel = selectedAmount == amt;
-                  Color lblColor = primaryBrown;
-                  if (sel) {
-                    lblColor = Colors.white;
-                  }
-                  return ChoiceChip(
-                    label: Text("$amt Coins"),
-                    selected: sel,
-                    selectedColor: buttonDark,
-                    backgroundColor: cardBg,
-                    labelStyle: TextStyle(
-                        color: lblColor,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12),
-                    onSelected: (_) =>
-                        setDialogState(() => selectedAmount = amt),
-                  );
-                }).toList(),
-              ),
-              const SizedBox(height: 16),
-              const Text("Red Packet Quantity",
-                  style: TextStyle(color: Colors.black54, fontSize: 12.5)),
-              const SizedBox(height: 8),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [5, 10, 15, 20].map((qty) {
-                  final sel = selectedCount == qty;
-                  Color lblColor = primaryBrown;
-                  if (sel) {
-                    lblColor = Colors.white;
-                  }
-                  return ChoiceChip(
-                    label: Text("x$qty"),
-                    selected: sel,
-                    selectedColor: buttonDark,
-                    backgroundColor: cardBg,
-                    labelStyle: TextStyle(
-                        color: lblColor,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12),
-
-onSelected: (_) =>
-                        setDialogState(() => selectedCount = qty),
-                  );
-                }).toList(),
-              ),
-              const SizedBox(height: 20),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF107C41),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16)),
-                    elevation: 0,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 44,
+                      height: 4,
+                      decoration: BoxDecoration(
+                          color: Colors.black26,
+                          borderRadius: BorderRadius.circular(2)),
+                    ),
                   ),
-                  onPressed: () {
-                    if (_currentCoins < selectedAmount) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                            content:
-                                Text("Insufficient coins to send Red Packet!")),
-                      );
-                      return;
-                    }
-                    setState(() {
-                      _currentCoins -= selectedAmount;
-                    });
-
-                    FirebaseFirestore.instance
-                        .collection('rooms')
-                        .doc(channelName)
-                        .collection('chats')
-                        .add({
-                      'sender': 'System',
-                      'text':
-                          "Red Packet of $selectedAmount Coins dropped in room!",
-                      'timestamp': FieldValue.serverTimestamp(),
-                    });
-
-                    if (_currentUser != null) {
-                      FirebaseFirestore.instance
-                          .collection('users')
-                          .doc(_currentUser!.uid)
-                          .update(
-                              {'coins': FieldValue.increment(-selectedAmount)});
-                    }
-                    widget.onCoinUpdate(_currentCoins);
-                    Navigator.pop(context);
-                  },
-                  child: const Text("Send Red Packets",
+                  const SizedBox(height: 16),
+                  const Center(
+                    child: Text(
+                      "Send Red Packet",
                       style: TextStyle(
-                          color: Colors.white, fontWeight: FontWeight.bold)),
-                ),
+                          color: primaryBrown,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text("Total Coins in Red Packets",
+
+style: TextStyle(color: Colors.black54, fontSize: 12.5)),
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: [100, 500, 1000].map((amt) {
+                      final sel = selectedAmount == amt;
+                      Color lblColor = primaryBrown;
+                      if (sel) {
+                        lblColor = Colors.white;
+                      }
+                      return ChoiceChip(
+                        label: Text("$amt Coins"),
+                        selected: sel,
+                        selectedColor: buttonDark,
+                        backgroundColor: cardBg,
+                        labelStyle: TextStyle(
+                            color: lblColor,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12),
+                        onSelected: (_) {
+                          setDialogState(() {
+                            selectedAmount = amt;
+                          });
+                        },
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text("Red Packet Quantity",
+                      style: TextStyle(color: Colors.black54, fontSize: 12.5)),
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: [5, 10, 15, 20].map((qty) {
+                      final sel = selectedCount == qty;
+                      Color lblColor = primaryBrown;
+                      if (sel) {
+                        lblColor = Colors.white;
+                      }
+                      return ChoiceChip(
+                        label: Text("x$qty"),
+                        selected: sel,
+                        selectedColor: buttonDark,
+                        backgroundColor: cardBg,
+                        labelStyle: TextStyle(
+                            color: lblColor,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12),
+                        onSelected: (_) {
+                          setDialogState(() {
+                            selectedCount = qty;
+                          });
+                        },
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF107C41),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16)),
+                        elevation: 0,
+                      ),
+                      onPressed: () {
+                        if (_lt(_currentCoins, selectedAmount)) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                                content: Text(
+                                    "Insufficient coins to send Red Packet!")),
+                          );
+                          return;
+                        }
+                        setState(() {
+                          _currentCoins -= selectedAmount;
+                        });
+
+                        FirebaseFirestore.instance
+                            .collection('rooms')
+                            .doc(channelName)
+                            .collection('chats')
+                            .add({
+                          'sender': _d('System'),
+                          'text': _d(
+                              "Red Packet of $selectedAmount Coins dropped in room!"),
+                          'timestamp': _d(FieldValue.serverTimestamp()),
+                        });
+
+if (_currentUser != null) {
+                          FirebaseFirestore.instance
+                              .collection('users')
+                              .doc(_currentUser!.uid)
+                              .update({
+                            'coins': _d(FieldValue.increment(-selectedAmount))
+                          });
+                        }
+                        _w.onCoinUpdate(_currentCoins);
+                        Navigator.pop(context);
+                      },
+                      child: const Text("Send Red Packets",
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                ],
               ),
-              const SizedBox(height: 10),
-            ],
-          ),
-        ),
-      ),
+            );
+          },
+        );
+      },
     );
   }
 
@@ -866,88 +919,90 @@ onSelected: (_) =>
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
-      builder: (_) => Container(
-        padding: const EdgeInsets.all(18),
-        decoration: const BoxDecoration(
-          color: bgColor,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Center(
-              child: Container(
-                  width: 44,
-                  height: 4,
-                  decoration: BoxDecoration(
-                      color: Colors.black26,
-                      borderRadius: BorderRadius.circular(2))),
-            ),
-            const SizedBox(height: 12),
-            Text(user,
-                style: const TextStyle(
-                    color: primaryBrown,
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold)),
-            const SizedBox(height: 14),
-            Container(
-              decoration: BoxDecoration(
-                  color: cardBg,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: borderColor)),
-
-child: Column(
-                children: [
-                  ListTile(
-                    leading: Icon(micIcon, color: primaryBrown),
-                    title: Text(micLabel,
-                        style: const TextStyle(
-                            color: primaryBrown, fontWeight: FontWeight.w600)),
-                    onTap: () {
-                      setState(() {
-                        if (isMuted) {
-                          _mutedSeats.remove(index);
-                        } else {
-                          _mutedSeats.add(index);
-                        }
-                      });
-                      Navigator.pop(context);
-                    },
-                  ),
-                  const Divider(height: 1, color: borderColor),
-                  ListTile(
-                    leading: const Icon(Icons.exit_to_app,
-                        color: Colors.redAccent),
-                    title: const Text("Kick from Seat",
-                        style: TextStyle(
-                            color: Colors.redAccent,
-                            fontWeight: FontWeight.w600)),
-                    onTap: () async {
-                      setState(() {
-                        _seats[index] = null;
-                        _seatUids[index] = null;
-                      });
-                      Navigator.pop(context);
-
-                      await FirebaseFirestore.instance
-                          .collection('rooms')
-                          .doc(channelName)
-                          .set({
-                        'seats': _seats,
-                        'seatUids': _seatUids,
-                      }, SetOptions(merge: true));
-                    },
-                  ),
-                ],
+      builder: (_) {
+        return Container(
+          padding: const EdgeInsets.all(18),
+          decoration: const BoxDecoration(
+            color: bgColor,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Center(
+                child: Container(
+                    width: 44,
+                    height: 4,
+                    decoration: BoxDecoration(
+                        color: Colors.black26,
+                        borderRadius: BorderRadius.circular(2))),
               ),
-            ),
-          ],
-        ),
-      ),
+              const SizedBox(height: 12),
+              Text(user,
+                  style: const TextStyle(
+                      color: primaryBrown,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold)),
+              const SizedBox(height: 14),
+              Container(
+                decoration: BoxDecoration(
+                    color: cardBg,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: borderColor)),
+                child: Column(
+                  children: [
+                    ListTile(
+                      leading: Icon(micIcon, color: primaryBrown),
+                      title: Text(micLabel,
+                          style: const TextStyle(
+                              color: primaryBrown,
+                              fontWeight: FontWeight.w600)),
+                      onTap: () {
+                        setState(() {
+                          if (isMuted) {
+                            _mutedSeats.remove(index);
+                          } else {
+                            _mutedSeats.add(index);
+                          }
+                        });
+                        Navigator.pop(context);
+                      },
+                    ),
+                    const Divider(height: 1, color: borderColor),
+                    ListTile(
+                      leading: const Icon(Icons.exit_to_app,
+                          color: Colors.redAccent),
+                      title: const Text("Kick from Seat",
+                          style: TextStyle(
+                              color: Colors.redAccent,
+                              fontWeight: FontWeight.w600)),
+                      onTap: () async {
+                        setState(() {
+                          _seats[index] = null;
+                          _seatUids[index] = null;
+                        });
+                        Navigator.pop(context);
+
+await FirebaseFirestore.instance
+                            .collection('rooms')
+                            .doc(channelName)
+                            .set({
+                          'seats': _d(_seats),
+                          'seatUids': _d(_seatUids),
+                        }, SetOptions(merge: true));
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
-  Future<void> _playGiftVideo(GiftModel gift) async {
+  Future _playGiftVideo(GiftModel gift) async {
     try {
       _videoController?.dispose();
       _videoController = VideoPlayerController.asset(gift.videoPath);
@@ -964,7 +1019,7 @@ child: Column(
         final ctrl = _videoController;
         if (ctrl != null) {
           if (ctrl.value.isInitialized) {
-            if (ctrl.value.position >= ctrl.value.duration) {
+            if (ctrl.value.position.compareTo(ctrl.value.duration).sign != -1) {
               if (mounted) {
                 setState(() {
                   _isPlayingVideo = false;
@@ -995,7 +1050,7 @@ child: Column(
     bool isStreak = false;
     if (_lastGiftTargetKey == targetKey) {
       if (_lastGiftTimestamp != null) {
-        if (now.difference(_lastGiftTimestamp!).inSeconds < 4) {
+        if (_lt(now.difference(_lastGiftTimestamp!).inSeconds, 4)) {
           isStreak = true;
         }
       }
@@ -1042,7 +1097,7 @@ child: Column(
   }) async {
     final int totalCost = gift.cost * multiplier;
 
-if (_currentCoins < totalCost) {
+    if (_lt(_currentCoins, totalCost)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Insufficient coins! Please recharge.")),
       );
@@ -1064,58 +1119,64 @@ if (_currentCoins < totalCost) {
       _currentCoins -= totalCost;
 
       if (targetSeatIndex != null) {
-        if (targetSeatIndex < _seatGiftsCount.length) {
-          _seatGiftsCount[targetSeatIndex] += totalCost;
-          final recipientUid = _seatUids[targetSeatIndex];
+        if (_lt(targetSeatIndex, _seatGiftsCount.length)) {
+          _seatGiftsCount[targetSeatIndex] =
+              (_seatGiftsCount[targetSeatIndex] as num).toInt() + totalCost;
+          final String? recipientUid = _seatUids[targetSeatIndex]?.toString();
           if (recipientUid != null) {
             if (recipientUid.isNotEmpty) {
               FirebaseFirestore.instance
                   .collection('users')
                   .doc(recipientUid)
                   .set({
-                'points': FieldValue.increment(pointsPerRecipient),
-                'todayPoints': FieldValue.increment(pointsPerRecipient),
-                'charmExp': FieldValue.increment(pointsPerRecipient),
-                'todayTaskPoints': FieldValue.increment(pointsPerRecipient),
-                'weekTaskPoints': FieldValue.increment(pointsPerRecipient),
+                'points': _d(FieldValue.increment(pointsPerRecipient)),
+
+'todayPoints': _d(FieldValue.increment(pointsPerRecipient)),
+                'charmExp': _d(FieldValue.increment(pointsPerRecipient)),
+                'todayTaskPoints':
+                    _d(FieldValue.increment(pointsPerRecipient)),
+                'weekTaskPoints': _d(FieldValue.increment(pointsPerRecipient)),
               }, SetOptions(merge: true));
 
               FirebaseFirestore.instance.collection('point_transactions').add({
-                'userUid': recipientUid,
-                'senderUid': senderUid,
-                'type': 'GIFT_RECEIVED',
-                'points': pointsPerRecipient,
-                'createdAt': FieldValue.serverTimestamp(),
+                'userUid': _d(recipientUid),
+                'senderUid': _d(senderUid),
+                'type': _d('GIFT_RECEIVED'),
+                'points': _d(pointsPerRecipient),
+                'createdAt': _d(FieldValue.serverTimestamp()),
               });
             }
           }
         }
       } else if (target == "All Seats") {
-        for (int i = 0; i < _seatGiftsCount.length; i++) {
+        for (int i = 0; _lt(i, _seatGiftsCount.length); i++) {
           if (_seats[i] != null) {
-            _seatGiftsCount[i] += totalCost;
-            final recipientUid = _seatUids[i];
+            _seatGiftsCount[i] =
+                (_seatGiftsCount[i] as num).toInt() + totalCost;
+            final String? recipientUid = _seatUids[i]?.toString();
             if (recipientUid != null) {
               if (recipientUid.isNotEmpty) {
                 FirebaseFirestore.instance
                     .collection('users')
                     .doc(recipientUid)
                     .set({
-                  'points': FieldValue.increment(pointsPerRecipient),
-                  'todayPoints': FieldValue.increment(pointsPerRecipient),
-                  'charmExp': FieldValue.increment(pointsPerRecipient),
-                  'todayTaskPoints': FieldValue.increment(pointsPerRecipient),
-                  'weekTaskPoints': FieldValue.increment(pointsPerRecipient),
+                  'points': _d(FieldValue.increment(pointsPerRecipient)),
+                  'todayPoints': _d(FieldValue.increment(pointsPerRecipient)),
+                  'charmExp': _d(FieldValue.increment(pointsPerRecipient)),
+                  'todayTaskPoints':
+                      _d(FieldValue.increment(pointsPerRecipient)),
+                  'weekTaskPoints':
+                      _d(FieldValue.increment(pointsPerRecipient)),
                 }, SetOptions(merge: true));
 
                 FirebaseFirestore.instance
                     .collection('point_transactions')
                     .add({
-                  'userUid': recipientUid,
-                  'senderUid': senderUid,
-                  'type': 'GIFT_RECEIVED',
-                  'points': pointsPerRecipient,
-                  'createdAt': FieldValue.serverTimestamp(),
+                  'userUid': _d(recipientUid),
+                  'senderUid': _d(senderUid),
+                  'type': _d('GIFT_RECEIVED'),
+                  'points': _d(pointsPerRecipient),
+                  'createdAt': _d(FieldValue.serverTimestamp()),
                 });
               }
             }
@@ -1129,13 +1190,13 @@ if (_currentCoins < totalCost) {
         .doc(channelName)
         .collection('chats')
         .add({
-      'sender': _myDisplayName,
-      'text': "sent ${gift.name} ${gift.icon} x$multiplier to $target",
-      'timestamp': FieldValue.serverTimestamp(),
+      'sender': _d(_myDisplayName),
+      'text': _d("sent ${gift.name} ${gift.icon} x$multiplier to $target"),
+      'timestamp': _d(FieldValue.serverTimestamp()),
     });
 
     await FirebaseFirestore.instance.collection('rooms').doc(channelName).set({
-      'seatGifts': _seatGiftsCount,
+      'seatGifts': _d(_seatGiftsCount),
     }, SetOptions(merge: true));
 
     if (_currentUser != null) {
@@ -1143,12 +1204,12 @@ if (_currentCoins < totalCost) {
           .collection('users')
           .doc(_currentUser!.uid)
           .set({
-        'coins': FieldValue.increment(-totalCost),
-        'wealthExp': FieldValue.increment(totalCost),
+        'coins': _d(FieldValue.increment(-totalCost)),
+        'wealthExp': _d(FieldValue.increment(totalCost)),
       }, SetOptions(merge: true));
     }
 
-    widget.onCoinUpdate(_currentCoins);
+    _w.onCoinUpdate(_currentCoins);
     if (mounted) {
       Navigator.pop(context);
     }
@@ -1158,13 +1219,13 @@ if (_currentCoins < totalCost) {
     _playGiftVideo(gift);
   }
 
-void _openGiftSheet() {
+  void _openGiftSheet() {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) {
-        GiftModel selectedGift = availableGifts[0];
+        GiftModel selectedGift = availableGifts[0] as GiftModel;
         String selectedTarget = "All Seats";
         int? selectedSeatIndex;
         int selectedMultiplier = 1;
@@ -1176,7 +1237,7 @@ void _openGiftSheet() {
               currentUid = _currentUser!.uid;
             }
 
-            return Container(
+return Container(
               height: 530,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: const BoxDecoration(
@@ -1245,7 +1306,7 @@ void _openGiftSheet() {
                         childAspectRatio: 0.8,
                       ),
                       itemBuilder: (context, index) {
-                        final gift = availableGifts[index];
+                        final gift = availableGifts[index] as GiftModel;
                         final isSelected = selectedGift.id == gift.id;
 
                         Color itemBg = cardBg;
@@ -1257,7 +1318,7 @@ void _openGiftSheet() {
                           itemBorderW = 2.0;
                         }
 
-return GestureDetector(
+                        return GestureDetector(
                           onTap: () {
                             setSheetState(() {
                               selectedGift = gift;
@@ -1266,7 +1327,8 @@ return GestureDetector(
                           child: Container(
                             decoration: BoxDecoration(
                               color: itemBg,
-                              borderRadius: BorderRadius.circular(14),
+
+borderRadius: BorderRadius.circular(14),
                               border: Border.all(
                                 color: itemBorder,
                                 width: itemBorderW,
@@ -1317,7 +1379,8 @@ return GestureDetector(
                   SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
                     child: Row(
-                      children: giftMultipliers.map((mult) {
+                      children: giftMultipliers.map((rawMult) {
+                        final int mult = (rawMult as num).toInt();
                         final isChosen = selectedMultiplier == mult;
                         Color pillBg = cardBg;
                         Color pillBorder = borderColor;
@@ -1338,13 +1401,13 @@ return GestureDetector(
                             margin: const EdgeInsets.only(right: 8),
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 10, vertical: 5),
-
-decoration: BoxDecoration(
+                            decoration: BoxDecoration(
                               color: pillBg,
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(
                                 color: pillBorder,
-                              ),
+
+),
                             ),
                             child: Text(
                               "x$mult",
@@ -1382,18 +1445,20 @@ decoration: BoxDecoration(
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                  builder: (_) => WalletScreen(
-                                    userUid: currentUid,
-                                    userNumericId: _myUid,
-                                    currentCoins: _currentCoins,
-                                    onCoinsRecharged: (newCoins) {
-                                      setState(() {
-                                        _currentCoins = newCoins;
-                                      });
-                                      setSheetState(() {});
-                                      widget.onCoinUpdate(newCoins);
-                                    },
-                                  ),
+                                  builder: (_) {
+                                    return WalletScreen(
+                                      userUid: currentUid,
+                                      userNumericId: _myUid,
+                                      currentCoins: _currentCoins,
+                                      onCoinsRecharged: (newCoins) {
+                                        setState(() {
+                                          _currentCoins = newCoins;
+                                        });
+                                        setSheetState(() {});
+                                        _w.onCoinUpdate(newCoins);
+                                      },
+                                    );
+                                  },
                                 ),
                               );
                             },
@@ -1421,25 +1486,27 @@ decoration: BoxDecoration(
                               ),
                             ),
                           ),
-
-],
+                        ],
                       ),
                       ElevatedButton(
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF107C41),
-                          foregroundColor: Colors.white,
+
+foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(
                               horizontal: 24, vertical: 12),
                           shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(16)),
                           elevation: 0,
                         ),
-                        onPressed: () => _sendGift(
-                          gift: selectedGift,
-                          target: selectedTarget,
-                          targetSeatIndex: selectedSeatIndex,
-                          multiplier: selectedMultiplier,
-                        ),
+                        onPressed: () {
+                          _sendGift(
+                            gift: selectedGift,
+                            target: selectedTarget,
+                            targetSeatIndex: selectedSeatIndex,
+                            multiplier: selectedMultiplier,
+                          );
+                        },
                         child: Text(
                           "Send (Total: ${selectedGift.cost * selectedMultiplier})",
                           style: const TextStyle(
@@ -1515,19 +1582,19 @@ decoration: BoxDecoration(
   @override
   Widget build(BuildContext context) {
     double seatSize = 44.0;
-    if (_activeSeatCount > 20) {
+    if (_gt(_activeSeatCount, 20)) {
       seatSize = 38.0;
     }
 
     int crossCount = 4;
-    if (_activeSeatCount > 20) {
+    if (_gt(_activeSeatCount, 20)) {
       crossCount = 6;
-    } else if (_activeSeatCount > 12) {
+    } else if (_gt(_activeSeatCount, 12)) {
       crossCount = 5;
     }
 
     int gridItemCount = 0;
-    if (_activeSeatCount > 1) {
+    if (_gt(_activeSeatCount, 1)) {
       gridItemCount = _activeSeatCount - 1;
     }
 
@@ -1557,13 +1624,13 @@ decoration: BoxDecoration(
               color: primaryBrown, size: 28),
           tooltip: "Minimize Room",
           onPressed: () {
-
-_agoraService.minimizeRoom();
+            _agoraService.minimizeRoom();
             Navigator.pop(context);
           },
         ),
         title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+
+crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               _roomSettings.roomName,
@@ -1641,7 +1708,8 @@ _agoraService.minimizeRoom();
                                 isMuted = true;
                               }
 
-                              final giftPoints = _seatGiftsCount[seatIndex];
+                              final int giftPoints =
+                                  (_seatGiftsCount[seatIndex] as num).toInt();
 
                               Widget seatCenterIcon = const Icon(Icons.chair,
                                   color: Colors.black38, size: 18);
@@ -1661,12 +1729,14 @@ _agoraService.minimizeRoom();
 String seatLabelText = "$seatIndex";
                               Color seatLabelColor = Colors.black54;
                               if (isTaken) {
-                                seatLabelText = _seats[seatIndex]!;
+                                seatLabelText = _seats[seatIndex].toString();
                                 seatLabelColor = primaryBrown;
                               }
 
                               return GestureDetector(
-                                onTap: () => _handleSeatTap(seatIndex),
+                                onTap: () {
+                                  _handleSeatTap(seatIndex);
+                                },
                                 child: Column(
                                   children: [
                                     AnimatedBuilder(
@@ -1724,10 +1794,10 @@ String seatLabelText = "$seatIndex";
                                       ),
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
-                                    ),
-                                    if (giftPoints > 0)
 
-Container(
+),
+                                    if (_gt(giftPoints, 0))
+                                      Container(
                                         padding: const EdgeInsets.symmetric(
                                             horizontal: 4, vertical: 1),
                                         decoration: BoxDecoration(
@@ -1764,11 +1834,12 @@ Container(
                     reverse: true,
                     itemCount: _chatMessages.length,
                     itemBuilder: (context, index) {
-                      final msg =
-                          _chatMessages[_chatMessages.length - 1 - index];
-                      final isSystem = RegExp(
-                              r'^(System:|Announcement:|Red Packet)')
-                          .hasMatch(msg);
+                      final String msg =
+                          _chatMessages[_chatMessages.length - 1 - index]
+                              .toString();
+                      final bool isSystem = msg.startsWith("System:") ||
+                          msg.startsWith("Announcement:") ||
+                          msg.startsWith("Red Packet");
 
                       Color msgBg = cardBg.withOpacity(0.9);
                       Color msgColor = primaryBrown;
@@ -1806,12 +1877,12 @@ Container(
                   ),
                 ),
                 Container(
-                  padding:
+
+padding:
                       const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: const BoxDecoration(
                     color: cardBg,
-
-border: Border(top: BorderSide(color: borderColor)),
+                    border: Border(top: BorderSide(color: borderColor)),
                   ),
                   child: Row(
                     children: [
@@ -1848,9 +1919,9 @@ border: Border(top: BorderSide(color: borderColor)),
                                     .doc(channelName)
                                     .collection('chats')
                                     .add({
-                                  'sender': _myDisplayName,
-                                  'text': txt,
-                                  'timestamp': FieldValue.serverTimestamp(),
+                                  'sender': _d(_myDisplayName),
+                                  'text': _d(txt),
+                                  'timestamp': _d(FieldValue.serverTimestamp()),
                                 });
                               }
                             },
@@ -1864,121 +1935,179 @@ border: Border(top: BorderSide(color: borderColor)),
                           showModalBottomSheet(
                             context: context,
                             backgroundColor: Colors.transparent,
-                            builder: (context) => Container(
-                              padding: const EdgeInsets.all(20.0),
-                              decoration: const BoxDecoration(
-                                color: bgColor,
-                                borderRadius: BorderRadius.vertical(
-                                    top: Radius.circular(24)),
-                              ),
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Center(
-                                    child: Container(
-                                      width: 44,
-                                      height: 4,
-                                      decoration: BoxDecoration(
-                                          color: Colors.black26,
-                                          borderRadius:
-                                              BorderRadius.circular(2)),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 16),
-                                  const Text(
-                                    "Select Mini-Game",
-                                    style: TextStyle(
-
-color: primaryBrown,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 17,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 16),
-                                  Container(
-                                    decoration: BoxDecoration(
-                                        color: cardBg,
-                                        borderRadius: BorderRadius.circular(16),
-                                        border: Border.all(color: borderColor)),
-                                    child: Column(
-                                      children: [
-                                        ListTile(
-                                          leading: const CircleAvatar(
-                                            backgroundColor: bgColor,
-                                            child: Text("🎰",
-                                                style: TextStyle(fontSize: 20)),
-                                          ),
-                                          title: const Text(
-                                            "Lucky Spin Wheel",
-                                            style: TextStyle(
-                                                color: primaryBrown,
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 13),
-                                          ),
-                                          trailing: const Icon(
-                                              Icons.chevron_right,
-                                              color: primaryBrown),
-                                          onTap: () {
-                                            Navigator.pop(context);
-                                            showModalBottomSheet(
-                                              context: context,
-                                              isScrollControlled: true,
-                                              backgroundColor:
-                                                  Colors.transparent,
-                                              builder: (_) => LuckyWheelDialog(
-                                                currentCoins: _currentCoins,
-                                                onCoinsUpdated: (newCoins) {
-                                                  setState(() =>
-                                                      _currentCoins = newCoins);
-                                                  widget.onCoinUpdate(newCoins);
-                                                },
-                                              ),
-                                            );
-                                          },
-                                        ),
-                                        const Divider(
-                                            height: 1, color: borderColor),
-                                        ListTile(
-                                          leading: const CircleAvatar(
-                                            backgroundColor: bgColor,
-                                            child: Text("🃏",
-                                                style: TextStyle(fontSize: 20)),
-                                          ),
-                                          title: const Text(
-                                            "Teen Patti (3 Cards)",
-                                            style: TextStyle(
-                                                color: primaryBrown,
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 13),
+                            builder: (context) {
+                              return Container(
+                                padding: const EdgeInsets.all(20.0),
+                                decoration: const BoxDecoration(
+                                  color: bgColor,
+                                  borderRadius: BorderRadius.vertical(
+                                      top: Radius.circular(24)),
+                                ),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Center(
+                                      child: Container(
+                                        width: 44,
+                                        height: 4,
+                                        decoration: BoxDecoration(
+                                            color: Colors.black26,
+                                            borderRadius:
+                                                BorderRadius.circular(2)),
 
 ),
-                                          trailing: const Icon(
-                                              Icons.chevron_right,
-                                              color: primaryBrown),
-                                          onTap: () {
-                                            Navigator.pop(context);
-                                            showModalBottomSheet(
-                                              context: context,
-                                              isScrollControlled: true,
-                                              backgroundColor:
-                                                  Colors.transparent,
-                                              builder: (_) => TeenPattiDialog(
-                                                currentCoins: _currentCoins,
-                                                onCoinsUpdated: (newCoins) {
-                                                  setState(() =>
-                                                      _currentCoins = newCoins);
-                                                  widget.onCoinUpdate(newCoins);
-                                                },
-                                              ),
-                                            );
-                                          },
-                                        ),
-                                      ],
                                     ),
-                                  ),
-                                ],
-                              ),
-                            ),
+                                    const SizedBox(height: 16),
+                                    const Text(
+                                      "Select Mini-Game",
+                                      style: TextStyle(
+                                        color: primaryBrown,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 17,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 16),
+                                    Container(
+                                      decoration: BoxDecoration(
+                                          color: cardBg,
+                                          borderRadius:
+                                              BorderRadius.circular(16),
+                                          border:
+                                              Border.all(color: borderColor)),
+                                      child: Column(
+                                        children: [
+                                          ListTile(
+                                            leading: const CircleAvatar(
+                                              backgroundColor: bgColor,
+                                              child: Text("🐉",
+                                                  style:
+                                                      TextStyle(fontSize: 20)),
+                                            ),
+                                            title: const Text(
+                                              "Dragon vs Tiger",
+                                              style: TextStyle(
+                                                  color: primaryBrown,
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 13),
+                                            ),
+                                            trailing: const Icon(
+                                                Icons.chevron_right,
+                                                color: primaryBrown),
+                                            onTap: () {
+                                              Navigator.pop(context);
+                                              showModalBottomSheet(
+                                                context: context,
+                                                isScrollControlled: true,
+                                                backgroundColor:
+                                                    Colors.transparent,
+                                                builder: (_) {
+                                                  return DragonTigerDialog(
+                                                    currentCoins: _currentCoins,
+                                                    userName: _myDisplayName,
+                                                    userNumericId: _myUid,
+                                                    onCoinsUpdated: (newCoins) {
+                                                      setState(() {
+                                                        _currentCoins =
+                                                            newCoins;
+                                                      });
+                                                      _w.onCoinUpdate(newCoins);
+                                                    },
+                                                  );
+                                                },
+                                              );
+                                            },
+
+),
+                                          const Divider(
+                                              height: 1, color: borderColor),
+                                          ListTile(
+                                            leading: const CircleAvatar(
+                                              backgroundColor: bgColor,
+                                              child: Text("🎰",
+                                                  style:
+                                                      TextStyle(fontSize: 20)),
+                                            ),
+                                            title: const Text(
+                                              "Lucky Spin Wheel",
+                                              style: TextStyle(
+                                                  color: primaryBrown,
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 13),
+                                            ),
+                                            trailing: const Icon(
+                                                Icons.chevron_right,
+                                                color: primaryBrown),
+                                            onTap: () {
+                                              Navigator.pop(context);
+                                              showModalBottomSheet(
+                                                context: context,
+                                                isScrollControlled: true,
+                                                backgroundColor:
+                                                    Colors.transparent,
+                                                builder: (_) {
+                                                  return LuckyWheelDialog(
+                                                    currentCoins: _currentCoins,
+                                                    onCoinsUpdated: (newCoins) {
+                                                      setState(() {
+                                                        _currentCoins =
+                                                            newCoins;
+                                                      });
+                                                      _w.onCoinUpdate(newCoins);
+                                                    },
+                                                  );
+                                                },
+                                              );
+                                            },
+                                          ),
+                                          const Divider(
+                                              height: 1, color: borderColor),
+                                          ListTile(
+                                            leading: const CircleAvatar(
+                                              backgroundColor: bgColor,
+                                              child: Text("🃏",
+                                                  style:
+                                                      TextStyle(fontSize: 20)),
+                                            ),
+                                            title: const Text(
+                                              "Teen Patti (3 Cards)",
+                                              style: TextStyle(
+                                                  color: primaryBrown,
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 13),
+                                            ),
+                                            trailing: const Icon(
+
+Icons.chevron_right,
+                                                color: primaryBrown),
+                                            onTap: () {
+                                              Navigator.pop(context);
+                                              showModalBottomSheet(
+                                                context: context,
+                                                isScrollControlled: true,
+                                                backgroundColor:
+                                                    Colors.transparent,
+                                                builder: (_) {
+                                                  return TeenPattiDialog(
+                                                    currentCoins: _currentCoins,
+                                                    onCoinsUpdated: (newCoins) {
+                                                      setState(() {
+                                                        _currentCoins =
+                                                            newCoins;
+                                                      });
+                                                      _w.onCoinUpdate(newCoins);
+                                                    },
+                                                  );
+                                                },
+                                              );
+                                            },
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
                           );
                         },
                       ),
@@ -1991,54 +2120,74 @@ color: primaryBrown,
                         icon: const Icon(Icons.grid_view_rounded,
                             color: primaryBrown),
                         onPressed: () {
+                          final typedSeats =
+                              List.generate(_seats.length, (i) {
+                            final val = _seats[i];
+                            if (val == null) {
+                              return null;
+                            }
+                            return val.toString();
+                          });
+
                           showModalBottomSheet(
                             context: context,
                             backgroundColor: Colors.transparent,
-                            builder: (_) => BasicToolsSheet(
-                              settings: _roomSettings,
-                              onToggleRoomVoice: _toggleRoomVoice,
-                              onToggleAllMic: _toggleAllMic,
-                              onOpenPasswordDialog: _openPasswordDialog,
-                              onOpenAdminSheet: _openAdminSheet,
-                              onOpenRedPacket: _openRedPacketDialog,
-                              onOpenRoomSettings: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => RoomSettingsScreen(
-                                      settings: _roomSettings,
-                                      currentSeats: _seats,
-                                      onKickSeat: (idx) async {
-                                        setState(() {
-                                          _seats[idx] = null;
-                                          _seatUids[idx] = null;
-                                        });
-                                        await FirebaseFirestore.instance
-                                            .collection('rooms')
-                                            .doc(channelName)
-                                            .set({
-                                          'seats': _seats,
-                                          'seatUids': _seatUids,
-                                        }, SetOptions(merge: true));
+                            builder: (_) {
+                              return BasicToolsSheet(
+                                settings: _roomSettings,
+                                onToggleRoomVoice: _toggleRoomVoice,
+                                onToggleAllMic: _toggleAllMic,
+                                onOpenPasswordDialog: _openPasswordDialog,
+                                onOpenAdminSheet: _openAdminSheet,
+                                onOpenRedPacket: _openRedPacketDialog,
+                                onOpenRoomSettings: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) {
+                                        return RoomSettingsScreen(
+                                          settings: _roomSettings,
+                                          currentSeats: typedSeats,
+                                          onKickSeat: (idx) async {
 
-},
-                                      onUpdateSettings: (newSet) {
-                                        setState(() {
-                                          _roomSettings = newSet;
-                                          _activeSeatCount = newSet.seatCount;
-                                          _seats = List.filled(
-                                              _activeSeatCount, null);
-                                          _seatUids = List.filled(
-                                              _activeSeatCount, null);
-                                          _seatGiftsCount =
-                                              List.filled(_activeSeatCount, 0);
-                                        });
+setState(() {
+                                              _seats[idx] = null;
+                                              _seatUids[idx] = null;
+                                            });
+                                            await FirebaseFirestore.instance
+                                                .collection('rooms')
+                                                .doc(channelName)
+                                                .set({
+                                              'seats': _d(_seats),
+                                              'seatUids': _d(_seatUids),
+                                            }, SetOptions(merge: true));
+                                          },
+                                          onUpdateSettings: (newSet) {
+                                            setState(() {
+                                              _roomSettings = newSet;
+                                              _activeSeatCount =
+                                                  newSet.seatCount;
+                                              _seats = List.generate(
+                                                  _activeSeatCount, (i) {
+                                                return null;
+                                              }, growable: true);
+                                              _seatUids = List.generate(
+                                                  _activeSeatCount, (i) {
+                                                return null;
+                                              }, growable: true);
+                                              _seatGiftsCount = List.generate(
+                                                  _activeSeatCount, (i) {
+                                                return 0;
+                                              }, growable: true);
+                                            });
+                                          },
+                                        );
                                       },
                                     ),
-                                  ),
-                                );
-                              },
-                            ),
+                                  );
+                                },
+                              );
+                            },
                           );
                         },
                       ),
@@ -2081,7 +2230,8 @@ color: primaryBrown,
                         const SizedBox(width: 8),
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
+
+mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(
                               _activeComboData!.senderName,
@@ -2110,9 +2260,15 @@ color: primaryBrown,
                     ),
                   ),
                   const SizedBox(width: 8),
-
-ScaleTransition(
-                    scale: _comboScaleAnimation,
+                  AnimatedBuilder(
+                    animation: _comboScaleController,
+                    builder: (context, child) {
+                      final double t = _comboScaleController.value;
+                      final double scaleVal = _lt(t, 0.5)
+                          ? (1.0 + t * 1.1)
+                          : (1.55 - (t - 0.5) * 1.1);
+                      return Transform.scale(scale: scaleVal, child: child);
+                    },
                     child: Text(
                       "x${_activeComboData!.comboCount}",
                       style: const TextStyle(
@@ -2153,18 +2309,20 @@ ScaleTransition(
         isSpeaking = true;
       }
     }
-    final hostGifts = _seatGiftsCount[0];
+    final int hostGifts = (_seatGiftsCount[0] as num).toInt();
 
     Widget hostCenterIcon =
         const Icon(Icons.chair, color: accentGold, size: 30);
     String hostLabel = "Host (1)";
     if (isTaken) {
       hostCenterIcon = const Icon(Icons.person, color: accentGold, size: 34);
-      hostLabel = _seats[0]!;
+      hostLabel = _seats[0].toString();
     }
 
     return GestureDetector(
-      onTap: () => _handleSeatTap(0),
+      onTap: () {
+        _handleSeatTap(0);
+      },
       child: Column(
         children: [
           AnimatedBuilder(
@@ -2185,7 +2343,7 @@ ScaleTransition(
                 glowColor = const Color(0xFF107C41).withOpacity(0.4);
               }
 
-              return Container(
+return Container(
                 width: 72,
                 height: 72,
                 decoration: BoxDecoration(
@@ -2218,7 +2376,7 @@ ScaleTransition(
               fontWeight: FontWeight.bold,
             ),
           ),
-          if (hostGifts > 0)
+          if (_gt(hostGifts, 0))
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
               decoration: BoxDecoration(
