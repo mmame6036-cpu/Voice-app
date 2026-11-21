@@ -36,7 +36,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Future<void> _saveField(String key, dynamic value) async {
+  Future _saveField(String key, dynamic value) async {
     if (_currentUser == null) return;
     try {
       await FirebaseFirestore.instance
@@ -342,23 +342,26 @@ fontWeight: FontWeight.bold, fontSize: 14, color: kDark),
         stream: uid.isNotEmpty
             ? FirebaseFirestore.instance.collection('users').doc(uid).snapshots()
             : null,
-        builder: (context, AsyncSnapshot snap) {
+        builder: (context, snap) {
           final doc = snap.data as DocumentSnapshot?;
           final userData = doc?.data() as Map? ?? {};
           final currentLang =
               (userData['appLanguage'] ?? 'English').toString();
           final currentLine =
               (userData['networkLine'] ?? 'Line1').toString();
+          final bool hasSecurityPin =
+              (userData['paymentPin'] ?? '').toString().trim().length == 6;
 
 return SingleChildScrollView(
             physics: const BouncingScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(16, 10, 16, 28),
             child: Column(
               children: [
-                // Card 1: Account Manager
+                // Card 1: Account Manager (Includes Security Password)
                 _cardGroup([
                   _settingRow(
                     title: "Account Manager",
+                    trailing: hasSecurityPin ? "PIN Protected" : "Set PIN",
                     onTap: () => _openAccountManager(userData),
                   ),
                 ]),
@@ -492,11 +495,11 @@ Widget _settingRow({
 }
 
 // ============================================================================
-// 1. ACCOUNT SETTINGS PAGE (Account Password, Security Password, Mail)
+// 1. ACCOUNT SETTINGS PAGE (Account Password, 6-Digit Security Password, Mail)
 // ============================================================================
 class _AccountSettingsPage extends StatelessWidget {
   final Map userData;
-  final Future<void> Function(String key, dynamic val) onSaveField;
+  final Future Function(String key, dynamic val) onSaveField;
   final void Function(String msg) onToast;
 
   const _AccountSettingsPage({
@@ -514,12 +517,19 @@ class _AccountSettingsPage extends StatelessWidget {
     return "${name.substring(0, 4)}***@$domain";
   }
 
-  void _openSetPasswordScreen(BuildContext context, {required bool isSecurity}) {
+  void _openSetPasswordScreen(
+    BuildContext context, {
+    required bool isSecurity,
+    required String existingPin,
+    required String boundEmail,
+  }) {
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => _SetPasswordPage(
           isSecurityPassword: isSecurity,
+          existingPin: existingPin,
+          boundEmail: boundEmail,
           onSaveField: onSaveField,
           onToast: onToast,
         ),
@@ -572,12 +582,12 @@ class _AccountSettingsPage extends StatelessWidget {
                     ),
                   ),
                 ),
-              ),
+
+),
               Container(height: 8, color: const Color(0xFFF5F6F8)),
               InkWell(
                 onTap: () => Navigator.pop(ctx),
-
-child: const SizedBox(
+                child: const SizedBox(
                   width: double.infinity,
                   height: 54,
                   child: Center(
@@ -627,11 +637,13 @@ child: const SizedBox(
         stream: uid.isNotEmpty
             ? FirebaseFirestore.instance.collection('users').doc(uid).snapshots()
             : null,
-        builder: (context, AsyncSnapshot snap) {
+        builder: (context, snap) {
           final doc = snap.data as DocumentSnapshot?;
           final live = doc?.data() as Map? ?? userData;
           final bool hasPass = live['hasPassword'] == true;
-          final bool hasPin = (live['paymentPin'] ?? '').toString().isNotEmpty;
+          final String currentPin =
+              (live['paymentPin'] ?? '').toString().trim();
+          final bool hasPin = currentPin.length == 6;
           final String boundMail =
               (live['email'] ?? user?.email ?? '').toString();
 
@@ -678,29 +690,56 @@ child: const SizedBox(
                         ),
                         const SizedBox(width: 2),
                         const Icon(Icons.chevron_right_rounded,
-                            color: Color(0xFF86909C), size: 22),
+
+color: Color(0xFF86909C), size: 22),
                       ],
                     ),
-                    onTap: () =>
-                        _openSetPasswordScreen(context, isSecurity: false),
-
-),
+                    onTap: () => _openSetPasswordScreen(
+                      context,
+                      isSecurity: false,
+                      existingPin: currentPin,
+                      boundEmail: boundMail,
+                    ),
+                  ),
                   const Divider(height: 1, indent: 16, color: Color(0xFFF2F3F5)),
                   ListTile(
                     contentPadding:
                         const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    title: const Text(
-                      "Security Password",
-                      style: TextStyle(
-                        fontSize: 15.5,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF1F2329),
-                      ),
+                    title: Row(
+                      children: [
+                        const Text(
+                          "Security Password",
+                          style: TextStyle(
+                            fontSize: 15.5,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF1F2329),
+                          ),
+                        ),
+                        if (hasPin) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 7, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFE8F9F4),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: const Text(
+                              "6-Digit Active",
+                              style: TextStyle(
+                                color: Color(0xFF00B578),
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                     subtitle: const Padding(
                       padding: EdgeInsets.only(top: 4),
                       child: Text(
-                        "This password is used for payments and transfers",
+                        "Used for Cash out, Transfer & Exchange in Points Wallet",
                         style: TextStyle(
                           fontSize: 12.5,
                           color: Color(0xFF86909C),
@@ -712,9 +751,12 @@ child: const SizedBox(
                       children: [
                         Text(
                           hasPin ? "Change" : "Set",
-                          style: const TextStyle(
-                            color: Color(0xFF86909C),
+                          style: TextStyle(
+                            color: hasPin
+                                ? const Color(0xFF1ED7B5)
+                                : const Color(0xFFE54D42),
                             fontSize: 14,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                         const SizedBox(width: 2),
@@ -722,8 +764,12 @@ child: const SizedBox(
                             color: Color(0xFF86909C), size: 22),
                       ],
                     ),
-                    onTap: () =>
-                        _openSetPasswordScreen(context, isSecurity: true),
+                    onTap: () => _openSetPasswordScreen(
+                      context,
+                      isSecurity: true,
+                      existingPin: currentPin,
+                      boundEmail: boundMail,
+                    ),
                   ),
                   const Divider(height: 1, indent: 16, color: Color(0xFFF2F3F5)),
                   ListTile(
@@ -733,7 +779,8 @@ child: const SizedBox(
                       "Mail",
                       style: TextStyle(
                         fontSize: 15.5,
-                        fontWeight: FontWeight.w600,
+
+fontWeight: FontWeight.w600,
                         color: Color(0xFF1F2329),
                       ),
                     ),
@@ -775,53 +822,104 @@ child: const SizedBox(
 }
 
 // ============================================================================
-// SET PASSWORD FULL SCREEN (2 Rounded Inputs + Teal Pill "Set" Button)
+// SET / CHANGE SECURITY PASSWORD & ACCOUNT PASSWORD FULL SCREEN
 // ============================================================================
 class _SetPasswordPage extends StatefulWidget {
   final bool isSecurityPassword;
-  final Future<void> Function(String key, dynamic val) onSaveField;
+  final String existingPin;
+  final String boundEmail;
+  final Future Function(String key, dynamic val) onSaveField;
   final void Function(String msg) onToast;
 
   const _SetPasswordPage({
     required this.isSecurityPassword,
+    required this.existingPin,
+    required this.boundEmail,
     required this.onSaveField,
     required this.onToast,
   });
 
-@override
+  @override
   State<_SetPasswordPage> createState() => _SetPasswordPageState();
 }
 
 class _SetPasswordPageState extends State<_SetPasswordPage> {
+  final TextEditingController _oldPinCtrl = TextEditingController();
   final TextEditingController _pass1Ctrl = TextEditingController();
   final TextEditingController _pass2Ctrl = TextEditingController();
   bool _saving = false;
+  bool _forgotResetMode = false;
+  String _recoveryCode = "";
+  final TextEditingController _recoveryCodeCtrl = TextEditingController();
+
+  bool get _hasExistingPin =>
+      widget.isSecurityPassword && widget.existingPin.length == 6;
 
   @override
   void dispose() {
+    _oldPinCtrl.dispose();
     _pass1Ctrl.dispose();
     _pass2Ctrl.dispose();
+    _recoveryCodeCtrl.dispose();
     super.dispose();
   }
 
-  Future<void> _submit() async {
+  void _startForgotPinRecovery() {
+    final code = "${100000 + Random().nextInt(899999)}";
+    setState(() {
+      _forgotResetMode = true;
+      _recoveryCode = code;
+    });
+    widget.onToast("Verification code: $code");
+  }
+
+  Future _submit() async {
     final p1 = _pass1Ctrl.text.trim();
     final p2 = _pass2Ctrl.text.trim();
 
-    if (p1.length < 6) {
-      widget.onToast("Password must be at least 6 characters.");
-      return;
-    }
-    if (p1 != p2) {
-      widget.onToast("Both passwords must match.");
-      return;
+    if (widget.isSecurityPassword) {
+      // If changing existing 6-digit PIN, require either old PIN or recovery code
+      if (_hasExistingPin && !_forgotResetMode) {
+        final oldEntered = _oldPinCtrl.text.trim();
+        if (oldEntered != widget.existingPin) {
+          widget.onToast("Incorrect current 6-digit Security Password.");
+          return;
+        }
+      } else if (_hasExistingPin && _forgotResetMode) {
+        if (_recoveryCode.isEmpty ||
+            _recoveryCodeCtrl.text.trim() != _recoveryCode) {
+          widget.onToast("Invalid verification code.");
+          return;
+        }
+      }
+
+      if (!RegExp(r'^\d{6}$').hasMatch(p1)) {
+
+widget.onToast("Security Password must be exactly 6 digits (0-9).");
+        return;
+      }
+      if (p1 != p2) {
+        widget.onToast("Both 6-digit Security Passwords must match.");
+        return;
+      }
+    } else {
+      if (p1.length < 6) {
+        widget.onToast("Password must be at least 6 characters.");
+        return;
+      }
+      if (p1 != p2) {
+        widget.onToast("Both passwords must match.");
+        return;
+      }
     }
 
     setState(() => _saving = true);
     try {
       if (widget.isSecurityPassword) {
         await widget.onSaveField('paymentPin', p1);
-        widget.onToast("Security password saved successfully.");
+        widget.onToast(
+          "6-digit Security Password saved! Active for Cash out, Transfer & Exchange.",
+        );
         if (mounted) Navigator.pop(context);
       } else {
         final user = FirebaseAuth.instance.currentUser;
@@ -851,6 +949,10 @@ class _SetPasswordPageState extends State<_SetPasswordPage> {
 
   @override
   Widget build(BuildContext context) {
+    final String pageTitle = widget.isSecurityPassword
+        ? (_hasExistingPin ? "Change Security Password" : "Set Security Password")
+        : "Account Password";
+
     return Scaffold(
       backgroundColor: const Color(0xFFF5F6F8),
       appBar: AppBar(
@@ -863,17 +965,110 @@ class _SetPasswordPageState extends State<_SetPasswordPage> {
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
-          widget.isSecurityPassword ? "Security Password" : "Set",
+          pageTitle,
           style: const TextStyle(
               color: Color(0xFF1F2329),
-              fontSize: 18,
+              fontSize: 17.5,
               fontWeight: FontWeight.w700),
         ),
       ),
-      body: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 22, 20, 20),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            if (widget.isSecurityPassword) ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE8F9F4),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                      color: const Color(0xFF1ED7B5).withOpacity(0.5)),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.shield_rounded,
+                        color: Color(0xFF00B578), size: 22),
+                    SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        "This 6-digit Security Password protects your Cash out, Transfer, and Exchange transactions in Points Wallet.",
+                        style: TextStyle(
+                          color: Color(0xFF1F2329),
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w500,
+                          height: 1.35,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+
+// Current 6-digit PIN field when changing an existing PIN
+            if (_hasExistingPin && !_forgotResetMode) ...[
+              Container(
+                height: 52,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEDEEF2),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Center(
+                  child: TextField(
+                    controller: _oldPinCtrl,
+                    obscureText: true,
+                    maxLength: 6,
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    decoration: const InputDecoration(
+                      hintText: "Current 6-digit Security Password",
+                      counterText: "",
+                      hintStyle:
+                          TextStyle(color: Color(0xFF86909C), fontSize: 14.5),
+                      border: InputBorder.none,
+                      isDense: true,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
+
+            // Recovery code input if user tapped Forgot Security Password
+            if (_hasExistingPin && _forgotResetMode) ...[
+              Container(
+                height: 52,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEDEEF2),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Center(
+                  child: TextField(
+                    controller: _recoveryCodeCtrl,
+                    maxLength: 6,
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    decoration: const InputDecoration(
+                      hintText: "Enter 6-digit verification code",
+                      counterText: "",
+                      hintStyle:
+                          TextStyle(color: Color(0xFF86909C), fontSize: 14.5),
+                      border: InputBorder.none,
+                      isDense: true,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
+
+            // New Password / PIN field
             Container(
               height: 52,
               padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -885,13 +1080,20 @@ class _SetPasswordPageState extends State<_SetPasswordPage> {
                 child: TextField(
                   controller: _pass1Ctrl,
                   obscureText: true,
+                  maxLength: widget.isSecurityPassword ? 6 : 32,
                   keyboardType: widget.isSecurityPassword
                       ? TextInputType.number
                       : TextInputType.text,
-                  decoration: const InputDecoration(
-                    hintText: "Password",
-                    hintStyle:
-                        TextStyle(color: Color(0xFF86909C), fontSize: 15),
+                  inputFormatters: widget.isSecurityPassword
+                      ? [FilteringTextInputFormatter.digitsOnly]
+                      : null,
+                  decoration: InputDecoration(
+                    hintText: widget.isSecurityPassword
+                        ? "New 6-digit Security Password"
+                        : "New Password",
+                    counterText: "",
+                    hintStyle: const TextStyle(
+                        color: Color(0xFF86909C), fontSize: 14.5),
                     border: InputBorder.none,
                     isDense: true,
                   ),
@@ -899,32 +1101,59 @@ class _SetPasswordPageState extends State<_SetPasswordPage> {
               ),
             ),
             const SizedBox(height: 12),
+
+// Confirm Password / PIN field
             Container(
               height: 52,
               padding: const EdgeInsets.symmetric(horizontal: 16),
               decoration: BoxDecoration(
                 color: const Color(0xFFEDEEF2),
-
-borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(14),
               ),
               child: Center(
                 child: TextField(
                   controller: _pass2Ctrl,
                   obscureText: true,
+                  maxLength: widget.isSecurityPassword ? 6 : 32,
                   keyboardType: widget.isSecurityPassword
                       ? TextInputType.number
                       : TextInputType.text,
-                  decoration: const InputDecoration(
-                    hintText: "Password",
-                    hintStyle:
-                        TextStyle(color: Color(0xFF86909C), fontSize: 15),
+                  inputFormatters: widget.isSecurityPassword
+                      ? [FilteringTextInputFormatter.digitsOnly]
+                      : null,
+                  decoration: InputDecoration(
+                    hintText: widget.isSecurityPassword
+                        ? "Confirm 6-digit Security Password"
+                        : "Confirm Password",
+                    counterText: "",
+                    hintStyle: const TextStyle(
+                        color: Color(0xFF86909C), fontSize: 14.5),
                     border: InputBorder.none,
                     isDense: true,
                   ),
                 ),
               ),
             ),
-            const SizedBox(height: 28),
+
+            if (_hasExistingPin && !_forgotResetMode) ...[
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: _startForgotPinRecovery,
+                  child: const Text(
+                    "Forgot Security Password?",
+                    style: TextStyle(
+                      color: Color(0xFF1ED7B5),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+
+            const SizedBox(height: 24),
             SizedBox(
               width: double.infinity,
               height: 50,
@@ -937,9 +1166,10 @@ borderRadius: BorderRadius.circular(14),
                       borderRadius: BorderRadius.circular(25)),
                 ),
                 onPressed: _saving ? null : _submit,
-                child: const Text(
-                  "Set",
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                child: Text(
+                  _hasExistingPin ? "Update Password" : "Set",
+                  style: const TextStyle(
+                      fontSize: 16, fontWeight: FontWeight.w700),
                 ),
               ),
             ),
@@ -955,7 +1185,7 @@ borderRadius: BorderRadius.circular(14),
 // ============================================================================
 class _BindMailPage extends StatefulWidget {
   final String existingEmail;
-  final Future<void> Function(String email) onBound;
+  final Future Function(String email) onBound;
   final void Function(String msg) onToast;
 
   const _BindMailPage({
@@ -990,7 +1220,7 @@ class _BindMailPageState extends State<_BindMailPage> {
     super.dispose();
   }
 
-  void _sendCode() {
+void _sendCode() {
     final mail = _emailCtrl.text.trim();
     if (!mail.contains('@') || !mail.contains('.')) {
       widget.onToast("Please enter a valid email address.");
@@ -1034,8 +1264,7 @@ class _BindMailPageState extends State<_BindMailPage> {
           "Reset Email",
           style: TextStyle(
               color: Color(0xFF1F2329),
-
-fontSize: 18,
+              fontSize: 18,
               fontWeight: FontWeight.w700),
         ),
       ),
@@ -1103,7 +1332,8 @@ fontSize: 18,
                     ? null
                     : () async {
                         final mail = _emailCtrl.text.trim();
-                        final entered = _codeCtrl.text.trim();
+
+final entered = _codeCtrl.text.trim();
                         if (!mail.contains('@')) {
                           widget.onToast("Please enter a valid email.");
                           return;
@@ -1136,7 +1366,7 @@ class _MessageSettingsPage extends StatefulWidget {
   final bool initialBanner;
   final bool initialSounds;
   final bool initialVibration;
-  final Future<void> Function(String key, dynamic val) onSaveField;
+  final Future Function(String key, dynamic val) onSaveField;
 
   const _MessageSettingsPage({
     required this.initialBanner,
@@ -1145,7 +1375,7 @@ class _MessageSettingsPage extends StatefulWidget {
     required this.onSaveField,
   });
 
-@override
+  @override
   State<_MessageSettingsPage> createState() => _MessageSettingsPageState();
 }
 
@@ -1214,7 +1444,8 @@ class _MessageSettingsPageState extends State<_MessageSettingsPage> {
                         color: Color(0xFF1F2329))),
                 activeColor: Colors.white,
                 activeTrackColor: const Color(0xFF1ED7B5),
-                value: _sounds,
+
+value: _sounds,
                 onChanged: (v) {
                   setState(() => _sounds = v);
                   widget.onSaveField('roomSounds', v);
@@ -1250,7 +1481,7 @@ class _MessageSettingsPageState extends State<_MessageSettingsPage> {
 // ============================================================================
 class _LanguageSettingPage extends StatefulWidget {
   final String currentLanguage;
-  final Future<void> Function(String lang) onSaved;
+  final Future Function(String lang) onSaved;
 
   const _LanguageSettingPage({
     required this.currentLanguage,
@@ -1337,7 +1568,8 @@ class _LanguageSettingPageState extends State<_LanguageSettingPage> {
           child: ListView.separated(
             shrinkWrap: true,
             itemCount: _languages.length,
-            separatorBuilder: (_, __) =>
+
+separatorBuilder: (_, __) =>
                 const Divider(height: 1, indent: 16, color: Color(0xFFF2F3F5)),
             itemBuilder: (_, i) {
               final lang = _languages[i].toString();
@@ -1372,7 +1604,7 @@ class _PrivilegeSettingsPage extends StatefulWidget {
   final bool initialMysteryMan;
   final bool initialHideOnline;
   final bool initialInvisibleEntry;
-  final Future<void> Function(String key, dynamic val) onSaveField;
+  final Future Function(String key, dynamic val) onSaveField;
 
   const _PrivilegeSettingsPage({
     required this.initialMysteryMan,
@@ -1390,7 +1622,7 @@ class _PrivilegeSettingsPageState extends State<_PrivilegeSettingsPage> {
   late bool _hideOnline;
   late bool _invisibleEntry;
 
-@override
+  @override
   void initState() {
     super.initState();
     _mysteryMan = widget.initialMysteryMan;
@@ -1449,7 +1681,8 @@ class _PrivilegeSettingsPageState extends State<_PrivilegeSettingsPage> {
                 ),
                 activeColor: Colors.white,
                 activeTrackColor: const Color(0xFF1ED7B5),
-                value: _mysteryMan,
+
+value: _mysteryMan,
                 onChanged: (v) {
                   setState(() => _mysteryMan = v);
                   widget.onSaveField('mysteryManOnRank', v);
@@ -1493,8 +1726,7 @@ class _PrivilegeSettingsPageState extends State<_PrivilegeSettingsPage> {
                 ),
                 subtitle: const Text(
                   "Appear offline to other users",
-
-style: TextStyle(fontSize: 12, color: Color(0xFF86909C)),
+                  style: TextStyle(fontSize: 12, color: Color(0xFF86909C)),
                 ),
                 activeColor: Colors.white,
                 activeTrackColor: const Color(0xFF1ED7B5),
@@ -1550,7 +1782,8 @@ class _BlockedUsersPage extends StatelessWidget {
               elevation: 0,
             ),
             onPressed: () async {
-              final target = ctrl.text.trim();
+
+final target = ctrl.text.trim();
               if (target.isEmpty) return;
               Navigator.pop(ctx);
               await FirebaseFirestore.instance
@@ -1607,11 +1840,10 @@ class _BlockedUsersPage extends StatelessWidget {
             )
           : StreamBuilder(
               stream: FirebaseFirestore.instance
-
-.collection('users')
+                  .collection('users')
                   .doc(uid)
                   .snapshots(),
-              builder: (context, AsyncSnapshot snap) {
+              builder: (context, snap) {
                 final doc = snap.data as DocumentSnapshot?;
                 final data = doc?.data() as Map? ?? {};
                 final List blocked =
@@ -1654,7 +1886,8 @@ class _BlockedUsersPage extends StatelessWidget {
                         ),
                         const SizedBox(height: 12),
                         const Text(
-                          "Have no Friends yet",
+
+"Have no Friends yet",
                           style: TextStyle(
                             color: Color(0xFF86909C),
                             fontSize: 14.5,
@@ -1695,8 +1928,7 @@ class _BlockedUsersPage extends StatelessWidget {
                             ),
                           ),
                           trailing: TextButton(
-
-onPressed: () async {
+                            onPressed: () async {
                               await FirebaseFirestore.instance
                                   .collection('users')
                                   .doc(uid)
@@ -1765,8 +1997,9 @@ class _DeleteAccountPageState extends State<_DeleteAccountPage> {
     super.dispose();
   }
 
-  Future<void> _executeDeletion() async {
-    final user = FirebaseAuth.instance.currentUser;
+  Future _executeDeletion() async {
+
+final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
     setState(() => _deleting = true);
     try {
@@ -1824,8 +2057,7 @@ class _DeleteAccountPageState extends State<_DeleteAccountPage> {
                   Row(
                     children: [
                       Icon(Icons.warning_amber_rounded,
-
-color: Color(0xFFE54D42), size: 26),
+                          color: Color(0xFFE54D42), size: 26),
                       SizedBox(width: 8),
                       Text(
                         "Important Account Deletion Notice",
@@ -1868,7 +2100,8 @@ color: Color(0xFFE54D42), size: 26),
               ),
               value: _agreed,
               onChanged: (v) => setState(() => _agreed = v == true),
-            ),
+
+),
             const Spacer(),
             SizedBox(
               width: double.infinity,
