@@ -140,7 +140,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 // 2. Customer Service Support Unread
     _supportUnreadSub =
         db.collection('support_chats').doc(uid).snapshots().listen((doc) {
-      if (!mounted  !doc.exists  doc.data() == null) return;
+      if (!mounted) return;
+if (!doc.exists) return;
+if (doc.data() == null) return;
       final data = doc.data()!;
       setState(() {
         _supportUnread = (data['userUnread'] as num?)?.toInt() ?? 0;
