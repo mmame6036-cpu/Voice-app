@@ -2150,7 +2150,7 @@ class _BinanceCheckoutScreenState extends State<_BinanceCheckoutScreen>
         .doc(widget.orderId)
         .snapshots()
         .listen((doc) async {
-      if (!mounted  _orderCompleted  !doc.exists || doc.data() == null) {
+      if (!mounted) return; if (_orderCompleted) return;
         return;
       }
       final data = doc.data()!;
