@@ -1,1241 +1,1574 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:audioplayers/audioplayers.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
-class DragonTigerSheet extends StatefulWidget {
-  final String roomId;
-  final String userName;
-  final String? userUid;
-  final int? userNumericId;
-
-  const DragonTigerSheet({
-    super.key,
-    required this.roomId,
-    required this.userName,
-    this.userUid,
-    this.userNumericId,
-  });
-
-  static void show(
-    BuildContext context, {
-    required String roomId,
-    required String userName,
-    String? userUid,
-    int? userNumericId,
-  }) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (ctx) => DragonTigerSheet(
-        roomId: roomId,
-        userName: userName,
-        userUid: userUid,
-        userNumericId: userNumericId,
-      ),
-    );
-  }
-
-  @override
-  State<DragonTigerSheet> createState() => _DragonTigerSheetState();
+bool _gt(num a, num b) {
+  return a.compareTo(b).sign == 1;
 }
 
-class _DragonTigerSheetState extends State<DragonTigerSheet> {
-  static const Color kBgDark = Color(0xFF140D09);
-  static const Color kCardDark = Color(0xFF231710);
-  static const Color kGold = Color(0xFFFFD700);
-  static const Color kGoldBorder = Color(0xFFD49B42);
-  static const Color kDragonRed = Color(0xFFB71C1C);
-  static const Color kTigerAmber = Color(0xFFE65100);
-  static const Color kTieGreen = Color(0xFF1B5E20);
+bool _lt(num a, num b) {
+  return a.compareTo(b).sign == -1;
+}
 
-  static const int kBettingDurationMs = 15000;
-  static const int kRevealDurationMs = 3000;
-  static const int kSettlementDurationMs = 4000;
+bool _gte(num a, num b) {
+  return a.compareTo(b).sign != -1;
+}
 
-  final List _chips = [100, 500, 1000, 5000, 10000, 50000];
-  int _selectedChip = 100;
+bool _lte(num a, num b) {
+  return a.compareTo(b).sign != 1;
+}
 
-  String _resolvedUid = "";
-  String _resolvedName = "Player";
-  int _resolvedNumericId = 0;
+dynamic _d(Object? v) {
+  return v;
+}
 
-  int _myCoins = 0;
-  int _remainingSec = 15;
+enum _GamePhase {
+  vsIntro,
+  betting,
+  drawing,
+  settlement,
+}
 
-  String _roundId = "";
-  int _roundNumber = 1;
-  String _phase = "BETTING";
-  int _roundEndTime = 0;
-  int _revealEndTime = 0;
-  int _nextRoundTime = 0;
+class _PlacedChip {
+  final int amount;
+  final double dx;
+  final double dy;
+
+  const _PlacedChip({
+    required this.amount,
+    required this.dx,
+    required this.dy,
+  });
+}
+
+class _VictorEntry {
+  final String name;
+  final int winAmount;
+  final bool isMe;
+
+  const _VictorEntry({
+    required this.name,
+    required this.winAmount,
+    this.isMe = false,
+  });
+}
+
+class DragonTigerDialog extends StatefulWidget {
+  final int currentCoins;
+  final Function(int) onCoinsUpdated;
+  final String userName;
+  final int userNumericId;
+
+  const DragonTigerDialog({
+    super.key,
+    required this.currentCoins,
+    required this.onCoinsUpdated,
+    this.userName = "Player",
+    this.userNumericId = 100001,
+  });
+
+  @override
+  State createState() {
+    return _DragonTigerDialogState();
+  }
+}
+
+class _DragonTigerDialogState extends State with TickerProviderStateMixin {
+  DragonTigerDialog get _w {
+    return widget as DragonTigerDialog;
+  }
+
+  final User? _user = FirebaseAuth.instance.currentUser;
+  final Random _rng = Random();
+
+  late int _coins;
+  int _roundNumber = 2144;
+  _GamePhase _phase = _GamePhase.vsIntro;
+  int _secondsLeft = 20;
+  int _pingMs = 186;
+
+  static const List _chipValues = [1000, 10000, 30000, 50000];
+  int _selectedChipIndex = 0;
 
   int _potDragon = 0;
   int _potTie = 0;
   int _potTiger = 0;
 
-  int _myBetDragon = 0;
-  int _myBetTie = 0;
-  int _myBetTiger = 0;
+  int _myDragonBet = 0;
+  int _myTieBet = 0;
+  int _myTigerBet = 0;
 
-  Map? _dragonCard;
-  Map? _tigerCard;
-  String? _winner;
-  List _topWinners = [];
-  List _history = [];
+  int _lastDragonBet = 0;
+  int _lastTieBet = 0;
+  int _lastTigerBet = 0;
 
-  int _lastSettledWin = 0;
-  String _lastSettledRound = "";
-  String? _statusBanner;
-  bool _isPlacingBet = false;
-  bool _isAdvancingEngine = false;
-  bool _isSettlingMyBet = false;
+  final List _dragonChips = [];
+  final List _tieChips = [];
+  final List _tigerChips = [];
 
-  StreamSubscription? _gameSub;
-  StreamSubscription? _userSub;
-  StreamSubscription? _myBetSub;
-  Timer? _clockTimer;
-  Timer? _bannerTimer;
+  int _dragonCard = 7;
+  int _tigerCard = 1;
+  bool _dragonCardRevealed = false;
+  bool _tigerCardRevealed = false;
+  String _roundWinner = "";
+  int _myRoundWin = 0;
 
-  DocumentReference get _gameDoc =>
-      FirebaseFirestore.instance.collection('games').doc('dragon_tiger');
+  final List _recentResults = [
+    "Dragon",
+    "Tiger",
+    "Dragon",
+    "Dragon",
+    "Tiger",
+    "Tie",
+    "Dragon",
+    "Tiger",
+    "Dragon",
+    "Tiger",
+  ];
 
-  Map _asMap(Object? raw) {
-    if (raw is Map) {
-      return Map.from(raw);
-    }
-    return {};
-  }
+  final List _roundHistory = [];
+  List _topVictors = [];
+
+  Timer? _loopTimer;
+  late AnimationController _pulseCtrl;
+
+  static const List _botNames = [
+    "حكيم",
+    "PYIA🔥Anasvia",
+    "مبارك",
+    "محمد باديولا",
+    "Silent👑",
+    "Agent_Joy",
+    "VIP6_Megan",
+    "Murat_TR",
+  ];
 
   @override
   void initState() {
     super.initState();
-    _initPlayerIdentity();
-    _ensureGameInitialized();
-    _listenToGameStream();
-    _startClockTimer();
-  }
+    _coins = _w.currentCoins;
+    _pulseCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    )..repeat(reverse: true);
 
-  Future<void> _initPlayerIdentity() async {
-    final authUser = FirebaseAuth.instance.currentUser;
-    String uid = "";
-    final passedUid = widget.userUid ?? "";
-    if (passedUid.isNotEmpty && passedUid != "user_guest_id") {
-      uid = passedUid;
-    } else if (authUser != null) {
-      uid = authUser.uid;
-    }
-
-    _resolvedUid = uid;
-    _resolvedName = widget.userName.isNotEmpty ? widget.userName : "Player";
-    _resolvedNumericId = widget.userNumericId ?? 0;
-
-    if (uid.isNotEmpty) {
-      _userSub = FirebaseFirestore.instance
-          .collection('users')
-          .doc(uid)
-          .snapshots()
-          .listen((snap) {
-        if (!mounted) return;
-        if (!snap.exists) return;
-        final d = _asMap(snap.data());
-        if (d.isEmpty) return;
-
-        setState(() {
-          _myCoins = (d['coins'] as num?)?.toInt() ?? 0;
-
-if ((d['name'] ?? '').toString().isNotEmpty) {
-            _resolvedName = d['name'].toString();
-          }
-          if (d['numericId'] != null) {
-            _resolvedNumericId = (d['numericId'] as num).toInt();
-          }
-        });
-      });
-    }
-  }
-
-  Future<void> _ensureGameInitialized() async {
-    try {
-      final snap = await _gameDoc.get();
-      if (!snap.exists) {
-        await _advanceGameEngine(forceInit: true);
-      } else {
-        await _advanceGameEngine();
-      }
-    } catch (_) {}
-  }
-
-  void _listenToGameStream() {
-    _gameSub = _gameDoc.snapshots().listen((snap) {
-      if (!mounted) return;
-      if (!snap.exists) {
-        _advanceGameEngine(forceInit: true);
-        return;
-      }
-      final d = _asMap(snap.data());
-      if (d.isEmpty) {
-        _advanceGameEngine(forceInit: true);
-        return;
-      }
-      _applyGameData(d);
-    });
-  }
-
-  void _applyGameData(Map d) {
-    if (!mounted) return;
-
-    final String newRoundId = (d['roundId'] ?? '').toString();
-    final String newPhase = (d['phase'] ?? 'BETTING').toString();
-
-    if (newRoundId.isNotEmpty && newRoundId != _roundId) {
-      _roundId = newRoundId;
-      _myBetDragon = 0;
-      _myBetTie = 0;
-      _myBetTiger = 0;
-      _lastSettledWin = 0;
-      _subscribeToMyRoundBet(newRoundId);
-    }
-
-    final potMap = _asMap(d['pot']);
-    final rawWinners = d['topWinners'];
-    final List nextWinners = [];
-    if (rawWinners is Iterable) {
-      for (final item in rawWinners) {
-        if (item is Map) {
-          nextWinners.add(Map.from(item));
-        }
-      }
-    }
-
-    final rawHistory = d['history'];
-    final List nextHistory = [];
-    if (rawHistory is Iterable) {
-      for (final item in rawHistory) {
-        nextHistory.add(item.toString());
-      }
-    }
-
-    setState(() {
-      _roundNumber = (d['roundNumber'] as num?)?.toInt() ?? _roundNumber;
-      _phase = newPhase;
-      _roundEndTime = (d['roundEndTime'] as num?)?.toInt() ?? _roundEndTime;
-      _revealEndTime = (d['revealEndTime'] as num?)?.toInt() ?? _revealEndTime;
-      _nextRoundTime = (d['nextRoundTime'] as num?)?.toInt() ?? _nextRoundTime;
-
-      _potDragon = (potMap['dragon'] as num?)?.toInt() ?? 0;
-      _potTie = (potMap['tie'] as num?)?.toInt() ?? 0;
-      _potTiger = (potMap['tiger'] as num?)?.toInt() ?? 0;
-
-      _dragonCard =
-          (d['dragonCard'] is Map) ? Map.from(d['dragonCard'] as Map) : null;
-      _tigerCard =
-          (d['tigerCard'] is Map) ? Map.from(d['tigerCard'] as Map) : null;
-      _winner = d['winner']?.toString();
-
-      _topWinners = nextWinners;
-      _history = nextHistory;
-    });
-
-    bool isRevealOrSettle = false;
-    if (newPhase == "REVEALING") isRevealOrSettle = true;
-    if (newPhase == "SETTLEMENT") isRevealOrSettle = true;
-
-    if (isRevealOrSettle && _winner != null && _winner!.isNotEmpty) {
-      _settleMyBetIfNeeded(newRoundId, _winner!);
-    }
-  }
-
-  void _subscribeToMyRoundBet(String roundId) {
-    _myBetSub?.cancel();
-    if (_resolvedUid.isEmpty) return;
-    if (roundId.isEmpty) return;
-
-    _myBetSub = _gameDoc
-        .collection('rounds')
-        .doc(roundId)
-        .collection('bets')
-        .doc(_resolvedUid)
-        .snapshots()
-        .listen((snap) {
-      if (!mounted) return;
-      if (!snap.exists) return;
-      final d = _asMap(snap.data());
-      if (d.isEmpty) return;
-
-      final int won = (d['wonAmount'] as num?)?.toInt() ?? 0;
-      final bool paid = d['paid'] == true;
-
-      setState(() {
-        _myBetDragon = (d['dragon'] as num?)?.toInt() ?? 0;
-        _myBetTie = (d['tie'] as num?)?.toInt() ?? 0;
-        _myBetTiger = (d['tiger'] as num?)?.toInt() ?? 0;
-
-        if (paid && won > 0 && _lastSettledRound != roundId) {
-          _lastSettledRound = roundId;
-          _lastSettledWin = won;
-          _playWinSound();
-        }
-      });
-    });
-  }
-
-  void _startClockTimer() {
-    _clockTimer = Timer.periodic(const Duration(milliseconds: 300), (_) {
-      if (!mounted) return;
-      final int now = DateTime.now().millisecondsSinceEpoch;
-
-if (_roundId.isEmpty) {
-        _advanceGameEngine(forceInit: true);
-        return;
-      }
-
-      int target = _roundEndTime;
-      if (_phase == "REVEALING") target = _revealEndTime;
-      if (_phase == "SETTLEMENT") target = _nextRoundTime;
-
-      final int diffSec = ((target - now) / 1000).ceil();
-      setState(() {
-        _remainingSec = diffSec.clamp(0, 30);
-      });
-
-      if (now >= target) {
-        _advanceGameEngine();
-      }
-    });
-  }
-
-  Future<void> _advanceGameEngine({bool forceInit = false}) async {
-    if (_isAdvancingEngine) return;
-    _isAdvancingEngine = true;
-
-    try {
-      await FirebaseFirestore.instance.runTransaction((tx) async {
-        final snap = await tx.get(_gameDoc);
-        final int now = DateTime.now().millisecondsSinceEpoch;
-        final data = _asMap(snap.data());
-
-        if (!snap.exists || data.isEmpty) {
-          tx.set(_gameDoc, {
-            'roundNumber': 1,
-            'roundId': 'round_1_$now',
-            'phase': 'BETTING',
-            'roundEndTime': now + kBettingDurationMs,
-            'revealEndTime': now + kBettingDurationMs + kRevealDurationMs,
-            'nextRoundTime': now +
-                kBettingDurationMs +
-                kRevealDurationMs +
-                kSettlementDurationMs,
-            'pot': {'dragon': 0, 'tie': 0, 'tiger': 0},
-            'dragonCard': null,
-            'tigerCard': null,
-            'winner': null,
-            'topWinners': [],
-            'history': [],
-          });
-          return;
-        }
-
-        final String currentPhase = (data['phase'] ?? 'BETTING').toString();
-        final int roundNumber = (data['roundNumber'] as num?)?.toInt() ?? 1;
-        final int roundEndTime = (data['roundEndTime'] as num?)?.toInt() ?? 0;
-        final int revealEndTime =
-            (data['revealEndTime'] as num?)?.toInt() ?? 0;
-        final int nextRoundTime =
-            (data['nextRoundTime'] as num?)?.toInt() ?? 0;
-
-        bool shouldStartNext = false;
-        if (currentPhase == 'SETTLEMENT' && now >= nextRoundTime) {
-          shouldStartNext = true;
-        }
-        if (nextRoundTime > 0 && (now - nextRoundTime) > 15000) {
-          shouldStartNext = true;
-        }
-
-        if (currentPhase == 'BETTING' && now >= roundEndTime) {
-          final rng = Random.secure();
-          const suits = ['S', 'H', 'D', 'C'];
-          final int dRank = rng.nextInt(13) + 1;
-          final int tRank = rng.nextInt(13) + 1;
-          final String dSuit = suits[rng.nextInt(4)];
-          final String tSuit = suits[rng.nextInt(4)];
-
-          String winnerSide = 'tie';
-          String historyCode = 'Tie';
-          if (dRank > tRank) {
-            winnerSide = 'dragon';
-            historyCode = 'D';
-          } else if (tRank > dRank) {
-            winnerSide = 'tiger';
-            historyCode = 'T';
-          }
-
-          final List hist = [];
-          final rawHist = data['history'];
-          if (rawHist is Iterable) {
-            for (final h in rawHist) {
-              hist.add(h.toString());
-            }
-          }
-          hist.insert(0, historyCode);
-          if (hist.length > 15) {
-            hist.removeRange(15, hist.length);
-          }
-
-          tx.update(_gameDoc, {
-            'phase': 'REVEALING',
-            'dragonCard': {'rank': dRank, 'suit': dSuit},
-            'tigerCard': {'rank': tRank, 'suit': tSuit},
-            'winner': winnerSide,
-            'history': hist,
-            'revealEndTime': now + kRevealDurationMs,
-            'nextRoundTime': now + kRevealDurationMs + kSettlementDurationMs,
-          });
-        } else if (currentPhase == 'REVEALING' && now >= revealEndTime) {
-          tx.update(_gameDoc, {
-            'phase': 'SETTLEMENT',
-            'nextRoundTime': now + kSettlementDurationMs,
-          });
-
-} else if (shouldStartNext) {
-          final int nextNum = roundNumber + 1;
-          tx.update(_gameDoc, {
-            'roundNumber': nextNum,
-            'roundId': 'round_${nextNum}_$now',
-            'phase': 'BETTING',
-            'roundEndTime': now + kBettingDurationMs,
-            'revealEndTime': now + kBettingDurationMs + kRevealDurationMs,
-            'nextRoundTime': now +
-                kBettingDurationMs +
-                kRevealDurationMs +
-                kSettlementDurationMs,
-            'pot': {'dragon': 0, 'tie': 0, 'tiger': 0},
-            'dragonCard': null,
-            'tigerCard': null,
-            'winner': null,
-            'topWinners': [],
-          });
-        }
-      });
-    } catch (_) {
-    } finally {
-      _isAdvancingEngine = false;
-    }
-  }
-
-  Future<void> _settleMyBetIfNeeded(String roundId, String winnerSide) async {
-    if (_isSettlingMyBet) return;
-    if (_resolvedUid.isEmpty) return;
-    if (roundId.isEmpty) return;
-    if (_lastSettledRound == roundId) return;
-
-    _isSettlingMyBet = true;
-    try {
-      final betRef = _gameDoc
-          .collection('rounds')
-          .doc(roundId)
-          .collection('bets')
-          .doc(_resolvedUid);
-      final userRef =
-          FirebaseFirestore.instance.collection('users').doc(_resolvedUid);
-
-      int creditedWin = 0;
-
-      await FirebaseFirestore.instance.runTransaction((tx) async {
-        final betSnap = await tx.get(betRef);
-        if (!betSnap.exists) return;
-
-        final betData = _asMap(betSnap.data());
-        if (betData.isEmpty) return;
-        if (betData['paid'] == true) return;
-
-        final int dBet = (betData['dragon'] as num?)?.toInt() ?? 0;
-        final int tBet = (betData['tiger'] as num?)?.toInt() ?? 0;
-        final int tieBet = (betData['tie'] as num?)?.toInt() ?? 0;
-
-        int winAmount = 0;
-        if (winnerSide == 'dragon' && dBet > 0) {
-          winAmount = dBet * 2;
-        } else if (winnerSide == 'tiger' && tBet > 0) {
-          winAmount = tBet * 2;
-        } else if (winnerSide == 'tie' && tieBet > 0) {
-          winAmount = tieBet * 22;
-        }
-
-        tx.update(betRef, {
-          'paid': true,
-          'wonAmount': winAmount,
-          'settledAt': FieldValue.serverTimestamp(),
-        });
-
-        if (winAmount > 0) {
-          tx.update(userRef, {
-            'coins': FieldValue.increment(winAmount),
-          });
-          tx.update(_gameDoc, {
-            'topWinners': FieldValue.arrayUnion([
-              {
-                'uid': _resolvedUid,
-                'name': _resolvedName,
-                'wonAmount': winAmount,
-              }
-            ]),
-          });
-          creditedWin = winAmount;
-        }
-      });
-
-      if (creditedWin > 0 && mounted) {
-        setState(() {
-          _lastSettledRound = roundId;
-          _lastSettledWin = creditedWin;
-        });
-        _playWinSound();
-      }
-    } catch (_) {
-    } finally {
-      _isSettlingMyBet = false;
-    }
-  }
-
-  void _playWinSound() async {
-    try {
-      final player = AudioPlayer();
-      await player.setVolume(1.0);
-      try {
-        await player.play(AssetSource('sounds/Five_win.mp3'));
-      } catch (_) {
-        await player.play(AssetSource('sounds/five_win.mp3'));
-      }
-      player.onPlayerComplete.listen((_) => player.dispose());
-    } catch (_) {}
-  }
-
-  void _showNotice(String text) {
-    if (!mounted) return;
-    _bannerTimer?.cancel();
-    setState(() => _statusBanner = text);
-    _bannerTimer = Timer(const Duration(seconds: 2), () {
-      if (mounted) setState(() => _statusBanner = null);
-    });
-  }
-
-  Future<void> _placeBet(String side) async {
-    if (_isPlacingBet) return;
-    if (_roundId.isEmpty) {
-      await _advanceGameEngine(forceInit: true);
-      return;
-    }
-    if (_phase != "BETTING") {
-
-_showNotice("Betting closed! Wait for next round.");
-      return;
-    }
-    if (_remainingSec <= 1) {
-      _showNotice("Betting closed! Wait for next round.");
-      return;
-    }
-    if (_resolvedUid.isEmpty) {
-      _showNotice("Please sign in to play.");
-      return;
-    }
-    if (_myCoins < _selectedChip) {
-      _showNotice("Insufficient coins balance!");
-      return;
-    }
-
-    setState(() => _isPlacingBet = true);
-
-    try {
-      final userRef =
-          FirebaseFirestore.instance.collection('users').doc(_resolvedUid);
-      final betRef = _gameDoc
-          .collection('rounds')
-          .doc(_roundId)
-          .collection('bets')
-          .doc(_resolvedUid);
-
-      final int betAmount = _selectedChip;
-
-      await FirebaseFirestore.instance.runTransaction((tx) async {
-        final userSnap = await tx.get(userRef);
-        final gameSnap = await tx.get(_gameDoc);
-
-        if (!userSnap.exists) {
-          throw Exception("Account not ready");
-        }
-        if (!gameSnap.exists) {
-          throw Exception("Game not ready");
-        }
-
-        final userData = _asMap(userSnap.data());
-        final gameData = _asMap(gameSnap.data());
-
-        final int currentCoins = (userData['coins'] as num?)?.toInt() ?? 0;
-        final String livePhase = (gameData['phase'] ?? '').toString();
-
-        if (livePhase != 'BETTING') {
-          throw Exception("Betting closed for this round");
-        }
-        if (currentCoins < betAmount) {
-          throw Exception("Insufficient coins balance!");
-        }
-
-        tx.update(userRef, {
-          'coins': currentCoins - betAmount,
-        });
-
-        tx.update(_gameDoc, {
-          'pot.$side': FieldValue.increment(betAmount),
-        });
-
-        tx.set(
-          betRef,
-          {
-            'uid': _resolvedUid,
-            'name': _resolvedName,
-            'numericId': _resolvedNumericId,
-            'roomId': widget.roomId,
-            side: FieldValue.increment(betAmount),
-            'paid': false,
-            'updatedAt': FieldValue.serverTimestamp(),
-          },
-          SetOptions(merge: true),
-        );
-      });
-    } catch (e) {
-      final msg = e.toString().replaceFirst('Exception: ', '');
-      _showNotice(msg.isNotEmpty ? msg : "Could not place bet, try again.");
-    } finally {
-      if (mounted) setState(() => _isPlacingBet = false);
-    }
+    _startNewRound();
   }
 
   @override
   void dispose() {
-    _gameSub?.cancel();
-    _userSub?.cancel();
-    _myBetSub?.cancel();
-    _clockTimer?.cancel();
-    _bannerTimer?.cancel();
+    _loopTimer?.cancel();
+    _pulseCtrl.dispose();
     super.dispose();
   }
 
-  String _formatNum(int n) {
-    if (n >= 1000000) return "${(n / 1000000).toStringAsFixed(1)}M";
-    if (n >= 10000) return "${(n / 1000).toStringAsFixed(1)}K";
-    return "$n";
+  void _startNewRound() {
+    _loopTimer?.cancel();
+    if (!mounted) return;
+
+    final int prevTotal = _myDragonBet + _myTieBet + _myTigerBet;
+    if (_gt(prevTotal, 0)) {
+      _lastDragonBet = _myDragonBet;
+      _lastTieBet = _myTieBet;
+      _lastTigerBet = _myTigerBet;
+    }
+
+    setState(() {
+      _phase = _GamePhase.vsIntro;
+      _secondsLeft = 20;
+      _dragonCardRevealed = false;
+      _tigerCardRevealed = false;
+      _roundWinner = "";
+      _myRoundWin = 0;
+
+      _myDragonBet = 0;
+      _myTieBet = 0;
+      _myTigerBet = 0;
+
+      _potDragon = 8000 + _rng.nextInt(12000);
+      _potTie = 2000 + _rng.nextInt(5000);
+      _potTiger = 8000 + _rng.nextInt(12000);
+
+      _dragonChips.clear();
+      _tieChips.clear();
+      _tigerChips.clear();
+      _seedInitialChips();
+    });
+
+_loopTimer = Timer(const Duration(milliseconds: 1400), () {
+      if (!mounted) return;
+      setState(() {
+        _phase = _GamePhase.betting;
+        _secondsLeft = 20;
+      });
+
+      _loopTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+        if (!mounted) {
+          timer.cancel();
+          return;
+        }
+        if (_gt(_secondsLeft, 1)) {
+          setState(() {
+            _secondsLeft -= 1;
+            _pingMs = 175 + _rng.nextInt(35);
+            _simulateRoomActivity();
+          });
+        } else {
+          timer.cancel();
+          _beginPrizeDrawing();
+        }
+      });
+    });
   }
 
-  String _rankLabel(int rank) {
-    if (rank == 1) return "A";
-    if (rank == 11) return "J";
-    if (rank == 12) return "Q";
-    if (rank == 13) return "K";
-    return "$rank";
+  void _seedInitialChips() {
+    for (int i = 0; _lt(i, 3); i++) {
+      _dragonChips.add(_randomChip(1000));
+      _tigerChips.add(_randomChip(1000));
+    }
+    _tieChips.add(_randomChip(1000));
   }
 
-  String _suitSymbol(String suit) {
-    if (suit == 'H') return "♥";
-    if (suit == 'D') return "♦";
-    if (suit == 'C') return "♣";
-    return "♠";
+  _PlacedChip _randomChip(int amount) {
+    return _PlacedChip(
+      amount: amount,
+      dx: (_rng.nextDouble() * 54) - 27,
+      dy: (_rng.nextDouble() * 34) - 17,
+    );
   }
 
-  Widget _buildCardBack(Color accentColor) {
-    return Container(
-      width: 68,
-      height: 94,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(10),
-        gradient: LinearGradient(
-          colors: [accentColor, const Color(0xFF1A100B)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        border: Border.all(color: kGold, width: 1.8),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.5),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
-          ),
-        ],
+  void _simulateRoomActivity() {
+    final choices = [1000, 1000, 10000, 30000];
+    final int amt1 = choices[_rng.nextInt(choices.length)];
+    final int amt2 = choices[_rng.nextInt(choices.length)];
+
+    _potDragon += amt1;
+    if (_lt(_dragonChips.length, 28)) {
+      _dragonChips.add(_randomChip(amt1));
+    }
+
+    _potTiger += amt2;
+    if (_lt(_tigerChips.length, 28)) {
+      _tigerChips.add(_randomChip(amt2));
+    }
+
+    if (_rng.nextBool()) {
+      final int tieAmt = choices[_rng.nextInt(3)];
+      _potTie += tieAmt;
+      if (_lt(_tieChips.length, 24)) {
+        _tieChips.add(_randomChip(tieAmt));
+      }
+    }
+  }
+
+  Future _placeBet(String area) async {
+    if (_phase != _GamePhase.betting) {
+      _showGameNotice("Please wait for the next betting round.");
+      return;
+    }
+
+    final int betAmount = (_chipValues[_selectedChipIndex] as num).toInt();
+    if (_lt(_coins, betAmount)) {
+      _showGameNotice("Insufficient coins! Please recharge.");
+      return;
+    }
+
+    setState(() {
+      _coins -= betAmount;
+      if (area == "Dragon") {
+        _myDragonBet += betAmount;
+        _potDragon += betAmount;
+        if (_lt(_dragonChips.length, 36)) {
+          _dragonChips.add(_randomChip(betAmount));
+        }
+      } else if (area == "Tie") {
+        _myTieBet += betAmount;
+        _potTie += betAmount;
+        if (_lt(_tieChips.length, 36)) {
+          _tieChips.add(_randomChip(betAmount));
+        }
+      } else if (area == "Tiger") {
+        _myTigerBet += betAmount;
+        _potTiger += betAmount;
+        if (_lt(_tigerChips.length, 36)) {
+          _tigerChips.add(_randomChip(betAmount));
+        }
+      }
+    });
+
+    _w.onCoinsUpdated(_coins);
+    await _syncCoinsDelta(-betAmount);
+  }
+
+  Future _repeatPreviousBets() async {
+    if (_phase != _GamePhase.betting) {
+      _showGameNotice("You can only repeat bets during betting time.");
+      return;
+    }
+
+    final int totalNeeded = _lastDragonBet + _lastTieBet + _lastTigerBet;
+    if (_lte(totalNeeded, 0)) {
+      _showGameNotice("No previous bets to repeat.");
+      return;
+    }
+
+    if (_lt(_coins, totalNeeded)) {
+      _showGameNotice("Insufficient coins to repeat previous bet.");
+      return;
+    }
+
+    setState(() {
+      _coins -= totalNeeded;
+      if (_gt(_lastDragonBet, 0)) {
+        _myDragonBet += _lastDragonBet;
+        _potDragon += _lastDragonBet;
+        _dragonChips.add(_randomChip(_lastDragonBet));
+      }
+      if (_gt(_lastTieBet, 0)) {
+        _myTieBet += _lastTieBet;
+        _potTie += _lastTieBet;
+        _tieChips.add(_randomChip(_lastTieBet));
+      }
+      if (_gt(_lastTigerBet, 0)) {
+        _myTigerBet += _lastTigerBet;
+        _potTiger += _lastTigerBet;
+        _tigerChips.add(_randomChip(_lastTigerBet));
+      }
+    });
+
+    _w.onCoinsUpdated(_coins);
+    await _syncCoinsDelta(-totalNeeded);
+  }
+
+Future _syncCoinsDelta(int delta) async {
+    final user = _user;
+    if (user == null) return;
+    if (delta == 0) return;
+    try {
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .set({'coins': _d(FieldValue.increment(delta))}, SetOptions(merge: true));
+    } catch (_) {}
+  }
+
+  void _beginPrizeDrawing() {
+    if (!mounted) return;
+    final int dCard = _rng.nextInt(13) + 1;
+    final int tCard = _rng.nextInt(13) + 1;
+
+    setState(() {
+      _phase = _GamePhase.drawing;
+      _dragonCard = dCard;
+      _tigerCard = tCard;
+      _dragonCardRevealed = false;
+      _tigerCardRevealed = false;
+    });
+
+    Future.delayed(const Duration(milliseconds: 900), () {
+      if (!mounted) return;
+      setState(() {
+        _dragonCardRevealed = true;
+      });
+    });
+
+    Future.delayed(const Duration(milliseconds: 1900), () {
+      if (!mounted) return;
+      setState(() {
+        _tigerCardRevealed = true;
+      });
+    });
+
+    Future.delayed(const Duration(milliseconds: 2600), () async {
+      if (!mounted) return;
+
+      String winner = "Tie";
+      if (_gt(_dragonCard, _tigerCard)) {
+        winner = "Dragon";
+      } else if (_gt(_tigerCard, _dragonCard)) {
+        winner = "Tiger";
+      }
+
+      int winCoins = 0;
+      if (winner == "Dragon") {
+        if (_gt(_myDragonBet, 0)) {
+          winCoins = _myDragonBet * 2;
+        }
+      } else if (winner == "Tiger") {
+        if (_gt(_myTigerBet, 0)) {
+          winCoins = _myTigerBet * 2;
+        }
+      } else if (winner == "Tie") {
+        if (_gt(_myTieBet, 0)) {
+          winCoins = _myTieBet * 22;
+        }
+      }
+
+      final int totalMyBet = _myDragonBet + _myTieBet + _myTigerBet;
+
+      setState(() {
+        _roundWinner = winner;
+        _myRoundWin = winCoins;
+        _coins += winCoins;
+        _recentResults.insert(0, winner);
+        if (_gt(_recentResults.length, 12)) {
+          _recentResults.removeLast();
+        }
+        _roundHistory.insert(0, {
+          "round": _roundNumber,
+          "dragon": _dragonCard,
+          "tiger": _tigerCard,
+          "winner": winner,
+          "bet": totalMyBet,
+          "win": winCoins,
+        });
+        if (_gt(_roundHistory.length, 30)) {
+          _roundHistory.removeLast();
+        }
+        _buildVictorsList(winCoins);
+      });
+
+      if (_gt(winCoins, 0)) {
+        _w.onCoinsUpdated(_coins);
+        await _syncCoinsDelta(winCoins);
+      }
+
+      Future.delayed(const Duration(milliseconds: 1400), () {
+        if (!mounted) return;
+        setState(() {
+          _phase = _GamePhase.settlement;
+        });
+
+        _loopTimer = Timer(const Duration(milliseconds: 3800), () {
+          if (!mounted) return;
+          _roundNumber += 1;
+          _startNewRound();
+        });
+      });
+    });
+  }
+
+  void _buildVictorsList(int myWin) {
+    final shuffled = List.of(_botNames)..shuffle(_rng);
+    final List list = [
+      _VictorEntry(
+        name: shuffled[0].toString(),
+        winAmount: (20 + _rng.nextInt(40)) * 1000,
       ),
-      child: const Center(
-        child: Icon(Icons.auto_awesome, color: kGold, size: 28),
+      _VictorEntry(
+        name: shuffled[1].toString(),
+        winAmount: (100 + _rng.nextInt(300)) * 1000,
+      ),
+      _VictorEntry(
+        name: shuffled[2].toString(),
+        winAmount: (15 + _rng.nextInt(35)) * 1000,
+      ),
+    ];
+
+    if (_gt(myWin, 0)) {
+      list[1] = _VictorEntry(
+        name: _w.userName,
+        winAmount: myWin,
+        isMe: true,
+      );
+    }
+    _topVictors = list;
+  }
+
+  void _showGameNotice(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg,
+            style: const TextStyle(
+                color: Colors.white, fontWeight: FontWeight.bold)),
+        backgroundColor: const Color(0xFF1F2937),
+        duration: const Duration(seconds: 2),
       ),
     );
   }
 
-  Widget _buildPlayingCard(Map? card, Color accentColor) {
-    bool isRevealPhase = false;
-    if (_phase == "REVEALING") isRevealPhase = true;
-    if (_phase == "SETTLEMENT") isRevealPhase = true;
-
-if (!isRevealPhase) {
-      return _buildCardBack(accentColor);
+  String _formatCompact(int val) {
+    if (_gte(val, 1000000)) {
+      return "${(val / 1000000).toStringAsFixed(1)}M";
     }
-    if (card == null) {
-      return _buildCardBack(accentColor);
+    if (_gte(val, 1000)) {
+      final int k = val ~/ 1000;
+      return "${k}K";
     }
-
-    final int rank = (card['rank'] as num?)?.toInt() ?? 1;
-    final String suit = (card['suit'] ?? 'S').toString();
-    bool isRed = false;
-    if (suit == 'H') isRed = true;
-    if (suit == 'D') isRed = true;
-
-    final Color cardColor =
-        isRed ? const Color(0xFFC62828) : const Color(0xFF1A1A1A);
-
-    return Container(
-      width: 68,
-      height: 94,
-      padding: const EdgeInsets.all(6),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFFFBF2),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: kGold, width: 2.0),
-        boxShadow: [
-          BoxShadow(
-            color: accentColor.withOpacity(0.55),
-            blurRadius: 12,
-            spreadRadius: 1,
-          ),
-        ],
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Align(
-            alignment: Alignment.topLeft,
-            child: Text(
-              "${_rankLabel(rank)}${_suitSymbol(suit)}",
-              style: TextStyle(
-                color: cardColor,
-                fontSize: 14,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-          ),
-          Text(
-            _suitSymbol(suit),
-            style: TextStyle(color: cardColor, fontSize: 28),
-          ),
-          Align(
-            alignment: Alignment.bottomRight,
-            child: Text(
-              _rankLabel(rank),
-              style: TextStyle(
-                color: cardColor,
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
+    return "$val";
   }
 
-  Widget _buildBetBox({
-    required String side,
-    required String title,
-    required String multiplier,
-    required int pot,
-    required int myBet,
-    required Color baseColor,
-  }) {
-    bool isRevealPhase = false;
-    if (_phase == "REVEALING") isRevealPhase = true;
-    if (_phase == "SETTLEMENT") isRevealPhase = true;
-
-    final bool isWinner = isRevealPhase && _winner == side;
-
-    return Expanded(
-      child: GestureDetector(
-        onTap: () => _placeBet(side),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 220),
-          margin: const EdgeInsets.symmetric(horizontal: 4),
-          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                baseColor.withOpacity(isWinner ? 0.95 : 0.65),
-                const Color(0xFF1A110B),
-              ],
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-            ),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: isWinner ? kGold : kGoldBorder.withOpacity(0.75),
-              width: isWinner ? 2.6 : 1.2,
-            ),
-            boxShadow: [
-              if (isWinner)
-                BoxShadow(
-                  color: kGold.withOpacity(0.5),
-                  blurRadius: 12,
-                  spreadRadius: 1,
-                ),
-            ],
+void _openRulesDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF1E1410),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+            side: const BorderSide(color: Color(0xFFD49B42), width: 1.5),
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+          title: const Row(
             children: [
-              Text(
-                title,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
-                decoration: BoxDecoration(
-
-color: Colors.black45,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  multiplier,
-                  style: const TextStyle(
-                    color: kGold,
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                "POT: ${_formatNum(pot)}",
-                style: const TextStyle(
-                  color: Colors.white70,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 3),
-                decoration: BoxDecoration(
-                  color: myBet > 0 ? kGold : Colors.black38,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  "ME: ${_formatNum(myBet)}",
-                  textAlign: TextAlign.center,
+              Icon(Icons.help_outline, color: Color(0xFFFACC15)),
+              SizedBox(width: 8),
+              Text("Dragon vs Tiger Rules",
                   style: TextStyle(
-                    color: myBet > 0 ? Colors.black : Colors.white60,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ),
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold)),
             ],
           ),
-        ),
-      ),
+          content: const Text(
+            "1. Select a chip (1K, 10K, 30K, 50K) and tap Dragon, Tie, or Tiger during the 20s betting countdown.\n\n"
+            "2. Two cards are drawn (1 to 13). Higher card wins!\n"
+            "   • Dragon Wins: 2x Payout (X2)\n"
+            "   • Tiger Wins: 2x Payout (X2)\n"
+            "   • Tie (Equal Cards): 22x Payout (X22)",
+            style:
+                TextStyle(color: Colors.white70, fontSize: 12.5, height: 1.45),
+          ),
+          actions: [
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFD97706)),
+              onPressed: () {
+                Navigator.pop(ctx);
+              },
+              child: const Text("Got It",
+                  style: TextStyle(
+                      color: Colors.white, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _openHistoryDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF1E1410),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+            side: const BorderSide(color: Color(0xFFD49B42), width: 1.5),
+          ),
+          title: const Text("Round History",
+              style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold)),
+          content: SizedBox(
+            width: double.maxFinite,
+            height: 260,
+            child: _roundHistory.isEmpty
+                ? const Center(
+                    child: Text("No completed rounds yet.",
+                        style:
+                            TextStyle(color: Colors.white54, fontSize: 12.5)),
+                  )
+                : ListView.builder(
+                    itemCount: _roundHistory.length,
+                    itemBuilder: (_, i) {
+                      final r = _roundHistory[i] as Map;
+                      final String w = r['winner'].toString();
+                      Color wColor = const Color(0xFFFACC15);
+                      if (w == "Dragon") {
+                        wColor = const Color(0xFFEF4444);
+                      } else if (w == "Tiger") {
+                        wColor = const Color(0xFF3B82F6);
+                      }
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.06),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text("Round #${r['round']}",
+                                style: const TextStyle(
+
+color: Colors.white70, fontSize: 11.5)),
+                            Text("D:${r['dragon']} vs T:${r['tiger']}",
+                                style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12)),
+                            Text(w,
+                                style: TextStyle(
+                                    color: wColor,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12)),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+              },
+              child: const Text("Close",
+                  style: TextStyle(color: Color(0xFFFACC15))),
+            ),
+          ],
+        );
+      },
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    bool isRevealPhase = false;
-    if (_phase == "REVEALING") isRevealPhase = true;
-    if (_phase == "SETTLEMENT") isRevealPhase = true;
-
-    String phaseText = "BETTING: ${_remainingSec}s";
-    Color phaseColor = const Color(0xFF107C41);
-
-    if (_phase == "REVEALING") {
-      phaseText = "REVEALING CARDS...";
-      phaseColor = const Color(0xFFD84315);
-    } else if (_phase == "SETTLEMENT") {
-      phaseText = "NEXT ROUND: ${_remainingSec}s";
-      phaseColor = const Color(0xFF6A1B9A);
-    }
+    final int totalMyBet = _myDragonBet + _myTieBet + _myTigerBet;
+    final bool showDrawingBar =
+        _phase == _GamePhase.drawing && _roundWinner.isEmpty;
 
     return Container(
+      height: MediaQuery.of(context).size.height * 0.66,
       decoration: const BoxDecoration(
-        color: kBgDark,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        border: Border(top: BorderSide(color: kGoldBorder, width: 1.5)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+        gradient: LinearGradient(
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+          colors: [
+            Color(0xFF7C1D05),
+            Color(0xFF431407),
+            Color(0xFF1E1B4B),
+            Color(0xFF0F296D),
+          ],
+        ),
       ),
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 18),
-      child: SafeArea(
-        top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+      child: ClipRRect(
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
+        child: Stack(
           children: [
-            Container(
-              width: 40,
-              height: 4,
-              margin: const EdgeInsets.only(bottom: 8),
-              decoration: BoxDecoration(
-                color: Colors.white24,
-                borderRadius: BorderRadius.circular(2),
+            Positioned(
+              left: -18,
+              top: 30,
+              child: Icon(
+                Icons.local_fire_department_rounded,
+                size: 185,
+                color: const Color(0xFFF97316).withOpacity(0.22),
               ),
             ),
-            Row(
-              children: [
-                const Text(
-                  "🐉 DRAGON vs TIGER 🐅",
-                  style: TextStyle(
-                    color: kGold,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: kCardDark,
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: kGoldBorder, width: 0.8),
-                  ),
-                  child: Text(
-                    "#$_roundNumber",
-                    style: const TextStyle(color: Colors.white70, fontSize: 10),
-                  ),
-                ),
-                const Spacer(),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-
-decoration: BoxDecoration(
-                    color: kCardDark,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: kGold, width: 1.1),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.monetization_on, color: kGold, size: 15),
-                      const SizedBox(width: 4),
-                      Text(
-                        "$_myCoins",
-                        style: const TextStyle(
-                          color: kGold,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 6),
-                GestureDetector(
-                  onTap: () => Navigator.pop(context),
-                  child: const CircleAvatar(
-                    radius: 14,
-                    backgroundColor: Colors.white12,
-                    child: Icon(Icons.close, color: Colors.white70, size: 16),
-                  ),
-                ),
-              ],
+            Positioned(
+              right: -18,
+              top: 30,
+              child: Icon(
+                Icons.bolt_rounded,
+                size: 185,
+                color: const Color(0xFF38BDF8).withOpacity(0.22),
+              ),
             ),
 
-            const SizedBox(height: 8),
+            SafeArea(
+              top: false,
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                child: Column(
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        GestureDetector(
+                          onTap: () {
+                            Navigator.pop(context);
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.black38,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Row(
+                              children: [
+                                Icon(Icons.keyboard_arrow_down,
+                                    color: Colors.white, size: 18),
+                                SizedBox(width: 2),
+                                Text("Dragon vs Tiger",
+                                    style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 11.5,
 
-            Row(
-              children: [
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: phaseColor,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    phaseText,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: SizedBox(
-                    height: 24,
-                    child: ListView.builder(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: _history.length,
-                      itemBuilder: (ctx, idx) {
-                        final item = _history[idx].toString();
-                        Color c = kTieGreen;
-                        if (item == "D") c = kDragonRed;
-                        if (item == "T") c = kTigerAmber;
-                        return Container(
-                          margin: const EdgeInsets.only(right: 4),
-                          padding: const EdgeInsets.symmetric(horizontal: 7),
-                          alignment: Alignment.center,
-                          decoration: BoxDecoration(
-                            color: c,
-                            borderRadius: BorderRadius.circular(10),
-                            border:
-                                Border.all(color: Colors.white24, width: 0.7),
-                          ),
-                          child: Text(
-                            item,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
+fontWeight: FontWeight.bold)),
+                              ],
                             ),
                           ),
-                        );
-                      },
+                        ),
+                        Row(
+                          children: [
+                            _topIconBtn(
+                                Icons.history_rounded, _openHistoryDialog),
+                            const SizedBox(width: 6),
+                            _topIconBtn(
+                                Icons.question_mark_rounded, _openRulesDialog),
+                            const SizedBox(width: 8),
+                            Row(
+                              children: [
+                                const Icon(Icons.wifi,
+                                    color: Color(0xFF22C55E), size: 13),
+                                const SizedBox(width: 2),
+                                Text(
+                                  "${_pingMs}ms",
+                                  style: const TextStyle(
+                                      color: Color(0xFF4ADE80),
+                                      fontSize: 10.5,
+                                      fontWeight: FontWeight.bold),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
-                  ),
-                ),
-              ],
-            ),
 
-            const SizedBox(height: 12),
+                    const SizedBox(height: 6),
 
-            Container(
-              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-              decoration: BoxDecoration(
-                color: kCardDark,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: kGoldBorder.withOpacity(0.5)),
+                    SizedBox(
+                      height: 112,
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                            children: [
+                              _buildPlayingCard(
+                                isDragon: true,
+                                revealed: _dragonCardRevealed,
+                                value: _dragonCard,
+                              ),
+                              const SizedBox(width: 64),
+                              _buildPlayingCard(
+                                isDragon: false,
+                                revealed: _tigerCardRevealed,
+                                value: _tigerCard,
+                              ),
+                            ],
+                          ),
+
+                          if (_phase == _GamePhase.vsIntro)
+                            AnimatedBuilder(
+                              animation: _pulseCtrl,
+                              builder: (context, child) {
+                                final double s =
+                                    0.9 + (_pulseCtrl.value * 0.25);
+                                return Transform.scale(scale: s, child: child);
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 14, vertical: 6),
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  gradient: const RadialGradient(
+                                    colors: [
+                                      Color(0xFFFEF08A),
+                                      Color(0xFFD97706),
+                                    ],
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: const Color(0xFFFACC15)
+                                          .withOpacity(0.7),
+                                      blurRadius: 16,
+                                    ),
+                                  ],
 
 ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  Column(
-                    children: [
-                      const Text(
-                        "🐉 DRAGON",
-                        style: TextStyle(
-                          color: Color(0xFFFF5252),
-                          fontWeight: FontWeight.w900,
-                          fontSize: 12,
-                        ),
+                                child: const Text(
+                                  "VS",
+                                  style: TextStyle(
+                                    color: Color(0xFF7C2D12),
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.w900,
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                ),
+                              ),
+                            )
+                          else if (_phase == _GamePhase.betting)
+                            Container(
+                              width: 56,
+                              height: 56,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: const Color(0xFF451A03),
+                                border: Border.all(
+                                    color: const Color(0xFFFACC15), width: 3),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.5),
+                                    blurRadius: 8,
+                                  ),
+                                ],
+                              ),
+                              child: Center(
+                                child: Text(
+                                  "$_secondsLeft",
+                                  style: TextStyle(
+                                    color: _lte(_secondsLeft, 5)
+                                        ? const Color(0xFFEF4444)
+                                        : Colors.white,
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                              ),
+                            ),
+
+                          if (_roundWinner.isNotEmpty)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 26, vertical: 7),
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: _roundWinner == "Tiger"
+                                      ? [
+                                          const Color(0xFF1D4ED8),
+                                          const Color(0xFF3B82F6),
+                                          const Color(0xFF1D4ED8),
+                                        ]
+                                      : [
+                                          const Color(0xFF991B1B),
+                                          const Color(0xFFDC2626),
+                                          const Color(0xFF991B1B),
+                                        ],
+                                ),
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                    color: const Color(0xFFFACC15), width: 2),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.55),
+                                    blurRadius: 12,
+                                  ),
+                                ],
+                              ),
+                              child: Text(
+                                _roundWinner == "Tie"
+                                    ? "Tie Win!"
+                                    : "$_roundWinner Win",
+                                style: const TextStyle(
+
+color: Color(0xFFFEF08A),
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 0.6,
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
-                      const SizedBox(height: 6),
-                      _buildPlayingCard(_dragonCard, kDragonRed),
-                    ],
-                  ),
-                  Column(
-                    children: [
-                      const Text(
-                        "VS",
-                        style: TextStyle(
-                          color: kGold,
-                          fontSize: 22,
-                          fontWeight: FontWeight.w900,
-                        ),
+                    ),
+
+                    const SizedBox(height: 6),
+
+                    Container(
+                      height: 28,
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      decoration: BoxDecoration(
+                        color: Colors.black38,
+                        borderRadius: BorderRadius.circular(14),
                       ),
-                      if (_winner != null && isRevealPhase)
-                        Container(
-                          margin: const EdgeInsets.only(top: 6),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: kGold,
-                            borderRadius: BorderRadius.circular(8),
+                      child: Row(
+                        children: [
+                          const Text(
+                            "Result:",
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
-                          child: Text(
-                            "${_winner!.toUpperCase()} WINS!",
-                            style: const TextStyle(
-                              color: Colors.black,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w900,
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: ListView.builder(
+                              scrollDirection: Axis.horizontal,
+                              itemCount: _recentResults.length,
+                              itemBuilder: (_, idx) {
+                                final String res =
+                                    _recentResults[idx].toString();
+                                Color badgeBg = const Color(0xFFEA580C);
+                                String letter = "D";
+                                if (res == "Tiger") {
+                                  badgeBg = const Color(0xFF2563EB);
+                                  letter = "T";
+                                } else if (res == "Tie") {
+                                  badgeBg = const Color(0xFF16A34A);
+                                  letter = "=";
+                                }
+                                return Container(
+                                  width: 20,
+                                  height: 20,
+                                  margin: const EdgeInsets.only(right: 6),
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: badgeBg,
+                                    border: Border.all(
+                                        color: const Color(0xFFFACC15),
+                                        width: 1),
+                                  ),
+                                  child: Center(
+                                    child: Text(
+                                      letter,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w900,
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 8),
+
+                    Expanded(
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _buildBettingZone(
+
+title: "Dragon",
+                                  multiplier: "X2",
+                                  pot: _potDragon,
+                                  myBet: _myDragonBet,
+                                  chips: _dragonChips,
+                                  borderColor: const Color(0xFFF97316),
+                                  bgTint: const Color(0xFF7C2D12),
+                                  watermarkIcon:
+                                      Icons.local_fire_department_rounded,
+                                  onTap: () {
+                                    _placeBet("Dragon");
+                                  },
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: _buildBettingZone(
+                                  title: "Tie",
+                                  multiplier: "X22",
+                                  pot: _potTie,
+                                  myBet: _myTieBet,
+                                  chips: _tieChips,
+                                  borderColor: const Color(0xFFFACC15),
+                                  bgTint: const Color(0xFF713F12),
+                                  watermarkIcon: Icons.balance_rounded,
+                                  onTap: () {
+                                    _placeBet("Tie");
+                                  },
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: _buildBettingZone(
+                                  title: "Tiger",
+                                  multiplier: "X2",
+                                  pot: _potTiger,
+                                  myBet: _myTigerBet,
+                                  chips: _tigerChips,
+                                  borderColor: const Color(0xFF38BDF8),
+                                  bgTint: const Color(0xFF1E3A8A),
+                                  watermarkIcon: Icons.bolt_rounded,
+                                  onTap: () {
+                                    _placeBet("Tiger");
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+
+                          if (showDrawingBar)
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(
+                                  vertical: 10, horizontal: 12),
+                              color: Colors.black.withOpacity(0.75),
+                              child: const Text(
+                                "Betting stopped, prize drawing in progress.",
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 8),
+
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: Colors.black45,
+                            borderRadius: BorderRadius.circular(16),
+
+border: Border.all(
+                                color:
+                                    const Color(0xFFFACC15).withOpacity(0.5)),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.monetization_on,
+                                  color: Color(0xFFFACC15), size: 16),
+                              const SizedBox(width: 4),
+                              Text(
+                                _formatCompact(_coins),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+
+                        Expanded(
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                            children: List.generate(_chipValues.length, (i) {
+                              final int val = (_chipValues[i] as num).toInt();
+                              final bool selected = _selectedChipIndex == i;
+                              return GestureDetector(
+                                onTap: () {
+                                  setState(() {
+                                    _selectedChipIndex = i;
+                                  });
+                                },
+                                child: AnimatedContainer(
+                                  duration: const Duration(milliseconds: 180),
+                                  width: selected ? 46 : 40,
+                                  height: selected ? 46 : 40,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: _chipColor(val),
+                                    border: Border.all(
+                                      color: selected
+                                          ? const Color(0xFFFEF08A)
+                                          : Colors.white38,
+                                      width: selected ? 2.5 : 1.2,
+                                    ),
+                                    boxShadow: selected
+                                        ? [
+                                            BoxShadow(
+                                              color: const Color(0xFFFACC15)
+                                                  .withOpacity(0.65),
+                                              blurRadius: 8,
+                                            ),
+                                          ]
+                                        : [],
+                                  ),
+                                  child: Center(
+                                    child: Text(
+                                      _formatCompact(val),
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 10.5,
+                                        fontWeight: FontWeight.w900,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }),
+                          ),
+                        ),
+
+                        const SizedBox(width: 6),
+
+                        GestureDetector(
+                          onTap: _repeatPreviousBets,
+                          child: Container(
+
+padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 8),
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                colors: [
+                                  Color(0xFFF59E0B),
+                                  Color(0xFFD97706),
+                                ],
+                              ),
+                              borderRadius: BorderRadius.circular(18),
+                              border: Border.all(
+                                  color: const Color(0xFFFEF08A), width: 1.2),
+                            ),
+                            child: const Text(
+                              "Repeat",
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w900,
+                              ),
                             ),
                           ),
                         ),
-                    ],
-                  ),
-                  Column(
-                    children: [
-                      const Text(
-                        "🐅 TIGER",
-                        style: TextStyle(
-                          color: Color(0xFFFFAB40),
-                          fontWeight: FontWeight.w900,
-                          fontSize: 12,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      _buildPlayingCard(_tigerCard, kTigerAmber),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-
-            if (_lastSettledWin > 0 && _phase == "SETTLEMENT")
-              Container(
-                margin: const EdgeInsets.only(top: 8),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF107C41),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: kGold),
-                ),
-                child: Text(
-                  "🎉 YOU WON +$_lastSettledWin COINS!",
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 12,
-                  ),
-                ),
-              ),
-
-            if (_topWinners.isNotEmpty && _phase == "SETTLEMENT")
-              Container(
-                margin: const EdgeInsets.only(top: 6),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: Colors.black54,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-
-const Text(
-                      "🏆 Top: ",
-                      style: TextStyle(
-                        color: kGold,
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                      ),
+                      ],
                     ),
-                    ..._topWinners.take(3).map((item) {
-                      final w = _asMap(item);
-                      final int wonAmt = (w['wonAmount'] as num?)?.toInt() ?? 0;
-                      return Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: Text(
-                          "${w['name']} (+${_formatNum(wonAmt)})",
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 10.5,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      );
-                    }),
+
+                    const SizedBox(height: 4),
+                    const Text(
+                      "Steps: Select Amount • Click the Betting Area",
+                      style: TextStyle(color: Colors.white60, fontSize: 10),
+                    ),
                   ],
                 ),
               ),
-
-            if (_statusBanner != null)
-              Container(
-                margin: const EdgeInsets.only(top: 6),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.redAccent.shade700,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  _statusBanner!,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-
-            const SizedBox(height: 10),
-
-            Row(
-              children: [
-                _buildBetBox(
-                  side: "dragon",
-                  title: "DRAGON",
-                  multiplier: "X2",
-                  pot: _potDragon,
-                  myBet: _myBetDragon,
-                  baseColor: kDragonRed,
-                ),
-                _buildBetBox(
-                  side: "tie",
-                  title: "TIE",
-                  multiplier: "X22",
-                  pot: _potTie,
-                  myBet: _myBetTie,
-                  baseColor: kTieGreen,
-                ),
-                _buildBetBox(
-                  side: "tiger",
-                  title: "TIGER",
-                  multiplier: "X2",
-                  pot: _potTiger,
-                  myBet: _myBetTiger,
-                  baseColor: kTigerAmber,
-                ),
-              ],
             ),
 
-            const SizedBox(height: 12),
+            if (_phase == _GamePhase.settlement)
+              _buildSettlementOverlay(totalMyBet),
+          ],
+        ),
+      ),
+    );
+  }
 
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: _chips.map((chip) {
-                final int chipVal = (chip as num).toInt();
-                final bool selected = _selectedChip == chipVal;
-                return GestureDetector(
-                  onTap: () => setState(() => _selectedChip = chipVal),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 160),
-                    width: 48,
-                    height: 48,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: LinearGradient(
-                        colors: selected
-                            ? [kGold, const Color(0xFFB8860B)]
-                            : [
-                                const Color(0xFF3A281E),
-                                const Color(0xFF1D130D)
-                              ],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
+  Widget _topIconBtn(IconData icon, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 24,
+        height: 24,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: const Color(0xFFF59E0B),
+          border: Border.all(color: const Color(0xFFFEF08A), width: 1),
+        ),
+        child: Icon(icon, color: Colors.white, size: 14),
+      ),
+    );
+  }
 
-border: Border.all(
-                        color: selected ? Colors.white : kGoldBorder,
-                        width: selected ? 2.2 : 1.0,
-                      ),
+  Color _chipColor(int val) {
+    if (_gte(val, 50000)) return const Color(0xFFDB2777);
+    if (_gte(val, 30000)) return const Color(0xFF7C3AED);
+    if (_gte(val, 10000)) return const Color(0xFF2563EB);
+    return const Color(0xFF16A34A);
+  }
+
+  Widget _buildPlayingCard({
+    required bool isDragon,
+    required bool revealed,
+    required int value,
+  }) {
+    final Color backColor =
+        isDragon ? const Color(0xFFB91C1C) : const Color(0xFF1D4ED8);
+    final Color accent =
+        isDragon ? const Color(0xFFEF4444) : const Color(0xFF2563EB);
+
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 350),
+      transitionBuilder: (child, anim) {
+        return ScaleTransition(scale: anim, child: child);
+      },
+      child: revealed
+          ? Container(
+              key: ValueKey("open_${isDragon}_$value"),
+              width: 68,
+              height: 94,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(10),
+                border:
+                    Border.all(color: const Color(0xFFFACC15), width: 2.2),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.45),
+                    blurRadius: 8,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Stack(
+                children: [
+                  Positioned(
+                    top: 5,
+                    left: 6,
+                    child: Column(
+                      children: [
+                        Text(
+                          "$value",
+                          style: TextStyle(
+                            color: accent,
+
+fontSize: 13,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        Icon(
+                          isDragon
+                              ? Icons.local_fire_department
+                              : Icons.bolt_rounded,
+                          color: accent,
+                          size: 12,
+                        ),
+                      ],
                     ),
+                  ),
+                  Center(
                     child: Text(
-                      _formatNum(chipVal),
+                      "$value",
                       style: TextStyle(
-                        color: selected ? Colors.black : kGold,
-                        fontSize: 11,
+                        color: accent,
+                        fontSize: 36,
                         fontWeight: FontWeight.w900,
                       ),
                     ),
                   ),
-                );
-              }).toList(),
+                ],
+              ),
+            )
+          : Container(
+              key: ValueKey("back_$isDragon"),
+              width: 68,
+              height: 94,
+              decoration: BoxDecoration(
+                color: backColor,
+                borderRadius: BorderRadius.circular(10),
+                border:
+                    Border.all(color: const Color(0xFFFACC15), width: 2.0),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.45),
+                    blurRadius: 8,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Center(
+                child: Icon(
+                  isDragon
+                      ? Icons.local_fire_department_rounded
+                      : Icons.bolt_rounded,
+                  color: const Color(0xFFFEF08A).withOpacity(0.75),
+                  size: 38,
+                ),
+              ),
+            ),
+    );
+  }
+
+  Widget _buildBettingZone({
+    required String title,
+    required String multiplier,
+    required int pot,
+    required int myBet,
+    required List chips,
+    required Color borderColor,
+    required Color bgTint,
+    required IconData watermarkIcon,
+    required VoidCallback onTap,
+  }) {
+    final bool isWinnerZone = _roundWinner == title;
+
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 220),
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+        decoration: BoxDecoration(
+          color: bgTint.withOpacity(isWinnerZone ? 0.85 : 0.58),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isWinnerZone ? const Color(0xFFFEF08A) : borderColor,
+            width: isWinnerZone ? 2.6 : 1.5,
+          ),
+        ),
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            Icon(
+              watermarkIcon,
+              size: 72,
+              color: Colors.white.withOpacity(0.09),
+            ),
+
+            ...chips.map((rawChip) {
+              final c = rawChip as _PlacedChip;
+              return Transform.translate(
+                offset: Offset(c.dx, c.dy),
+                child: Container(
+                  width: 16,
+                  height: 16,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: _chipColor(c.amount),
+                    border: Border.all(color: Colors.white, width: 0.8),
+                  ),
+                  child: const Center(
+                    child: Icon(Icons.diamond, color: Colors.white, size: 9),
+                  ),
+                ),
+              );
+            }),
+
+            Column(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+
+color: Colors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  multiplier,
+                  style: const TextStyle(
+                    color: Color(0xFFFEF08A),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  "POT:${_formatCompact(pot)}",
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                Text(
+                  "ME:${_formatCompact(myBet)}",
+                  style: TextStyle(
+                    color: _gt(myBet, 0)
+                        ? const Color(0xFF4ADE80)
+                        : Colors.white70,
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildSettlementOverlay(int totalMyBet) {
+    IconData emblemIcon = Icons.local_fire_department_rounded;
+    if (_roundWinner == "Tiger") {
+      emblemIcon = Icons.bolt_rounded;
+    } else if (_roundWinner == "Tie") {
+      emblemIcon = Icons.balance_rounded;
+    }
+
+    return Container(
+      color: Colors.black.withOpacity(0.72),
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+      child: Center(
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Color(0xFF991B1B),
+                Color(0xFF450A0A),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: const Color(0xFFFACC15), width: 2.2),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFFF59E0B), Color(0xFFD97706)],
+                  ),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Text(
+                  "Settlement",
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                "Round:$_roundNumber",
+                style: const TextStyle(color: Colors.white70, fontSize: 11),
+              ),
+              const SizedBox(height: 6),
+
+              Icon(
+                emblemIcon,
+                color: const Color(0xFFFACC15),
+                size: 46,
+              ),
+              Text(
+                "$_roundWinner Win",
+                style: const TextStyle(
+                  color: Color(0xFFFEF08A),
+                  fontSize: 14,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+
+              const SizedBox(height: 8),
+              const Text(
+                "The top victors of this round",
+                style: TextStyle(color: Colors.white70, fontSize: 11),
+              ),
+              const SizedBox(height: 8),
+
+if (_gte(_topVictors.length, 3))
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    _buildVictorColumn(_topVictors[0] as _VictorEntry, 2),
+                    _buildVictorColumn(_topVictors[1] as _VictorEntry, 1),
+                    _buildVictorColumn(_topVictors[2] as _VictorEntry, 3),
+                  ],
+                ),
+
+              const SizedBox(height: 12),
+
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.45),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                      color: const Color(0xFFFACC15).withOpacity(0.4)),
+                ),
+                child: Row(
+                  children: [
+                    const CircleAvatar(
+                      radius: 16,
+                      backgroundColor: Color(0xFFF59E0B),
+                      child: Icon(Icons.person, color: Colors.white, size: 18),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _w.userName,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          "Bet   ${_formatCompact(totalMyBet)}",
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        Text(
+                          "Win   ${_formatCompact(_myRoundWin)}",
+                          style: const TextStyle(
+                            color: Color(0xFFFACC15),
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildVictorColumn(_VictorEntry v, int rank) {
+    final bool isFirst = rank == 1;
+    Color crownColor = const Color(0xFFD97706);
+    if (isFirst) {
+      crownColor = const Color(0xFFFACC15);
+    } else if (rank == 2) {
+      crownColor = const Color(0xFFE5E7EB);
+    }
+
+    return Expanded(
+      child: Column(
+        children: [
+          Icon(Icons.workspace_premium,
+              color: crownColor, size: isFirst ? 22 : 18),
+          CircleAvatar(
+            radius: isFirst ? 22 : 18,
+            backgroundColor: crownColor,
+            child: CircleAvatar(
+              radius: isFirst ? 20 : 16,
+              backgroundColor: const Color(0xFF1F2937),
+              child: const Icon(Icons.person, color: Colors.white, size: 18),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            v.name,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 10.5,
+              fontWeight: FontWeight.w600,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          Text(
+            "Win ${_formatCompact(v.winAmount)}",
+            style: const TextStyle(
+              color: Color(0xFFFACC15),
+              fontSize: 10.5,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
       ),
     );
   }
