@@ -521,9 +521,9 @@ fontSize: 11.5, fontWeight: FontWeight.bold)),
         if (!snapshot.exists) return;
 
      final raw = snapshot.data();
-     final Map data = raw is Map ? Map.from(raw) : {};
+     final Map data = (raw as Map?) ?? {};
      final rawTasks = data['claimedTaskKeys'];
-     final Map claimedMap = rawTasks is Map ? Map.from(rawTasks) : {};
+     final Map claimedMap = (rawTasks as Map?) ?? {};
 
         if (claimedMap[claimKey] == true) {
           return;
