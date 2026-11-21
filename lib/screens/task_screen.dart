@@ -520,10 +520,10 @@ fontSize: 11.5, fontWeight: FontWeight.bold)),
         final snapshot = await transaction.get(userRef);
         if (!snapshot.exists) return;
 
-        final raw = snapshot.data();
-        final Map data = raw is Map ? raw : {};
-        final rawTasks = data['claimedTaskKeys'];
-        final Map claimedMap = rawTasks is Map ? rawTasks : {};
+     final raw = snapshot.data();
+     final Map data = raw is Map ? Map.from(raw) : {};
+     final rawTasks = data['claimedTaskKeys'];
+     final Map claimedMap = rawTasks is Map ? Map.from(rawTasks) : {};
 
         if (claimedMap[claimKey] == true) {
           return;
