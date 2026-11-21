@@ -22,26 +22,54 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   String _displayName = "Host";
   bool _isBanned = false;
   String _banReason = "";
+
+  int _dmUnread = 0;
+  int _supportUnread = 0;
+  int _sysUnread = 0;
+  int _noticeUnread = 0;
+  int _interUnread = 0;
+  int _followerUnread = 0;
+
   StreamSubscription? _userSubscription;
+  StreamSubscription? _dmUnreadSub;
+  StreamSubscription? _supportUnreadSub;
+  StreamSubscription? _sysUnreadSub;
+  StreamSubscription? _noticeUnreadSub;
+  StreamSubscription? _interUnreadSub;
+  StreamSubscription? _followerUnreadSub;
 
   final AgoraService _agoraService = AgoraService();
   Offset _floatingOffset = const Offset(16, 120);
 
-  // እንደ ዋናው Hala አፕ ንጹህ እና ጉልት የሆኑ የታችኛው ባር ቀለሞች
   static const Color navBgColor = Colors.white;
   static const Color activeColor = Color(0xFF14B8A6);
   static const Color inactiveColor = Color(0xFF475569);
+
+  int get _totalUnreadMessages =>
+      _dmUnread +
+      _supportUnread +
+      _sysUnread +
+      _noticeUnread +
+      _interUnread +
+      _followerUnread;
 
   @override
   void initState() {
     super.initState();
     _listenToUserData();
+    _listenToUnreadMessages();
     _agoraService.addListener(_onRoomStateChanged);
   }
 
   @override
   void dispose() {
     _userSubscription?.cancel();
+    _dmUnreadSub?.cancel();
+    _supportUnreadSub?.cancel();
+    _sysUnreadSub?.cancel();
+    _noticeUnreadSub?.cancel();
+    _interUnreadSub?.cancel();
+    _followerUnreadSub?.cancel();
     _agoraService.removeListener(_onRoomStateChanged);
     super.dispose();
   }
@@ -84,6 +112,88 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         }
       });
     }
+  }
+
+  void _listenToUnreadMessages() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    final uid = user.uid;
+    final db = FirebaseFirestore.instance;
+
+    // 1. Direct Messages Unread
+    _dmUnreadSub = db
+        .collection('direct_chats')
+        .where('participants', arrayContains: uid)
+        .snapshots()
+        .listen((snap) {
+      if (!mounted) return;
+      int total = 0;
+      for (final doc in snap.docs) {
+        final d = doc.data();
+        final Map unreadMap =
+            d['unreadCounts'] is Map ? d['unreadCounts'] as Map : {};
+        total += (unreadMap[uid] as num?)?.toInt() ?? 0;
+      }
+      setState(() => _dmUnread = total);
+    }, onError: (_) {});
+
+// 2. Customer Service Support Unread
+    _supportUnreadSub =
+        db.collection('support_chats').doc(uid).snapshots().listen((doc) {
+      if (!mounted  !doc.exists  doc.data() == null) return;
+      final data = doc.data()!;
+      setState(() {
+        _supportUnread = (data['userUnread'] as num?)?.toInt() ?? 0;
+      });
+    }, onError: (_) {});
+
+    // 3. System Messages Unread
+    _sysUnreadSub = db
+        .collection('users')
+        .doc(uid)
+        .collection('system_messages')
+        .where('unread', isEqualTo: true)
+        .snapshots()
+        .listen((snap) {
+      if (!mounted) return;
+      setState(() => _sysUnread = snap.docs.length);
+    }, onError: (_) {});
+
+    // 4. Notices Unread
+    _noticeUnreadSub = db
+        .collection('users')
+        .doc(uid)
+        .collection('notices')
+        .where('unread', isEqualTo: true)
+        .snapshots()
+        .listen((snap) {
+      if (!mounted) return;
+      setState(() => _noticeUnread = snap.docs.length);
+    }, onError: (_) {});
+
+    // 5. Interactions Unread
+    _interUnreadSub = db
+        .collection('users')
+        .doc(uid)
+        .collection('interactions')
+        .where('unread', isEqualTo: true)
+        .snapshots()
+        .listen((snap) {
+      if (!mounted) return;
+      setState(() => _interUnread = snap.docs.length);
+    }, onError: (_) {});
+
+    // 6. Followers Unread
+    _followerUnreadSub = db
+        .collection('users')
+        .doc(uid)
+        .collection('followers')
+        .where('unread', isEqualTo: true)
+        .snapshots()
+        .listen((snap) {
+      if (!mounted) return;
+      setState(() => _followerUnread = snap.docs.length);
+    }, onError: (_) {});
   }
 
   void _updateCoins(int newCoins) {
@@ -131,8 +241,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-
-Container(
+                  Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
                       color: Colors.redAccent.withOpacity(0.15),
@@ -154,7 +263,8 @@ Container(
                     ),
                   ),
                   const SizedBox(height: 6),
-                  Text(
+
+Text(
                     "ID: $_numericId ($_displayName)",
                     style: const TextStyle(
                       color: Color(0xFFF3BA2F),
@@ -239,8 +349,7 @@ Container(
               (_floatingOffset.dx - details.delta.dx)
                   .clamp(8.0, MediaQuery.of(context).size.width - 210),
               (_floatingOffset.dy - details.delta.dy)
-
-.clamp(80.0, MediaQuery.of(context).size.height - 140),
+                  .clamp(80.0, MediaQuery.of(context).size.height - 140),
             );
           });
         },
@@ -262,7 +371,8 @@ Container(
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withOpacity(0.35),
-                  blurRadius: 12,
+
+blurRadius: 12,
                   offset: const Offset(0, 4),
                 ),
               ],
@@ -349,7 +459,7 @@ Container(
       return _buildBannedScreen();
     }
 
-final List<Widget> screens = [
+    final List<Widget> screens = [
       HomeScreen(
         coins: _coins,
         onCoinUpdate: _updateCoins,
@@ -379,7 +489,8 @@ final List<Widget> screens = [
           color: navBgColor,
           border: const Border(
             top: BorderSide(color: Color(0xFFE2E8F0), width: 1),
-          ),
+
+),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(0.08),
@@ -404,6 +515,7 @@ final List<Widget> screens = [
                 icon: Icons.chat_bubble_outline_rounded,
                 activeIcon: Icons.chat_bubble_rounded,
                 label: "Message",
+                badgeCount: _totalUnreadMessages,
               ),
             ),
             Expanded(
@@ -425,6 +537,7 @@ final List<Widget> screens = [
     required IconData icon,
     required IconData activeIcon,
     required String label,
+    int badgeCount = 0,
   }) {
     final bool isSelected = _currentIndex == index;
     final Color itemColor = isSelected ? activeColor : inactiveColor;
@@ -437,10 +550,43 @@ final List<Widget> screens = [
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            isSelected ? activeIcon : icon,
-            color: itemColor,
-            size: 28,
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Icon(
+                isSelected ? activeIcon : icon,
+                color: itemColor,
+                size: 28,
+              ),
+              if (badgeCount > 0)
+                Positioned(
+                  top: -4,
+                  right: -10,
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE53935),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.white, width: 1.2),
+                    ),
+                    constraints: const BoxConstraints(
+                      minWidth: 18,
+                      minHeight: 16,
+                    ),
+                    child: Center(
+                      child: Text(
+                        badgeCount > 99 ? "99+" : "$badgeCount",
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
           ),
           const SizedBox(height: 3),
           Text(
