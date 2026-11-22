@@ -150,15 +150,16 @@ class _RoomScreenState extends State<RoomScreen>
   static const Color buttonDark = Color(0xFF4A3528);
 
   @override
-  void initState() {
+
+void initState() {
     super.initState();
     _currentCoins = widget.initialCoins;
     _activeSeatCount = widget.seatCount;
-    _seats = List.filled(_activeSeatCount, null);
-    _seatUids = List.filled(_activeSeatCount, null);
-    _seatGiftsCount = List.filled(_activeSeatCount, 0);
+    _seats = List<String?>.filled(_activeSeatCount, null);
+    _seatUids = List<String?>.filled(_activeSeatCount, null);
+    _seatGiftsCount = List<int>.filled(_activeSeatCount, 0);
 
-if (_currentUser != null) {
+    if (_currentUser != null) {
       _myUid = (_currentUser!.uid.hashCode.abs() % 899999) + 100000;
     } else {
       _myUid = 100001;
@@ -254,13 +255,13 @@ if (_currentUser != null) {
           setState(() {
             for (int i = 0; i < _activeSeatCount; i++) {
               if (i < incomingSeats.length) {
-                _seats[i] = incomingSeats[i];
+                _seats[i] = incomingSeats[i]?.toString();
               }
               if (i < incomingUids.length) {
-                _seatUids[i] = incomingUids[i];
+                _seatUids[i] = incomingUids[i]?.toString();
               }
               if (i < incomingGifts.length) {
-                _seatGiftsCount[i] = (incomingGifts[i] as num).toInt();
+                _seatGiftsCount[i] = (incomingGifts[i] as num?)?.toInt() ?? 0;
               }
             }
 
@@ -274,7 +275,11 @@ if (_currentUser != null) {
 
           if (previousSeat == null) {
             if (updatedSeat != null) {
-              _updateBroadcasterRole(true);
+
+_updateBroadcasterRole(true);
+              if (!_isMicMuted) {
+                _startMicMinutesTracking();
+              }
             }
           } else if (updatedSeat == null) {
             _updateBroadcasterRole(false);
@@ -287,8 +292,7 @@ if (_currentUser != null) {
 
   void _listenToLiveRoomChats() {
     _chatSubscription = FirebaseFirestore.instance
-
-.collection('rooms')
+        .collection('rooms')
         .doc(channelName)
         .collection('chats')
         .orderBy('timestamp', descending: true)
@@ -322,53 +326,73 @@ if (_currentUser != null) {
   }
 
   void _startMicMinutesTracking() {
-    _micTrackerTimer?.cancel();
-    _micTrackerTimer = Timer.periodic(const Duration(minutes: 1), (timer) async {
+    if (_micTrackerTimer != null && _micTrackerTimer!.isActive) {
+      return;
+    }
+    _micTrackerTimer =
+        Timer.periodic(const Duration(minutes: 1), (timer) async {
       final user = _currentUser;
       if (user == null) return;
       if (_mySeatIndex == null) return;
       if (_isMicMuted) return;
 
-      final userRef = FirebaseFirestore.instance.collection('users').doc(user.uid);
-      final snap = await userRef.get();
-      if (!snap.exists) return;
-      final data = snap.data() ?? {};
+      try {
+        final userRef =
+            FirebaseFirestore.instance.collection('users').doc(user.uid);
+        final hostRef =
+            FirebaseFirestore.instance.collection('hosts').doc(user.uid);
+        final snap = await userRef.get();
+        final data = snap.data() ?? <String, dynamic>{};
 
-      if (data['isFaceVerified'] != true) return;
+        // 24-hour daily cycle resets at 9:00 PM EAT (18:00 UTC)
+        final cycleNow =
+            DateTime.now().toUtc().add(const Duration(hours: 6));
+        final String todayKey =
+            "${cycleNow.year}-${cycleNow.month.toString().padLeft(2, '0')}-${cycleNow.day.toString().padLeft(2, '0')}";
 
-      final now = DateTime.now();
-      final String todayKey =
-          "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+        final String storedKey =
+            (data['micDateKey'] ?? data['lastMicDate'] ?? '').toString();
 
-      String lastMicDate = "";
-      if (data['lastMicDate'] != null) {
-        lastMicDate = data['lastMicDate'].toString();
-      }
+        if (storedKey != todayKey) {
+          final int crownInit = _mySeatIndex == 0 ? 1 : 0;
+          await userRef.set(<String, dynamic>{
+            'micDateKey': todayKey,
+            'lastMicDate': todayKey,
+            'todayMicMinutes': 1,
+            'todayCrownMinutes': crownInit,
+          }, SetOptions(merge: true));
 
-      if (lastMicDate != todayKey) {
-        int crownInit = 0;
-        if (_mySeatIndex == 0) {
-          crownInit = 1;
+          await hostRef.set(<String, dynamic>{
+            'micDateKey': todayKey,
+            'liveDurationMinutesToday': 1,
+            'updatedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
+        } else {
+          final Map<String, dynamic> incData = <String, dynamic>{
+            'micDateKey': todayKey,
+            'lastMicDate': todayKey,
+            'todayMicMinutes': FieldValue.increment(1),
+          };
+          if (_mySeatIndex == 0) {
+            incData['todayCrownMinutes'] = FieldValue.increment(1);
+          }
+          await userRef.set(incData, SetOptions(merge: true));
+
+          await hostRef.set(<String, dynamic>{
+            'micDateKey': todayKey,
+            'liveDurationMinutesToday': FieldValue.increment(1),
+            'updatedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
         }
-        await userRef.set({
-          'lastMicDate': todayKey,
-          'todayMicMinutes': 1,
-          'todayCrownMinutes': crownInit,
-        }, SetOptions(merge: true));
-      } else {
-        final Map<String, dynamic> incData = {
-          'todayMicMinutes': FieldValue.increment(1),
-        };
-        if (_mySeatIndex == 0) {
-          incData['todayCrownMinutes'] = FieldValue.increment(1);
-        }
-        await userRef.set(incData, SetOptions(merge: true));
+      } catch (e) {
+        debugPrint("Mic minutes tracking error: $e");
       }
     });
   }
 
   void _stopMicMinutesTracking() {
     _micTrackerTimer?.cancel();
+    _micTrackerTimer = null;
   }
 
   Future<void> _initVoiceEngine() async {
@@ -381,7 +405,7 @@ if (_currentUser != null) {
         }
       };
 
-      await _agoraService.initEngine(
+await _agoraService.initEngine(
         onUserJoined: (uid) {
           if (mounted) {
             setState(() {
@@ -464,7 +488,7 @@ if (_currentUser != null) {
       }
     }
 
-if (_seats[index] == null) {
+    if (_seats[index] == null) {
       if (_mySeatIndex != null) {
         _seats[_mySeatIndex!] = null;
         _seatUids[_mySeatIndex!] = null;
@@ -488,7 +512,10 @@ if (_seats[index] == null) {
       _stopMicMinutesTracking();
     }
 
-    await FirebaseFirestore.instance.collection('rooms').doc(channelName).set({
+    await FirebaseFirestore.instance
+        .collection('rooms')
+        .doc(channelName)
+        .set(<String, dynamic>{
       'seats': _seats,
       'seatUids': _seatUids,
       'seatGifts': _seatGiftsCount,
@@ -528,7 +555,7 @@ if (_seats[index] == null) {
     }
   }
 
-  void _toggleAllMic() {
+void _toggleAllMic() {
     setState(() {
       _roomSettings.isAllMicClosed = !_roomSettings.isAllMicClosed;
       if (_roomSettings.isAllMicClosed) {
@@ -585,8 +612,7 @@ if (_seats[index] == null) {
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: buttonDark),
-
-onPressed: () {
+            onPressed: () {
               setState(() {
                 final txt = passCtrl.text.trim();
                 if (txt.isEmpty) {
@@ -638,7 +664,8 @@ onPressed: () {
               "Room Administrators",
               style: TextStyle(
                   color: primaryBrown,
-                  fontSize: 16,
+
+fontSize: 16,
                   fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 12),
@@ -685,8 +712,7 @@ onPressed: () {
                               _roomSettings.admins.remove(u);
                             } else {
                               _roomSettings.admins.add(u);
-
-}
+                            }
                           });
                           Navigator.pop(context);
                         },
@@ -739,7 +765,8 @@ onPressed: () {
                   "Send Red Packet",
                   style: TextStyle(
                       color: primaryBrown,
-                      fontSize: 18,
+
+fontSize: 18,
                       fontWeight: FontWeight.bold),
                 ),
               ),
@@ -790,8 +817,7 @@ onPressed: () {
                         color: lblColor,
                         fontWeight: FontWeight.bold,
                         fontSize: 12),
-
-onSelected: (_) =>
+                    onSelected: (_) =>
                         setDialogState(() => selectedCount = qty),
                   );
                 }).toList(),
@@ -824,19 +850,20 @@ onSelected: (_) =>
                         .collection('rooms')
                         .doc(channelName)
                         .collection('chats')
-                        .add({
+                        .add(<String, dynamic>{
                       'sender': 'System',
                       'text':
                           "Red Packet of $selectedAmount Coins dropped in room!",
                       'timestamp': FieldValue.serverTimestamp(),
                     });
 
-                    if (_currentUser != null) {
+if (_currentUser != null) {
                       FirebaseFirestore.instance
                           .collection('users')
                           .doc(_currentUser!.uid)
-                          .update(
-                              {'coins': FieldValue.increment(-selectedAmount)});
+                          .update(<String, dynamic>{
+                        'coins': FieldValue.increment(-selectedAmount),
+                      });
                     }
                     widget.onCoinUpdate(_currentCoins);
                     Navigator.pop(context);
@@ -895,8 +922,7 @@ onSelected: (_) =>
                   color: cardBg,
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(color: borderColor)),
-
-child: Column(
+              child: Column(
                 children: [
                   ListTile(
                     leading: Icon(micIcon, color: primaryBrown),
@@ -932,7 +958,7 @@ child: Column(
                       await FirebaseFirestore.instance
                           .collection('rooms')
                           .doc(channelName)
-                          .set({
+                          .set(<String, dynamic>{
                         'seats': _seats,
                         'seatUids': _seatUids,
                       }, SetOptions(merge: true));
@@ -947,7 +973,7 @@ child: Column(
     );
   }
 
-  Future<void> _playGiftVideo(GiftModel gift) async {
+Future<void> _playGiftVideo(GiftModel gift) async {
     try {
       _videoController?.dispose();
       _videoController = VideoPlayerController.asset(gift.videoPath);
@@ -1034,6 +1060,44 @@ child: Column(
     });
   }
 
+  void _creditRecipientGiftPoints({
+    required String recipientUid,
+    required String senderUid,
+    required int pointsPerRecipient,
+  }) {
+    FirebaseFirestore.instance
+        .collection('users')
+        .doc(recipientUid)
+        .set(<String, dynamic>{
+      'points': FieldValue.increment(pointsPerRecipient),
+      'receivedGiftPoints': FieldValue.increment(pointsPerRecipient),
+      'giftIncomeLast7Days': FieldValue.increment(pointsPerRecipient),
+      'todayPoints': FieldValue.increment(pointsPerRecipient),
+      'charmExp': FieldValue.increment(pointsPerRecipient),
+      'todayTaskPoints': FieldValue.increment(pointsPerRecipient),
+      'weekTaskPoints': FieldValue.increment(pointsPerRecipient),
+    }, SetOptions(merge: true));
+
+    FirebaseFirestore.instance
+        .collection('hosts')
+        .doc(recipientUid)
+        .set(<String, dynamic>{
+      'giftPoints': FieldValue.increment(pointsPerRecipient),
+      'giftIncomeLast7Days': FieldValue.increment(pointsPerRecipient),
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+
+    FirebaseFirestore.instance
+        .collection('point_transactions')
+        .add(<String, dynamic>{
+      'userUid': recipientUid,
+      'senderUid': senderUid,
+      'type': 'GIFT_RECEIVED',
+      'points': pointsPerRecipient,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+  }
+
   void _sendGift({
     required GiftModel gift,
     required String target,
@@ -1042,7 +1106,7 @@ child: Column(
   }) async {
     final int totalCost = gift.cost * multiplier;
 
-if (_currentCoins < totalCost) {
+    if (_currentCoins < totalCost) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Insufficient coins! Please recharge.")),
       );
@@ -1060,34 +1124,19 @@ if (_currentCoins < totalCost) {
       senderUid = _currentUser!.uid;
     }
 
-    setState(() {
+setState(() {
       _currentCoins -= totalCost;
 
       if (targetSeatIndex != null) {
         if (targetSeatIndex < _seatGiftsCount.length) {
           _seatGiftsCount[targetSeatIndex] += totalCost;
           final recipientUid = _seatUids[targetSeatIndex];
-          if (recipientUid != null) {
-            if (recipientUid.isNotEmpty) {
-              FirebaseFirestore.instance
-                  .collection('users')
-                  .doc(recipientUid)
-                  .set({
-                'points': FieldValue.increment(pointsPerRecipient),
-                'todayPoints': FieldValue.increment(pointsPerRecipient),
-                'charmExp': FieldValue.increment(pointsPerRecipient),
-                'todayTaskPoints': FieldValue.increment(pointsPerRecipient),
-                'weekTaskPoints': FieldValue.increment(pointsPerRecipient),
-              }, SetOptions(merge: true));
-
-              FirebaseFirestore.instance.collection('point_transactions').add({
-                'userUid': recipientUid,
-                'senderUid': senderUid,
-                'type': 'GIFT_RECEIVED',
-                'points': pointsPerRecipient,
-                'createdAt': FieldValue.serverTimestamp(),
-              });
-            }
+          if (recipientUid != null && recipientUid.isNotEmpty) {
+            _creditRecipientGiftPoints(
+              recipientUid: recipientUid,
+              senderUid: senderUid,
+              pointsPerRecipient: pointsPerRecipient,
+            );
           }
         }
       } else if (target == "All Seats") {
@@ -1095,29 +1144,12 @@ if (_currentCoins < totalCost) {
           if (_seats[i] != null) {
             _seatGiftsCount[i] += totalCost;
             final recipientUid = _seatUids[i];
-            if (recipientUid != null) {
-              if (recipientUid.isNotEmpty) {
-                FirebaseFirestore.instance
-                    .collection('users')
-                    .doc(recipientUid)
-                    .set({
-                  'points': FieldValue.increment(pointsPerRecipient),
-                  'todayPoints': FieldValue.increment(pointsPerRecipient),
-                  'charmExp': FieldValue.increment(pointsPerRecipient),
-                  'todayTaskPoints': FieldValue.increment(pointsPerRecipient),
-                  'weekTaskPoints': FieldValue.increment(pointsPerRecipient),
-                }, SetOptions(merge: true));
-
-                FirebaseFirestore.instance
-                    .collection('point_transactions')
-                    .add({
-                  'userUid': recipientUid,
-                  'senderUid': senderUid,
-                  'type': 'GIFT_RECEIVED',
-                  'points': pointsPerRecipient,
-                  'createdAt': FieldValue.serverTimestamp(),
-                });
-              }
+            if (recipientUid != null && recipientUid.isNotEmpty) {
+              _creditRecipientGiftPoints(
+                recipientUid: recipientUid,
+                senderUid: senderUid,
+                pointsPerRecipient: pointsPerRecipient,
+              );
             }
           }
         }
@@ -1128,13 +1160,16 @@ if (_currentCoins < totalCost) {
         .collection('rooms')
         .doc(channelName)
         .collection('chats')
-        .add({
+        .add(<String, dynamic>{
       'sender': _myDisplayName,
       'text': "sent ${gift.name} ${gift.icon} x$multiplier to $target",
       'timestamp': FieldValue.serverTimestamp(),
     });
 
-    await FirebaseFirestore.instance.collection('rooms').doc(channelName).set({
+    await FirebaseFirestore.instance
+        .collection('rooms')
+        .doc(channelName)
+        .set(<String, dynamic>{
       'seatGifts': _seatGiftsCount,
     }, SetOptions(merge: true));
 
@@ -1142,7 +1177,7 @@ if (_currentCoins < totalCost) {
       await FirebaseFirestore.instance
           .collection('users')
           .doc(_currentUser!.uid)
-          .set({
+          .set(<String, dynamic>{
         'coins': FieldValue.increment(-totalCost),
         'wealthExp': FieldValue.increment(totalCost),
       }, SetOptions(merge: true));
@@ -1158,7 +1193,7 @@ if (_currentCoins < totalCost) {
     _playGiftVideo(gift);
   }
 
-void _openGiftSheet() {
+  void _openGiftSheet() {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -1204,7 +1239,8 @@ void _openGiftSheet() {
                           onTap: () {
                             setSheetState(() {
                               selectedTarget = "All Seats";
-                              selectedSeatIndex = null;
+
+selectedSeatIndex = null;
                             });
                             setState(() {
                               _isAllSeatsTargeted = true;
@@ -1257,7 +1293,7 @@ void _openGiftSheet() {
                           itemBorderW = 2.0;
                         }
 
-return GestureDetector(
+                        return GestureDetector(
                           onTap: () {
                             setSheetState(() {
                               selectedGift = gift;
@@ -1288,7 +1324,8 @@ return GestureDetector(
                                   textAlign: TextAlign.center,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                ),
+
+),
                                 const SizedBox(height: 4),
                                 Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
@@ -1338,8 +1375,7 @@ return GestureDetector(
                             margin: const EdgeInsets.only(right: 8),
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 10, vertical: 5),
-
-decoration: BoxDecoration(
+                            decoration: BoxDecoration(
                               color: pillBg,
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(
@@ -1374,7 +1410,8 @@ decoration: BoxDecoration(
                               color: primaryBrown,
                               fontWeight: FontWeight.bold,
                               fontSize: 15,
-                            ),
+
+),
                           ),
                           const SizedBox(width: 8),
                           GestureDetector(
@@ -1421,8 +1458,7 @@ decoration: BoxDecoration(
                               ),
                             ),
                           ),
-
-],
+                        ],
                       ),
                       ElevatedButton(
                         style: ElevatedButton.styleFrom(
@@ -1475,7 +1511,7 @@ decoration: BoxDecoration(
       chipText = Colors.white;
     }
 
-    return GestureDetector(
+return GestureDetector(
       onTap: onTap,
       child: Container(
         margin: const EdgeInsets.only(right: 8),
@@ -1557,8 +1593,7 @@ decoration: BoxDecoration(
               color: primaryBrown, size: 28),
           tooltip: "Minimize Room",
           onPressed: () {
-
-_agoraService.minimizeRoom();
+            _agoraService.minimizeRoom();
             Navigator.pop(context);
           },
         ),
@@ -1613,7 +1648,8 @@ _agoraService.minimizeRoom();
                         const SizedBox(height: 10),
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 14),
-                          child: GridView.builder(
+
+child: GridView.builder(
                             shrinkWrap: true,
                             physics: const NeverScrollableScrollPhysics(),
                             itemCount: gridItemCount,
@@ -1658,7 +1694,7 @@ _agoraService.minimizeRoom();
                                     color: Colors.black26, size: 16);
                               }
 
-String seatLabelText = "$seatIndex";
+                              String seatLabelText = "$seatIndex";
                               Color seatLabelColor = Colors.black54;
                               if (isTaken) {
                                 seatLabelText = _seats[seatIndex]!;
@@ -1685,7 +1721,8 @@ String seatLabelText = "$seatIndex";
                                               accentGold.withOpacity(0.4);
                                         } else if (isSpeaking) {
                                           ringColor = const Color(0xFF107C41);
-                                          ringWidth = 2.0 + pulse * 1.5;
+
+ringWidth = 2.0 + pulse * 1.5;
                                           glowColor = const Color(0xFF107C41)
                                               .withOpacity(0.3);
                                         }
@@ -1726,8 +1763,7 @@ String seatLabelText = "$seatIndex";
                                       overflow: TextOverflow.ellipsis,
                                     ),
                                     if (giftPoints > 0)
-
-Container(
+                                      Container(
                                         padding: const EdgeInsets.symmetric(
                                             horizontal: 4, vertical: 1),
                                         decoration: BoxDecoration(
@@ -1759,7 +1795,8 @@ Container(
                 Container(
                   height: 90,
                   padding: const EdgeInsets.symmetric(horizontal: 16),
-                  alignment: Alignment.bottomLeft,
+
+alignment: Alignment.bottomLeft,
                   child: ListView.builder(
                     reverse: true,
                     itemCount: _chatMessages.length,
@@ -1810,8 +1847,7 @@ Container(
                       const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: const BoxDecoration(
                     color: cardBg,
-
-border: Border(top: BorderSide(color: borderColor)),
+                    border: Border(top: BorderSide(color: borderColor)),
                   ),
                   child: Row(
                     children: [
@@ -1843,11 +1879,12 @@ border: Border(top: BorderSide(color: borderColor)),
                               final txt = val.trim();
                               if (txt.isNotEmpty) {
                                 _msgController.clear();
-                                await FirebaseFirestore.instance
+
+await FirebaseFirestore.instance
                                     .collection('rooms')
                                     .doc(channelName)
                                     .collection('chats')
-                                    .add({
+                                    .add(<String, dynamic>{
                                   'sender': _myDisplayName,
                                   'text': txt,
                                   'timestamp': FieldValue.serverTimestamp(),
@@ -1888,8 +1925,7 @@ border: Border(top: BorderSide(color: borderColor)),
                                   const Text(
                                     "Select Mini-Game",
                                     style: TextStyle(
-
-color: primaryBrown,
+                                      color: primaryBrown,
                                       fontWeight: FontWeight.bold,
                                       fontSize: 17,
                                     ),
@@ -1914,7 +1950,8 @@ color: primaryBrown,
                                                 color: primaryBrown,
                                                 fontWeight: FontWeight.bold,
                                                 fontSize: 13),
-                                          ),
+
+),
                                           trailing: const Icon(
                                               Icons.chevron_right,
                                               color: primaryBrown),
@@ -1950,8 +1987,7 @@ color: primaryBrown,
                                                 color: primaryBrown,
                                                 fontWeight: FontWeight.bold,
                                                 fontSize: 13),
-
-),
+                                          ),
                                           trailing: const Icon(
                                               Icons.chevron_right,
                                               color: primaryBrown),
@@ -1976,7 +2012,8 @@ color: primaryBrown,
                                       ],
                                     ),
                                   ),
-                                ],
+
+],
                               ),
                             ),
                           );
@@ -2016,22 +2053,21 @@ color: primaryBrown,
                                         await FirebaseFirestore.instance
                                             .collection('rooms')
                                             .doc(channelName)
-                                            .set({
+                                            .set(<String, dynamic>{
                                           'seats': _seats,
                                           'seatUids': _seatUids,
                                         }, SetOptions(merge: true));
-
-},
+                                      },
                                       onUpdateSettings: (newSet) {
                                         setState(() {
                                           _roomSettings = newSet;
                                           _activeSeatCount = newSet.seatCount;
-                                          _seats = List.filled(
+                                          _seats = List<String?>.filled(
                                               _activeSeatCount, null);
-                                          _seatUids = List.filled(
+                                          _seatUids = List<String?>.filled(
                                               _activeSeatCount, null);
                                           _seatGiftsCount =
-                                              List.filled(_activeSeatCount, 0);
+                                              List<int>.filled(_activeSeatCount, 0);
                                         });
                                       },
                                     ),
@@ -2057,7 +2093,8 @@ color: primaryBrown,
                   Container(
                     padding:
                         const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
+
+decoration: BoxDecoration(
                       color: cardBg,
                       borderRadius: BorderRadius.circular(30),
                       boxShadow: [
@@ -2110,8 +2147,7 @@ color: primaryBrown,
                     ),
                   ),
                   const SizedBox(width: 8),
-
-ScaleTransition(
+                  ScaleTransition(
                     scale: _comboScaleAnimation,
                     child: Text(
                       "x${_activeComboData!.comboCount}",
@@ -2163,7 +2199,7 @@ ScaleTransition(
       hostLabel = _seats[0]!;
     }
 
-    return GestureDetector(
+return GestureDetector(
       onTap: () => _handleSeatTap(0),
       child: Column(
         children: [
