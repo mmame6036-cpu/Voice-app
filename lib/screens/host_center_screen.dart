@@ -1,21 +1,49 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'points_wallet_screen.dart';
 
+bool _gt(num a, num b) {
+  return a.compareTo(b).sign == 1;
+}
+
+bool _lt(num a, num b) {
+  return a.compareTo(b).sign == -1;
+}
+
+bool _gte(num a, num b) {
+  return a.compareTo(b).sign != -1;
+}
+
+bool _lte(num a, num b) {
+  return a.compareTo(b).sign != 1;
+}
+
+dynamic _d(Object? v) {
+  return v;
+}
+
 class HostCenterScreen extends StatefulWidget {
   const HostCenterScreen({super.key});
 
   @override
-  State<HostCenterScreen> createState() => _HostCenterScreenState();
+  State createState() {
+    return _HostCenterScreenState();
+  }
 }
 
-class _HostCenterScreenState extends State<HostCenterScreen> {
+class _HostCenterScreenState extends State {
   final User? currentUser = FirebaseAuth.instance.currentUser;
   final TextEditingController _agencyInputController = TextEditingController();
   bool _isJoining = false;
   bool _isClaimingReward = false;
   int _selectedRecordTab = 0;
+  String _ownedAgencyId = "";
+  String _ownedAgencyName = "";
+  Timer? _clockTicker;
 
   static const List _hostPolicyTiers = [
     {"level": "S", "req": 50000000, "reward": 180000, "maxHours": 2},
@@ -34,39 +62,106 @@ class _HostCenterScreenState extends State<HostCenterScreen> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    _checkOwnedAgency();
+    _clockTicker = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) {
+        setState(() {});
+      }
+    });
+  }
+
+  Future _checkOwnedAgency() async {
+    final user = currentUser;
+    if (user == null) return;
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('agencies')
+          .where('ownerUid', isEqualTo: user.uid)
+          .limit(1)
+          .get();
+      if (snap.docs.isNotEmpty) {
+        final doc = snap.docs.first;
+        final data = doc.data();
+        if (mounted) {
+          setState(() {
+            _ownedAgencyId = doc.id;
+            _ownedAgencyName = (data['name'] ?? 'My Agency').toString();
+          });
+        }
+      }
+    } catch (_) {}
+  }
+
+  @override
   void dispose() {
+    _clockTicker?.cancel();
     _agencyInputController.dispose();
     super.dispose();
   }
 
+  // App 24-hour day resets at 9:00 PM EAT (ማታ 3:00) == 18:00 UTC
+  DateTime _getAppCycleNow() {
+    return DateTime.now().toUtc().add(const Duration(hours: 6));
+  }
+
   String _getTodayDateKey() {
-    final now = DateTime.now();
-    final String y = now.year.toString();
-    final String m = now.month.toString().padLeft(2, '0');
-    final String d = now.day.toString().padLeft(2, '0');
+    final cycleNow = _getAppCycleNow();
+    final String y = cycleNow.year.toString();
+    final String m = cycleNow.month.toString().padLeft(2, '0');
+    final String d = cycleNow.day.toString().padLeft(2, '0');
     return "$y-$m-$d";
   }
 
+  String _getCountdownToReset() {
+    final cycleNow = _getAppCycleNow();
+    final nextReset =
+        DateTime.utc(cycleNow.year, cycleNow.month, cycleNow.day + 1);
+    final diff = nextReset.difference(cycleNow);
+    final String hh = diff.inHours.toString().padLeft(2, '0');
+    final String mm = diff.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final String ss = diff.inSeconds.remainder(60).toString().padLeft(2, '0');
+    return "$hh:$mm:$ss";
+  }
+
   String _getFormattedShortDate() {
-    final now = DateTime.now();
-    final String m = now.month.toString().padLeft(2, '0');
-    final String d = now.day.toString().padLeft(2, '0');
+    final cycleNow = _getAppCycleNow();
+    final String m = cycleNow.month.toString().padLeft(2, '0');
+    final String d = cycleNow.day.toString().padLeft(2, '0');
     return "$m.$d - $m.$d";
   }
 
-  String _getFormattedTime() {
-    final now = DateTime.now();
+String _getFormattedTime() {
+    final now = DateTime.now().toUtc().add(const Duration(hours: 3));
     final String h = now.hour.toString().padLeft(2, '0');
     final String min = now.minute.toString().padLeft(2, '0');
     return "$h:$min (EAT)";
   }
 
-  Map<String, dynamic> _calculateTier(int giftIncome7Days) {
-    for (int i = 0; i < _hostPolicyTiers.length; i++) {
-      final tier = _hostPolicyTiers[i];
-      final req = tier['req'] as int;
-      if (giftIncome7Days >= req) {
-        final currentReward = tier['reward'] as int;
+  ImageProvider? _resolveAvatarProvider(String avatarUrl) {
+    if (avatarUrl.isEmpty) return null;
+    if (avatarUrl.startsWith('data:image')) {
+      try {
+        final int commaIdx = avatarUrl.indexOf(',');
+        if (commaIdx != -1) {
+          final Uint8List bytes =
+              base64Decode(avatarUrl.substring(commaIdx + 1));
+          return MemoryImage(bytes);
+        }
+      } catch (_) {
+        return null;
+      }
+    }
+    return NetworkImage(avatarUrl);
+  }
+
+  Map _calculateTier(int giftIncome7Days) {
+    for (int i = 0; _lt(i, _hostPolicyTiers.length); i++) {
+      final tier = _hostPolicyTiers[i] as Map;
+      final int req = (tier['req'] as num).toInt();
+      if (_gte(giftIncome7Days, req)) {
+        final int currentReward = (tier['reward'] as num).toInt();
         if (i == 0) {
           return {
             "currentReward": currentReward,
@@ -77,16 +172,17 @@ class _HostCenterScreenState extends State<HostCenterScreen> {
             "level": tier['level'],
           };
         }
-        final higherTier = _hostPolicyTiers[i - 1];
-        final nextReq = higherTier['req'] as int;
-        final nextReward = higherTier['reward'] as int;
-        final stillNeed = (nextReq - giftIncome7Days).clamp(0, nextReq);
-        final base = req;
+        final higherTier = _hostPolicyTiers[i - 1] as Map;
+        final int nextReq = (higherTier['req'] as num).toInt();
+        final int nextReward = (higherTier['reward'] as num).toInt();
+        final int stillNeed = (nextReq - giftIncome7Days).clamp(0, nextReq);
+        final int base = req;
         int span = nextReq - base;
-        if (span <= 0) {
+        if (_lte(span, 0)) {
           span = 1;
         }
-        final double progress = ((giftIncome7Days - base) / span).clamp(0.0, 1.0);
+        final double progress =
+            ((giftIncome7Days - base) / span).clamp(0.0, 1.0);
         return {
           "currentReward": currentReward,
           "nextReward": nextReward,
@@ -108,7 +204,7 @@ class _HostCenterScreenState extends State<HostCenterScreen> {
     };
   }
 
-  Future<void> _claimDailyMicReward({
+  Future _claimDailyMicReward({
     required int liveMinutesToday,
     required int currentHourlyIncome,
     required String currentLevel,
@@ -117,23 +213,25 @@ class _HostCenterScreenState extends State<HostCenterScreen> {
     final user = currentUser;
     if (user == null) return;
 
-final String todayKey = _getTodayDateKey();
+    final String todayKey = _getTodayDateKey();
     if (lastClaimDate == todayKey) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Today's mic reward has already been claimed.")),
+        const SnackBar(
+            content: Text("Today's mic reward has already been claimed.")),
       );
       return;
     }
 
-    if (liveMinutesToday < 60) {
+    if (_lt(liveMinutesToday, 60)) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Minimum 60 mic minutes required today to claim.")),
+        const SnackBar(
+            content: Text("Minimum 60 mic minutes required today to claim.")),
       );
       return;
     }
 
     int qualifiedHours = liveMinutesToday ~/ 60;
-    if (qualifiedHours > 2) {
+    if (_gt(qualifiedHours, 2)) {
       qualifiedHours = 2;
     }
 
@@ -146,29 +244,33 @@ final String todayKey = _getTodayDateKey();
       }
     }
 
-    setState(() => _isClaimingReward = true);
+    setState(() {
+      _isClaimingReward = true;
+    });
 
     try {
       final batch = FirebaseFirestore.instance.batch();
-      final userRef = FirebaseFirestore.instance.collection('users').doc(user.uid);
-      final hostRef = FirebaseFirestore.instance.collection('hosts').doc(user.uid);
+      final userRef =
+          FirebaseFirestore.instance.collection('users').doc(user.uid);
+      final hostRef =
+          FirebaseFirestore.instance.collection('hosts').doc(user.uid);
       final recordRef = hostRef.collection('live_records').doc(todayKey);
 
       batch.set(
         userRef,
         {
-          'points': FieldValue.increment(rewardPoints),
-          'lastMicClaimDate': todayKey,
+          'points': _d(FieldValue.increment(rewardPoints)),
+          'lastMicClaimDate': _d(todayKey),
         },
         SetOptions(merge: true),
       );
 
-      batch.set(
+batch.set(
         hostRef,
         {
-          'baseSalaryPoints': FieldValue.increment(rewardPoints),
-          'lastMicClaimDate': todayKey,
-          'updatedAt': FieldValue.serverTimestamp(),
+          'baseSalaryPoints': _d(FieldValue.increment(rewardPoints)),
+          'lastMicClaimDate': _d(todayKey),
+          'updatedAt': _d(FieldValue.serverTimestamp()),
         },
         SetOptions(merge: true),
       );
@@ -176,11 +278,11 @@ final String todayKey = _getTodayDateKey();
       batch.set(
         recordRef,
         {
-          'startTime': todayKey,
-          'endTime': _getFormattedTime(),
-          'durationMinutes': liveMinutesToday,
-          'pointsEarned': rewardPoints,
-          'createdAt': FieldValue.serverTimestamp(),
+          'startTime': _d(todayKey),
+          'endTime': _d(_getFormattedTime()),
+          'durationMinutes': _d(liveMinutesToday),
+          'pointsEarned': _d(rewardPoints),
+          'createdAt': _d(FieldValue.serverTimestamp()),
         },
         SetOptions(merge: true),
       );
@@ -199,7 +301,11 @@ final String todayKey = _getTodayDateKey();
         );
       }
     } finally {
-      if (mounted) setState(() => _isClaimingReward = false);
+      if (mounted) {
+        setState(() {
+          _isClaimingReward = false;
+        });
+      }
     }
   }
 
@@ -208,313 +314,331 @@ final String todayKey = _getTodayDateKey();
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      builder: (ctx) => Container(
-        height: MediaQuery.of(context).size.height * 0.85,
-        decoration: const BoxDecoration(
-          color: Color(0xFFFAF7F2),
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-        child: Column(
-          children: [
-            Center(
-              child: Container(
-                width: 44,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.black26,
-                  borderRadius: BorderRadius.circular(2),
+      builder: (ctx) {
+        return Container(
+          height: MediaQuery.of(context).size.height * 0.85,
+          decoration: const BoxDecoration(
+            color: Color(0xFFFAF7F2),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+          child: Column(
+            children: [
+              Center(
+                child: Container(
+                  width: 44,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.black26,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 14),
-            const Text(
-              "Host Policy & Hourly Reward Rules",
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF3E2723),
+              const SizedBox(height: 14),
+              const Text(
+                "Host Policy & Hourly Reward Rules",
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF3E2723),
+                ),
               ),
-            ),
-            const SizedBox(height: 12),
-            Expanded(
-              child: ListView(
-                physics: const BouncingScrollPhysics(),
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-
-borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFFE2D6C5)),
-                    ),
-                    child: const Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          "New Host First Week Base Salary",
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF4E342E),
+              const SizedBox(height: 12),
+              Expanded(
+                child: ListView(
+                  physics: const BouncingScrollPhysics(),
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFE2D6C5)),
+                      ),
+                      child: const Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            "New Host First Week Base Salary",
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF4E342E),
+                            ),
                           ),
-                        ),
-                        SizedBox(height: 4),
-                        Text(
-                          "Income Requirement: None\n"
-                          "• On mic for 1 hour: 2,000 Points\n"
-                          "• On mic for 2 hours: 3,000 Points\n"
-                          "Maximum 2 hours daily up to 35,000 Points in the first week.",
-                          style: TextStyle(fontSize: 11.5, color: Colors.black87, height: 1.4),
-                        ),
-                      ],
+                          SizedBox(height: 4),
+                          Text(
+                            "Income Requirement: None\n"
+                            "• On mic for 1 hour: 2,000 Points\n"
+                            "• On mic for 2 hours: 3,000 Points\n"
+                            "• Daily Reset Time: 9:00 PM EAT (3:00 ማታ)",
+                            style: TextStyle(
+                                fontSize: 11.5,
+                                color: Colors.black87,
+
+height: 1.4),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  const Text(
-                    "Ordinary Host Hourly Reward Table",
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF3E2723),
+                    const SizedBox(height: 12),
+                    const Text(
+                      "Ordinary Host Hourly Reward Table",
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF3E2723),
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFFE2D6C5)),
-                    ),
-                    child: Table(
-                      border: TableBorder.all(color: const Color(0xFFEFE6DE)),
-                      children: [
-                        const TableRow(
-                          decoration: BoxDecoration(color: Color(0xFFF5EFEB)),
-                          children: [
-                            Padding(
-                              padding: EdgeInsets.all(8),
-                              child: Text("Level", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
-                            ),
-                            Padding(
-                              padding: EdgeInsets.all(8),
-                              child: Text("Income (7d)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
-                            ),
-                            Padding(
-                              padding: EdgeInsets.all(8),
-                              child: Text("Reward /h", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
-                            ),
-                            Padding(
-                              padding: EdgeInsets.all(8),
-                              child: Text("Max Daily", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
-                            ),
-                          ],
-                        ),
-                        ..._hostPolicyTiers.map((t) {
-                          String reqLabel = "${t['req']}";
-                          if (t['req'] == 0) {
-                            reqLabel = "No Target";
-                          }
-                          return TableRow(
+                    const SizedBox(height: 8),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFE2D6C5)),
+                      ),
+                      child: Table(
+                        border: TableBorder.all(color: const Color(0xFFEFE6DE)),
+                        children: [
+                          const TableRow(
+                            decoration:
+                                BoxDecoration(color: Color(0xFFF5EFEB)),
                             children: [
                               Padding(
-                                padding: const EdgeInsets.all(8),
-                                child: Text("${t['level']}", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                                padding: EdgeInsets.all(8),
+                                child: Text("Level",
+                                    style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 11)),
                               ),
                               Padding(
-
-padding: const EdgeInsets.all(8),
-                                child: Text(reqLabel, style: const TextStyle(fontSize: 11)),
+                                padding: EdgeInsets.all(8),
+                                child: Text("Income (7d)",
+                                    style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 11)),
                               ),
                               Padding(
-                                padding: const EdgeInsets.all(8),
-                                child: Text("${t['reward']} /h", style: const TextStyle(fontSize: 11, color: Color(0xFFD49B42), fontWeight: FontWeight.bold)),
+                                padding: EdgeInsets.all(8),
+                                child: Text("Reward /h",
+                                    style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 11)),
                               ),
                               Padding(
-                                padding: const EdgeInsets.all(8),
-                                child: Text("${t['maxHours']} Hours", style: const TextStyle(fontSize: 11)),
+                                padding: EdgeInsets.all(8),
+                                child: Text("Max Daily",
+                                    style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 11)),
                               ),
                             ],
-                          );
-                        }),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFFE2D6C5)),
-                    ),
-                    child: const Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          "Rules & Requirements",
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF4E342E),
                           ),
-                        ),
-                        SizedBox(height: 4),
-                        Text(
-                          "1. 1 USD = 10,000 Points.\n"
-                          "2. On mic duration must be continuous for at least 15 minutes to count.\n"
-                          "3. Host must join an active agency to request withdrawals.\n"
-                          "4. First withdrawal requires Level K; subsequent payouts require Level J.\n"
-                          "5. Multiple accounts on a single device or IP are strictly prohibited.",
-                          style: TextStyle(fontSize: 11.5, color: Colors.black87, height: 1.4),
-                        ),
-                      ],
+                          ..._hostPolicyTiers.map((rawT) {
+                            final t = rawT as Map;
+                            String reqLabel = "${t['req']}";
+                            if (t['req'] == 0) {
+                              reqLabel = "No Target";
+                            }
+                            return TableRow(
+                              children: [
+                                Padding(
+                                  padding: const EdgeInsets.all(8),
+                                  child: Text("${t['level']}",
+                                      style: const TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold)),
+                                ),
+                                Padding(
+                                  padding: const EdgeInsets.all(8),
+                                  child: Text(reqLabel,
+                                      style: const TextStyle(fontSize: 11)),
+                                ),
+
+Padding(
+                                  padding: const EdgeInsets.all(8),
+                                  child: Text("${t['reward']} /h",
+                                      style: const TextStyle(
+                                          fontSize: 11,
+                                          color: Color(0xFFD49B42),
+                                          fontWeight: FontWeight.bold)),
+                                ),
+                                Padding(
+                                  padding: const EdgeInsets.all(8),
+                                  child: Text("${t['maxHours']} Hours",
+                                      style: const TextStyle(fontSize: 11)),
+                                ),
+                              ],
+                            );
+                          }),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-          ],
-        ),
-      ),
+            ],
+          ),
+        );
+      },
     );
   }
 
   void _showJoinAgencyDialog() {
     showDialog(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (context, setDialogState) {
-          VoidCallback? submitAction = () async {
-            final inputId = _agencyInputController.text.trim();
-            if (inputId.isEmpty) return;
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            VoidCallback? submitAction = () async {
+              final inputId = _agencyInputController.text.trim();
+              if (inputId.isEmpty) return;
 
-            setDialogState(() => _isJoining = true);
+              setDialogState(() {
+                _isJoining = true;
+              });
 
-            try {
-              final agencyDoc = await FirebaseFirestore.instance
-                  .collection('agencies')
-                  .doc(inputId)
-                  .get();
+              try {
+                final agencyDoc = await FirebaseFirestore.instance
+                    .collection('agencies')
+                    .doc(inputId)
+                    .get();
 
-              if (!agencyDoc.exists) {
+                if (!agencyDoc.exists) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text("Agency ID not found.")),
+                    );
+                  }
+                  setDialogState(() {
+                    _isJoining = false;
+                  });
+                  return;
+                }
+
+                final agencyData = agencyDoc.data() ?? {};
+                String agencyName = inputId;
+                if (agencyData['name'] != null) {
+                  agencyName = agencyData['name'].toString();
+                }
+
+                await FirebaseFirestore.instance
+                    .collection('hosts')
+                    .doc(currentUser!.uid)
+                    .set({
+                  'agencyId': _d(inputId),
+                  'agencyName': _d(agencyName),
+                  'status': _d('active'),
+                  'updatedAt': _d(FieldValue.serverTimestamp()),
+                }, SetOptions(merge: true));
+
+                await FirebaseFirestore.instance
+                    .collection('users')
+                    .doc(currentUser!.uid)
+                    .set({
+                  'agencyId': _d(inputId),
+                  'agencyName': _d(agencyName),
+                }, SetOptions(merge: true));
+
                 if (mounted) {
+                  Navigator.pop(ctx);
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text("Agency ID not found.")),
+                    const SnackBar(
+                        content: Text("Successfully linked to agency!")),
                   );
                 }
-                setDialogState(() => _isJoining = false);
-                return;
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text("Error: $e")),
+                  );
+                }
+              } finally {
+                setDialogState(() {
+                  _isJoining = false;
+                });
               }
+            };
 
-              final agencyData = agencyDoc.data() ?? {};
-              String agencyName = inputId;
-              if (agencyData['name'] != null) {
-                agencyName = agencyData['name'].toString();
-              }
-
-              await FirebaseFirestore.instance
-                  .collection('hosts')
-                  .doc(currentUser!.uid)
-                  .set({
-                'agencyId': inputId,
-                'agencyName': agencyName,
-                'status': 'active',
-                'updatedAt': FieldValue.serverTimestamp(),
-              }, SetOptions(merge: true));
-
-await FirebaseFirestore.instance
-                  .collection('users')
-                  .doc(currentUser!.uid)
-                  .set({
-                'agencyId': inputId,
-                'agencyName': agencyName,
-              }, SetOptions(merge: true));
-
-              if (mounted) {
-                Navigator.pop(ctx);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text("Successfully linked to agency!")),
-                );
-              }
-            } catch (e) {
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text("Error: $e")),
-                );
-              }
-            } finally {
-              setDialogState(() => _isJoining = false);
-            }
-          };
-
-          Widget submitChild = const Text(
-            "Submit",
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-          );
-
-          if (_isJoining) {
-            submitAction = null;
-            submitChild = const SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+            Widget submitChild = const Text(
+              "Submit",
+              style:
+                  TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
             );
-          }
 
-          return AlertDialog(
-            backgroundColor: const Color(0xFFFAF7F2),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            title: const Text(
-              "Join Agency",
-              style: TextStyle(color: Color(0xFF3E2723), fontWeight: FontWeight.bold, fontSize: 16),
-            ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text(
-                  "Enter the Agency ID provided by your agency manager to link your host account.",
-                  style: TextStyle(color: Colors.black54, fontSize: 12),
-                ),
-                const SizedBox(height: 14),
-                TextField(
-                  controller: _agencyInputController,
-                  style: const TextStyle(color: Color(0xFF3E2723)),
-                  decoration: InputDecoration(
-                    hintText: "e.g. AG_1001",
-                    hintStyle: const TextStyle(color: Colors.black38),
-                    filled: true,
-                    fillColor: Colors.white,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: Color(0xFFE2D6C5)),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: Color(0xFFE2D6C5)),
+if (_isJoining) {
+              submitAction = null;
+              submitChild = const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                    strokeWidth: 2, color: Colors.white),
+              );
+            }
+
+            return AlertDialog(
+              backgroundColor: const Color(0xFFFAF7F2),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16)),
+              title: const Text(
+                "Join Agency",
+                style: TextStyle(
+                    color: Color(0xFF3E2723),
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16),
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    "Enter the Agency ID provided by your agency manager to link your host account.",
+                    style: TextStyle(color: Colors.black54, fontSize: 12),
+                  ),
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: _agencyInputController,
+                    style: const TextStyle(color: Color(0xFF3E2723)),
+                    decoration: InputDecoration(
+                      hintText: "e.g. 100083",
+                      hintStyle: const TextStyle(color: Colors.black38),
+                      filled: true,
+                      fillColor: Colors.white,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide:
+                            const BorderSide(color: Color(0xFFE2D6C5)),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide:
+                            const BorderSide(color: Color(0xFFE2D6C5)),
+                      ),
                     ),
                   ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                  },
+                  child: const Text("Cancel",
+                      style: TextStyle(color: Colors.black54)),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF4A3528),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                  ),
+                  onPressed: submitAction,
+                  child: submitChild,
                 ),
               ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text("Cancel", style: TextStyle(color: Colors.black54)),
-              ),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF4A3528),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                ),
-                onPressed: submitAction,
-                child: submitChild,
-              ),
-            ],
-          );
-        },
-      ),
+            );
+          },
+        );
+      },
     );
   }
 
@@ -534,14 +658,15 @@ await FirebaseFirestore.instance
       }
     }
 
-String statusText = "Withdrawal locked: Must join an agency first.";
+    String statusText = "Withdrawal locked: Must join an agency first.";
     Color statusColor = const Color(0xFFD32F2F);
     if (isLinked) {
       if (canWithdraw) {
         statusText = "Host Tier: Level $currentLevel (Eligible)";
         statusColor = const Color(0xFF107C41);
       } else {
-        statusText = "Host Tier: Level $currentLevel (Requires Level K or higher)";
+        statusText =
+            "Host Tier: Level $currentLevel (Requires Level K or higher)";
       }
     }
 
@@ -551,7 +676,8 @@ String statusText = "Withdrawal locked: Must join an agency first.";
     }
 
     showModalBottomSheet(
-      context: context,
+
+context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (ctx) {
@@ -561,7 +687,11 @@ String statusText = "Withdrawal locked: Must join an agency first.";
             Navigator.pop(ctx);
             Navigator.push(
               context,
-              MaterialPageRoute(builder: (_) => const PointsWalletScreen()),
+              MaterialPageRoute(
+                builder: (_) {
+                  return const PointsWalletScreen();
+                },
+              ),
             );
           };
         }
@@ -578,7 +708,10 @@ String statusText = "Withdrawal locked: Must join an agency first.";
             children: [
               const Text(
                 "Withdraw Earnings",
-                style: TextStyle(color: Color(0xFF3E2723), fontSize: 17, fontWeight: FontWeight.bold),
+                style: TextStyle(
+                    color: Color(0xFF3E2723),
+                    fontSize: 17,
+                    fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 10),
               Text(
@@ -604,12 +737,16 @@ String statusText = "Withdrawal locked: Must join an agency first.";
                 ),
                 child: const Row(
                   children: [
-                    Icon(Icons.account_balance_wallet, color: Color(0xFFD49B42)),
+                    Icon(Icons.account_balance_wallet,
+                        color: Color(0xFFD49B42)),
                     SizedBox(width: 12),
                     Expanded(
                       child: Text(
                         "Telebirr / CBE / Abyssinia / Awash / Binance Pay",
-                        style: TextStyle(color: Color(0xFF3E2723), fontSize: 12, fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                            color: Color(0xFF3E2723),
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold),
                       ),
                     ),
                   ],
@@ -622,13 +759,15 @@ String statusText = "Withdrawal locked: Must join an agency first.";
                   style: ElevatedButton.styleFrom(
                     backgroundColor: btnColor,
                     padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
                     elevation: 0,
                   ),
                   onPressed: btnAction,
                   child: const Text(
                     "Proceed to Points Wallet",
-                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                    style: TextStyle(
+                        color: Colors.white, fontWeight: FontWeight.bold),
                   ),
                 ),
               ),
@@ -645,10 +784,13 @@ String statusText = "Withdrawal locked: Must join an agency first.";
       return const Scaffold(
         backgroundColor: Color(0xFFF5EFEB),
         body: Center(
-          child: Text("Please sign in first.", style: TextStyle(color: Colors.black54)),
+          child: Text("Please sign in first.",
+              style: TextStyle(color: Colors.black54)),
         ),
       );
     }
+
+    final String todayAppKey = _getTodayDateKey();
 
 return Scaffold(
       backgroundColor: const Color(0xFFF5EFEB),
@@ -656,8 +798,11 @@ return Scaffold(
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: Color(0xFF3E2723), size: 20),
-          onPressed: () => Navigator.pop(context),
+          icon: const Icon(Icons.arrow_back_ios,
+              color: Color(0xFF3E2723), size: 20),
+          onPressed: () {
+            Navigator.pop(context);
+          },
         ),
         title: const Text(
           "Host Center",
@@ -669,27 +814,35 @@ return Scaffold(
         ),
         centerTitle: true,
       ),
-      body: StreamBuilder<DocumentSnapshot>(
-        stream: FirebaseFirestore.instance.collection('users').doc(currentUser!.uid).snapshots(),
+      body: StreamBuilder(
+        stream: FirebaseFirestore.instance
+            .collection('users')
+            .doc(currentUser!.uid)
+            .snapshots(),
         builder: (context, userSnapshot) {
-          Map<String, dynamic> userData = {};
+          Map userData = {};
           if (userSnapshot.hasData) {
-            if (userSnapshot.data!.exists) {
-              final raw = userSnapshot.data!.data();
-              if (raw is Map<String, dynamic>) {
+            final doc = userSnapshot.data as DocumentSnapshot;
+            if (doc.exists) {
+              final raw = doc.data();
+              if (raw is Map) {
                 userData = raw;
               }
             }
           }
 
-          return StreamBuilder<DocumentSnapshot>(
-            stream: FirebaseFirestore.instance.collection('hosts').doc(currentUser!.uid).snapshots(),
+          return StreamBuilder(
+            stream: FirebaseFirestore.instance
+                .collection('hosts')
+                .doc(currentUser!.uid)
+                .snapshots(),
             builder: (context, hostSnapshot) {
-              Map<String, dynamic> hostData = {};
+              Map hostData = {};
               if (hostSnapshot.hasData) {
-                if (hostSnapshot.data!.exists) {
-                  final raw = hostSnapshot.data!.data();
-                  if (raw is Map<String, dynamic>) {
+                final doc = hostSnapshot.data as DocumentSnapshot;
+                if (doc.exists) {
+                  final raw = doc.data();
+                  if (raw is Map) {
                     hostData = raw;
                   }
                 }
@@ -698,6 +851,8 @@ return Scaffold(
               String userName = "Host";
               if (userData['name'] != null) {
                 userName = userData['name'].toString();
+              } else if (userData['nickname'] != null) {
+                userName = userData['nickname'].toString();
               } else if (userData['displayName'] != null) {
                 userName = userData['displayName'].toString();
               }
@@ -712,10 +867,10 @@ return Scaffold(
               String avatarUrl = "";
               if (userData['avatarUrl'] != null) {
                 avatarUrl = userData['avatarUrl'].toString();
-              } else if (userData['avatar'] != null) {
-                avatarUrl = userData['avatar'].toString();
               } else if (userData['photoURL'] != null) {
                 avatarUrl = userData['photoURL'].toString();
+              } else if (userData['avatar'] != null) {
+                avatarUrl = userData['avatar'].toString();
               }
 
               String agencyName = "";
@@ -723,6 +878,8 @@ return Scaffold(
                 agencyName = hostData['agencyName'].toString();
               } else if (userData['agencyName'] != null) {
                 agencyName = userData['agencyName'].toString();
+              } else if (_ownedAgencyName.isNotEmpty) {
+                agencyName = _ownedAgencyName;
               }
 
               String agencyId = "";
@@ -730,17 +887,27 @@ return Scaffold(
                 agencyId = hostData['agencyId'].toString();
               } else if (userData['agencyId'] != null) {
                 agencyId = userData['agencyId'].toString();
+              } else if (_ownedAgencyId.isNotEmpty) {
+                agencyId = _ownedAgencyId;
               }
               final bool isLinked = agencyId.isNotEmpty;
 
-              int giftIncome7Days = (hostData['giftIncomeLast7Days'] as num?)?.toInt() ?? 0;
-              if (giftIncome7Days == 0) {
-                giftIncome7Days = (userData['giftIncomeLast7Days'] as num?)?.toInt() ?? 0;
-              }
+              // 24-Hour Daily Reset at 9:00 PM EAT (3:00 ማታ):
+              // Only count today's minutes if stored micDateKey matches todayAppKey!
+              final String storedDateKey = (userData['micDateKey'] ??
 
-              int liveMinutesToday = (hostData['liveDurationMinutesToday'] as num?)?.toInt() ?? 0;
-              if (liveMinutesToday == 0) {
-                liveMinutesToday = (userData['todayMicMinutes'] as num?)?.toInt() ?? 0;
+hostData['micDateKey'] ??
+                      todayAppKey)
+                  .toString();
+              int liveMinutesToday = 0;
+              if (storedDateKey == todayAppKey) {
+                liveMinutesToday =
+                    (hostData['liveDurationMinutesToday'] as num?)?.toInt() ??
+                        0;
+                if (liveMinutesToday == 0) {
+                  liveMinutesToday =
+                      (userData['todayMicMinutes'] as num?)?.toInt() ?? 0;
+                }
               }
 
               String lastClaimDate = "";
@@ -750,32 +917,55 @@ return Scaffold(
                 lastClaimDate = hostData['lastMicClaimDate'].toString();
               }
 
-final tierCalc = _calculateTier(giftIncome7Days);
-              final int currentHourlyIncome = tierCalc['currentReward'] as int;
-              final int nextHourlyIncome = tierCalc['nextReward'] as int;
-              final int stillNeed = tierCalc['stillNeed'] as int;
-              final double tierProgress = tierCalc['progress'] as double;
-              final String currentLevel = tierCalc['level'] as String;
-
               int giftPoints = (hostData['giftPoints'] as num?)?.toInt() ?? 0;
+              if (giftPoints == 0) {
+                giftPoints =
+                    (userData['receivedGiftPoints'] as num?)?.toInt() ?? 0;
+              }
               if (giftPoints == 0) {
                 giftPoints = (userData['points'] as num?)?.toInt() ?? 0;
               }
-              final int baseSalaryPoints = (hostData['baseSalaryPoints'] as num?)?.toInt() ?? 0;
-              final int invitationPoints = (hostData['invitationPoints'] as num?)?.toInt() ?? 0;
+
+              // Ensure Gift Income (Last 7 days) & Still Need progress bar move with received gifts
+              int giftIncome7Days =
+                  (hostData['giftIncomeLast7Days'] as num?)?.toInt() ?? 0;
+              if (giftIncome7Days == 0) {
+                giftIncome7Days =
+                    (userData['giftIncomeLast7Days'] as num?)?.toInt() ?? 0;
+              }
+              if (giftIncome7Days == 0) {
+                giftIncome7Days = giftPoints;
+              }
+
+              final tierCalc = _calculateTier(giftIncome7Days);
+              final int currentHourlyIncome =
+                  (tierCalc['currentReward'] as num).toInt();
+              final int nextHourlyIncome =
+                  (tierCalc['nextReward'] as num).toInt();
+              final int stillNeed = (tierCalc['stillNeed'] as num).toInt();
+              final double tierProgress =
+                  (tierCalc['progress'] as num).toDouble();
+              final String currentLevel = tierCalc['level'].toString();
+
+              final int baseSalaryPoints =
+                  (hostData['baseSalaryPoints'] as num?)?.toInt() ?? 0;
+              final int invitationPoints =
+                  (hostData['invitationPoints'] as num?)?.toInt() ?? 0;
               int taskPoints = (hostData['taskPoints'] as num?)?.toInt() ?? 0;
               if (taskPoints == 0) {
-                taskPoints = (userData['todayTaskPoints'] as num?)?.toInt() ?? 0;
+                taskPoints =
+                    (userData['todayTaskPoints'] as num?)?.toInt() ?? 0;
               }
-              final int otherPoints = (hostData['otherPoints'] as num?)?.toInt() ?? 0;
-              final int totalPoints = giftPoints + baseSalaryPoints + invitationPoints + taskPoints + otherPoints;
+              final int otherPoints =
+                  (hostData['otherPoints'] as num?)?.toInt() ?? 0;
+              final int totalPoints = giftPoints +
+                  baseSalaryPoints +
+                  invitationPoints +
+                  taskPoints +
+                  otherPoints;
 
-              DecorationImage? avatarDeco;
-              Widget? avatarChild = const Icon(Icons.person, color: Color(0xFF8D6E63), size: 30);
-              if (avatarUrl.isNotEmpty) {
-                avatarDeco = DecorationImage(image: NetworkImage(avatarUrl), fit: BoxFit.cover);
-                avatarChild = null;
-              }
+              final ImageProvider? avatarProvider =
+                  _resolveAvatarProvider(avatarUrl);
 
               VoidCallback? agencyTap = _showJoinAgencyDialog;
               String agencyLabel = "Agency: Tap to Join";
@@ -783,12 +973,12 @@ final tierCalc = _calculateTier(giftIncome7Days);
               if (isLinked) {
                 agencyTap = null;
                 agencyLabel = "Agency: $agencyName";
-                agencyColor = const Color(0xFF8D6E63);
+                agencyColor = const Color(0xFF107C41);
               }
 
-              final bool alreadyClaimedToday = lastClaimDate == _getTodayDateKey();
+              final bool alreadyClaimedToday = lastClaimDate == todayAppKey;
               bool canClaimMic = false;
-              if (liveMinutesToday >= 60) {
+              if (_gte(liveMinutesToday, 60)) {
                 if (!alreadyClaimedToday) {
                   canClaimMic = true;
                 }
@@ -799,7 +989,7 @@ final tierCalc = _calculateTier(giftIncome7Days);
               Color claimBtnTextCol = Colors.black45;
               VoidCallback? claimBtnAction;
 
-              if (alreadyClaimedToday) {
+if (alreadyClaimedToday) {
                 claimBtnText = "Claimed Today";
                 claimBtnBg = const Color(0xFFE8F5E9);
                 claimBtnTextCol = const Color(0xFF107C41);
@@ -808,12 +998,14 @@ final tierCalc = _calculateTier(giftIncome7Days);
                 claimBtnBg = const Color(0xFF107C41);
                 claimBtnTextCol = Colors.white;
                 if (!_isClaimingReward) {
-                  claimBtnAction = () => _claimDailyMicReward(
-                        liveMinutesToday: liveMinutesToday,
-                        currentHourlyIncome: currentHourlyIncome,
-                        currentLevel: currentLevel,
-                        lastClaimDate: lastClaimDate,
-                      );
+                  claimBtnAction = () {
+                    _claimDailyMicReward(
+                      liveMinutesToday: liveMinutesToday,
+                      currentHourlyIncome: currentHourlyIncome,
+                      currentLevel: currentLevel,
+                      lastClaimDate: lastClaimDate,
+                    );
+                  };
                 }
               }
 
@@ -827,20 +1019,19 @@ final tierCalc = _calculateTier(giftIncome7Days);
 
               return ListView(
                 physics: const BouncingScrollPhysics(),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 children: [
                   Row(
                     children: [
-                      Container(
-                        width: 54,
-
-height: 54,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(color: const Color(0xFFDDD0C2), width: 1.5),
-                          image: avatarDeco,
-                        ),
-                        child: avatarChild,
+                      CircleAvatar(
+                        radius: 27,
+                        backgroundColor: const Color(0xFFE7DDD2),
+                        backgroundImage: avatarProvider,
+                        child: avatarProvider == null
+                            ? const Icon(Icons.person,
+                                color: Color(0xFF8D6E63), size: 30)
+                            : null,
                       ),
                       const SizedBox(width: 12),
                       Expanded(
@@ -863,7 +1054,8 @@ height: 54,
                                 ),
                                 const SizedBox(width: 6),
                                 Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 6, vertical: 2),
                                   decoration: BoxDecoration(
                                     color: const Color(0xFFD49B42),
                                     borderRadius: BorderRadius.circular(10),
@@ -881,8 +1073,10 @@ height: 54,
                             ),
                             const SizedBox(height: 3),
                             Text(
-                              "ID: $userNumericId",
-                              style: const TextStyle(color: Colors.black45, fontSize: 11),
+
+"ID: $userNumericId",
+                              style: const TextStyle(
+                                  color: Colors.black45, fontSize: 11),
                             ),
                             const SizedBox(height: 2),
                             GestureDetector(
@@ -904,15 +1098,19 @@ height: 54,
                         children: [
                           Text(
                             _getFormattedTime(),
-                            style: const TextStyle(color: Colors.black45, fontSize: 11),
+                            style: const TextStyle(
+                                color: Colors.black45, fontSize: 11),
                           ),
                           const SizedBox(height: 6),
                           GestureDetector(
-                            onTap: () => _showWithdrawDialog(totalPoints, currentLevel, isLinked),
+                            onTap: () {
+                              _showWithdrawDialog(
+                                  totalPoints, currentLevel, isLinked);
+                            },
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-
-decoration: BoxDecoration(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 5),
+                              decoration: BoxDecoration(
                                 color: const Color(0xFF4A3528),
                                 borderRadius: BorderRadius.circular(14),
                               ),
@@ -933,6 +1131,7 @@ decoration: BoxDecoration(
 
                   const SizedBox(height: 16),
 
+                  // Gift Income & Still Need Progress Card
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
@@ -949,14 +1148,17 @@ decoration: BoxDecoration(
                             Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Text("Gift income (Last 7 days)", style: TextStyle(color: Colors.black45, fontSize: 11)),
+                                const Text("Gift income (Last 7 days)",
+                                    style: TextStyle(
+                                        color: Colors.black45, fontSize: 11)),
                                 const SizedBox(height: 4),
                                 Text(
                                   "$giftIncome7Days",
                                   style: const TextStyle(
                                     color: Color(0xFF3E2723),
                                     fontSize: 16,
-                                    fontWeight: FontWeight.bold,
+
+fontWeight: FontWeight.bold,
                                   ),
                                 ),
                               ],
@@ -964,7 +1166,9 @@ decoration: BoxDecoration(
                             Column(
                               crossAxisAlignment: CrossAxisAlignment.end,
                               children: [
-                                const Text("Hourly income", style: TextStyle(color: Colors.black45, fontSize: 11)),
+                                const Text("Hourly income",
+                                    style: TextStyle(
+                                        color: Colors.black45, fontSize: 11)),
                                 const SizedBox(height: 4),
                                 Text(
                                   "$currentHourlyIncome /h",
@@ -985,15 +1189,15 @@ decoration: BoxDecoration(
                             Expanded(
                               child: Text(
                                 "Still need $stillNeed points to reach $nextHourlyIncome /h",
-                                style: const TextStyle(color: Colors.black54, fontSize: 11.5),
+                                style: const TextStyle(
+                                    color: Colors.black54, fontSize: 11.5),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
                             GestureDetector(
                               onTap: _showPolicyDialog,
-
-child: const Text(
+                              child: const Text(
                                 "Rules >",
                                 style: TextStyle(
                                   color: Color(0xFF8D6E63),
@@ -1027,8 +1231,12 @@ child: const Text(
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text("$currentHourlyIncome /h", style: const TextStyle(color: Colors.black38, fontSize: 10)),
-                            Text("$nextHourlyIncome /h", style: const TextStyle(color: Colors.black38, fontSize: 10)),
+                            Text("$currentHourlyIncome /h",
+                                style: const TextStyle(
+                                    color: Colors.black38, fontSize: 10)),
+                            Text("$nextHourlyIncome /h",
+                                style: const TextStyle(
+                                    color: Colors.black38, fontSize: 10)),
                           ],
                         ),
                       ],
@@ -1037,11 +1245,12 @@ child: const Text(
 
                   const SizedBox(height: 16),
 
-                  Row(
+Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(12),
@@ -1049,11 +1258,15 @@ child: const Text(
                         ),
                         child: Row(
                           children: [
-                            const Icon(Icons.calendar_today, size: 12, color: Color(0xFF8D6E63)),
+                            const Icon(Icons.calendar_today,
+                                size: 12, color: Color(0xFF8D6E63)),
                             const SizedBox(width: 6),
                             Text(
                               _getFormattedShortDate(),
-                              style: const TextStyle(fontSize: 11, color: Color(0xFF3E2723), fontWeight: FontWeight.bold),
+                              style: const TextStyle(
+                                  fontSize: 11,
+                                  color: Color(0xFF3E2723),
+                                  fontWeight: FontWeight.bold),
                             ),
                           ],
                         ),
@@ -1061,7 +1274,8 @@ child: const Text(
                       Row(
                         children: [
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 5),
                             decoration: BoxDecoration(
                               gradient: const LinearGradient(
                                 colors: [Color(0xFFE91E63), Color(0xFF9C27B0)],
@@ -1070,28 +1284,39 @@ child: const Text(
                             ),
                             child: const Text(
                               "Total Income",
-                              style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                              style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold),
                             ),
-
-),
+                          ),
                           const SizedBox(width: 8),
                           GestureDetector(
                             onTap: () {
                               Navigator.push(
                                 context,
-                                MaterialPageRoute(builder: (_) => const PointsWalletScreen()),
+                                MaterialPageRoute(
+                                  builder: (_) {
+                                    return const PointsWalletScreen();
+                                  },
+                                ),
                               );
                             },
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 5),
                               decoration: BoxDecoration(
                                 color: Colors.white,
                                 borderRadius: BorderRadius.circular(14),
-                                border: Border.all(color: const Color(0xFFE2D6C5)),
+                                border:
+                                    Border.all(color: const Color(0xFFE2D6C5)),
                               ),
                               child: const Text(
                                 "Wallet >",
-                                style: TextStyle(color: Color(0xFF3E2723), fontSize: 11, fontWeight: FontWeight.bold),
+                                style: TextStyle(
+                                    color: Color(0xFF3E2723),
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold),
                               ),
                             ),
                           ),
@@ -1104,7 +1329,8 @@ child: const Text(
 
                   GridView.count(
                     crossAxisCount: 3,
-                    shrinkWrap: true,
+
+shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
                     crossAxisSpacing: 8,
                     mainAxisSpacing: 8,
@@ -1121,6 +1347,7 @@ child: const Text(
 
                   const SizedBox(height: 18),
 
+                  // Work Detail + 24-Hour Countdown (Resets at 3:00 ማታ / 9:00 PM EAT)
                   Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
@@ -1145,7 +1372,8 @@ child: const Text(
                             GestureDetector(
                               onTap: claimBtnAction,
                               child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 4),
                                 decoration: BoxDecoration(
                                   color: claimBtnBg,
                                   borderRadius: BorderRadius.circular(12),
@@ -1155,8 +1383,7 @@ child: const Text(
                                   style: TextStyle(
                                     color: claimBtnTextCol,
                                     fontSize: 10.5,
-
-fontWeight: FontWeight.bold,
+                                    fontWeight: FontWeight.bold,
                                   ),
                                 ),
                               ),
@@ -1166,15 +1393,41 @@ fontWeight: FontWeight.bold,
                         const SizedBox(height: 10),
                         Row(
                           children: [
-                            const Icon(Icons.access_time, color: Color(0xFF8D6E63), size: 20),
+                            const Icon(Icons.access_time,
+                                color: Color(0xFF8D6E63), size: 20),
                             const SizedBox(width: 8),
-                            const Text("Live Duration", style: TextStyle(color: Colors.black54, fontSize: 12)),
+                            const Text("Live Duration",
+                                style: TextStyle(
+                                    color: Colors.black54, fontSize: 12)),
                             const Spacer(),
                             Text(
                               "$liveMinutesToday mins",
                               style: const TextStyle(
                                 color: Color(0xFF3E2723),
                                 fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+
+const Divider(height: 16, color: Color(0xFFF5EFEB)),
+                        Row(
+                          children: [
+                            const Icon(Icons.autorenew_rounded,
+                                color: Color(0xFFD49B42), size: 16),
+                            const SizedBox(width: 6),
+                            const Text(
+                              "24h Reset (3:00 ማታ):",
+                              style: TextStyle(
+                                  color: Colors.black45, fontSize: 11),
+                            ),
+                            const Spacer(),
+                            Text(
+                              _getCountdownToReset(),
+                              style: const TextStyle(
+                                color: Color(0xFFD49B42),
+                                fontSize: 11.5,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
@@ -1189,7 +1442,11 @@ fontWeight: FontWeight.bold,
                   Row(
                     children: [
                       GestureDetector(
-                        onTap: () => setState(() => _selectedRecordTab = 0),
+                        onTap: () {
+                          setState(() {
+                            _selectedRecordTab = 0;
+                          });
+                        },
                         child: Text(
                           "Today's live record",
                           style: TextStyle(
@@ -1201,7 +1458,11 @@ fontWeight: FontWeight.bold,
                       ),
                       const SizedBox(width: 16),
                       GestureDetector(
-                        onTap: () => setState(() => _selectedRecordTab = 1),
+                        onTap: () {
+                          setState(() {
+                            _selectedRecordTab = 1;
+                          });
+                        },
                         child: Text(
                           "Daily Statistics",
                           style: TextStyle(
@@ -1226,30 +1487,35 @@ fontWeight: FontWeight.bold,
                       ),
                       child: Column(
                         children: [
-                          _buildStatRow("Current Host Tier", "Level $currentLevel"),
+                          _buildStatRow(
+                              "Current Host Tier", "Level $currentLevel"),
                           const Divider(color: Color(0xFFEFE6DE)),
-                          _buildStatRow("Hourly Reward Rate", "$currentHourlyIncome Points / h"),
+                          _buildStatRow("Hourly Reward Rate",
+                              "$currentHourlyIncome Points / h"),
                           const Divider(color: Color(0xFFEFE6DE)),
-                          _buildStatRow("Today Qualified Minutes", "$liveMinutesToday / 120 mins"),
+                          _buildStatRow("Today Qualified Minutes",
+                              "$liveMinutesToday / 120 mins"),
                           const Divider(color: Color(0xFFEFE6DE)),
-                          _buildStatRow("Estimated USD Value", "\$${(totalPoints / 10000.0).toStringAsFixed(2)} USD"),
+                          _buildStatRow("Estimated USD Value",
+                              "\$${(totalPoints / 10000.0).toStringAsFixed(2)} USD"),
                         ],
                       ),
                     )
                   else
-                    StreamBuilder<QuerySnapshot>(
+
+StreamBuilder(
                       stream: FirebaseFirestore.instance
                           .collection('hosts')
                           .doc(currentUser!.uid)
                           .collection('live_records')
                           .orderBy('createdAt', descending: true)
-
-.limit(10)
+                          .limit(10)
                           .snapshots(),
                       builder: (context, recordSnapshot) {
                         List records = [];
                         if (recordSnapshot.hasData) {
-                          records = recordSnapshot.data!.docs;
+                          records =
+                              (recordSnapshot.data as QuerySnapshot).docs;
                         }
 
                         if (records.isEmpty) {
@@ -1258,18 +1524,22 @@ fontWeight: FontWeight.bold,
                             alignment: Alignment.center,
                             child: const Column(
                               children: [
-                                Icon(Icons.receipt_long, color: Colors.black26, size: 36),
+                                Icon(Icons.receipt_long,
+                                    color: Colors.black26, size: 36),
                                 SizedBox(height: 6),
-                                Text("No streaming records today", style: TextStyle(color: Colors.black38, fontSize: 11)),
+                                Text("No streaming records today",
+                                    style: TextStyle(
+                                        color: Colors.black38, fontSize: 11)),
                               ],
                             ),
                           );
                         }
 
                         return Column(
-                          children: records.map((doc) {
+                          children: records.map((rawDoc) {
+                            final doc = rawDoc as QueryDocumentSnapshot;
                             final raw = doc.data();
-                            final Map<String, dynamic> data = raw is Map<String, dynamic> ? raw : {};
+                            final Map data = raw is Map ? raw : {};
                             String start = "00:00";
                             if (data['startTime'] != null) {
                               start = data['startTime'].toString();
@@ -1278,8 +1548,10 @@ fontWeight: FontWeight.bold,
                             if (data['endTime'] != null) {
                               end = data['endTime'].toString();
                             }
-                            final duration = (data['durationMinutes'] ?? 0).toString();
-                            final earned = (data['pointsEarned'] ?? 0).toString();
+                            final duration =
+                                (data['durationMinutes'] ?? 0).toString();
+                            final earned =
+                                (data['pointsEarned'] ?? 0).toString();
 
                             return Container(
                               margin: const EdgeInsets.only(bottom: 8),
@@ -1287,17 +1559,28 @@ fontWeight: FontWeight.bold,
                               decoration: BoxDecoration(
                                 color: Colors.white,
                                 borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: const Color(0xFFE2D6C5)),
+                                border:
+                                    Border.all(color: const Color(0xFFE2D6C5)),
                               ),
                               child: Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
                                 children: [
                                   Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
-                                      Text("$start - $end", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF3E2723))),
+                                      Text("$start - $end",
+                                          style: const TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 12,
+                                              color: Color(0xFF3E2723))),
                                       const SizedBox(height: 2),
-                                      Text("Duration: $duration mins", style: const TextStyle(color: Colors.black45, fontSize: 10.5)),
+                                      Text("Duration: $duration mins",
+
+style: const TextStyle(
+                                              color: Colors.black45,
+                                              fontSize: 10.5)),
                                     ],
                                   ),
                                   Text(
@@ -1326,14 +1609,19 @@ fontWeight: FontWeight.bold,
     );
   }
 
-Widget _buildStatRow(String label, String value) {
+  Widget _buildStatRow(String label, String value) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: const TextStyle(color: Colors.black54, fontSize: 12)),
-          Text(value, style: const TextStyle(color: Color(0xFF3E2723), fontSize: 12.5, fontWeight: FontWeight.bold)),
+          Text(label,
+              style: const TextStyle(color: Colors.black54, fontSize: 12)),
+          Text(value,
+              style: const TextStyle(
+                  color: Color(0xFF3E2723),
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.bold)),
         ],
       ),
     );
@@ -1351,7 +1639,9 @@ Widget _buildStatRow(String label, String value) {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text(title, style: const TextStyle(color: Colors.black54, fontSize: 10.5), maxLines: 1),
+          Text(title,
+              style: const TextStyle(color: Colors.black54, fontSize: 10.5),
+              maxLines: 1),
           const SizedBox(height: 4),
           FittedBox(
             fit: BoxFit.scaleDown,
