@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -2413,7 +2414,10 @@ final docSnap = userSnap.data as DocumentSnapshot?;
                 if (!_isMigratingId) {
                   _isMigratingId = true;
                   final String targetId = myNumericId.toString();
-                  final updatedData = Map.of(agencyData);
+                  final updatedData = {'agencyId': _d(targetId)};
+                  agencyData.forEach((k, v) {
+                    updatedData[k.toString()] = v;
+                  });
                   updatedData['agencyId'] = targetId;
                   updatedData['ownerNumericId'] = myNumericId;
                   if (updatedData['status'] == null) {
