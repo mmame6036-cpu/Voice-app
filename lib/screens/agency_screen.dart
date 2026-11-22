@@ -1,4 +1,3 @@
-import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -41,16 +40,32 @@ class _AgencyScreenState extends State {
 
   final User? _currentUser = FirebaseAuth.instance.currentUser;
   final TextEditingController _agencyNameController = TextEditingController();
+  final TextEditingController _agencyPhoneController = TextEditingController();
   final TextEditingController _joinAgencyIdController = TextEditingController();
   final TextEditingController _hostIdController = TextEditingController();
   final TextEditingController _payoutAccountController = TextEditingController();
 
   bool _isLoading = false;
   bool _isCreatingAgency = false;
+  bool _isMigratingId = false;
+  String _selectedCountry = "Ethiopia 🇪🇹";
   String _selectedPayoutMethod = "Binance Pay (USDT)";
 
   static const int _pointsPerUsd = 10000;
   static const String _inviteBaseUrl = "https://nilevoiceapp.web.app/join";
+
+  static const List _countries = [
+    "Ethiopia 🇪🇹",
+    "Saudi Arabia 🇸🇦",
+    "UAE 🇦🇪",
+    "Kuwait 🇰🇼",
+    "Qatar 🇶🇦",
+    "Bahrain 🇧🇭",
+    "Oman 🇴🇲",
+    "USA 🇺🇸",
+    "UK 🇬🇧",
+    "Other 🌍",
+  ];
 
   static const Color kBgColor = Color(0xFFF3F5F7);
   static const Color kTealGreen = Color(0xFF00C875);
@@ -77,6 +92,7 @@ class _AgencyScreenState extends State {
   @override
   void dispose() {
     _agencyNameController.dispose();
+    _agencyPhoneController.dispose();
     _joinAgencyIdController.dispose();
     _hostIdController.dispose();
     _payoutAccountController.dispose();
@@ -107,7 +123,8 @@ class _AgencyScreenState extends State {
       }
     } else if (text.contains("hostRef=")) {
       isSubAgentInvite = false;
-      final parts = text.split("hostRef=");
+
+final parts = text.split("hostRef=");
       if (_gt(parts.length, 1)) {
         final match = RegExp(r'\d+').firstMatch(parts[1]);
         if (match != null) {
@@ -127,7 +144,7 @@ class _AgencyScreenState extends State {
     };
   }
 
-String _fmtNum(num val, {int decimals = 1}) {
+  String _fmtNum(num val, {int decimals = 1}) {
     final double d = val.toDouble();
     final bool isWhole = d == d.roundToDouble() && decimals == 0;
     final String fixed =
@@ -195,7 +212,7 @@ String _fmtNum(num val, {int decimals = 1}) {
   // =========================================================================
   // 1. JOIN AN AGENCY (Accepts Host Link, Agent Link, or Agency ID)
   // =========================================================================
-  void _showJoinAgencyDialog() {
+  void _showJoinAgencyDialog({required int myNumericId}) {
     _joinAgencyIdController.clear();
     bool isJoining = false;
 
@@ -224,11 +241,12 @@ String _fmtNum(num val, {int decimals = 1}) {
                   TextField(
                     controller: _joinAgencyIdController,
                     decoration: InputDecoration(
-                      hintText: "Paste invite link or ID (e.g. 1753925)",
+                      hintText: "Paste invite link or ID (e.g. 100083)",
                       hintStyle: const TextStyle(fontSize: 12),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                      ),
+
+),
                     ),
                   ),
                 ],
@@ -243,8 +261,7 @@ String _fmtNum(num val, {int decimals = 1}) {
                 ),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
-
-backgroundColor: kTealGreen,
+                    backgroundColor: kTealGreen,
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
@@ -315,7 +332,7 @@ backgroundColor: kTealGreen,
                               {
                                 'agencyId': _d(enteredAgencyId),
                                 'agencyName': _d(agencyName),
-                                'isHost': _d(!isSubAgentLink),
+                                'isHost': _d(true),
                                 'allowCreateAgency': _d(isSubAgentLink),
                                 'joinedAgencyAt':
                                     _d(FieldValue.serverTimestamp()),
@@ -323,23 +340,20 @@ backgroundColor: kTealGreen,
                               SetOptions(merge: true),
                             );
 
-                            batch.set(
+batch.set(
                               hostRef,
                               {
                                 'agencyId': _d(enteredAgencyId),
-
-'agencyName': _d(agencyName),
+                                'agencyName': _d(agencyName),
                                 'status': _d('active'),
                                 'updatedAt': _d(FieldValue.serverTimestamp()),
                               },
                               SetOptions(merge: true),
                             );
 
-                            if (!isSubAgentLink) {
-                              batch.update(agencyDoc.reference, {
-                                'totalHosts': _d(FieldValue.increment(1)),
-                              });
-                            }
+                            batch.update(agencyDoc.reference, {
+                              'totalHosts': _d(FieldValue.increment(1)),
+                            });
 
                             await batch.commit();
 
@@ -349,14 +363,14 @@ backgroundColor: kTealGreen,
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
                                     content: Text(
-                                        "Agent invite accepted under $agencyName! Now name your agency."),
+                                        "Joined under $agencyName! Complete your Sub-Agency form for their approval."),
                                     backgroundColor: kCyanBlue,
                                   ),
                                 );
-                                _handleCreateAgencyTap(
+                                _openCreateAgencyForm(
+                                  myNumericId: myNumericId,
                                   joinedAgencyId: enteredAgencyId,
                                   joinedAgencyName: agencyName,
-                                  allowCreateAgency: true,
                                 );
                               } else {
                                 ScaffoldMessenger.of(context).showSnackBar(
@@ -405,200 +419,385 @@ backgroundColor: kTealGreen,
   }
 
   // =========================================================================
-  // 2. CREATE AGENCY
+  // 2. CREATE AGENCY APPLICATION FORM (Agency Name + Phone + Country)
+  // - Direct Applicant (no parent agent) -> Sent to Super Admin Dashboard (PENDING)
+  // - Recruited Host (under an agent) -> Sent to Parent Agent for Agree / Reject
   // =========================================================================
-  void _handleCreateAgencyTap({
+  void _openCreateAgencyForm({
+    required int myNumericId,
     required String joinedAgencyId,
     required String joinedAgencyName,
-    required bool allowCreateAgency,
   }) {
-    if (joinedAgencyId.isNotEmpty) {
-      if (!allowCreateAgency) {
-        showDialog(
-          context: context,
-          builder: (ctx) {
-            return AlertDialog(
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20)),
-
-title: const Row(
-                children: [
-                  Icon(Icons.lock_outline, color: kCoralRed),
-                  SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      "Permission Required",
-                      style:
-                          TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
-                    ),
-                  ),
-                ],
-              ),
-              content: Text(
-                "You are currently registered under \"$joinedAgencyName\" (ID: $joinedAgencyId).\n\n"
-                "You cannot create your own agency unless the agent who recruited you sends you an Agent Invite Link.",
-                style: const TextStyle(
-                    fontSize: 13.5, color: kTextDark, height: 1.4),
-              ),
-              actions: [
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: kTextDark,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  onPressed: () {
-                    Navigator.pop(ctx);
-                  },
-                  child: const Text("OK"),
-                ),
-              ],
-            );
-          },
-        );
-        return;
-      }
-    }
-
+    final bool isUnderParentAgent = joinedAgencyId.isNotEmpty;
     _agencyNameController.clear();
-    showDialog(
+    _agencyPhoneController.clear();
+    _selectedCountry = "Ethiopia 🇪🇹";
+
+showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
       builder: (ctx) {
         return StatefulBuilder(
-          builder: (ctx, setDialogState) {
-            return AlertDialog(
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20)),
-              title: const Text(
-                "Create An Agency",
-                style:
-                    TextStyle(fontWeight: FontWeight.bold, color: kTextDark),
+          builder: (ctx, setSheetState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                left: 20,
+                right: 20,
+                top: 20,
+                bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
               ),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    "Enter your Agency Name to open your Agency Center:",
-                    style: TextStyle(fontSize: 13, color: kTextMuted),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _agencyNameController,
-                    decoration: InputDecoration(
-                      hintText: "e.g. NILE FAMS",
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 44,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: Colors.black12,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
                       ),
                     ),
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () {
-                    Navigator.pop(ctx);
-                  },
-                  child:
-                      const Text("Cancel", style: TextStyle(color: kTextMuted)),
-                ),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: kTealGreen,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                    const SizedBox(height: 14),
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: kOrangeCardStart.withOpacity(0.15),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.business_center_rounded,
+                              color: kOrangeCardEnd),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            isUnderParentAgent
+                                ? "Sub-Agency Application"
+                                : "Create An Agency",
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w900,
+                              color: kTextDark,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                  onPressed: _isCreatingAgency
-                      ? null
-                      : () async {
-                          final name = _agencyNameController.text.trim();
-                          if (name.isEmpty) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text("Please enter an agency name"),
+                    const SizedBox(height: 8),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: kOverviewTileBg,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        isUnderParentAgent
+                            ? "You are registered under \"$joinedAgencyName\" (ID: $joinedAgencyId). Your request will be sent to your agent for Agree / Reject approval."
+                            : "Your Agency ID will match your Personal ID ($myNumericId). After submitting, Admin approval from the Dashboard will activate your Agency Center.",
+                        style: const TextStyle(
+                            fontSize: 12, color: kTextDark, height: 1.35),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+
+                    // 1. Agency Name
+                    const Text(
+                      "Agency Name *",
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: kTextDark,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    TextField(
+                      controller: _agencyNameController,
+
+decoration: InputDecoration(
+                        hintText: "Enter full agency name (e.g. NILE FAMS)",
+                        filled: true,
+                        fillColor: kBgColor,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+
+                    // 2. Phone Number
+                    const Text(
+                      "Phone Number (WhatsApp / Telegram) *",
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: kTextDark,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    TextField(
+                      controller: _agencyPhoneController,
+                      keyboardType: TextInputType.phone,
+                      decoration: InputDecoration(
+                        hintText: "e.g. +251911223344",
+                        filled: true,
+                        fillColor: kBgColor,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+
+                    // 3. Country
+                    const Text(
+                      "Country *",
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: kTextDark,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      decoration: BoxDecoration(
+                        color: kBgColor,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton(
+                          value: _selectedCountry,
+                          isExpanded: true,
+                          items: _countries.map((rawC) {
+                            final String c = rawC.toString();
+                            return DropdownMenuItem(
+                              value: c,
+                              child: Text(
+                                c,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  color: kTextDark,
+                                ),
                               ),
                             );
-                            return;
-                          }
-                          if (_currentUser == null) return;
-
-setDialogState(() {
-                            _isCreatingAgency = true;
-                          });
-                          setState(() {
-                            _isCreatingAgency = true;
-                          });
-
-                          try {
-                            final newAgencyId =
-                                "${1000000 + Random().nextInt(8999999)}";
-                            await FirebaseFirestore.instance
-                                .collection('agencies')
-                                .doc(newAgencyId)
-                                .set({
-                              'agencyId': _d(newAgencyId),
-                              'ownerUid': _d(_currentUser!.uid),
-                              'ownerNumericId': _d(_w.userNumericId),
-                              'parentAgencyId': _d(joinedAgencyId),
-                              'name': _d(name),
-                              'commissionRate': _d(0.04),
-                              'totalHosts': _d(0),
-                              'tags': _d(['VIP Voice']),
-                              'withdrawnCommissionPoints': _d(0),
-                              'bonusCommissionPoints': _d(0),
-                              'createdAt': _d(FieldValue.serverTimestamp()),
-                            });
-
-                            await FirebaseFirestore.instance
-                                .collection('users')
-                                .doc(_currentUser!.uid)
-                                .set({
-                              'isAgent': _d(true),
-                              'role': _d('agent'),
-                            }, SetOptions(merge: true));
-
-                            if (ctx.mounted) Navigator.pop(ctx);
-                          } catch (e) {
-                            if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content:
-                                      Text("Failed to create agency: $e"),
-                                ),
-                              );
-                            }
-                          } finally {
-                            if (ctx.mounted) {
-                              setDialogState(() {
-                                _isCreatingAgency = false;
+                          }).toList(),
+                          onChanged: (val) {
+                            if (val != null) {
+                              setSheetState(() {
+                                _selectedCountry = val.toString();
                               });
                             }
-                            if (mounted) {
-                              setState(() {
-                                _isCreatingAgency = false;
-                              });
-                            }
-                          }
-                        },
-                  child: _isCreatingAgency
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : const Text(
-                          "Create",
-                          style: TextStyle(fontWeight: FontWeight.bold),
+                          },
                         ),
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+
+                    SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: kTealGreen,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+
+borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                        onPressed: _isCreatingAgency
+                            ? null
+                            : () async {
+                                final name = _agencyNameController.text.trim();
+                                final phone =
+                                    _agencyPhoneController.text.trim();
+
+                                if (name.isEmpty) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                        content:
+                                            Text("Please enter Agency Name")),
+                                  );
+                                  return;
+                                }
+                                if (phone.isEmpty) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                        content:
+                                            Text("Please enter Phone Number")),
+                                  );
+                                  return;
+                                }
+                                if (_currentUser == null) return;
+
+                                setSheetState(() {
+                                  _isCreatingAgency = true;
+                                });
+                                setState(() {
+                                  _isCreatingAgency = true;
+                                });
+
+                                try {
+                                  int resolvedNumId = myNumericId;
+                                  String applicantName = "User";
+                                  final uDoc = await FirebaseFirestore.instance
+                                      .collection('users')
+                                      .doc(_currentUser!.uid)
+                                      .get();
+                                  if (uDoc.exists) {
+                                    final uData = uDoc.data() ?? {};
+                                    if (resolvedNumId == 0) {
+                                      resolvedNumId =
+                                          (uData['numericId'] as num?)
+                                                  ?.toInt() ??
+                                              0;
+                                    }
+                                    applicantName = (uData['name'] ??
+                                            uData['nickname'] ??
+                                            'User')
+                                        .toString();
+                                  }
+
+                                  final String newAgencyId = resolvedNumId != 0
+                                      ? resolvedNumId.toString()
+                                      : _currentUser!.uid
+                                          .substring(0, 6)
+                                          .toUpperCase();
+
+                                  final String initialStatus =
+                                      isUnderParentAgent
+                                          ? 'PENDING_PARENT'
+                                          : 'PENDING';
+
+                                  final batch =
+                                      FirebaseFirestore.instance.batch();
+
+                                  final agencyRef = FirebaseFirestore.instance
+                                      .collection('agencies')
+                                      .doc(newAgencyId);
+
+                                  batch.set(
+                                    agencyRef,
+                                    {
+
+'agencyId': _d(newAgencyId),
+                                      'ownerUid': _d(_currentUser!.uid),
+                                      'ownerNumericId': _d(resolvedNumId),
+                                      'ownerName': _d(applicantName),
+                                      'parentAgencyId': _d(joinedAgencyId),
+                                      'parentAgencyName': _d(joinedAgencyName),
+                                      'name': _d(name),
+                                      'phone': _d(phone),
+                                      'country': _d(_selectedCountry),
+                                      'status': _d(initialStatus),
+                                      'approvalType': _d(isUnderParentAgent
+                                          ? 'PARENT_AGENT'
+                                          : 'SUPER_ADMIN'),
+                                      'commissionRate': _d(0.04),
+                                      'totalHosts': _d(0),
+                                      'tags': _d(['VIP Voice']),
+                                      'withdrawnCommissionPoints': _d(0),
+                                      'bonusCommissionPoints': _d(0),
+                                      'createdAt':
+                                          _d(FieldValue.serverTimestamp()),
+                                    },
+                                    SetOptions(merge: true),
+                                  );
+
+                                  if (!isUnderParentAgent) {
+                                    final reqRef = FirebaseFirestore.instance
+                                        .collection('agency_requests')
+                                        .doc(newAgencyId);
+                                    batch.set(
+                                      reqRef,
+                                      {
+                                        'requestId': _d(newAgencyId),
+                                        'agencyId': _d(newAgencyId),
+                                        'ownerUid': _d(_currentUser!.uid),
+                                        'ownerNumericId': _d(resolvedNumId),
+                                        'ownerName': _d(applicantName),
+                                        'agencyName': _d(name),
+                                        'phone': _d(phone),
+                                        'country': _d(_selectedCountry),
+                                        'status': _d('PENDING'),
+                                        'createdAt':
+                                            _d(FieldValue.serverTimestamp()),
+                                      },
+                                      SetOptions(merge: true),
+                                    );
+                                  }
+
+                                  await batch.commit();
+
+                                  if (ctx.mounted) Navigator.pop(ctx);
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text(
+                                          isUnderParentAgent
+                                              ? "Request sent to $joinedAgencyName! Waiting for Agree / Reject."
+                                              : "Application submitted! Waiting for Admin Dashboard approval.",
+                                        ),
+                                        backgroundColor: kTealGreen,
+                                      ),
+                                    );
+                                  }
+                                } catch (e) {
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+
+SnackBar(
+                                        content: Text(
+                                            "Failed to submit application: $e"),
+                                      ),
+                                    );
+                                  }
+                                } finally {
+                                  if (ctx.mounted) {
+                                    setSheetState(() {
+                                      _isCreatingAgency = false;
+                                    });
+                                  }
+                                  if (mounted) {
+                                    setState(() {
+                                      _isCreatingAgency = false;
+                                    });
+                                  }
+                                }
+                              },
+                        child: _isCreatingAgency
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : Text(
+                                isUnderParentAgent
+                                    ? "Send Request to My Agent"
+                                    : "Submit Agency Application",
+                                style: const TextStyle(
+                                    fontSize: 15, fontWeight: FontWeight.bold),
+                              ),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             );
           },
         );
@@ -607,7 +806,74 @@ setDialogState(() {
   }
 
   // =========================================================================
-  // 3. HOST RECRUITMENT & INVITE LINKS
+  // 3. PARENT AGENT: AGREE OR REJECT SUB-AGENCY REQUESTS
+  // =========================================================================
+  Future _respondToSubAgencyRequest({
+    required String subAgencyId,
+    required String subOwnerUid,
+    required String subAgencyName,
+    required bool agree,
+  }) async {
+    try {
+      final batch = FirebaseFirestore.instance.batch();
+      final subAgencyRef =
+          FirebaseFirestore.instance.collection('agencies').doc(subAgencyId);
+      final subUserRef =
+          FirebaseFirestore.instance.collection('users').doc(subOwnerUid);
+
+      if (agree) {
+        batch.update(subAgencyRef, {
+          'status': _d('APPROVED'),
+          'approvedAt': _d(FieldValue.serverTimestamp()),
+        });
+        batch.set(
+          subUserRef,
+          {
+            'isAgent': _d(true),
+            'role': _d('agent'),
+            'allowCreateAgency': _d(true),
+          },
+          SetOptions(merge: true),
+        );
+      } else {
+        batch.update(subAgencyRef, {
+          'status': _d('REJECTED'),
+          'rejectedAt': _d(FieldValue.serverTimestamp()),
+        });
+        batch.set(
+          subUserRef,
+          {
+            'allowCreateAgency': _d(false),
+          },
+          SetOptions(merge: true),
+        );
+      }
+
+      await batch.commit();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              agree
+                  ? "Agreed! $subAgencyName is now an active Sub-Agency."
+                  : "Rejected sub-agency request from $subAgencyName.",
+            ),
+            backgroundColor: agree ? kTealGreen : kCoralRed,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error updating request: $e")),
+        );
+      }
+    }
+  }
+
+// =========================================================================
+  // 4. HOST RECRUITMENT & INVITE LINKS
   // =========================================================================
   Future _addHostToAgency(
       BuildContext sheetCtx, String agencyId, String agencyName) async {
@@ -619,7 +885,7 @@ setDialogState(() {
       return;
     }
 
-setState(() {
+    setState(() {
       _isLoading = true;
     });
     try {
@@ -743,7 +1009,7 @@ setState(() {
     }
   }
 
-  Future _removeHostFromAgency(
+Future _removeHostFromAgency(
       String agencyId, String hostUid, String hostName) async {
     try {
       final batch = FirebaseFirestore.instance.batch();
@@ -761,7 +1027,7 @@ setState(() {
         'allowCreateAgency': _d(false),
       });
 
-batch.set(
+      batch.set(
         hostRef,
         {
           'agencyId': _d(''),
@@ -837,8 +1103,6 @@ batch.set(
                 ],
               ),
               const SizedBox(height: 14),
-
-              // 1. Host Invite Link Box
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
@@ -861,7 +1125,8 @@ batch.set(
                       hostLink,
                       style: const TextStyle(
                         fontSize: 12.5,
-                        fontWeight: FontWeight.bold,
+
+fontWeight: FontWeight.bold,
                         color: kTealGreen,
                       ),
                     ),
@@ -874,8 +1139,7 @@ batch.set(
                               backgroundColor: kTealGreen,
                               foregroundColor: Colors.white,
                               shape: RoundedRectangleBorder(
-
-borderRadius: BorderRadius.circular(18),
+                                borderRadius: BorderRadius.circular(18),
                               ),
                             ),
                             onPressed: () {
@@ -906,7 +1170,6 @@ borderRadius: BorderRadius.circular(18),
                   ],
                 ),
               ),
-
               const SizedBox(height: 16),
               const Text(
                 "Or Add Host Directly by Numeric ID:",
@@ -952,7 +1215,8 @@ borderRadius: BorderRadius.circular(18),
                         ? null
                         : () {
                             _addHostToAgency(ctx, agencyId, agencyName);
-                          },
+
+},
                     child: const Text(
                       "Add Host",
                       style: TextStyle(fontWeight: FontWeight.bold),
@@ -975,8 +1239,7 @@ borderRadius: BorderRadius.circular(18),
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-
-backgroundColor: Colors.white,
+      backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
       ),
@@ -1016,8 +1279,6 @@ backgroundColor: Colors.white,
                     ],
                   ),
                   const SizedBox(height: 12),
-
-                  // Agent Invite Link Box
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
@@ -1053,7 +1314,8 @@ backgroundColor: Colors.white,
                               foregroundColor: Colors.white,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(18),
-                              ),
+
+),
                             ),
                             onPressed: () {
                               _copyText(agentLink, "Agent Invite Link");
@@ -1066,8 +1328,7 @@ backgroundColor: Colors.white,
                       ],
                     ),
                   ),
-
-const SizedBox(height: 14),
+                  const SizedBox(height: 14),
                   const Text(
                     "Or Grant Sub-Agency Permission by Host Numeric ID:",
                     style: TextStyle(fontSize: 12.5, color: kTextMuted),
@@ -1131,7 +1392,8 @@ const SizedBox(height: 14),
                                         content: Text(
                                           "Permission granted to ID $targetId to create a sub-agency!",
                                         ),
-                                        backgroundColor: kCyanBlue,
+
+backgroundColor: kCyanBlue,
                                       ),
                                     );
                                   }
@@ -1145,8 +1407,7 @@ const SizedBox(height: 14),
                               }
                             },
                       child: const Text(
-
-"Grant Sub-Agency Permission",
+                        "Grant Sub-Agency Permission",
                         style: TextStyle(fontWeight: FontWeight.bold),
                       ),
                     ),
@@ -1250,7 +1511,8 @@ const SizedBox(height: 14),
                   const Text(
                     "Choose up to 2 tags for your agency badge:",
                     style: TextStyle(fontSize: 12.5, color: kTextMuted),
-                  ),
+
+),
                   const SizedBox(height: 14),
                   Wrap(
                     spacing: 8,
@@ -1264,8 +1526,7 @@ const SizedBox(height: 14),
                         checkmarkColor: kTealGreen,
                         onSelected: (val) {
                           setModalState(() {
-
-if (val && _lt(selected.length, 2)) {
+                            if (val && _lt(selected.length, 2)) {
                               selected.add(tag);
                             } else {
                               selected.remove(tag);
@@ -1349,7 +1610,8 @@ if (val && _lt(selected.length, 2)) {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   decoration: BoxDecoration(
-                    color: kOverviewTileBg,
+
+color: kOverviewTileBg,
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Row(
@@ -1364,8 +1626,7 @@ if (val && _lt(selected.length, 2)) {
                       ),
                       Container(
                         padding: const EdgeInsets.symmetric(
-
-horizontal: 10,
+                          horizontal: 10,
                           vertical: 4,
                         ),
                         decoration: BoxDecoration(
@@ -1456,7 +1717,8 @@ horizontal: 10,
                     Navigator.pop(ctx);
                     _copyText("@NILELive_Support", "Telegram");
                   },
-                  child: const Text(
+
+child: const Text(
                     "Copy",
                     style: TextStyle(
                       color: kCyanBlue,
@@ -1479,8 +1741,7 @@ horizontal: 10,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
-
-),
+      ),
       builder: (ctx) {
         return DraggableScrollableSheet(
           expand: false,
@@ -1556,7 +1817,7 @@ horizontal: 10,
                           }
                           final bool canCreate = h['allowCreateAgency'] == true;
 
-                          return Padding(
+return Padding(
                             padding: const EdgeInsets.symmetric(vertical: 8),
                             child: Row(
                               children: [
@@ -1565,8 +1826,7 @@ horizontal: 10,
                                   child: Text(
                                     name.isNotEmpty
                                         ? name[0].toUpperCase()
-
-: "H",
+                                        : "H",
                                     style: const TextStyle(
                                       color: kTealGreen,
                                       fontWeight: FontWeight.bold,
@@ -1632,7 +1892,8 @@ horizontal: 10,
                                   onPressed: () {
                                     Navigator.pop(ctx);
                                     _removeHostFromAgency(
-                                        agencyId, doc.id, name);
+
+agencyId, doc.id, name);
                                   },
                                 ),
                               ],
@@ -1650,11 +1911,15 @@ horizontal: 10,
     );
   }
 
-  void _showSubAgenciesSheet(String parentAgencyId, List subAgencies) {
-
-showModalBottomSheet(
+  void _showSubAgenciesSheet(
+    String parentAgencyId,
+    List approvedSubAgencies,
+    List pendingSubRequests,
+  ) {
+    showModalBottomSheet(
       context: context,
       backgroundColor: Colors.white,
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
       ),
@@ -1669,7 +1934,7 @@ showModalBottomSheet(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    "Sub-agency Number (${subAgencies.length})",
+                    "Sub-agency Number (${approvedSubAgencies.length})",
                     style: const TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
@@ -1693,13 +1958,119 @@ showModalBottomSheet(
                   ),
                 ],
               ),
+              if (pendingSubRequests.isNotEmpty) ...[
+                const SizedBox(height: 14),
+                const Text(
+                  "Pending Sub-Agency Requests:",
+                  style: TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.bold,
+                    color: kCoralRed,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                ...pendingSubRequests.map((rawDoc) {
+                  final doc = rawDoc as QueryDocumentSnapshot;
+                  final Map req = doc.data() is Map ? doc.data() as Map : {};
+                  final String subName =
+                      (req['name'] ?? 'Sub-Agency').toString();
+                  final String subOwnerUid =
+                      (req['ownerUid'] ?? '').toString();
+                  final String phone = (req['phone'] ?? '').toString();
+                  final String country = (req['country'] ?? '').toString();
+
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF7ED),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: kOrangeCardStart),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          "$subName (ID: ${doc.id})",
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+
+fontSize: 14,
+                            color: kTextDark,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          "Phone: $phone • $country",
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: kTextMuted,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: ElevatedButton(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: kTealGreen,
+                                  foregroundColor: Colors.white,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                ),
+                                onPressed: () {
+                                  Navigator.pop(ctx);
+                                  _respondToSubAgencyRequest(
+                                    subAgencyId: doc.id,
+                                    subOwnerUid: subOwnerUid,
+                                    subAgencyName: subName,
+                                    agree: true,
+                                  );
+                                },
+                                child: const Text("Agree",
+                                    style:
+                                        TextStyle(fontWeight: FontWeight.bold)),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: OutlinedButton(
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: kCoralRed,
+                                  side: const BorderSide(color: kCoralRed),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                ),
+                                onPressed: () {
+                                  Navigator.pop(ctx);
+                                  _respondToSubAgencyRequest(
+                                    subAgencyId: doc.id,
+                                    subOwnerUid: subOwnerUid,
+                                    subAgencyName: subName,
+                                    agree: false,
+                                  );
+                                },
+                                child: const Text("Reject",
+                                    style:
+                                        TextStyle(fontWeight: FontWeight.bold)),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+              ],
               const SizedBox(height: 12),
-              if (subAgencies.isEmpty)
+              if (approvedSubAgencies.isEmpty)
                 const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 24),
+                  padding: EdgeInsets.symmetric(vertical: 20),
                   child: Center(
                     child: Text(
-                      "No sub-agencies linked yet.",
+                      "No active sub-agencies yet.",
                       style: TextStyle(color: kTextMuted),
                     ),
                   ),
@@ -1708,12 +2079,14 @@ showModalBottomSheet(
                 Flexible(
                   child: ListView.separated(
                     shrinkWrap: true,
-                    itemCount: subAgencies.length,
-                    separatorBuilder: (_, __) {
+                    itemCount: approvedSubAgencies.length,
+
+separatorBuilder: (_, __) {
                       return const Divider(height: 1);
                     },
                     itemBuilder: (_, idx) {
-                      final doc = subAgencies[idx] as QueryDocumentSnapshot;
+                      final doc =
+                          approvedSubAgencies[idx] as QueryDocumentSnapshot;
                       final raw = doc.data();
                       final Map s = raw is Map ? raw : {};
                       return ListTile(
@@ -1726,7 +2099,8 @@ showModalBottomSheet(
                           (s['name'] ?? 'Sub-Agency').toString(),
                           style: const TextStyle(fontWeight: FontWeight.bold),
                         ),
-                        subtitle: Text("ID: ${s['agencyId'] ?? doc.id}"),
+                        subtitle: Text(
+                            "ID: ${s['agencyId'] ?? doc.id} • ${s['country'] ?? ''}"),
                         trailing: Text(
                           "${s['totalHosts'] ?? 0} Hosts",
                           style: const TextStyle(
@@ -1755,7 +2129,7 @@ showModalBottomSheet(
   }) {
     final bool canWithdraw = _gte(commissionUsd, 10.0);
 
-showModalBottomSheet(
+    showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.white,
@@ -1807,7 +2181,8 @@ showModalBottomSheet(
                         Text(
                           "Available Net Commission ($ratePct% Rate)",
                           style:
-                              const TextStyle(fontSize: 12, color: kTextMuted),
+
+const TextStyle(fontSize: 12, color: kTextMuted),
                         ),
                         const SizedBox(height: 4),
                         Text(
@@ -1850,8 +2225,7 @@ showModalBottomSheet(
                         selectedColor: kTealGreen,
                         labelStyle: TextStyle(
                           color: isSel ? Colors.white : kTextDark,
-
-fontSize: 11.5,
+                          fontSize: 11.5,
                           fontWeight: FontWeight.bold,
                         ),
                         onSelected: (_) {
@@ -1901,7 +2275,7 @@ fontSize: 11.5,
 
                               Navigator.pop(ctx);
 
-                              final String currencyCode =
+final String currencyCode =
                                   _selectedPayoutMethod == "Binance Pay (USDT)"
                                       ? "USDT"
                                       : "ETB";
@@ -1931,8 +2305,7 @@ fontSize: 11.5,
 
                               final agencyRef = FirebaseFirestore.instance
                                   .collection('agencies')
-
-.doc(agencyId);
+                                  .doc(agencyId);
                               batch.update(agencyRef, {
                                 'withdrawnCommissionPoints': _d(
                                     FieldValue.increment(
@@ -1992,14 +2365,17 @@ fontSize: 11.5,
           .doc(user.uid)
           .snapshots(),
       builder: (context, userSnap) {
-        final docSnap = userSnap.data as DocumentSnapshot?;
+
+final docSnap = userSnap.data as DocumentSnapshot?;
         final rawUser = docSnap?.data();
         final Map userData = rawUser is Map ? rawUser : {};
         final String joinedAgencyId =
             (userData['agencyId'] ?? '').toString().trim();
         final String joinedAgencyName =
             (userData['agencyName'] ?? '').toString().trim();
-        final bool allowCreateAgency = userData['allowCreateAgency'] == true;
+        final int dbNumId = (userData['numericId'] as num?)?.toInt() ?? 0;
+        final int myNumericId =
+            _w.userNumericId != 0 ? _w.userNumericId : dbNumId;
 
         return StreamBuilder(
           stream: FirebaseFirestore.instance
@@ -2020,29 +2396,75 @@ fontSize: 11.5,
             final qSnap = snapshot.data as QuerySnapshot;
             if (qSnap.docs.isEmpty) {
               return _buildAgentEntryScreen(
+                myNumericId: myNumericId,
                 joinedAgencyId: joinedAgencyId,
                 joinedAgencyName: joinedAgencyName,
-                allowCreateAgency: allowCreateAgency,
+                pendingAgencyData: null,
               );
             }
 
             final agencyDoc = qSnap.docs.first;
             final rawAgency = agencyDoc.data();
             final Map agencyData = rawAgency is Map ? rawAgency : {};
-            final agencyId = agencyDoc.id;
 
+            // Ensure Agency ID is ALWAYS identical to Personal numericId (e.g. 100083)
+            if (myNumericId != 0) {
+              if (agencyDoc.id != myNumericId.toString()) {
+                if (!_isMigratingId) {
+                  _isMigratingId = true;
+                  final String targetId = myNumericId.toString();
+                  final updatedData = Map.of(agencyData);
+                  updatedData['agencyId'] = targetId;
+                  updatedData['ownerNumericId'] = myNumericId;
+                  if (updatedData['status'] == null) {
+                    updatedData['status'] = 'APPROVED';
+                  }
+                  FirebaseFirestore.instance
+                      .collection('agencies')
+                      .doc(targetId)
+                      .set(updatedData, SetOptions(merge: true))
+                      .then((_) {
+                    agencyDoc.reference.delete();
+                    _isMigratingId = false;
+                  });
+                }
+                return const Scaffold(
+                  backgroundColor: kBgColor,
+                  body: Center(
+                    child: CircularProgressIndicator(color: kTealGreen),
+                  ),
+                );
+              }
+            }
+
+            // Check approval status:
+            // - Existing agencies without 'status' field default to APPROVED
+            // - New direct applications have 'PENDING' until Super Admin approves
+            // - Sub-agency applications have 'PENDING_PARENT' until Parent Agent agrees
+            final String status =
+                (agencyData['status'] ?? 'APPROVED').toString().toUpperCase();
+
+            if (status != 'APPROVED') {
+              return _buildAgentEntryScreen(
+                myNumericId: myNumericId,
+                joinedAgencyId: joinedAgencyId,
+                joinedAgencyName: joinedAgencyName,
+                pendingAgencyData: agencyData,
+              );
+            }
+
+            final agencyId = agencyDoc.id;
             final String agencyName =
                 (agencyData['name'] ?? "MY AGENCY").toString();
             final int withdrawnPoints =
                 (agencyData['withdrawnCommissionPoints'] as num?)?.toInt() ?? 0;
-
-final int bonusCommissionPoints =
+            final int bonusCommissionPoints =
                 (agencyData['bonusCommissionPoints'] as num?)?.toInt() ?? 0;
             final List tags = agencyData['tags'] is List
                 ? List.of(agencyData['tags'] as List)
                 : ["VIP Voice"];
 
-            return StreamBuilder(
+return StreamBuilder(
               stream: FirebaseFirestore.instance
                   .collection('users')
                   .where('agencyId', isEqualTo: agencyId)
@@ -2075,9 +2497,25 @@ final int bonusCommissionPoints =
                       .where('parentAgencyId', isEqualTo: agencyId)
                       .snapshots(),
                   builder: (context, subSnap) {
-                    final List subAgenciesList = subSnap.hasData
+                    final List allChildDocs = subSnap.hasData
                         ? (subSnap.data as QuerySnapshot).docs
                         : [];
+
+                    final List approvedSubAgencies = [];
+                    final List pendingSubRequests = [];
+
+                    for (final rawSub in allChildDocs) {
+                      final sDoc = rawSub as QueryDocumentSnapshot;
+                      final Map sMap =
+                          sDoc.data() is Map ? sDoc.data() as Map : {};
+                      final String sStatus =
+                          (sMap['status'] ?? 'APPROVED').toString();
+                      if (sStatus == 'PENDING_PARENT') {
+                        pendingSubRequests.add(sDoc);
+                      } else if (sStatus == 'APPROVED') {
+                        approvedSubAgencies.add(sDoc);
+                      }
+                    }
 
                     final tier = _getTierForPoints(totalHostPoints);
                     final int tierMin = (tier['min'] as num).toInt();
@@ -2109,7 +2547,8 @@ final int bonusCommissionPoints =
                         elevation: 0,
                         centerTitle: true,
                         leading: IconButton(
-                          icon: const Icon(
+
+icon: const Icon(
                             Icons.arrow_back_ios_new,
                             color: kTextDark,
                             size: 20,
@@ -2120,8 +2559,7 @@ final int bonusCommissionPoints =
                         ),
                         title: const Text(
                           "Agency Center",
-
-style: TextStyle(
+                          style: TextStyle(
                             color: kTextDark,
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
@@ -2144,7 +2582,14 @@ style: TextStyle(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            // 1. Agency Header Row
+                            // Pending Sub-Agency Agree/Reject Alert Banner (for Parent Agent)
+                            if (pendingSubRequests.isNotEmpty) ...[
+                              _buildPendingSubRequestsCard(
+                                  pendingSubRequests),
+                              const SizedBox(height: 14),
+                            ],
+
+                            // 1. Agency Header Row (ID matches Personal User ID)
                             Row(
                               children: [
                                 Container(
@@ -2181,7 +2626,8 @@ style: TextStyle(
                                           fontWeight: FontWeight.w900,
                                         ),
                                       ),
-                                    ],
+
+],
                                   ),
                                 ),
                                 const SizedBox(width: 14),
@@ -2198,8 +2644,7 @@ style: TextStyle(
                                           color: kTextDark,
                                         ),
                                         maxLines: 1,
-
-overflow: TextOverflow.ellipsis,
+                                        overflow: TextOverflow.ellipsis,
                                       ),
                                       const SizedBox(height: 4),
                                       GestureDetector(
@@ -2214,7 +2659,7 @@ overflow: TextOverflow.ellipsis,
                                               style: const TextStyle(
                                                 fontSize: 13,
                                                 color: kTextMuted,
-                                                fontWeight: FontWeight.w500,
+                                                fontWeight: FontWeight.w600,
                                               ),
                                             ),
                                             const SizedBox(width: 6),
@@ -2256,7 +2701,8 @@ overflow: TextOverflow.ellipsis,
                                         foregroundColor: Colors.white,
                                         elevation: 0,
                                         shape: RoundedRectangleBorder(
-                                          borderRadius:
+
+borderRadius:
                                               BorderRadius.circular(23),
                                         ),
                                       ),
@@ -2272,8 +2718,7 @@ overflow: TextOverflow.ellipsis,
                                         ),
                                       ),
                                     ),
-
-),
+                                  ),
                                 ),
                                 const SizedBox(width: 12),
                                 Expanded(
@@ -2332,7 +2777,8 @@ overflow: TextOverflow.ellipsis,
                                       ),
                                     ),
                                     const SizedBox(width: 10),
-                                    Expanded(
+
+Expanded(
                                       child: Wrap(
                                         spacing: 6,
                                         children: tags.take(2).map((rawT) {
@@ -2346,8 +2792,7 @@ overflow: TextOverflow.ellipsis,
                                               color: kOverviewTileBg,
                                               borderRadius:
                                                   BorderRadius.circular(8),
-
-),
+                                            ),
                                             child: Text(
                                               t,
                                               style: const TextStyle(
@@ -2404,7 +2849,8 @@ overflow: TextOverflow.ellipsis,
                                           fontWeight: FontWeight.w800,
                                           color: kTextDark,
                                         ),
-                                      ),
+
+),
                                     ],
                                   ),
                                   const SizedBox(height: 12),
@@ -2420,8 +2866,7 @@ overflow: TextOverflow.ellipsis,
                                             "Total Host Points:",
                                             style: TextStyle(
                                               fontSize: 14.5,
-
-color: kTextDark,
+                                              color: kTextDark,
                                               fontWeight: FontWeight.w500,
                                             ),
                                           ),
@@ -2475,7 +2920,8 @@ color: kTextDark,
                                   Container(
                                     padding: const EdgeInsets.all(12),
                                     decoration: BoxDecoration(
-                                      color: Colors.white,
+
+color: Colors.white,
                                       borderRadius: BorderRadius.circular(12),
                                     ),
                                     child: Column(
@@ -2490,8 +2936,7 @@ color: kTextDark,
                                             const Text(
                                               "Still need",
                                               style: TextStyle(
-
-fontSize: 12.5,
+                                                fontSize: 12.5,
                                                 color: kTextDark,
                                               ),
                                             ),
@@ -2541,7 +2986,8 @@ fontSize: 12.5,
                                         Row(
                                           mainAxisAlignment:
                                               MainAxisAlignment.spaceBetween,
-                                          children: [
+
+children: [
                                             Row(
                                               children: [
                                                 _coinBadge(),
@@ -2554,8 +3000,7 @@ fontSize: 12.5,
                                                     fontWeight: FontWeight.w600,
                                                   ),
                                                 ),
-
-],
+                                              ],
                                             ),
                                             Row(
                                               children: [
@@ -2613,7 +3058,8 @@ fontSize: 12.5,
                                       const SizedBox(width: 10),
                                       Expanded(
                                         child: _overviewMetricBox(
-                                          title: "My Hosts Points",
+
+title: "My Hosts Points",
                                           subtitle: "Past 30 Days",
                                           value: _fmtNum(totalHostPoints),
                                         ),
@@ -2628,8 +3074,7 @@ fontSize: 12.5,
                                           title: "Sub-agent Host Points",
                                           subtitle: "Today",
                                           value: "0.0",
-
-),
+                                        ),
                                       ),
                                       const SizedBox(width: 10),
                                       Expanded(
@@ -2661,11 +3106,13 @@ fontSize: 12.5,
                                       Expanded(
                                         child: _overviewCountBox(
                                           title: "Sub-agency Number",
-                                          count: "${subAgenciesList.length}",
+                                          count:
+                                              "${approvedSubAgencies.length}",
                                           onTap: () {
                                             _showSubAgenciesSheet(
                                               agencyId,
-                                              subAgenciesList,
+                                              approvedSubAgencies,
+                                              pendingSubRequests,
                                             );
                                           },
                                         ),
@@ -2686,7 +3133,8 @@ fontSize: 12.5,
                               ),
                               child: Column(
                                 children: [
-                                  _incomeNavRow(
+
+_incomeNavRow(
                                     icon: Icons.mic_none_rounded,
                                     title: "Host Income",
                                     onTap: () {
@@ -2703,8 +3151,7 @@ fontSize: 12.5,
                                   ),
                                   const Divider(
                                     height: 1,
-
-indent: 50,
+                                    indent: 50,
                                     color: Color(0xFFF0F2F5),
                                   ),
                                   _incomeNavRow(
@@ -2759,7 +3206,8 @@ indent: 50,
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   const Text(
-                                    "Contact Admin",
+
+"Contact Admin",
                                     style: TextStyle(
                                       fontSize: 16,
                                       fontWeight: FontWeight.bold,
@@ -2777,8 +3225,7 @@ indent: 50,
                                           shape: BoxShape.circle,
                                         ),
                                         child: const Icon(
-
-Icons.chat_rounded,
+                                          Icons.chat_rounded,
                                           color: Colors.white,
                                           size: 22,
                                         ),
@@ -2830,7 +3277,8 @@ Icons.chat_rounded,
                                         ),
                                         child: const Icon(
                                           Icons.send_rounded,
-                                          color: Colors.white,
+
+color: Colors.white,
                                           size: 20,
                                         ),
                                       ),
@@ -2846,8 +3294,7 @@ Icons.chat_rounded,
                                                 fontSize: 14.5,
                                                 fontWeight: FontWeight.w600,
                                                 color: kTextDark,
-
-),
+                                              ),
                                             ),
                                             SizedBox(height: 2),
                                             Text(
@@ -2888,14 +3335,147 @@ Icons.chat_rounded,
   }
 
   // =========================================================================
-  // AGENT CENTER ENTRY SCREEN
+  // SUB-AGENCY AGREE / REJECT CARD (SHOWN ON PARENT AGENT DASHBOARD)
+  // =========================================================================
+  Widget _buildPendingSubRequestsCard(List pendingSubRequests) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF7ED),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: kOrangeCardStart, width: 1.5),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.notifications_active_rounded,
+                  color: kOrangeCardEnd, size: 22),
+              const SizedBox(width: 8),
+              Text(
+                "Sub-Agency Requests (${pendingSubRequests.length})",
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w900,
+                  color: kTextDark,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          ...pendingSubRequests.map((rawDoc) {
+            final doc = rawDoc as QueryDocumentSnapshot;
+            final Map req = doc.data() is Map ? doc.data() as Map : {};
+
+final String subName = (req['name'] ?? 'Sub-Agency').toString();
+            final String ownerName = (req['ownerName'] ?? 'Host').toString();
+            final String subOwnerUid = (req['ownerUid'] ?? '').toString();
+            final String phone = (req['phone'] ?? '').toString();
+            final String country = (req['country'] ?? '').toString();
+
+            return Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "$subName (ID: ${doc.id})",
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                      color: kTextDark,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    "Applicant: $ownerName • $country",
+                    style: const TextStyle(fontSize: 12, color: kTextMuted),
+                  ),
+                  Text(
+                    "Phone: $phone",
+                    style: const TextStyle(fontSize: 12, color: kTextMuted),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: kTealGreen,
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                          onPressed: () {
+                            _respondToSubAgencyRequest(
+                              subAgencyId: doc.id,
+                              subOwnerUid: subOwnerUid,
+                              subAgencyName: subName,
+                              agree: true,
+                            );
+                          },
+                          child: const Text("Agree",
+                              style: TextStyle(fontWeight: FontWeight.bold)),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: OutlinedButton(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: kCoralRed,
+                            side: const BorderSide(color: kCoralRed),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                          onPressed: () {
+                            _respondToSubAgencyRequest(
+                              subAgencyId: doc.id,
+                              subOwnerUid: subOwnerUid,
+                              subAgencyName: subName,
+                              agree: false,
+                            );
+                          },
+                          child: const Text("Reject",
+                              style: TextStyle(fontWeight: FontWeight.bold)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  // =========================================================================
+
+// AGENT CENTER ENTRY SCREEN (My Agent + Create An Agency + Pending Status)
   // =========================================================================
   Widget _buildAgentEntryScreen({
+    required int myNumericId,
     required String joinedAgencyId,
     required String joinedAgencyName,
-    required bool allowCreateAgency,
+    required Map? pendingAgencyData,
   }) {
     final bool hasJoinedAgency = joinedAgencyId.isNotEmpty;
+    final String appStatus = pendingAgencyData != null
+        ? (pendingAgencyData['status'] ?? '').toString().toUpperCase()
+        : "";
+    final bool hasPendingApp =
+        appStatus == 'PENDING' || appStatus == 'PENDING_PARENT';
+    final bool wasRejected = appStatus == 'REJECTED';
 
     return Scaffold(
       backgroundColor: kBgColor,
@@ -2926,6 +3506,81 @@ Icons.chat_rounded,
         padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
         child: Column(
           children: [
+            // Pending / Rejected Application Status Card
+            if (hasPendingApp || wasRejected) ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(
+                    color: wasRejected ? kCoralRed : kOrangeCardStart,
+                    width: 1.5,
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          wasRejected
+                              ? Icons.cancel_rounded
+                              : Icons.hourglass_top_rounded,
+                          color: wasRejected ? kCoralRed : kOrangeCardEnd,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            wasRejected
+                                ? "Agency Application Rejected"
+                                : (appStatus == 'PENDING_PARENT'
+                                    ? "Waiting for Agent Approval"
+                                    : "Waiting for Admin Dashboard Approval"),
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w800,
+                              color: kTextDark,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      "Agency Name: ${pendingAgencyData!['name'] ?? ''}",
+                      style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: kTextDark),
+                    ),
+                    Text(
+                      "Agency ID: ${pendingAgencyData['agencyId'] ?? myNumericId}",
+                      style: const TextStyle(fontSize: 12.5, color: kTextMuted),
+
+),
+                    Text(
+                      "Phone: ${pendingAgencyData['phone'] ?? ''} • ${pendingAgencyData['country'] ?? ''}",
+                      style: const TextStyle(fontSize: 12.5, color: kTextMuted),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      wasRejected
+                          ? "Your request was not approved. You can submit a new application below."
+                          : (appStatus == 'PENDING_PARENT'
+                              ? "Your agent ($joinedAgencyName) will review and Agree or Reject your request."
+                              : "Once approved from the Admin Dashboard, your Agency Center will open automatically."),
+                      style: const TextStyle(
+                          fontSize: 12, color: kTextMuted, height: 1.35),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+
+            // 1. "My Agent" Card
             Container(
               decoration: BoxDecoration(
                 color: Colors.white,
@@ -2955,8 +3610,7 @@ Icons.chat_rounded,
                       borderRadius: BorderRadius.vertical(
                         top: Radius.circular(18),
                       ),
-
-),
+                    ),
                     child: const Text(
                       "My Agent",
                       style: TextStyle(
@@ -2995,7 +3649,8 @@ Icons.chat_rounded,
                                   color: Color(0xFFFFD700),
                                   size: 26,
                                 ),
-                              ),
+
+),
                               const SizedBox(width: 14),
                               Expanded(
                                 child: Column(
@@ -3039,8 +3694,7 @@ Icons.chat_rounded,
                                 width: 50,
                                 height: 50,
                                 decoration: BoxDecoration(
-
-shape: BoxShape.circle,
+                                  shape: BoxShape.circle,
                                   color: kOverviewTileBg,
                                   border: Border.all(
                                     color: kTealGreen.withOpacity(0.35),
@@ -3073,7 +3727,8 @@ shape: BoxShape.circle,
                                         color: kTextMuted,
                                       ),
                                     ),
-                                  ],
+
+],
                                 ),
                               ),
                               ElevatedButton(
@@ -3089,7 +3744,10 @@ shape: BoxShape.circle,
                                     borderRadius: BorderRadius.circular(20),
                                   ),
                                 ),
-                                onPressed: _showJoinAgencyDialog,
+                                onPressed: () {
+                                  _showJoinAgencyDialog(
+                                      myNumericId: myNumericId);
+                                },
                                 child: const Text(
                                   "Join",
                                   style: TextStyle(
@@ -3107,6 +3765,7 @@ shape: BoxShape.circle,
 
             const SizedBox(height: 16),
 
+            // 2. "I am an agent / Create An Agency" Golden-Orange Banner Card
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(20),
@@ -3125,8 +3784,7 @@ shape: BoxShape.circle,
                   ),
                 ],
               ),
-
-child: Row(
+              child: Row(
                 children: [
                   Expanded(
                     flex: 6,
@@ -3155,16 +3813,21 @@ child: Row(
                               borderRadius: BorderRadius.circular(12),
                             ),
                           ),
-                          onPressed: () {
-                            _handleCreateAgencyTap(
-                              joinedAgencyId: joinedAgencyId,
-                              joinedAgencyName: joinedAgencyName,
-                              allowCreateAgency: allowCreateAgency,
-                            );
-                          },
-                          child: const Text(
-                            "Create An Agency",
-                            style: TextStyle(
+                          onPressed: hasPendingApp
+                              ? null
+                              : () {
+                                  _openCreateAgencyForm(
+                                    myNumericId: myNumericId,
+
+joinedAgencyId: joinedAgencyId,
+                                    joinedAgencyName: joinedAgencyName,
+                                  );
+                                },
+                          child: Text(
+                            hasPendingApp
+                                ? "Application Pending"
+                                : "Create An Agency",
+                            style: const TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w800,
                             ),
@@ -3205,6 +3868,7 @@ child: Row(
 
             const SizedBox(height: 16),
 
+            // 3. "Customer Support" Bottom Card
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               decoration: BoxDecoration(
@@ -3224,8 +3888,7 @@ child: Row(
                     width: 44,
                     height: 44,
                     decoration: BoxDecoration(
-
-shape: BoxShape.circle,
+                      shape: BoxShape.circle,
                       color: kOverviewTileBg,
                       border: Border.all(color: kTealGreen.withOpacity(0.3)),
                     ),
@@ -3256,7 +3919,8 @@ shape: BoxShape.circle,
                         vertical: 10,
                       ),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
+
+borderRadius: BorderRadius.circular(10),
                       ),
                     ),
                     onPressed: _showSupportSheet,
@@ -3351,8 +4015,7 @@ shape: BoxShape.circle,
                 Expanded(
                   child: Text(
                     title,
-
-style: const TextStyle(
+                    style: const TextStyle(
                       fontSize: 12.5,
                       color: kTextDark,
                       fontWeight: FontWeight.w500,
@@ -3403,7 +4066,7 @@ style: const TextStyle(
     );
   }
 
-  Widget _contactPillButton({required VoidCallback onTap}) {
+Widget _contactPillButton({required VoidCallback onTap}) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
