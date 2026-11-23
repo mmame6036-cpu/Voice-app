@@ -391,7 +391,7 @@ String _toGiftImageAsset(String path) {
     if (_micMinutesTimer != null && _micMinutesTimer!.isActive) return;
     _micMinutesTimer =
         Timer.periodic(const Duration(minutes: 1), (timer) async {
-      if (_hasCleanedUp  _mySeatIndex == null || _isMuted) return;
+      if (_hasCleanedUp || _mySeatIndex == null || _isMuted) return;
 
       final String uid = _resolvedUid;
       if (uid.isEmpty || uid.startsWith('guest_')) return;
@@ -835,7 +835,7 @@ if (wonAmount > 0) {
   void _startSeatHeartbeat() {
     _heartbeatTimer?.cancel();
     _heartbeatTimer = Timer.periodic(const Duration(seconds: 10), (_) {
-      if (_hasCleanedUp || _isMinimizing  !mounted) return;
+      if (_hasCleanedUp || _isMinimizing || !mounted) return;
 
       if (_mySeatIndex != null) {
         final idx = _mySeatIndex!;
@@ -2894,7 +2894,7 @@ _eventsSubscription?.cancel();
     final bool isCrownSeat = _isGoldenSeat(index);
     final Color frameColor = _getSeatFrameColor(index, isOccupied, isSpeaking);
     final bool hasCustomFrame = isOccupied && _seatFrames[index] != 'default';
-    final bool showGlow = isSpeaking  hasCustomFrame || isCrownSeat || isHostSeat;
+    final bool showGlow = isSpeaking || hasCustomFrame || isCrownSeat || isHostSeat;
     final ImageProvider? seatAvatarImg =
         isOccupied ? _resolveAvatarProvider(_seatAvatars[index]) : null;
 
