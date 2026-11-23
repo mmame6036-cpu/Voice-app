@@ -122,7 +122,7 @@ class _FullscreenGiftAnimatorState extends State<FullscreenGiftAnimator> {
       setState(() {
         _useFallbackVisual = true;
       });
-      _dismissTimer = Timer(const Duration(milliseconds: 2600), () {
+      _dismissTimer = Timer(const Duration(milliseconds: 2200), () {
         _finishCurrentGift(currentToken);
       });
       return;
@@ -181,7 +181,7 @@ final int durMs = ctrl.value.duration.inMilliseconds;
             _useFallbackVisual = true;
           });
           _dismissTimer?.cancel();
-          _dismissTimer = Timer(const Duration(milliseconds: 2600), () {
+          _dismissTimer = Timer(const Duration(milliseconds: 2200), () {
             _finishCurrentGift(currentToken);
           });
         }
@@ -246,14 +246,14 @@ final int durMs = ctrl.value.duration.inMilliseconds;
 
   Widget _buildIconCenterpiece(String icon) {
     return Container(
-      width: 310,
-      height: 310,
+      width: 280,
+      height: 280,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         gradient: RadialGradient(
           colors: [
-            const Color(0xFFFFD700).withOpacity(0.55),
-            const Color(0xFFFF8C00).withOpacity(0.22),
+            const Color(0xFFFFD700).withOpacity(0.45),
+            const Color(0xFFFF8C00).withOpacity(0.18),
             Colors.transparent,
           ],
         ),
@@ -261,7 +261,7 @@ final int durMs = ctrl.value.duration.inMilliseconds;
       child: Center(
         child: Text(
           icon,
-          style: const TextStyle(fontSize: 165),
+          style: const TextStyle(fontSize: 145),
         ),
       ),
     );
@@ -310,67 +310,20 @@ final int durMs = ctrl.value.duration.inMilliseconds;
                     duration: const Duration(milliseconds: 380),
                     curve: Curves.easeOutBack,
                     child: _fallbackImagePath.isNotEmpty
-                        ? Container(
-                            width: 300,
-                            height: 300,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              gradient: RadialGradient(
-                                colors: [
-                                  const Color(0xFFFFD700).withOpacity(0.45),
-                                  const Color(0xFFFF8C00).withOpacity(0.15),
-                                  Colors.transparent,
-                                ],
-                              ),
-                            ),
-                            child: Center(
-                              child: Image.asset(
-                                _fallbackImagePath,
-                                width: 270,
-                                height: 270,
-                                fit: BoxFit.contain,
-                                errorBuilder: (ctx, err, stack) =>
-                                    _buildIconCenterpiece(activeIcon),
-                              ),
+                        ? ClipRRect(
+                            borderRadius: BorderRadius.circular(24),
+                            child: Image.asset(
+                              _fallbackImagePath,
+                              width: 240,
+                              height: 240,
+                              fit: BoxFit.contain,
+                              errorBuilder: (ctx, err, stack) =>
+                                  _buildIconCenterpiece(activeIcon),
                             ),
                           )
                         : _buildIconCenterpiece(activeIcon),
                   ),
                 ),
-              Positioned(
-                top: 18,
-                left: 14,
-                right: 14,
-                child: Center(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 20, vertical: 9),
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFFFFD700), Color(0xFFFF8C00)],
-                      ),
-                      borderRadius: BorderRadius.circular(24),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.5),
-                          blurRadius: 12,
-                          offset: const Offset(0, 3),
-                        ),
-                      ],
-                    ),
-                    child: Text(
-                      "🎉 ${_currentGift!.senderName} sent ${_currentGift!.giftName}! $activeIcon",
-                      style: const TextStyle(
-                        color: Colors.black,
-                        fontWeight: FontWeight.w900,
-                        fontSize: 14.5,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ),
-              ),
             ],
           ),
         ),
