@@ -1,6 +1,9 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:audioplayers/audioplayers.dart';
@@ -84,9 +87,9 @@ class _GiftDialogState extends State<GiftDialog> {
   int _selectedCategoryIndex = 0;
   int _selectedGiftIndex = 0;
 
-  static const Color goldColor = Color(0xFFFFD700);
-  static const Color darkBg = Color(0xFF130F26);
-  static const Color cardBg = Color(0xFF1E1738);
+  static const Color kMintSelect = Color(0xFF26E6C8);
+  static const Color kSendTeal = Color(0xFF1ED7B5);
+  static const Color kGoldCoin = Color(0xFFFFD700);
 
   final List<GiftCategory> _categories = const [
     GiftCategory.hot,
@@ -103,9 +106,9 @@ class _GiftDialogState extends State<GiftDialog> {
     GiftItem(id: "svga6", name: "Crystal Ring", icon: "💍", price: 3000, imageAsset: "assets/images/svga6.jpg", animationAsset: "assets/svga/svga6.mp4", category: GiftCategory.hot),
     GiftItem(id: "svga7", name: "Starlight Harp", icon: "🎵", price: 4000, imageAsset: "assets/images/svga7.jpg", animationAsset: "assets/svga/svga7.mp4", category: GiftCategory.hot),
     GiftItem(id: "svga9", name: "Fire Phoenix", icon: "🔥", price: 5000, imageAsset: "assets/images/svga9.jpg", animationAsset: "assets/svga/svga9.mp4", category: GiftCategory.hot),
-    GiftItem(id: "svga10", name: "Diamond Chest", icon: "💎", price: 6500, imageAsset: "assets/images/svga10.jpg", animationAsset: "assets/svga/svga10.mp4", category: GiftCategory.hot),
 
-GiftItem(id: "svga11", name: "Golden Eagle", icon: "🦅", price: 8000, imageAsset: "assets/images/svga11.jpg", animationAsset: "assets/svga/svga11.mp4", category: GiftCategory.hot),
+GiftItem(id: "svga10", name: "Diamond Chest", icon: "💎", price: 6500, imageAsset: "assets/images/svga10.jpg", animationAsset: "assets/svga/svga10.mp4", category: GiftCategory.hot),
+    GiftItem(id: "svga11", name: "Golden Eagle", icon: "🦅", price: 8000, imageAsset: "assets/images/svga11.jpg", animationAsset: "assets/svga/svga11.mp4", category: GiftCategory.hot),
     GiftItem(id: "svga12", name: "Royal Carriage", icon: "🎠", price: 10000, imageAsset: "assets/images/svga12.jpg", animationAsset: "assets/svga/svga12.mp4", category: GiftCategory.hot),
     GiftItem(id: "svga13", name: "Blue Dragon", icon: "🐉", price: 12000, imageAsset: "assets/images/svga13.jpg", animationAsset: "assets/svga/svga13.mp4", category: GiftCategory.hot),
     GiftItem(id: "svga14", name: "Victory Trophy", icon: "🏆", price: 13500, imageAsset: "assets/images/svga14.jpg", animationAsset: "assets/svga/svga14.mp4", category: GiftCategory.hot),
@@ -134,9 +137,9 @@ GiftItem(id: "svga11", name: "Golden Eagle", icon: "🦅", price: 8000, imageAss
     GiftItem(id: "prism_diamond", name: "Prism Diamond", icon: "💎", price: 1000, imageAsset: "assets/images/Prism Diamond.jpg", category: GiftCategory.lucky),
 
     // 3. LUXURY CATEGORY (20,000 - 500,000 Coins)
-    GiftItem(id: "svga27", name: "Gold Supercar", icon: "🏎️", price: 20000, imageAsset: "assets/images/svga27.jpg", animationAsset: "assets/svga/svga27.mp4", category: GiftCategory.luxury),
 
-GiftItem(id: "svga29", name: "VIP Helicopter", icon: "🚁", price: 35000, imageAsset: "assets/images/svga29.jpg", animationAsset: "assets/svga/svga29.mp4", category: GiftCategory.luxury),
+GiftItem(id: "svga27", name: "Gold Supercar", icon: "🏎️", price: 20000, imageAsset: "assets/images/svga27.jpg", animationAsset: "assets/svga/svga27.mp4", category: GiftCategory.luxury),
+    GiftItem(id: "svga29", name: "VIP Helicopter", icon: "🚁", price: 35000, imageAsset: "assets/images/svga29.jpg", animationAsset: "assets/svga/svga29.mp4", category: GiftCategory.luxury),
     GiftItem(id: "svga30", name: "Luxury Yacht", icon: "🛥️", price: 50000, imageAsset: "assets/images/svga30.jpg", animationAsset: "assets/svga/svga30.mp4", category: GiftCategory.luxury),
     GiftItem(id: "svga31", name: "Golden Lion", icon: "🦁", price: 75000, imageAsset: "assets/images/svga31.jpg", animationAsset: "assets/svga/svga31.mp4", category: GiftCategory.luxury),
     GiftItem(id: "svga32", name: "Private Jet", icon: "✈️", price: 100000, imageAsset: "assets/images/svga32.jpg", animationAsset: "assets/svga/svga32.mp4", category: GiftCategory.luxury),
@@ -157,9 +160,9 @@ GiftItem(id: "svga29", name: "VIP Helicopter", icon: "🚁", price: 35000, image
     GiftItem(id: "svga21", name: "Love Balloon", icon: "🎈", price: 18000, imageAsset: "assets/images/svga21.jpg", animationAsset: "assets/svga/svga21.mp4", category: GiftCategory.intimacy),
     GiftItem(id: "svga22", name: "Diamond Chain", icon: "📿", price: 25000, imageAsset: "assets/images/svga22.jpg", animationAsset: "assets/svga/svga22.mp4", category: GiftCategory.intimacy),
     GiftItem(id: "svga23", name: "Eternal Kiss", icon: "💋", price: 35000, imageAsset: "assets/images/svga23.jpg", animationAsset: "assets/svga/svga23.mp4", category: GiftCategory.intimacy),
-    GiftItem(id: "svga24", name: "Crystal Castle", icon: "🏰", price: 50000, imageAsset: "assets/images/svga24.jpg", animationAsset: "assets/svga/svga24.mp4", category: GiftCategory.intimacy),
 
-GiftItem(id: "svga25", name: "Starry Proposal", icon: "🌠", price: 65000, imageAsset: "assets/images/svga25.jpg", animationAsset: "assets/svga/svga25.mp4", category: GiftCategory.intimacy),
+GiftItem(id: "svga24", name: "Crystal Castle", icon: "🏰", price: 50000, imageAsset: "assets/images/svga24.jpg", animationAsset: "assets/svga/svga24.mp4", category: GiftCategory.intimacy),
+    GiftItem(id: "svga25", name: "Starry Proposal", icon: "🌠", price: 65000, imageAsset: "assets/images/svga25.jpg", animationAsset: "assets/svga/svga25.mp4", category: GiftCategory.intimacy),
     GiftItem(id: "svfa26", name: "Royal Wedding", icon: "👰", price: 80000, imageAsset: "assets/images/svfa26.jpg", animationAsset: "assets/svga/svfa26.mp4", category: GiftCategory.intimacy),
   ];
 
@@ -190,6 +193,25 @@ GiftItem(id: "svga25", name: "Starry Proposal", icon: "🌠", price: 65000, imag
     }
   }
 
+  ImageProvider? _resolveUserAvatar(String url) {
+    if (url.isEmpty) return null;
+    if (url.startsWith('data:image')) {
+      try {
+        final idx = url.indexOf(',');
+        if (idx != -1) {
+          final Uint8List bytes = base64Decode(url.substring(idx + 1));
+          return MemoryImage(bytes);
+        }
+      } catch (_) {
+        return null;
+      }
+    }
+    if (url.startsWith('http')) {
+      return NetworkImage(url);
+    }
+    return null;
+  }
+
   Future<void> _playLuckyCoinSound() async {
     try {
       final AudioPlayer player = AudioPlayer();
@@ -207,6 +229,7 @@ GiftItem(id: "svga25", name: "Starry Proposal", icon: "🌠", price: 65000, imag
   }
 
   void _toggleSelectAll() {
+    HapticFeedback.selectionClick();
     setState(() {
       if (_isAllSelected) {
         _selectedSeatIndices.clear();
@@ -227,6 +250,7 @@ GiftItem(id: "svga25", name: "Starry Proposal", icon: "🌠", price: 65000, imag
   }
 
   void _toggleSeat(int seatIndex) {
+    HapticFeedback.selectionClick();
     setState(() {
       if (_selectedSeatIndices.contains(seatIndex)) {
         _selectedSeatIndices.remove(seatIndex);
@@ -242,8 +266,9 @@ GiftItem(id: "svga25", name: "Starry Proposal", icon: "🌠", price: 65000, imag
 
   int get _effectiveMultiplier {
     final currentGifts = _currentCategoryGifts;
-    if (currentGifts.isEmpty) return 1;
-    if (_selectedGiftIndex >= currentGifts.length) return 1;
+    if (currentGifts.isEmpty || _selectedGiftIndex >= currentGifts.length) {
+      return 1;
+    }
     if (currentGifts[_selectedGiftIndex].isLucky) {
       return _selectedMultiplier;
     }
@@ -252,9 +277,11 @@ GiftItem(id: "svga25", name: "Starry Proposal", icon: "🌠", price: 65000, imag
 
   int get _calculateTotalPrice {
     final currentGifts = _currentCategoryGifts;
-    if (_selectedSeatIndices.isEmpty) return 0;
-    if (currentGifts.isEmpty) return 0;
-    if (_selectedGiftIndex >= currentGifts.length) return 0;
+    if (_selectedSeatIndices.isEmpty ||
+        currentGifts.isEmpty ||
+        _selectedGiftIndex >= currentGifts.length) {
+      return 0;
+    }
     final unitPrice = currentGifts[_selectedGiftIndex].price;
     return unitPrice * _effectiveMultiplier * _selectedSeatIndices.length;
   }
@@ -269,7 +296,7 @@ GiftItem(id: "svga25", name: "Starry Proposal", icon: "🌠", price: 65000, imag
     return 0;
   }
 
-  Future<void> _sendGift() async {
+Future<void> _sendGift() async {
     if (_currentUser == null) return;
     if (_selectedSeatIndices.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -291,9 +318,10 @@ GiftItem(id: "svga25", name: "Starry Proposal", icon: "🌠", price: 65000, imag
       return;
     }
 
+    HapticFeedback.lightImpact();
     setState(() => _isSending = true);
 
-try {
+    try {
       int wonCoins = 0;
       int maxMultiplier = 0;
 
@@ -345,6 +373,8 @@ try {
         if (recipientUid.isNotEmpty) {
           FirebaseFirestore.instance.collection('users').doc(recipientUid).set({
             'points': FieldValue.increment(pointsPerRecipient),
+            'receivedGiftPoints': FieldValue.increment(pointsPerRecipient),
+            'giftIncomeLast7Days': FieldValue.increment(pointsPerRecipient),
             'charmExp': FieldValue.increment(pointsPerRecipient),
             'todayTaskPoints': FieldValue.increment(pointsPerRecipient),
             'weekTaskPoints': FieldValue.increment(pointsPerRecipient),
@@ -359,6 +389,7 @@ try {
         'giftName': selectedGift.name,
         'giftIcon': selectedGift.icon,
         'imageAsset': selectedGift.playAsset,
+        'thumbAsset': selectedGift.imageAsset,
         'multiplier': sendMult,
         'seats': _selectedSeatIndices.toList(),
         'totalCost': totalCost,
@@ -374,7 +405,8 @@ try {
       widget.onCoinsUpdated?.call(_coins);
 
       final int fullSeatCost = selectedGift.price * sendMult;
-      if (mounted) {
+
+if (mounted) {
         Navigator.pop(
           context,
           GiftSendResult(
@@ -414,47 +446,23 @@ try {
     }
   }
 
-Widget _buildBorderlessGiftVisual(GiftItem gift, bool isSelected) {
-    return Container(
-      width: 62,
-      height: 62,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        boxShadow: isSelected
-            ? [
-                BoxShadow(
-                  color: goldColor.withOpacity(0.5),
-                  blurRadius: 16,
-                  spreadRadius: 2,
-                ),
-              ]
-            : null,
-      ),
-      child: ShaderMask(
-        shaderCallback: (Rect bounds) {
-          return const RadialGradient(
-            center: Alignment.center,
-            radius: 0.5,
-            colors: [
-              Colors.white,
-              Colors.white,
-              Colors.transparent,
-            ],
-            stops: [0.0, 0.68, 1.0],
-          ).createShader(bounds);
-        },
-        blendMode: BlendMode.dstIn,
-        child: ClipOval(
-          child: Image.asset(
-            gift.imageAsset,
-            width: 62,
-            height: 62,
-            fit: BoxFit.cover,
-            errorBuilder: (ctx, err, stack) => Center(
-              child: Text(
-                gift.icon,
-                style: const TextStyle(fontSize: 36),
-              ),
+  Widget _buildCrispGiftImage(GiftItem gift, bool isSelected) {
+    return AnimatedScale(
+      scale: isSelected ? 1.07 : 1.0,
+      duration: const Duration(milliseconds: 160),
+      curve: Curves.easeOutBack,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(10),
+        child: Image.asset(
+          gift.imageAsset,
+          width: 58,
+          height: 58,
+          fit: BoxFit.contain,
+          gaplessPlayback: true,
+          errorBuilder: (ctx, err, stack) => Center(
+            child: Text(
+              gift.icon,
+              style: const TextStyle(fontSize: 38),
             ),
           ),
         ),
@@ -472,95 +480,136 @@ Widget _buildBorderlessGiftVisual(GiftItem gift, bool isSelected) {
     final int activeMult = _effectiveMultiplier;
 
     return Container(
-      height: 480,
-      decoration: const BoxDecoration(
-        color: darkBg,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      height: 455,
+      decoration: BoxDecoration(
+        color: const Color(0xFF14151A).withOpacity(0.92),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
+        border: Border(
+          top: BorderSide(color: Colors.white.withOpacity(0.14), width: 1),
+        ),
       ),
       child: Column(
         children: [
+          // 1. Top Recipient Avatars Row + "All" Pill on Right
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: const BoxDecoration(
-              border: Border(bottom: BorderSide(color: Colors.white10)),
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
+            decoration: BoxDecoration(
+              border: Border(
+                bottom: BorderSide(color: Colors.white.withOpacity(0.08)),
+              ),
             ),
             child: Row(
               children: [
+                Expanded(
+                  child: SizedBox(
+                    height: 38,
+                    child: _userList.isEmpty
+                        ? const Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              "Select recipient on mic",
+                              style: TextStyle(color: Colors.white54, fontSize: 12),
+                            ),
+                          )
+                        : ListView.builder(
+                            scrollDirection: Axis.horizontal,
+                            itemCount: _userList.length,
+                            itemBuilder: (context, idx) {
+                              final rawUser = _userList[idx];
+                              if (rawUser is! Map) return const SizedBox.shrink();
+                              final int seatIdx =
+                                  (rawUser['seatIndex'] as num?)?.toInt() ?? 0;
+                              final String avatarUrl =
+                                  (rawUser['avatar'] ?? '').toString();
+                              final ImageProvider? avatarImg =
+                                  _resolveUserAvatar(avatarUrl);
+                              final bool isSelected =
+                                  _selectedSeatIndices.contains(seatIdx);
+
+return GestureDetector(
+                                onTap: () => _toggleSeat(seatIdx),
+                                child: Container(
+                                  margin: const EdgeInsets.only(right: 8),
+                                  child: Stack(
+                                    clipBehavior: Clip.none,
+                                    alignment: Alignment.bottomCenter,
+                                    children: [
+                                      Container(
+                                        width: 34,
+                                        height: 34,
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          border: Border.all(
+                                            color: isSelected
+                                                ? kMintSelect
+                                                : Colors.white24,
+                                            width: isSelected ? 2.0 : 1.0,
+                                          ),
+                                        ),
+                                        child: CircleAvatar(
+                                          backgroundColor: const Color(0xFF252830),
+                                          backgroundImage: avatarImg,
+                                          child: avatarImg == null
+                                              ? const Icon(Icons.person,
+                                                  color: Colors.white70, size: 18)
+                                              : null,
+                                        ),
+                                      ),
+                                      Positioned(
+                                        bottom: -3,
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 5, vertical: 0.5),
+                                          decoration: BoxDecoration(
+                                            color: isSelected
+                                                ? kMintSelect
+                                                : const Color(0xFF2C303A),
+                                            borderRadius: BorderRadius.circular(8),
+                                          ),
+                                          child: Text(
+                                            "${seatIdx + 1}",
+                                            style: TextStyle(
+                                              color: isSelected
+                                                  ? Colors.black
+                                                  : Colors.white,
+                                              fontSize: 9,
+                                              fontWeight: FontWeight.w900,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+                ),
+                const SizedBox(width: 8),
                 GestureDetector(
                   onTap: _toggleSelectAll,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                     decoration: BoxDecoration(
-                      color: _isAllSelected ? goldColor : cardBg,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: _isAllSelected ? goldColor : Colors.white24),
+                      color: _isAllSelected
+                          ? kMintSelect.withOpacity(0.22)
+
+: Colors.white.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: _isAllSelected ? kMintSelect : Colors.white24,
+                        width: 1.3,
+                      ),
                     ),
                     child: Text(
                       "All",
                       style: TextStyle(
-                        color: _isAllSelected ? Colors.black : Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 10.5,
+                        color: _isAllSelected ? kMintSelect : Colors.white,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 12,
                       ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: SizedBox(
-                    height: 42,
-                    child: ListView.builder(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: 30,
-                      itemBuilder: (context, index) {
-                        final seatIdx = index;
-                        final seatNum = seatIdx + 1;
-
-                        bool isOccupied = false;
-                        for (final user in _userList) {
-                          if (user is Map) {
-                            final sIdx = (user['seatIndex'] as num?)?.toInt();
-                            if (sIdx == seatIdx) {
-                              isOccupied = true;
-                              break;
-                            }
-                          }
-                        }
-
-                        final isSelected = _selectedSeatIndices.contains(seatIdx);
-
-return GestureDetector(
-                          onTap: isOccupied ? () => _toggleSeat(seatIdx) : null,
-                          child: Container(
-                            width: 32,
-                            margin: const EdgeInsets.only(right: 5),
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: isSelected
-                                  ? goldColor.withOpacity(0.25)
-                                  : (isOccupied ? cardBg : Colors.white.withOpacity(0.04)),
-                              border: Border.all(
-                                color: isSelected
-                                    ? goldColor
-                                    : (isOccupied ? Colors.white24 : Colors.transparent),
-                                width: isSelected ? 1.5 : 0.8,
-                              ),
-                            ),
-                            child: Center(
-                              child: Text(
-                                "$seatNum",
-                                style: TextStyle(
-                                  color: isSelected
-                                      ? goldColor
-                                      : (isOccupied ? Colors.white : Colors.white24),
-                                  fontSize: 10,
-                                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                                ),
-                              ),
-                            ),
-                          ),
-                        );
-                      },
                     ),
                   ),
                 ),
@@ -568,89 +617,123 @@ return GestureDetector(
             ),
           ),
 
-          Container(
+          // 2. Clean Category Tabs (Hot | Lucky | Luxury | Intimacy)
+          SizedBox(
             height: 38,
-            margin: const EdgeInsets.symmetric(vertical: 4),
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              itemCount: _categories.length,
-              itemBuilder: (context, index) {
-                final isSelected = _selectedCategoryIndex == index;
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: List.generate(_categories.length, (index) {
+                final bool isSelected = _selectedCategoryIndex == index;
                 return GestureDetector(
+                  behavior: HitTestBehavior.opaque,
                   onTap: () {
+                    HapticFeedback.selectionClick();
                     setState(() {
                       _selectedCategoryIndex = index;
                       _selectedGiftIndex = 0;
                     });
                   },
-                  child: Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 4),
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: isSelected ? goldColor : Colors.white.withOpacity(0.05),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: isSelected ? goldColor : Colors.white12,
-                      ),
-                    ),
-                    child: Center(
-                      child: Text(
-                        _getCategoryName(_categories[index]),
-                        style: TextStyle(
-                          color: isSelected ? Colors.black : Colors.white70,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 12,
+                  child: Padding(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          _getCategoryName(_categories[index]),
+                          style: TextStyle(
+                            color: isSelected ? Colors.white : Colors.white54,
+                            fontWeight:
+                                isSelected ? FontWeight.w900 : FontWeight.w600,
+                            fontSize: 13.5,
+                          ),
                         ),
-                      ),
+                      ],
                     ),
                   ),
                 );
-              },
+              }),
             ),
           ),
 
+          // 3. Crisp 4x2 Gift Grid with Glowing Rounded Selection Frame
           Expanded(
             child: GridView.builder(
-              padding: const EdgeInsets.all(8),
+              physics: const BouncingScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(10, 4, 10, 8),
               itemCount: currentGifts.length,
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 4,
                 mainAxisSpacing: 8,
                 crossAxisSpacing: 8,
-                childAspectRatio: 0.82,
+                childAspectRatio: 0.78,
               ),
               itemBuilder: (context, index) {
                 final gift = currentGifts[index];
                 final isSelected = _selectedGiftIndex == index;
 
-return GestureDetector(
-                  onTap: () => setState(() => _selectedGiftIndex = index),
-                  child: Container(
-                    color: Colors.transparent,
+                return GestureDetector(
+                  onTap: () {
+                    HapticFeedback.selectionClick();
+                    setState(() => _selectedGiftIndex = index);
+                  },
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 160),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 4, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? Colors.white.withOpacity(0.08)
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: isSelected ? kMintSelect : Colors.transparent,
+                        width: 1.6,
+
+),
+                      boxShadow: isSelected
+                          ? [
+                              BoxShadow(
+                                color: kMintSelect.withOpacity(0.22),
+                                blurRadius: 8,
+                              ),
+                            ]
+                          : null,
+                    ),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        _buildBorderlessGiftVisual(gift, isSelected),
-                        const SizedBox(height: 4),
+                        _buildCrispGiftImage(gift, isSelected),
+                        const SizedBox(height: 5),
                         Text(
                           gift.name,
                           style: TextStyle(
-                            color: isSelected ? goldColor : Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
+                            color: isSelected ? Colors.white : Colors.white.withOpacity(0.9),
+                            fontSize: 11,
+                            fontWeight:
+                                isSelected ? FontWeight.w800 : FontWeight.w500,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           textAlign: TextAlign.center,
                         ),
-                        Text(
-                          "${gift.price}",
-                          style: const TextStyle(
-                            color: goldColor,
-                            fontSize: 9.5,
-                            fontWeight: FontWeight.bold,
-                          ),
+                        const SizedBox(height: 2),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.monetization_on,
+                                color: kGoldCoin, size: 11),
+                            const SizedBox(width: 2),
+                            Text(
+                              "${gift.price}",
+                              style: const TextStyle(
+                                color: Colors.white70,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
@@ -660,101 +743,123 @@ return GestureDetector(
             ),
           ),
 
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: const BoxDecoration(
-              color: cardBg,
-              border: Border(top: BorderSide(color: Colors.white10)),
-            ),
-            child: Row(
-              children: [
-                Row(
-                  children: [
-                    const Icon(Icons.monetization_on, color: goldColor, size: 16),
-                    const SizedBox(width: 4),
-                    Text(
-                      "$_coins",
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
+          // 4. Bottom Coins Balance & Unified Multiplier + Mint Send Pill
+          SafeArea(
+            top: false,
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(14, 8, 14, 10),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.35),
+                border: Border(
+                  top: BorderSide(color: Colors.white.withOpacity(0.08)),
                 ),
-                const SizedBox(width: 8),
-                if (selectedGift != null)
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.monetization_on, color: kGoldCoin, size: 18),
+                  const SizedBox(width: 5),
                   Text(
-                    "Pts ${(selectedGift.price * activeMult * selectedGift.pointRate).round()} (${selectedGift.isLucky ? '4%' : '70%'})",
-                    style: const TextStyle(color: Colors.white38, fontSize: 10),
-                  ),
-                const Spacer(),
-                if (selectedGift != null && selectedGift.isLucky) ...[
-                  PopupMenuButton<int>(
-                    color: const Color(0xFF281E48),
-                    initialValue: _selectedMultiplier,
-                    onSelected: (val) => setState(() => _selectedMultiplier = val),
-                    itemBuilder: (context) => _multipliers
-                        .map((m) => PopupMenuItem<int>(
-                              value: m,
-                              child: Text(
-                                "x$m",
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ))
-                        .toList(),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.08),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.white24),
-
-),
-                      child: Row(
-                        children: [
-                          Text(
-                            "x$_selectedMultiplier",
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 11,
-                            ),
-                          ),
-                          const Icon(Icons.arrow_drop_up, color: Colors.white70, size: 14),
-                        ],
-                      ),
+                    "$_coins",
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 14,
                     ),
                   ),
                   const SizedBox(width: 8),
-                ],
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: goldColor,
-                    foregroundColor: Colors.black,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  ),
-                  onPressed: _isSending ? null : _sendGift,
-                  child: _isSending
-                      ? const SizedBox(
-                          width: 14,
-                          height: 14,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
-                        )
-                      : Text(
-                          "Send ($totalCost)",
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 11,
-                            color: Colors.black,
+                  if (selectedGift != null)
+                    Text(
+                      "Pts ${(selectedGift.price * activeMult * selectedGift.pointRate).round()}",
+                      style: const TextStyle(color: Colors.white38, fontSize: 10.5),
+                    ),
+                  const Spacer(),
+
+                  // Unified Multiplier + Mint Send Pill (Matches Video)
+                  Container(
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF262A34),
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(
+                        color: kSendTeal.withOpacity(0.6),
+
+width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (selectedGift != null && selectedGift.isLucky)
+                          PopupMenuButton<int>(
+                            color: const Color(0xFF1F232C),
+                            initialValue: _selectedMultiplier,
+                            onSelected: (val) =>
+                                setState(() => _selectedMultiplier = val),
+                            itemBuilder: (context) => _multipliers
+                                .map((m) => PopupMenuItem<int>(
+                                      value: m,
+                                      child: Text(
+                                        "x$m",
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ))
+                                .toList(),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 10),
+                              child: Row(
+                                children: [
+                                  Text(
+                                    "$_selectedMultiplier",
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 12.5,
+                                    ),
+                                  ),
+                                  const Icon(Icons.arrow_drop_down,
+                                      color: Colors.white70, size: 18),
+                                ],
+                              ),
+                            ),
+                          ),
+                        GestureDetector(
+                          onTap: _isSending ? null : _sendGift,
+                          child: Container(
+                            height: 36,
+                            padding: const EdgeInsets.symmetric(horizontal: 18),
+                            decoration: BoxDecoration(
+                              color: kSendTeal,
+                              borderRadius: BorderRadius.circular(18),
+                            ),
+                            child: Center(
+                              child: _isSending
+                                  ? const SizedBox(
+                                      width: 14,
+                                      height: 14,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Colors.white,
+                                      ),
+                                    )
+                                  : Text(
+                                      totalCost > 0 ? "Send ($totalCost)" : "Send",
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w900,
+                                        fontSize: 12.5,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                            ),
                           ),
                         ),
-                ),
-              ],
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ],
