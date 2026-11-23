@@ -363,7 +363,7 @@ if (enable) {
     if (_micMinutesTimer != null && _micMinutesTimer!.isActive) return;
     _micMinutesTimer =
         Timer.periodic(const Duration(minutes: 1), (timer) async {
-      if (_hasCleanedUp  _mySeatIndex == null  _isMuted) return;
+      if (_hasCleanedUp || _mySeatIndex == null || _isMuted) return;
       final String uid = _resolvedUid;
       if (uid.isEmpty || uid.startsWith('guest_')) return;
 
@@ -718,7 +718,7 @@ setState(() {
         final List claimed = List.from((data['claimedBy'] as List?) ?? []);
         senderName = (data['senderName'] ?? 'User').toString();
 
-        if (remCount <= 0  remCoins <= 0  claimed.contains(_resolvedUid)) {
+        if (remCount <= 0 || remCoins <= 0 || claimed.contains(_resolvedUid)) {
           return;
         }
 
@@ -803,7 +803,7 @@ await FirebaseFirestore.instance
   void _startSeatHeartbeat() {
     _heartbeatTimer?.cancel();
     _heartbeatTimer = Timer.periodic(const Duration(seconds: 10), (_) {
-      if (_hasCleanedUp  _isMinimizing  !mounted) return;
+      if (_hasCleanedUp || _isMinimizing || !mounted) return;
 
       if (_mySeatIndex != null) {
         final idx = _mySeatIndex!;
@@ -4151,7 +4151,7 @@ child: Opacity(
 
                 // Fullscreen Gift Animation Layer
                 FullscreenGiftAnimator(
-                  eventStream: _fullscreenAnimStreamController.stream,
+                  giftStream: _fullscreenAnimStreamController.stream,
                 ),
               ],
             ),
