@@ -22,6 +22,7 @@ table{width:100%;border-collapse:collapse;font-size:12px;margin-top:8px}
 th,td{text-align:left;padding:7px 5px;border-bottom:1px solid #EFE6DE}
 .row{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
 .row input{padding:8px 10px;border-radius:8px;border:1px solid #DDD4C2;font-size:12.5px;flex:1;min-width:120px}
+.badge{display:inline-block;padding:2px 6px;border-radius:6px;font-size:10px;font-weight:bold;background:#E3F8F1;color:#107C41;margin-left:4px}
 </style>
 </head>
 <body>
@@ -54,9 +55,16 @@ th,td{text-align:left;padding:7px 5px;border-bottom:1px solid #EFE6DE}
     <div class="card"><b>Users & Hosts</b><div class="row"><input id="qUsr" placeholder="Search ID or Name..." oninput="drawUsers()"/></div><table><thead><tr><th>Name</th><th>ID</th><th>Coins</th><th>Pts</th><th>Face</th><th>Status</th><th>Controls</th></tr></thead><tbody id="tb4"></tbody></table></div>
   </div>
   <div id="p-agn" style="display:none">
-    <div class="card"><b>Create Agency</b><div class="row"><input id="aId" placeholder="Agency ID"/><input id="aName" placeholder="Name"/><input id="aOwn" type="number" placeholder="Owner ID"/><button class="b g" onclick="mkAgn()">Create</button></div></div>
+    <div class="card" id="pend-card" style="display:none;border:1.5px solid #D49B42">
+      <b style="color:#B45309">Pending Agency Requests (Approve / Reject)</b>
 
-<div class="card"><b>Agencies</b><table><thead><tr><th>ID</th><th>Name</th><th>Owner</th><th>Hosts</th><th>Withdrawn</th></tr></thead><tbody id="tb5"></tbody></table></div>
+<table>
+        <thead><tr><th>ID</th><th>Agency Name</th><th>Owner</th><th>Phone / Country</th><th>Action</th></tr></thead>
+        <tbody id="tb-pend"></tbody>
+      </table>
+    </div>
+    <div class="card"><b>Create Agency</b><div class="row"><input id="aId" placeholder="Agency ID"/><input id="aName" placeholder="Name"/><input id="aOwn" type="number" placeholder="Owner ID"/><button class="b g" onclick="mkAgn()">Create</button></div></div>
+    <div class="card"><b>Active Agencies</b><table><thead><tr><th>ID</th><th>Name</th><th>Owner</th><th>Hosts</th><th>Withdrawn</th><th>Action</th></tr></thead><tbody id="tb5"></tbody></table></div>
   </div>
 </div>
 <script>
@@ -64,6 +72,7 @@ var DATA={userOrders:[],sellerOrders:[],withdrawals:[],users:[],agencies:[]};
 function sv(v,d){if(v===undefined)return d;if(v===null)return d;if(v==='')return d;return String(v);}
 function nv(v){var n=Number(sv(v,'0'));if(isNaN(n))return 0;return n;}
 function g(id){return document.getElementById(id);}
+function cleanTxt(s){return sv(s,'').replace(/['"]/g,'');}
 function tab(id,el){
   var ts=document.querySelectorAll('.tab');for(var i=0;i<ts.length;i++){ts[i].classList.remove('on');}el.classList.add('on');
   var ps=['ord','wdr','usr','agn'];for(var j=0;j<ps.length;j++){g('p-'+ps[j]).style.display='none';}g('p-'+id).style.display='block';
@@ -93,8 +102,31 @@ function drawAll(){
     return '<tr><td>'+sv(x.userName,'Host')+'</td><td>'+sv(x.method,'')+'</td><td>'+sv(x.account,'')+'</td><td>'+nv(x.points)+'</td><td>$'+nv(x.usdAmount)+'</td><td>'+x.status+'</td><td>'+a+'</td></tr>';
   }).join('');
   drawUsers();
-  g('tb5').innerHTML=DATA.agencies.map(function(a){
-    return '<tr><td>'+sv(a.agencyId,a.id)+'</td><td>'+sv(a.name,'')+'</td><td>'+sv(a.ownerNumericId,'-')+'</td><td>'+nv(a.totalHosts)+'</td><td>'+nv(a.withdrawnCommissionPoints)+'</td></tr>';
+  drawAgencies();
+}
+function drawAgencies(){
+  var pending=[];
+  var active=[];
+  for(var i=0;i<DATA.agencies.length;i++){
+    var ag=DATA.agencies[i];
+    var st=sv(ag.status,'APPROVED').toUpperCase();
+    if(st==='PENDING'){pending.push(ag);}
+    else if(st!=='REJECTED'){active.push(ag);}
+  }
+  if(pending.length>0){
+    g('pend-card').style.display='block';
+    g('tb-pend').innerHTML=pending.map(function(a){
+
+var aid=cleanTxt(sv(a.agencyId,a.id));
+      return '<tr><td><b>'+aid+'</b></td><td>'+sv(a.name,'')+'</td><td>'+sv(a.ownerName,'')+' ('+sv(a.ownerNumericId,'-')+')</td><td>'+sv(a.phone,'-')+' / '+sv(a.country,'-')+'</td><td><button class="b g" onclick="respAgn(\''+aid+'\',true)">Approve</button> <button class="b r" onclick="respAgn(\''+aid+'\',false)">Reject</button></td></tr>';
+    }).join('');
+  }else{
+    g('pend-card').style.display='none';
+  }
+  g('tb5').innerHTML=active.map(function(a){
+    var aid=cleanTxt(sv(a.agencyId,a.id));
+    var anm=cleanTxt(sv(a.name,'Agency'));
+    return '<tr><td><b>'+aid+'</b></td><td>'+sv(a.name,'')+'</td><td>'+sv(a.ownerNumericId,'-')+'</td><td>'+nv(a.totalHosts)+'</td><td>'+nv(a.withdrawnCommissionPoints)+'</td><td><button class="b r" onclick="remAgn(\''+aid+'\',\''+anm+'\')">Remove Agent</button></td></tr>';
   }).join('');
 }
 function drawUsers(){
@@ -102,9 +134,13 @@ function drawUsers(){
   var list=DATA.users.filter(function(u){if(sv(u.numericId,'').indexOf(q)!==-1)return true;if(sv(u.name,'').toLowerCase().indexOf(q)!==-1)return true;return false;});
   g('tb4').innerHTML=list.slice(0,50).map(function(u){
     var fc='No';if(u.isFaceVerified){fc='Yes';}var st='ACTIVE',bn='Ban';if(u.isBanned){st='BANNED';bn='Unban';}
-    return '<tr><td>'+sv(u.name,'User')+'</td><td>'+sv(u.numericId,'-')+'</td><td>'+nv(u.coins)+'</td><td>'+nv(u.points)+'</td><td>'+fc+'</td><td>'+st+'</td><td><button class="b y" onclick="addC(\''+u.uid+'\')">+Coins</button> <button class="b d" onclick="ctl(\''+u.uid+'\',{toggleFace:true})">Face</button> <button class="b r" onclick="ctl(\''+u.uid+'\',{toggleBan:true})">'+bn+'</button></td></tr>';
-
-}).join('');
+    var agBadge='';var agBtn='';
+    if(u.isAgent){
+      agBadge='<span class="badge">AGENT</span>';
+      agBtn=' <button class="b r" onclick="remUsrAgn(\''+u.uid+'\',\''+sv(u.numericId,'')+'\',\''+cleanTxt(sv(u.name,'User'))+'\')">-Agent</button>';
+    }
+    return '<tr><td>'+sv(u.name,'User')+agBadge+'</td><td>'+sv(u.numericId,'-')+'</td><td>'+nv(u.coins)+'</td><td>'+nv(u.points)+'</td><td>'+fc+'</td><td>'+st+'</td><td><button class="b y" onclick="addC(\''+u.uid+'\')">+Coins</button> <button class="b d" onclick="ctl(\''+u.uid+'\',{toggleFace:true})">Face</button> <button class="b r" onclick="ctl(\''+u.uid+'\',{toggleBan:true})">'+bn+'</button>'+agBtn+'</td></tr>';
+  }).join('');
 }
 async function act(u,ref,a){if(!confirm(a+' '+ref+'?'))return;await fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({orderRef:ref,action:a})});loadAll();}
 async function wdr(id,a){if(!confirm(a+' withdrawal?'))return;await fetch('/api/admin/withdrawal',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({requestId:id,action:a})});loadAll();}
@@ -115,6 +151,22 @@ async function mkAgn(){
   if(id==='')return alert('Enter Agency ID');if(nm==='')return alert('Enter Agency Name');
   await fetch('/api/admin/create-agency',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({agencyId:id,agencyName:nm,ownerNumericId:ow})});
   g('aId').value='';g('aName').value='';g('aOwn').value='';loadAll();
+}
+async function respAgn(id,approve){
+  var lbl=approve?'Approve':'Reject';
+  if(!confirm(lbl+' agency request '+id+'?'))return;
+  await fetch('/api/admin/respond-agency',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({agencyId:id,approve:approve})});
+  loadAll();
+}
+async function remAgn(id,nm){
+  if(!confirm('Remove "'+nm+'" (ID: '+id+') from Agent status?'))return;
+  await fetch('/api/admin/remove-agency',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({agencyId:id})});
+  loadAll();
+}
+async function remUsrAgn(uid,numId,nm){
+  if(!confirm('Demote "'+nm+'" (ID: '+numId+') from Agent status?'))return;
+  await fetch('/api/admin/remove-agency',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({agencyId:numId,ownerUid:uid})});
+  loadAll();
 }
 loadAll();
 </script>
