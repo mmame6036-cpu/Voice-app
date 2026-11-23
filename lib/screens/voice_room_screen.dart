@@ -2894,7 +2894,7 @@ _eventsSubscription?.cancel();
     final bool isCrownSeat = _isGoldenSeat(index);
     final Color frameColor = _getSeatFrameColor(index, isOccupied, isSpeaking);
     final bool hasCustomFrame = isOccupied && _seatFrames[index] != 'default';
-    final bool showGlow = isSpeaking  hasCustomFrame  isCrownSeat || isHostSeat;
+    final bool showGlow = isSpeaking || hasCustomFrame  isCrownSeat || isHostSeat;
     final ImageProvider? seatAvatarImg =
         isOccupied ? _resolveAvatarProvider(_seatAvatars[index]) : null;
 
