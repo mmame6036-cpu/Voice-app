@@ -13,8 +13,10 @@ import '../services/room_session_manager.dart';
 import '../widgets/gift_dialog.dart';
 import '../widgets/fullscreen_gift_animator.dart';
 import '../widgets/room_tools_sheet.dart';
+import '../widgets/dragon_tiger_sheet.dart';
 import '../widgets/teen_patti_dialog.dart';
 import '../widgets/lucky_wheel_dialog.dart';
+import 'messages_screen.dart';
 import '../main.dart';
 
 class RoomChatMessage {
@@ -33,19 +35,21 @@ class RoomChatMessage {
 
 class CenterFlyingGift {
   final String id;
-  final String asset;
+  final String imageAsset;
   final String icon;
   final int targetSeatIndex;
-  final bool isAll;
+  final Offset startOffset;
+  final Offset endOffset;
   final AnimationController controller;
   final Animation<double> flightAnimation;
 
   CenterFlyingGift({
     required this.id,
-    required this.asset,
+    required this.imageAsset,
     this.icon = "🎁",
     required this.targetSeatIndex,
-    required this.isAll,
+    required this.startOffset,
+    required this.endOffset,
     required this.controller,
     required this.flightAnimation,
   });
@@ -109,8 +113,12 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
 
   final List<String> _seatFrames = List.filled(30, 'default');
   final List<String> _seatAvatars = List.filled(30, '');
+  final Map<String, ImageProvider> _avatarCache = {};
+
   final GlobalKey _roomStackKey = GlobalKey();
+  final GlobalKey _giftDockBtnKey = GlobalKey();
   final List<GlobalKey> _seatKeys = List.generate(30, (_) => GlobalKey());
+
   bool _isRoomOwnerAgent = false;
   int get _goldenSeatsCount => _isRoomOwnerAgent ? 6 : 3;
 
@@ -163,7 +171,7 @@ int? _mySeatIndex;
   Timer? _comboTimer;
   late AnimationController _comboRingController;
   late AnimationController _speakingWaveController;
-  Map? _lastSentGiftConfig;
+  Map<String, dynamic>? _lastSentGiftConfig;
 
   String? _luckyWinToast;
   Timer? _luckyWinToastTimer;
@@ -225,24 +233,44 @@ int? _mySeatIndex;
     return false;
   }
 
+  // Cached ImageProvider prevents Base64 re-decoding & eliminates avatar flickering
   ImageProvider? _resolveAvatarProvider(String? avatarUrl) {
     if (avatarUrl == null || avatarUrl.isEmpty) return null;
+    final String cacheKey =
+        "${avatarUrl.length}_${avatarUrl.hashCode}";
+    final cached = _avatarCache[cacheKey];
+    if (cached != null) return cached;
+
     if (avatarUrl.startsWith('data:image')) {
       try {
         final int commaIdx = avatarUrl.indexOf(',');
         if (commaIdx != -1) {
           final Uint8List bytes =
               base64Decode(avatarUrl.substring(commaIdx + 1));
-          return MemoryImage(bytes);
+          final provider = MemoryImage(bytes);
+          _avatarCache[cacheKey] = provider;
+          return provider;
         }
       } catch (_) {
         return null;
       }
     }
     if (avatarUrl.startsWith('http')) {
-      return NetworkImage(avatarUrl);
+      final provider = NetworkImage(avatarUrl);
+      _avatarCache[cacheKey] = provider;
+      return provider;
     }
     return null;
+  }
+
+String _toGiftImageAsset(String path) {
+    if (path.isEmpty) return "";
+    if (path.toLowerCase().endsWith('.mp4')) {
+      return path
+          .replaceFirst('assets/svga/', 'assets/images/')
+          .replaceAll('.mp4', '.jpg');
+    }
+    return path;
   }
 
   Future<void> _setScreenWakeLock(bool enable) async {
@@ -255,7 +283,7 @@ int? _mySeatIndex;
           .invokeMethod('toggle', {'enable': enable});
     } catch (_) {}
 
-if (enable) {
+    if (enable) {
       _keepAliveTimer?.cancel();
       _keepAliveTimer = Timer.periodic(const Duration(seconds: 25), (_) async {
         if (!mounted || _mySeatIndex == null) {
@@ -363,7 +391,8 @@ if (enable) {
     if (_micMinutesTimer != null && _micMinutesTimer!.isActive) return;
     _micMinutesTimer =
         Timer.periodic(const Duration(minutes: 1), (timer) async {
-      if (_hasCleanedUp || _mySeatIndex == null || _isMuted) return;
+      if (_hasCleanedUp  _mySeatIndex == null  _isMuted) return;
+
       final String uid = _resolvedUid;
       if (uid.isEmpty || uid.startsWith('guest_')) return;
 
@@ -373,7 +402,7 @@ if (enable) {
         final snap = await userRef.get();
         final data = snap.data() ?? <String, dynamic>{};
 
-        // 24-hour daily cycle resets at 9:00 PM EAT (18:00 UTC)
+// 24-hour daily cycle resets at 9:00 PM EAT (18:00 UTC)
         final cycleNow =
             DateTime.now().toUtc().add(const Duration(hours: 6));
         final String todayKey =
@@ -382,7 +411,7 @@ if (enable) {
         final String storedKey =
             (data['micDateKey'] ?? data['lastMicDate'] ?? '').toString();
 
-if (storedKey != todayKey) {
+        if (storedKey != todayKey) {
           final int crownInit = _mySeatIndex == 0 ? 1 : 0;
           await userRef.set({
             'micDateKey': todayKey,
@@ -506,7 +535,7 @@ if (storedKey != todayKey) {
     _entryMarqueeController.forward();
   }
 
-  void _showCompactWinBadge(int wonCoins) {
+void _showCompactWinBadge(int wonCoins) {
     if (wonCoins <= 0 || !mounted) return;
     _luckyWinToastTimer?.cancel();
     setState(() {
@@ -517,7 +546,7 @@ if (storedKey != todayKey) {
     });
   }
 
-Future<void> _playLuckyCoinSound() async {
+  Future<void> _playLuckyCoinSound() async {
     try {
       final AudioPlayer player = AudioPlayer();
       await player.setPlayerMode(PlayerMode.mediaPlayer);
@@ -619,16 +648,17 @@ Future<void> _playLuckyCoinSound() async {
         .snapshots()
         .listen((snapshot) {
       if (snapshot.exists && snapshot.data() != null && mounted) {
-        final data = snapshot.data()!;
-        final bool amAgent = (data['isAgent'] == true)
-            ? true
-            : (data['role'] == 'agent' ? true : (data['isAgency'] == true));
+
+final data = snapshot.data()!;
+        final bool amAgent = (data['isAgent'] == true) ||
+            (data['role'] == 'agent') ||
+            (data['isAgency'] == true);
         final String profileName =
             (data['name'] ?? data['nickname'] ?? '').toString().trim();
         final String profileAvatar =
             (data['avatarUrl'] ?? data['photoURL'] ?? '').toString().trim();
 
-setState(() {
+        setState(() {
           _myCoins = (data['coins'] as num?)?.toInt() ?? 0;
           _myPoints = (data['points'] as num?)?.toInt() ?? 0;
           _myWealthExp = (data['wealthExp'] as num?)?.toInt() ?? 0;
@@ -643,7 +673,9 @@ setState(() {
           if (_mySeatIndex != null) {
             _seats[_mySeatIndex!] = _effectiveUserName;
             _seatFrames[_mySeatIndex!] = frame;
-            _seatAvatars[_mySeatIndex!] = _myAvatarUrl;
+            if (_myAvatarUrl.isNotEmpty) {
+              _seatAvatars[_mySeatIndex!] = _myAvatarUrl;
+            }
           }
           if (_isRoomOwner) {
             _isRoomOwnerAgent = amAgent;
@@ -718,7 +750,7 @@ setState(() {
         final List claimed = List.from((data['claimedBy'] as List?) ?? []);
         senderName = (data['senderName'] ?? 'User').toString();
 
-        if (remCount <= 0 || remCoins <= 0 || claimed.contains(_resolvedUid)) {
+        if (remCount <= 0  remCoins <= 0  claimed.contains(_resolvedUid)) {
           return;
         }
 
@@ -738,7 +770,7 @@ setState(() {
         });
       });
 
-      if (wonAmount > 0) {
+if (wonAmount > 0) {
         await FirebaseFirestore.instance
             .collection('users')
             .doc(_resolvedUid)
@@ -748,7 +780,7 @@ setState(() {
 
         _showCompactWinBadge(wonAmount);
 
-await FirebaseFirestore.instance
+        await FirebaseFirestore.instance
             .collection('rooms')
             .doc(widget.roomId)
             .collection('messages')
@@ -803,7 +835,7 @@ await FirebaseFirestore.instance
   void _startSeatHeartbeat() {
     _heartbeatTimer?.cancel();
     _heartbeatTimer = Timer.periodic(const Duration(seconds: 10), (_) {
-      if (_hasCleanedUp || _isMinimizing || !mounted) return;
+      if (_hasCleanedUp  _isMinimizing  !mounted) return;
 
       if (_mySeatIndex != null) {
         final idx = _mySeatIndex!;
@@ -855,16 +887,14 @@ await FirebaseFirestore.instance
           return;
         }
 
-        final String updatedTitle =
+final String updatedTitle =
             (data['roomTitle'] ?? data['title'] ?? '').toString();
         final String hostUidDoc = (data['hostUid'] ?? '').toString();
         final String announcementText =
             (data['announcement'] ?? '').toString();
-
-final bool allClosed = data['allMicsClosed'] == true;
-        final bool agentHost = (data['isAgentHost'] == true)
-            ? true
-            : ((data['goldenSeatCount'] as num?)?.toInt() == 6);
+        final bool allClosed = data['allMicsClosed'] == true;
+        final bool agentHost = (data['isAgentHost'] == true) ||
+            ((data['goldenSeatCount'] as num?)?.toInt() == 6);
         final String? pass = data['password']?.toString();
         final List<String> admins =
             (data['admins'] as List?)?.map((e) => e.toString()).toList() ?? [];
@@ -931,10 +961,11 @@ final bool allClosed = data['allMicsClosed'] == true;
               _seatNumericIds[i] = numId;
               _seatMutes[i] = muted;
               _seatFrames[i] = frame;
-              _seatAvatars[i] =
-                  (uid == _resolvedUid && _myAvatarUrl.isNotEmpty)
-                      ? _myAvatarUrl
-                      : avatar;
+              if (uid == _resolvedUid && _myAvatarUrl.isNotEmpty) {
+                _seatAvatars[i] = _myAvatarUrl;
+              } else if (avatar.isNotEmpty) {
+                _seatAvatars[i] = avatar;
+              }
               if (uid == _resolvedUid) {
                 foundMySeat = i;
                 _isMuted = muted;
@@ -956,7 +987,7 @@ final bool allClosed = data['allMicsClosed'] == true;
           }
           _mySeatIndex = foundMySeat;
 
-          if (_allMicsClosed &&
+if (_allMicsClosed &&
               !_isAdminUser &&
               _mySeatIndex != null &&
               !_isMuted) {
@@ -968,7 +999,7 @@ final bool allClosed = data['allMicsClosed'] == true;
           }
         });
 
-if (_mySeatIndex != null) {
+        if (_mySeatIndex != null) {
           _setScreenWakeLock(true);
           if (!_isMuted) {
             _startMicMinutesTracking();
@@ -1036,6 +1067,7 @@ if (_mySeatIndex != null) {
         final String giftName = (d['giftName'] ?? 'Gift').toString();
         final String giftIcon = (d['giftIcon'] ?? '🎁').toString();
         final String asset = (d['imageAsset'] ?? '').toString();
+        final String thumb = (d['thumbAsset'] ?? _toGiftImageAsset(asset)).toString();
         final int mult = (d['multiplier'] as num?)?.toInt() ?? 1;
         final int totalCost = (d['totalCost'] as num?)?.toInt() ?? 0;
         final int wonCoins = (d['wonCoins'] as num?)?.toInt() ?? 0;
@@ -1066,7 +1098,7 @@ if (_mySeatIndex != null) {
             final idx = (s as num).toInt();
             if (idx >= 0 && idx < 30 && _seats[idx] != null) {
               _seatGifts[idx] += perSeatCost;
-              _triggerCenterGiftAnimation(asset, idx, icon: giftIcon);
+              _triggerCenterGiftAnimation(thumb, idx, icon: giftIcon);
             }
           }
         });
@@ -1074,7 +1106,7 @@ if (_mySeatIndex != null) {
     });
   }
 
-  void _addChatMessage(RoomChatMessage message) {
+void _addChatMessage(RoomChatMessage message) {
     if (!mounted) return;
     setState(() {
       _messages.add(message);
@@ -1082,8 +1114,7 @@ if (_mySeatIndex != null) {
         _messages.removeAt(0);
       }
     });
-
-WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_chatScrollController.hasClients) {
         _chatScrollController.animateTo(
           _chatScrollController.position.maxScrollExtent,
@@ -1196,7 +1227,8 @@ WidgetsBinding.instance.addPostFrameCallback((_) {
               builder: (_) => VoiceRoomScreen(
                 roomTitle: rTitle,
                 roomId: rId,
-                hostName: hName,
+
+hostName: hName,
                 userNumericId: uNumId,
                 userUid: uUid,
                 userName: uName,
@@ -1205,13 +1237,11 @@ WidgetsBinding.instance.addPostFrameCallback((_) {
           );
         }
       },
-
-leaveCallback: () async {
+      leaveCallback: () async {
         final Map<String, dynamic> removeSeats = {};
         for (int i = 0; i < 30; i++) {
-          final bool matchSeat = (seatUidsSnapshot[i] == resolvedU)
-              ? true
-              : (currentSeatSnapshot == i);
+          final bool matchSeat = (seatUidsSnapshot[i] == resolvedU) ||
+              (currentSeatSnapshot == i);
           if (matchSeat) {
             removeSeats['$i'] = FieldValue.delete();
           }
@@ -1267,33 +1297,60 @@ leaveCallback: () async {
     Navigator.of(context).pop();
   }
 
+  // Exact RenderBox flight from bottom gift button directly to the target seat
   void _triggerCenterGiftAnimation(
-    String asset,
+    String imageAsset,
     int targetSeatIndex, {
     String icon = "🎁",
-    bool isToAll = false,
   }) {
+    final stackBox =
+        _roomStackKey.currentContext?.findRenderObject() as RenderBox?;
+    if (stackBox == null || !stackBox.hasSize) return;
+
+    Offset startPos =
+        Offset(stackBox.size.width * 0.78, stackBox.size.height - 34);
+    final giftBtnBox =
+        _giftDockBtnKey.currentContext?.findRenderObject() as RenderBox?;
+    if (giftBtnBox != null && giftBtnBox.hasSize) {
+      final globalBtnCenter =
+          giftBtnBox.localToGlobal(giftBtnBox.size.center(Offset.zero));
+      startPos = stackBox.globalToLocal(globalBtnCenter);
+    }
+
+    Offset endPos = Offset(stackBox.size.width * 0.5, stackBox.size.height * 0.25);
+    if (targetSeatIndex >= 0 && targetSeatIndex < _seatKeys.length) {
+      final seatBox = _seatKeys[targetSeatIndex]
+          .currentContext
+          ?.findRenderObject() as RenderBox?;
+      if (seatBox != null && seatBox.hasSize) {
+        final globalSeatCenter =
+            seatBox.localToGlobal(seatBox.size.center(Offset.zero));
+        endPos = stackBox.globalToLocal(globalSeatCenter);
+      }
+    }
+
     final controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 950),
+      duration: const Duration(milliseconds: 850),
     );
 
     final animation = CurvedAnimation(
       parent: controller,
-      curve: Curves.fastOutSlowIn,
+      curve: Curves.easeInOutCubic,
     );
 
     final giftItem = CenterFlyingGift(
       id: "${DateTime.now().microsecondsSinceEpoch}_${Random().nextInt(9999)}_$targetSeatIndex",
-      asset: asset,
+      imageAsset: imageAsset,
       icon: icon,
       targetSeatIndex: targetSeatIndex,
-      isAll: isToAll,
+      startOffset: startPos,
+      endOffset: endPos,
       controller: controller,
       flightAnimation: animation,
     );
 
-    setState(() {
+setState(() {
       _activeFlyingGifts.add(giftItem);
     });
 
@@ -1337,14 +1394,15 @@ leaveCallback: () async {
 
   void _showMiniGamesSheet() {
     showModalBottomSheet(
-
-context: context,
+      context: context,
       backgroundColor: kGlassDark,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         side: BorderSide(color: kGoldBright, width: 1.4),
       ),
       builder: (ctx) {
+        final int activeNumId =
+            _myAgoraUid > 0 ? _myAgoraUid : widget.userNumericId;
         return Padding(
           padding: const EdgeInsets.all(20),
           child: Column(
@@ -1352,7 +1410,7 @@ context: context,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                "Party Mini-Games & Lucky Win 🎮",
+                "Party Games Arena 🎮",
                 style: TextStyle(
                   color: kGoldBright,
                   fontSize: 18,
@@ -1360,6 +1418,64 @@ context: context,
                 ),
               ),
               const SizedBox(height: 14),
+              // Featured Dragon vs Tiger Card
+              GestureDetector(
+                onTap: () {
+                  Navigator.pop(ctx);
+                  DragonTigerSheet.show(
+                    context,
+                    roomId: widget.roomId,
+                    userName: _effectiveUserName,
+                    userUid: _resolvedUid,
+                    userNumericId: activeNumId,
+                  );
+                },
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF7F1D1D), Color(0xFF1E3A8A)],
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
+                    ),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: kGoldBright, width: 1.5),
+                  ),
+                  child: const Row(
+                    children: [
+                      Text("🐉", style: TextStyle(fontSize: 32)),
+                      SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              "Dragon vs Tiger",
+                              style: TextStyle(
+                                color: kGoldBright,
+                                fontWeight: FontWeight.w900,
+                                fontSize: 16,
+                              ),
+                            ),
+                            SizedBox(height: 2),
+                            Text(
+                              "Live Arena • X2 Dragon/Tiger • X22 Tie",
+
+style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 11.5,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Text("🐅", style: TextStyle(fontSize: 32)),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
               Row(
                 children: [
                   Expanded(
@@ -1381,32 +1497,24 @@ context: context,
                         );
                       },
                       child: Container(
-                        padding: const EdgeInsets.all(14),
+                        padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
                           gradient: const LinearGradient(
                             colors: [kGoldBlackTop, kGoldBlackBottom],
                           ),
                           borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: kGoldBright, width: 1.3),
+                          border: Border.all(color: kGoldBorder, width: 1.2),
                         ),
                         child: const Column(
                           children: [
-                            Text("🃏", style: TextStyle(fontSize: 30)),
-                            SizedBox(height: 6),
+                            Text("🃏", style: TextStyle(fontSize: 28)),
+                            SizedBox(height: 4),
                             Text(
                               "TeenPatti",
                               style: TextStyle(
                                 color: kGoldBright,
                                 fontWeight: FontWeight.w900,
-                                fontSize: 14,
-                              ),
-                            ),
-                            SizedBox(height: 2),
-                            Text(
-                              "3 Cards Party Table",
-                              style: TextStyle(
-                                color: Colors.white70,
-                                fontSize: 10.5,
+                                fontSize: 13.5,
                               ),
                             ),
                           ],
@@ -1429,36 +1537,28 @@ context: context,
                               setState(() {
                                 _myCoins = newCoins;
                               });
-
-},
+                            },
                           ),
                         );
                       },
                       child: Container(
-                        padding: const EdgeInsets.all(14),
+                        padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
                           color: kGlassCard,
                           borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: kMintLive, width: 1.3),
+                          border: Border.all(color: kMintLive, width: 1.2),
                         ),
                         child: const Column(
                           children: [
-                            Text("🎰", style: TextStyle(fontSize: 30)),
-                            SizedBox(height: 6),
-                            Text(
+                            Text("🎰", style: TextStyle(fontSize: 28)),
+                            SizedBox(height: 4),
+
+Text(
                               "Lucky Spin",
                               style: TextStyle(
                                 color: kMintLive,
                                 fontWeight: FontWeight.w900,
-                                fontSize: 14,
-                              ),
-                            ),
-                            SizedBox(height: 2),
-                            Text(
-                              "Spin & Win Coins",
-                              style: TextStyle(
-                                color: Colors.white70,
-                                fontSize: 10.5,
+                                fontSize: 13.5,
                               ),
                             ),
                           ],
@@ -1475,75 +1575,16 @@ context: context,
     );
   }
 
-  void _showRoomChatsSheet() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: kGlassDark,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        side: BorderSide(color: kGoldBright, width: 1.4),
+  void _openMessagesInbox() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const MessagesScreen(),
       ),
-      builder: (ctx) {
-        return SizedBox(
-          height: MediaQuery.of(ctx).size.height * 0.55,
-          child: Column(
-            children: [
-              const SizedBox(height: 12),
-              Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.white24,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 12),
-                child: Text(
-                  "Room Messages & Notices",
-                  style: TextStyle(
-                    color: kGoldBright,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ),
-              Expanded(
-                child: ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  itemCount: _messages.length,
-                  itemBuilder: (_, idx) {
-                    final m = _messages[_messages.length - 1 - idx];
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 8),
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: kGlassCard,
-                        borderRadius: BorderRadius.circular(12),
-                        border:
-                            Border.all(color: kGoldBorder.withOpacity(0.45)),
-                      ),
-                      child: Text(
-                        "${m.sender}: ${m.message}",
-                        style: TextStyle(
-                          color: m.isSystem ? kGoldBright : Colors.white,
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ],
-          ),
-        );
-      },
     );
   }
 
-void _openRoomToolsMenu() {
+  void _openRoomToolsMenu() {
     RoomToolsSheet.show(
       context,
       roomId: widget.roomId,
@@ -1580,9 +1621,9 @@ void _openRoomToolsMenu() {
     final int receivedGifts = _seatGifts[seatIndex];
     final bool isSeatMuted = _seatMutes[seatIndex];
     final bool isMe =
-        (_mySeatIndex == seatIndex) ? true : (occupierUid == _resolvedUid);
+        (_mySeatIndex == seatIndex) || (occupierUid == _resolvedUid);
     final bool isSeatHost =
-        (seatIndex == 0) ? true : (occupierName == widget.hostName);
+        (seatIndex == 0) || (occupierName == widget.hostName);
     final String initialAvatar =
         isMe && _myAvatarUrl.isNotEmpty ? _myAvatarUrl : _seatAvatars[seatIndex];
 
@@ -1631,7 +1672,7 @@ void _openRoomToolsMenu() {
                     ? occupierUid.substring(0, 8)
                     : occupierUid);
 
-            return Padding(
+return Padding(
               padding: const EdgeInsets.only(top: 44),
               child: Stack(
                 clipBehavior: Clip.none,
@@ -1642,8 +1683,7 @@ void _openRoomToolsMenu() {
                     padding: const EdgeInsets.fromLTRB(18, 54, 18, 22),
                     decoration: const BoxDecoration(
                       color: Color(0xFF101C2C),
-
-borderRadius:
+                      borderRadius:
                           BorderRadius.vertical(top: Radius.circular(26)),
                       border: Border(
                         top: BorderSide(color: kGoldBright, width: 1.5),
@@ -1713,7 +1753,8 @@ borderRadius:
                                     colors: [kGoldBlackTop, kGoldBlackBottom],
                                   ),
                                   borderRadius: BorderRadius.circular(10),
-                                  border: Border.all(
+
+border: Border.all(
                                       color: kGoldBright, width: 1.0),
                                 ),
                                 child: const Text(
@@ -1722,8 +1763,7 @@ borderRadius:
                                     color: kGoldBright,
                                     fontSize: 10.5,
                                     fontWeight: FontWeight.bold,
-
-),
+                                  ),
                                 ),
                               ),
                             ],
@@ -1791,7 +1831,8 @@ borderRadius:
                                   borderRadius: BorderRadius.circular(16),
                                   border: Border.all(
                                       color: kGoldBorder, width: 1.2),
-                                ),
+
+),
                                 child: Row(
                                   children: [
                                     Container(
@@ -1800,8 +1841,7 @@ borderRadius:
                                       decoration: BoxDecoration(
                                         shape: BoxShape.circle,
                                         color: kGoldBright.withOpacity(0.18),
-
-),
+                                      ),
                                       child: const Center(
                                         child: Text("👑",
                                             style: TextStyle(fontSize: 20)),
@@ -1862,7 +1902,8 @@ borderRadius:
                                             fontSize: 11,
                                             fontWeight: FontWeight.bold,
                                           ),
-                                        ),
+
+),
                                         Text(
                                           "x$receivedGifts",
                                           style: const TextStyle(
@@ -1871,8 +1912,7 @@ borderRadius:
                                             fontWeight: FontWeight.w900,
                                           ),
                                         ),
-
-],
+                                      ],
                                     ),
                                     const SizedBox(height: 4),
                                     const Row(
@@ -1935,7 +1975,8 @@ borderRadius:
                                 ),
                               ),
                               const SizedBox(width: 10),
-                              Expanded(
+
+Expanded(
                                 child: OutlinedButton.icon(
                                   style: OutlinedButton.styleFrom(
                                     foregroundColor: Colors.redAccent,
@@ -1943,8 +1984,7 @@ borderRadius:
                                         color: Colors.redAccent),
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(14),
-
-),
+                                    ),
                                   ),
                                   icon: const Icon(Icons.person_remove,
                                       size: 16),
@@ -2008,7 +2048,8 @@ borderRadius:
                                     }
                                   },
                                   child: Text(
-                                    isMe
+
+isMe
                                         ? "Leave the microphone"
                                         : "@ Mention",
                                     style: const TextStyle(
@@ -2017,12 +2058,51 @@ borderRadius:
                                     ),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
-
-),
+                                  ),
                                 ),
                               ),
                             ),
-                            const SizedBox(width: 12),
+                            if (!isMe && occupierUid.isNotEmpty) ...[
+                              const SizedBox(width: 8),
+                              SizedBox(
+                                height: 46,
+                                child: ElevatedButton.icon(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFF1BB3C8),
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 14),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(24),
+                                    ),
+                                  ),
+                                  icon: const Icon(Icons.chat_bubble_rounded,
+                                      size: 16),
+                                  label: const Text(
+                                    "Chat",
+                                    style: TextStyle(
+                                      fontSize: 12.5,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                  onPressed: () {
+                                    Navigator.pop(ctx);
+                                    Navigator.push(
+                                      this.context,
+                                      MaterialPageRoute(
+                                        builder: (_) => DirectChatScreen(
+                                          myUid: _resolvedUid,
+                                          peerUid: occupierUid,
+                                          peerName: resolvedProfileName,
+                                          peerAvatar: resolvedAvatarUrl,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                            ],
+                            const SizedBox(width: 8),
                             Expanded(
                               child: SizedBox(
                                 height: 46,
@@ -2040,7 +2120,8 @@ borderRadius:
                                   label: const Text(
                                     "Send gifts",
                                     style: TextStyle(
-                                      fontSize: 13,
+
+fontSize: 13,
                                       fontWeight: FontWeight.w900,
                                       color: Colors.black,
                                     ),
@@ -2119,7 +2200,7 @@ borderRadius:
     final roomRef =
         FirebaseFirestore.instance.collection('rooms').doc(widget.roomId);
 
-final status = await Permission.microphone.request();
+    final status = await Permission.microphone.request();
     if (!status.isGranted) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -2160,7 +2241,7 @@ final status = await Permission.microphone.request();
       _startMicMinutesTracking();
     }
 
-    final Map<String, dynamic> seatData = {
+final Map<String, dynamic> seatData = {
       'uid': _resolvedUid,
       'name': _effectiveUserName,
       'numericId': activeNumId,
@@ -2249,7 +2330,7 @@ final status = await Permission.microphone.request();
       } catch (_) {}
     }
 
-try {
+    try {
       final double targetVol = nextState
           ? (((_musicData?['volume'] as num?)?.toDouble() ?? 0.6)
               .clamp(0.0, 1.0))
@@ -2310,7 +2391,7 @@ try {
     _comboRingController.reset();
     _comboRingController.forward();
 
-    _comboTimer = Timer(const Duration(seconds: 3), () {
+_comboTimer = Timer(const Duration(seconds: 3), () {
       if (mounted) {
         setState(() {
           _showComboButton = false;
@@ -2400,8 +2481,9 @@ try {
     _ensureSpeakerLoud();
     _playLuckyCoinSound();
 
-final String giftIconStr = (config['icon'] ?? "🎁").toString();
+    final String giftIconStr = (config['icon'] ?? "🎁").toString();
     final String giftAssetStr = (config['asset'] ?? "").toString();
+    final String giftThumbStr = (config['imageAsset'] ?? _toGiftImageAsset(giftAssetStr)).toString();
     final String giftNameStr = (config['name'] ?? "Gift").toString();
 
     if (wonCoins > 0) {
@@ -2413,14 +2495,14 @@ final String giftIconStr = (config['icon'] ?? "🎁").toString();
 
     _postGiftToChat(
       _effectiveUserName,
-      "$giftNameStr (Combo x$nextCombo)",
+      "$giftNameStr (x$nextCombo)",
       giftIconStr,
     );
 
     _fullscreenAnimStreamController.add(
       FullscreenGiftEvent(
         giftId: (config['giftId'] ?? "").toString(),
-        giftName: "$giftNameStr (Combo x$nextCombo)",
+        giftName: "$giftNameStr x$nextCombo",
         asset: giftAssetStr,
         giftIcon: giftIconStr,
         senderName: _effectiveUserName,
@@ -2442,7 +2524,7 @@ final String giftIconStr = (config['icon'] ?? "🎁").toString();
           ]
         : targets;
 
-    for (final seatIdx in activeTargets) {
+for (final seatIdx in activeTargets) {
       if (seatIdx >= 0 && seatIdx < 30 && _seats[seatIdx] != null) {
         final targetUid = _seatUids[seatIdx] ?? _resolvedUid;
         FirebaseFirestore.instance.collection('users').doc(targetUid).set({
@@ -2465,6 +2547,7 @@ final String giftIconStr = (config['icon'] ?? "🎁").toString();
       'giftName': giftNameStr,
       'giftIcon': giftIconStr,
       'imageAsset': giftAssetStr,
+      'thumbAsset': giftThumbStr,
       'multiplier': nextCombo,
       'seats': activeTargets,
       'totalCost': totalSpend,
@@ -2482,6 +2565,7 @@ final String giftIconStr = (config['icon'] ?? "🎁").toString();
       unitPrice: unitPrice,
       name: giftNameStr,
       asset: giftAssetStr,
+      imageAsset: giftThumbStr,
       icon: giftIconStr,
       isLucky: true,
       wonCoins: wonCoins,
@@ -2520,7 +2604,7 @@ final String giftIconStr = (config['icon'] ?? "🎁").toString();
       }
     }
 
-final GiftSendResult? result = await showModalBottomSheet(
+    final GiftSendResult? result = await showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
@@ -2539,6 +2623,7 @@ final GiftSendResult? result = await showModalBottomSheet(
     if (result != null) {
       final bool isLucky = result.gift.isLucky;
       final String playAsset = result.gift.playAsset;
+      final String thumbAsset = result.gift.imageAsset;
 
       if (isLucky && result.wonCoins > 0) {
         _showCompactWinBadge(result.wonCoins);
@@ -2564,14 +2649,15 @@ final GiftSendResult? result = await showModalBottomSheet(
         ),
       );
 
-      _executeMultiSeatSend(
+_executeMultiSeatSend(
         giftId: result.gift.id,
         targetSeats: result.targetSeatIndices,
         isAll: result.isAll,
         cost: result.rawGiftCostPerSeat,
         unitPrice: result.gift.price,
-        name: "${result.gift.name} x${result.multiplier}",
+        name: result.gift.name,
         asset: playAsset,
+        imageAsset: thumbAsset,
         icon: result.gift.icon,
         isLucky: isLucky,
         wonCoins: result.wonCoins,
@@ -2589,6 +2675,7 @@ final GiftSendResult? result = await showModalBottomSheet(
     required int unitPrice,
     required String name,
     required String asset,
+    required String imageAsset,
     String icon = "🎁",
     bool isLucky = false,
     int wonCoins = 0,
@@ -2622,12 +2709,12 @@ final GiftSendResult? result = await showModalBottomSheet(
             anyOccupied = true;
             _seatGifts[i] += cost;
             for (int b = 0; b < burstCount; b++) {
-              _triggerCenterGiftAnimation(asset, i, icon: icon, isToAll: true);
+              _triggerCenterGiftAnimation(imageAsset, i, icon: icon);
             }
           }
         }
         if (!anyOccupied) {
-          _triggerCenterGiftAnimation(asset, 0, icon: icon, isToAll: true);
+          _triggerCenterGiftAnimation(imageAsset, 0, icon: icon);
         }
       } else {
         for (final seatIdx in targetSeats) {
@@ -2636,7 +2723,7 @@ final GiftSendResult? result = await showModalBottomSheet(
               _seatGifts[seatIdx] += cost;
             }
             for (int b = 0; b < burstCount; b++) {
-              _triggerCenterGiftAnimation(asset, seatIdx, icon: icon);
+              _triggerCenterGiftAnimation(imageAsset, seatIdx, icon: icon);
             }
           }
         }
@@ -2652,6 +2739,7 @@ final GiftSendResult? result = await showModalBottomSheet(
         'unitPrice': unitPrice,
         'name': name,
         'asset': asset,
+        'imageAsset': imageAsset,
         'icon': icon,
         'isLucky': isLucky,
       };
@@ -2661,7 +2749,7 @@ final GiftSendResult? result = await showModalBottomSheet(
     }
   }
 
-void _cleanupAndLeave() {
+  void _cleanupAndLeave() {
     if (_hasCleanedUp) return;
     _hasCleanedUp = true;
     _setScreenWakeLock(false);
@@ -2674,7 +2762,7 @@ void _cleanupAndLeave() {
     final Map<String, dynamic> removeSeats = {};
     for (int i = 0; i < 30; i++) {
       final bool isMySeat =
-          (_seatUids[i] == _resolvedUid) ? true : (_mySeatIndex == i);
+          (_seatUids[i] == _resolvedUid) || (_mySeatIndex == i);
       if (isMySeat) {
         removeSeats['$i'] = FieldValue.delete();
       }
@@ -2701,7 +2789,8 @@ void _cleanupAndLeave() {
     _luckyWinToastTimer?.cancel();
     _walletSubscription?.cancel();
     _roomLiveSubscription?.cancel();
-    _eventsSubscription?.cancel();
+
+_eventsSubscription?.cancel();
     _chatSubscription?.cancel();
     _redPacketSubscription?.cancel();
     _speakingWaveController.dispose();
@@ -2789,7 +2878,7 @@ void _cleanupAndLeave() {
     );
   }
 
-Widget _buildSingleSeat({
+  Widget _buildSingleSeat({
     required int index,
     required double seatDimension,
     required double nameFontSize,
@@ -2805,15 +2894,14 @@ Widget _buildSingleSeat({
     final bool isCrownSeat = _isGoldenSeat(index);
     final Color frameColor = _getSeatFrameColor(index, isOccupied, isSpeaking);
     final bool hasCustomFrame = isOccupied && _seatFrames[index] != 'default';
-    final bool showGlow = isSpeaking
-        ? true
-        : (hasCustomFrame ? true : (isCrownSeat ? true : isHostSeat));
+    final bool showGlow = isSpeaking  hasCustomFrame  isCrownSeat || isHostSeat;
     final ImageProvider? seatAvatarImg =
         isOccupied ? _resolveAvatarProvider(_seatAvatars[index]) : null;
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: () => _handleSeatTap(index),
+
+onTap: () => _handleSeatTap(index),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         mainAxisSize: MainAxisSize.min,
@@ -2881,8 +2969,7 @@ Widget _buildSingleSeat({
                                 ? [
                                     const Color(0xFF3A2A10).withOpacity(0.75),
                                     const Color(0xFF1A1308).withOpacity(0.85),
-
-]
+                                  ]
                                 : [
                                     Colors.white.withOpacity(0.11),
                                     Colors.black.withOpacity(0.32),
@@ -2906,7 +2993,8 @@ Widget _buildSingleSeat({
                     if (showGlow)
                       BoxShadow(
                         color: frameColor.withOpacity(0.5),
-                        blurRadius: 9,
+
+blurRadius: 9,
                         spreadRadius: 1,
                       )
                     else
@@ -2924,6 +3012,7 @@ Widget _buildSingleSeat({
                           width: seatDimension,
                           height: seatDimension,
                           fit: BoxFit.cover,
+                          gaplessPlayback: true,
                         ),
                       )
                     : Center(
@@ -2976,8 +3065,7 @@ Widget _buildSingleSeat({
                 color: isOccupied
                     ? Colors.white
                     : ((isCrownSeat || isHostSeat)
-
-? kGoldBright
+                        ? kGoldBright
                         : Colors.white70),
                 fontSize: nameFontSize,
                 fontWeight: FontWeight.w800,
@@ -3003,7 +3091,8 @@ Widget _buildSingleSeat({
                   : Colors.black.withOpacity(0.38),
               borderRadius: BorderRadius.circular(8),
               border: Border.all(
-                color: (giftsCount > 0 && isOccupied)
+
+color: (giftsCount > 0 && isOccupied)
                     ? kGoldBright
                     : kGoldBorder.withOpacity(0.45),
                 width: 0.8,
@@ -3087,8 +3176,7 @@ Widget _buildSingleSeat({
                 child: Text(
                   activeWinnerText,
                   style: const TextStyle(
-
-color: Color(0xFFFFF3C4),
+                    color: Color(0xFFFFF3C4),
                     fontSize: 11.5,
                     fontWeight: FontWeight.w800,
                   ),
@@ -3115,7 +3203,8 @@ color: Color(0xFFFFF3C4),
                   Text(
                     "Play",
                     style: TextStyle(
-                      color: Colors.black,
+
+color: Colors.black,
                       fontSize: 10.5,
                       fontWeight: FontWeight.w900,
                     ),
@@ -3135,6 +3224,7 @@ color: Color(0xFFFFF3C4),
     if (_pkData == null || _pkData!['active'] != true) {
       return const SizedBox.shrink();
     }
+
     final int rScore = (_pkData!['redScore'] as num?)?.toInt() ?? 0;
     final int bScore = (_pkData!['blueScore'] as num?)?.toInt() ?? 0;
     final int total = rScore + bScore;
@@ -3197,8 +3287,7 @@ color: Color(0xFFFFF3C4),
                 children: [
                   Expanded(
                     flex: (redRatio * 100).round(),
-
-child: Container(color: Colors.redAccent),
+                    child: Container(color: Colors.redAccent),
                   ),
                   Expanded(
                     flex: ((1.0 - redRatio) * 100).round(),
@@ -3217,6 +3306,7 @@ child: Container(color: Colors.redAccent),
     if (_musicData == null || _musicData!['isPlaying'] != true) {
       return const SizedBox.shrink();
     }
+
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
@@ -3228,7 +3318,8 @@ child: Container(color: Colors.redAccent),
       child: Row(
         children: [
           const Icon(Icons.music_note, color: Color(0xFFFF4081), size: 16),
-          const SizedBox(width: 6),
+
+const SizedBox(width: 6),
           Expanded(
             child: Text(
               "Playing: ${_musicData!['trackTitle'] ?? 'Room Music'}",
@@ -3324,7 +3415,7 @@ child: Container(color: Colors.redAccent),
             const SizedBox(width: 8),
           ],
 
-// "Say Hello" Chat Pill Input
+          // "Say Hello" Chat Pill Input
           Expanded(
             child: Container(
               height: 40,
@@ -3343,7 +3434,8 @@ child: Container(color: Colors.redAccent),
                     child: TextField(
                       controller: _chatController,
                       style: const TextStyle(color: Colors.white, fontSize: 13),
-                      decoration: const InputDecoration(
+
+decoration: const InputDecoration(
                         hintText: "Say Hello",
                         hintStyle:
                             TextStyle(color: Colors.white60, fontSize: 13),
@@ -3368,7 +3460,7 @@ child: Container(color: Colors.redAccent),
           ),
           const SizedBox(width: 10),
 
-          // 1. Purple Game Controller Button
+          // 1. Purple Game Controller Button (Dragon vs Tiger + Mini-Games)
           GestureDetector(
             onTap: _showMiniGamesSheet,
             child: Container(
@@ -3399,6 +3491,7 @@ child: Container(color: Colors.redAccent),
 
           // 2. Golden-Orange Gift Box Circle Button
           GestureDetector(
+            key: _giftDockBtnKey,
             onTap: () => _openGiftSheet(),
             child: Container(
               width: 42,
@@ -3427,15 +3520,14 @@ child: Container(color: Colors.redAccent),
           ),
           const SizedBox(width: 8),
 
-          // 3. Blue-Green Message Bubble Button
+          // 3. Blue-Green Message Bubble Button -> Opens Main Private Messages Screen
           GestureDetector(
-            onTap: _showRoomChatsSheet,
+            onTap: _openMessagesInbox,
             child: Container(
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-
-shape: BoxShape.circle,
+                shape: BoxShape.circle,
                 gradient: const LinearGradient(
                   colors: [Color(0xFF38BDF8), Color(0xFF10B981)],
                   begin: Alignment.topLeft,
@@ -3457,7 +3549,7 @@ shape: BoxShape.circle,
           ),
           const SizedBox(width: 8),
 
-          // 4. Bottom-Right Corner 4-Square Tools Button
+// 4. Bottom-Right Corner 4-Square Tools Button
           GestureDetector(
             onTap: _openRoomToolsMenu,
             child: Container(
@@ -3501,8 +3593,6 @@ shape: BoxShape.circle,
 
   @override
   Widget build(BuildContext context) {
-    final size = MediaQuery.of(context).size;
-
     final int comboTier = (_comboCount ~/ 5) + 1;
     final double comboScale =
         (1.0 + ((comboTier - 1) * 0.08)).clamp(1.0, 1.45);
@@ -3559,8 +3649,7 @@ shape: BoxShape.circle,
                   children: [
                     Flexible(
                       child: Text(
-
-_liveRoomTitle,
+                        _liveRoomTitle,
                         style: const TextStyle(
                           fontSize: 15.5,
                           fontWeight: FontWeight.w900,
@@ -3578,7 +3667,8 @@ _liveRoomTitle,
                     ),
                     if (_roomPassword != null) ...[
                       const SizedBox(width: 4),
-                      const Icon(Icons.lock, color: kGoldBright, size: 14),
+
+const Icon(Icons.lock, color: kGoldBright, size: 14),
                     ],
                   ],
                 ),
@@ -3654,8 +3744,7 @@ _liveRoomTitle,
                             "$count Seats Layout",
                             style: TextStyle(
                               color: count == _totalSeats
-
-? kGoldBright
+                                  ? kGoldBright
                                   : Colors.white,
                               fontWeight: FontWeight.bold,
                             ),
@@ -3677,7 +3766,8 @@ _liveRoomTitle,
             child: Stack(
               key: _roomStackKey,
               children: [
-                Positioned(
+
+Positioned(
                   top: -60,
                   left: 0,
                   right: 0,
@@ -3744,8 +3834,7 @@ _liveRoomTitle,
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 6.0, vertical: 4.0),
                             child: Column(
-
-mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                               children: [
                                 Expanded(
                                   child: Row(
@@ -3757,7 +3846,8 @@ mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                                             seatDimension: dynamicSeatDim,
                                             nameFontSize: nameFontSize,
                                             badgeFontSize: badgeFontSize,
-                                          ),
+
+),
                                         ),
                                       );
                                     }),
@@ -3818,8 +3908,7 @@ mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                             Expanded(
                               child: ListView.builder(
                                 controller: _chatScrollController,
-
-physics: const BouncingScrollPhysics(),
+                                physics: const BouncingScrollPhysics(),
                                 padding: const EdgeInsets.only(bottom: 6),
                                 itemCount: filteredMessages.length + 1,
                                 itemBuilder: (context, index) {
@@ -3830,7 +3919,8 @@ physics: const BouncingScrollPhysics(),
                                       padding: const EdgeInsets.symmetric(
                                           horizontal: 10.0, vertical: 6.0),
                                       decoration: BoxDecoration(
-                                        color: const Color(0xFF1F2B3E)
+
+color: const Color(0xFF1F2B3E)
                                             .withOpacity(0.92),
                                         borderRadius: BorderRadius.circular(12),
                                         border: Border.all(
@@ -3881,8 +3971,7 @@ physics: const BouncingScrollPhysics(),
                                           color: item.isSystem
                                               ? kGoldBright.withOpacity(0.75)
                                               : Colors.white.withOpacity(0.16),
-
-width: 0.9,
+                                          width: 0.9,
                                         ),
                                       ),
                                       child: RichText(
@@ -3894,7 +3983,8 @@ width: 0.9,
                                                   padding: EdgeInsets.only(
                                                       right: 4.0),
                                                   child: Icon(
-                                                    Icons.campaign,
+
+Icons.campaign,
                                                     color: kGoldBright,
                                                     size: 13.5,
                                                   ),
@@ -3957,8 +4047,7 @@ width: 0.9,
                               border:
                                   Border.all(color: Colors.white, width: 1.2),
                             ),
-
-child: Row(
+                            child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 Text(
@@ -3972,7 +4061,8 @@ child: Row(
                                 const SizedBox(width: 6),
                                 Text(
                                   _entryBannerText!,
-                                  style: const TextStyle(
+
+style: const TextStyle(
                                     color: Colors.white,
                                     fontWeight: FontWeight.w800,
                                     fontSize: 12,
@@ -4047,8 +4137,7 @@ child: Row(
                         child: const Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-
-Text("🧧", style: TextStyle(fontSize: 24)),
+                            Text("🧧", style: TextStyle(fontSize: 24)),
                             SizedBox(height: 2),
                             Text(
                               "Grab",
@@ -4066,7 +4155,8 @@ Text("🧧", style: TextStyle(fontSize: 24)),
 
                 // Lucky Combo Floating Button
                 if (_showComboButton)
-                  Positioned(
+
+Positioned(
                     right: 16,
                     bottom: 66,
                     child: Transform.scale(
@@ -4115,41 +4205,57 @@ Text("🧧", style: TextStyle(fontSize: 24)),
                     ),
                   ),
 
-                // Center Flying Gifts Overlay
+                // Actual Gift Image Flying Directly to the Target Seat
                 ..._activeFlyingGifts.map((fg) {
                   return AnimatedBuilder(
                     key: ValueKey(fg.id),
                     animation: fg.flightAnimation,
                     builder: (context, child) {
                       final double t = fg.flightAnimation.value;
-                      final double startX = size.width * 0.5 - 24;
-                      final double startY = size.height * 0.65;
-                      final int col = fg.targetSeatIndex % 6;
-                      final int row = fg.targetSeatIndex ~/ 6;
-                      final double endX = (size.width / 6) * col + 14;
-                      final double endY = 60.0 + (row * 68.0);
-                      final double curX = startX + ((endX - startX) * t);
-                      final double curY = startY + ((endY - startY) * t);
+                      final double arcLift = -sin(t * pi) * 32.0;
+                      final double curX = fg.startOffset.dx +
+                          ((fg.endOffset.dx - fg.startOffset.dx) * t) -
+                          26.0;
+                      final double curY = fg.startOffset.dy +
+                          ((fg.endOffset.dy - fg.startOffset.dy) * t) +
+                          arcLift -
+                          26.0;
+                      final double scale = 1.15 - (0.30 * t);
 
                       return Positioned(
                         left: curX,
                         top: curY,
                         child: IgnorePointer(
-
-child: Opacity(
-                            opacity: (1.0 - (t * 0.25)).clamp(0.0, 1.0),
-                            child: Text(
-                              fg.icon,
-                              style: const TextStyle(fontSize: 34),
-                            ),
+                          child: Transform.scale(
+                            scale: scale,
+                            child: child,
                           ),
                         ),
                       );
                     },
+                    child: fg.imageAsset.isNotEmpty
+                        ? ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: Image.asset(
+                              fg.imageAsset,
+                              width: 52,
+                              height: 52,
+                              fit: BoxFit.contain,
+                              errorBuilder: (ctx, err, stack) => Text(
+
+fg.icon,
+                                style: const TextStyle(fontSize: 36),
+                              ),
+                            ),
+                          )
+                        : Text(
+                            fg.icon,
+                            style: const TextStyle(fontSize: 36),
+                          ),
                   );
                 }),
 
-                // Fullscreen Gift Animation Layer
+                // Fullscreen Gift Animation Layer (Top Yellow Text Removed)
                 FullscreenGiftAnimator(
                   giftStream: _fullscreenAnimStreamController.stream,
                 ),
