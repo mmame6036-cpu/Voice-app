@@ -90,6 +90,7 @@ class _GiftDialogState extends State<GiftDialog> {
   static const Color kMintSelect = Color(0xFF26E6C8);
   static const Color kSendTeal = Color(0xFF1ED7B5);
   static const Color kGoldCoin = Color(0xFFFFD700);
+  static const int kMinWinSoundThreshold = 2000;
 
   final List<GiftCategory> _categories = const [
     GiftCategory.hot,
@@ -266,9 +267,8 @@ GiftItem(id: "svga24", name: "Crystal Castle", icon: "🏰", price: 50000, image
 
   int get _effectiveMultiplier {
     final currentGifts = _currentCategoryGifts;
-    if (currentGifts.isEmpty || _selectedGiftIndex >= currentGifts.length) {
-      return 1;
-    }
+    if (currentGifts.isEmpty) return 1;
+    if (_selectedGiftIndex >= currentGifts.length) return 1;
     if (currentGifts[_selectedGiftIndex].isLucky) {
       return _selectedMultiplier;
     }
@@ -277,11 +277,9 @@ GiftItem(id: "svga24", name: "Crystal Castle", icon: "🏰", price: 50000, image
 
   int get _calculateTotalPrice {
     final currentGifts = _currentCategoryGifts;
-    if (_selectedSeatIndices.isEmpty ||
-        currentGifts.isEmpty ||
-        _selectedGiftIndex >= currentGifts.length) {
-      return 0;
-    }
+    if (_selectedSeatIndices.isEmpty) return 0;
+    if (currentGifts.isEmpty) return 0;
+    if (_selectedGiftIndex >= currentGifts.length) return 0;
     final unitPrice = currentGifts[_selectedGiftIndex].price;
     return unitPrice * _effectiveMultiplier * _selectedSeatIndices.length;
   }
@@ -334,7 +332,9 @@ Future<void> _sendGift() async {
             wonCoins += selectedGift.price * mult;
           }
         }
-        _playLuckyCoinSound();
+        if (wonCoins >= kMinWinSoundThreshold) {
+          _playLuckyCoinSound();
+        }
       }
 
       final senderRef = FirebaseFirestore.instance.collection('users').doc(_currentUser!.uid);
@@ -348,13 +348,17 @@ Future<void> _sendGift() async {
       }, SetOptions(merge: true)).catchError((_) {});
 
       final double hostRate = selectedGift.pointRate;
+      final int fullSeatCost = selectedGift.price * sendMult;
       final int pointsPerRecipient = max(
         1,
-        (selectedGift.price * sendMult * hostRate).round(),
+        (fullSeatCost * hostRate).round(),
       );
+
+      final Map<String, dynamic> seatGiftIncrements = {};
 
       for (final sIndex in _selectedSeatIndices) {
         String recipientUid = "";
+        seatGiftIncrements['$sIndex'] = FieldValue.increment(fullSeatCost);
 
         for (final user in _userList) {
           if (user is Map) {
@@ -382,6 +386,12 @@ Future<void> _sendGift() async {
         }
       }
 
+      if (seatGiftIncrements.isNotEmpty) {
+        roomRef.set({
+          'seatGifts': seatGiftIncrements,
+        }, SetOptions(merge: true)).catchError((_) {});
+      }
+
       roomRef.collection('events').add({
         'type': 'gift',
         'senderId': _currentUser!.uid,
@@ -400,13 +410,11 @@ Future<void> _sendGift() async {
         'createdAt': FieldValue.serverTimestamp(),
       }).catchError((_) {});
 
-      final updatedBalance = _coins + netDeduction;
+final updatedBalance = _coins + netDeduction;
       setState(() => _coins = updatedBalance);
       widget.onCoinsUpdated?.call(_coins);
 
-      final int fullSeatCost = selectedGift.price * sendMult;
-
-if (mounted) {
+      if (mounted) {
         Navigator.pop(
           context,
           GiftSendResult(
@@ -490,7 +498,6 @@ if (mounted) {
       ),
       child: Column(
         children: [
-          // 1. Top Recipient Avatars Row + "All" Pill on Right
           Container(
             padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
             decoration: BoxDecoration(
@@ -520,13 +527,14 @@ if (mounted) {
                               final int seatIdx =
                                   (rawUser['seatIndex'] as num?)?.toInt() ?? 0;
                               final String avatarUrl =
-                                  (rawUser['avatar'] ?? '').toString();
+
+(rawUser['avatar'] ?? '').toString();
                               final ImageProvider? avatarImg =
                                   _resolveUserAvatar(avatarUrl);
                               final bool isSelected =
                                   _selectedSeatIndices.contains(seatIdx);
 
-return GestureDetector(
+                              return GestureDetector(
                                 onTap: () => _toggleSeat(seatIdx),
                                 child: Container(
                                   margin: const EdgeInsets.only(right: 8),
@@ -589,14 +597,14 @@ return GestureDetector(
                 const SizedBox(width: 8),
                 GestureDetector(
                   onTap: _toggleSelectAll,
-                  child: Container(
+
+child: Container(
                     padding:
                         const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                     decoration: BoxDecoration(
                       color: _isAllSelected
                           ? kMintSelect.withOpacity(0.22)
-
-: Colors.white.withOpacity(0.08),
+                          : Colors.white.withOpacity(0.08),
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(
                         color: _isAllSelected ? kMintSelect : Colors.white24,
@@ -616,8 +624,6 @@ return GestureDetector(
               ],
             ),
           ),
-
-          // 2. Clean Category Tabs (Hot | Lucky | Luxury | Intimacy)
           SizedBox(
             height: 38,
             child: Row(
@@ -655,8 +661,6 @@ return GestureDetector(
               }),
             ),
           ),
-
-          // 3. Crisp 4x2 Gift Grid with Glowing Rounded Selection Frame
           Expanded(
             child: GridView.builder(
               physics: const BouncingScrollPhysics(),
@@ -686,11 +690,11 @@ return GestureDetector(
                           ? Colors.white.withOpacity(0.08)
                           : Colors.transparent,
                       borderRadius: BorderRadius.circular(14),
-                      border: Border.all(
+
+border: Border.all(
                         color: isSelected ? kMintSelect : Colors.transparent,
                         width: 1.6,
-
-),
+                      ),
                       boxShadow: isSelected
                           ? [
                               BoxShadow(
@@ -742,8 +746,6 @@ return GestureDetector(
               },
             ),
           ),
-
-          // 4. Bottom Coins Balance & Unified Multiplier + Mint Send Pill
           SafeArea(
             top: false,
             child: Container(
@@ -773,8 +775,6 @@ return GestureDetector(
                       style: const TextStyle(color: Colors.white38, fontSize: 10.5),
                     ),
                   const Spacer(),
-
-                  // Unified Multiplier + Mint Send Pill (Matches Video)
                   Container(
                     height: 36,
                     decoration: BoxDecoration(
