@@ -1,12 +1,17 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
+import 'dart:math';
 import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
-import 'package:image_picker/image_picker.dart';
+import 'package:camera/camera.dart';
+import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 import 'package:permission_handler/permission_handler.dart';
+import '../services/room_session_manager.dart';
 import 'room_screen.dart';
 
 class TaskScreen extends StatefulWidget {
@@ -22,7 +27,16 @@ class _TaskScreenState extends State<TaskScreen>
   final User? _user = FirebaseAuth.instance.currentUser;
   bool _isClaiming = false;
 
-  static const List _twoHourTiers = [
+  // Live Task Center Timer state (ticks every 1 second at top-right of Task Center)
+  Timer? _liveClockTimer;
+  int _sessionLiveSeconds = 0;
+  int _lastSyncedMinuteBucket = 0;
+  String _trackedDateKey = "";
+  bool _latestIsVerified = false;
+  bool _latestIsOnMic = false;
+  bool _latestIsCrownSeat = false;
+
+  static const List<Map<String, dynamic>> _twoHourTiers = [
     {"level": "L", "req": 0, "reward": 500},
     {"level": "Starter", "req": 0, "reward": 1000},
     {"level": "K", "req": 24000, "reward": 2500},
@@ -43,12 +57,126 @@ class _TaskScreenState extends State<TaskScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _trackedDateKey = _getTodayDateKey();
+    _startTaskCenterLiveTimer();
   }
 
   @override
   void dispose() {
+    _liveClockTimer?.cancel();
     _tabController.dispose();
     super.dispose();
+  }
+
+  void _startTaskCenterLiveTimer() {
+    _liveClockTimer?.cancel();
+    _liveClockTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      final String nowKey = _getTodayDateKey();
+      if (_trackedDateKey != nowKey) {
+        setState(() {
+          _trackedDateKey = nowKey;
+          _sessionLiveSeconds = 0;
+          _lastSyncedMinuteBucket = 0;
+        });
+        return;
+      }
+
+      final mgr = RoomSessionManager.instance;
+      bool onMicNow = _latestIsOnMic;
+      if (mgr.hasActiveRoom) {
+        if (mgr.seatedIndex != null) {
+          if (!mgr.isMuted) {
+            onMicNow = true;
+          } else {
+            onMicNow = false;
+          }
+        } else {
+          onMicNow = false;
+        }
+      }
+
+      if (_latestIsVerified) {
+        if (onMicNow) {
+          setState(() {
+            _sessionLiveSeconds += 1;
+          });
+          final int completedMinutes = _sessionLiveSeconds ~/ 60;
+          if (completedMinutes > _lastSyncedMinuteBucket) {
+            final int diffMins = completedMinutes - _lastSyncedMinuteBucket;
+            _lastSyncedMinuteBucket = completedMinutes;
+            _persistTaskCenterMinutes(diffMins);
+          }
+        }
+      }
+    });
+  }
+
+  Future<void> _persistTaskCenterMinutes(int minutesToAdd) async {
+    final user = _user;
+    if (user == null) return;
+    if (minutesToAdd <= 0) return;
+
+    final String todayKey = _getTodayDateKey();
+    bool onCrown = _latestIsCrownSeat;
+    if (RoomSessionManager.instance.hasActiveRoom) {
+      if (RoomSessionManager.instance.seatedIndex == 0) {
+        onCrown = true;
+      }
+    }
+
+try {
+      final userRef =
+          FirebaseFirestore.instance.collection('users').doc(user.uid);
+      final hostRef =
+          FirebaseFirestore.instance.collection('hosts').doc(user.uid);
+      final snap = await userRef.get();
+      final data = snap.data() ?? <String, dynamic>{};
+      final String storedDate =
+          (data['lastMicDate'] ?? data['micDateKey'] ?? '').toString();
+
+      if (storedDate != todayKey) {
+        await userRef.set({
+          'lastMicDate': todayKey,
+          'micDateKey': todayKey,
+          'todayMicMinutes': minutesToAdd,
+          'todayCrownMinutes': onCrown ? minutesToAdd : 0,
+        }, SetOptions(merge: true));
+
+        await hostRef.set({
+          'micDateKey': todayKey,
+          'liveDurationMinutesToday': minutesToAdd,
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+      } else {
+        final Map<String, dynamic> inc = {
+          'lastMicDate': todayKey,
+          'micDateKey': todayKey,
+          'todayMicMinutes': FieldValue.increment(minutesToAdd),
+        };
+        if (onCrown) {
+          inc['todayCrownMinutes'] = FieldValue.increment(minutesToAdd);
+        }
+        await userRef.set(inc, SetOptions(merge: true));
+
+        await hostRef.set({
+          'micDateKey': todayKey,
+          'liveDurationMinutesToday': FieldValue.increment(minutesToAdd),
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+      }
+    } catch (_) {}
+  }
+
+  String _formatDurationHms(int totalSeconds) {
+    final int safeSec = totalSeconds < 0 ? 0 : totalSeconds;
+    final int hrs = safeSec ~/ 3600;
+    final int mins = (safeSec % 3600) ~/ 60;
+    final int secs = safeSec % 60;
+    final String hStr = hrs.toString().padLeft(2, '0');
+    final String mStr = mins.toString().padLeft(2, '0');
+    final String sStr = secs.toString().padLeft(2, '0');
+    return "$hStr:$mStr:$sStr";
   }
 
   String _getTodayDateKey() {
@@ -71,35 +199,28 @@ class _TaskScreenState extends State<TaskScreen>
     if (userData['name'] != null) {
       nameVal = userData['name'].toString().trim();
     }
-    if (nameVal.isEmpty || nameVal == "User") {
-      return false;
-    }
+    if (nameVal.isEmpty) return false;
+    if (nameVal == "User") return false;
 
     String genderVal = "";
     if (userData['gender'] != null) {
       genderVal = userData['gender'].toString().trim();
     }
-    if (genderVal.isEmpty) {
-      return false;
-    }
+    if (genderVal.isEmpty) return false;
 
     int ageVal = (userData['age'] as num?)?.toInt() ?? 0;
-    if (ageVal < 18) {
-      return false;
-    }
+    if (ageVal < 18) return false;
 
     String countryVal = "";
     if (userData['country'] != null) {
       countryVal = userData['country'].toString().trim();
     }
-    if (countryVal.isEmpty) {
-      return false;
-    }
+    if (countryVal.isEmpty) return false;
 
     return true;
   }
 
-  Map _resolveTwoHourTier({
+  Map<String, dynamic> _resolveTwoHourTier({
     required int giftIncome7Days,
     required int daysSinceStart,
   }) {
@@ -118,13 +239,14 @@ class _TaskScreenState extends State<TaskScreen>
     }
 
     for (int i = 2; i < _twoHourTiers.length; i++) {
-      final tier = _twoHourTiers[i] as Map;
+      final tier = _twoHourTiers[i];
       final int req = tier['req'] as int;
       if (giftIncome7Days >= req) {
         currentReward = tier['reward'] as int;
         currentLevel = tier['level'].toString();
         if (i + 1 < _twoHourTiers.length) {
-          final nextTier = _twoHourTiers[i + 1] as Map;
+
+final nextTier = _twoHourTiers[i + 1];
           nextReq = nextTier['req'] as int;
           stillNeed = nextReq - giftIncome7Days;
           if (stillNeed < 0) {
@@ -137,7 +259,7 @@ class _TaskScreenState extends State<TaskScreen>
       }
     }
 
-return {
+    return {
       "currentReward": currentReward,
       "currentLevel": currentLevel,
       "nextReq": nextReq,
@@ -146,6 +268,11 @@ return {
   }
 
   void _navigateToRoom(int currentCoins) {
+    final mgr = RoomSessionManager.instance;
+    if (mgr.hasActiveRoom) {
+      mgr.expandRoom();
+      return;
+    }
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -158,14 +285,20 @@ return {
     );
   }
 
-  Future _openFaceVerificationFlow(Map userData) async {
+  Future<void> _openFaceVerificationFlow(Map userData) async {
     final user = _user;
     if (user == null) return;
 
     final String existingFaceUrl =
         (userData['facePhotoUrl'] ?? '').toString().trim();
-    final bool hasRealFacePhoto =
-        userData['isFaceVerified'] == true && existingFaceUrl.isNotEmpty;
+    bool hasRealFacePhoto = false;
+    if (userData['isFaceVerified'] == true) {
+      if (existingFaceUrl.isNotEmpty) {
+        if (userData['faceLivenessPassed'] == true) {
+          hasRealFacePhoto = true;
+        }
+      }
+    }
 
     String? savedFaceUrl = existingFaceUrl;
 
@@ -176,14 +309,15 @@ return {
         builder: (ctx) => _FaceBiometricDialog(uid: user.uid),
       );
 
-      if (uploadedUrl == null || uploadedUrl.isEmpty) {
-        return;
-      }
+      if (uploadedUrl == null) return;
+      if (uploadedUrl.isEmpty) return;
       savedFaceUrl = uploadedUrl;
 
       final String todayKey = _getTodayDateKey();
       final Map<String, dynamic> faceUpdate = {
         'isFaceVerified': true,
+        'faceLivenessPassed': true,
+        'faceLivenessSteps': ['EYE_BLINK', 'MOUTH_MOVE', 'HEAD_TURN'],
         'facePhotoUrl': savedFaceUrl,
         'faceVerifiedAt': FieldValue.serverTimestamp(),
       };
@@ -212,14 +346,18 @@ return {
   void _openHostProfileCompletionDialog(Map userData,
       {String? facePhotoUrl}) {
     String initName = "";
-    if (userData['name'] != null &&
-        userData['name'].toString().trim() != "User") {
-      initName = userData['name'].toString().trim();
+    if (userData['name'] != null) {
+      final trimmed = userData['name'].toString().trim();
+      if (trimmed != "User") {
+        initName = trimmed;
+      }
     }
     String initGender = "Male";
-    if (userData['gender'] != null &&
-        userData['gender'].toString().trim().isNotEmpty) {
-      initGender = userData['gender'].toString().trim();
+    if (userData['gender'] != null) {
+      final gTrim = userData['gender'].toString().trim();
+      if (gTrim.isNotEmpty) {
+        initGender = gTrim;
+      }
     }
     String initAge = "";
     if (userData['age'] != null) {
@@ -229,9 +367,11 @@ return {
       }
     }
     String initCountry = "Ethiopia";
-    if (userData['country'] != null &&
-        userData['country'].toString().trim().isNotEmpty) {
-      initCountry = userData['country'].toString().trim();
+    if (userData['country'] != null) {
+      final cTrim = userData['country'].toString().trim();
+      if (cTrim.isNotEmpty) {
+        initCountry = cTrim;
+      }
     }
     String initBio = "";
     if (userData['bio'] != null) {
@@ -245,7 +385,7 @@ return {
     String selectedGender = initGender;
     bool isSaving = false;
 
-    showDialog(
+showDialog(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => StatefulBuilder(
@@ -256,10 +396,12 @@ return {
             final String countryStr = countryCtrl.text.trim();
             final String bioStr = bioCtrl.text.trim();
 
-            if (nameStr.isEmpty || nameStr == "User") {
-              ScaffoldMessenger.of(context).showSnackBar(
+            bool invalidName = nameStr.isEmpty;
+            if (nameStr == "User") invalidName = true;
 
-const SnackBar(
+            if (invalidName) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
                     content: Text("Please enter your full host name")),
               );
               return;
@@ -291,11 +433,14 @@ const SnackBar(
                   'country': countryStr,
                   'bio': bioStr,
                   'isFaceVerified': true,
+                  'faceLivenessPassed': true,
                   'isHostProfileComplete': true,
                   'updatedAt': FieldValue.serverTimestamp(),
                 };
-                if (facePhotoUrl != null && facePhotoUrl.isNotEmpty) {
-                  profilePayload['facePhotoUrl'] = facePhotoUrl;
+                if (facePhotoUrl != null) {
+                  if (facePhotoUrl.isNotEmpty) {
+                    profilePayload['facePhotoUrl'] = facePhotoUrl;
+                  }
                 }
 
                 await FirebaseFirestore.instance
@@ -348,7 +493,8 @@ const SnackBar(
             title: const Row(
               children: [
                 Icon(Icons.verified_user, color: Color(0xFF107C41), size: 22),
-                SizedBox(width: 8),
+
+SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     "Complete Host Profile",
@@ -367,9 +513,8 @@ const SnackBar(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    "Face photo verified! Fill in your required profile details to unlock task hour tracking:",
-
-style: TextStyle(color: Colors.black54, fontSize: 12),
+                    "3-Step Face Liveness passed! Fill in your required profile details to unlock task hour tracking:",
+                    style: TextStyle(color: Colors.black54, fontSize: 12),
                   ),
                   const SizedBox(height: 12),
                   const Text("Host Full Name *",
@@ -438,7 +583,8 @@ style: TextStyle(color: Colors.black54, fontSize: 12),
                   ),
                   const SizedBox(height: 10),
                   const Text("Country / Region *",
-                      style: TextStyle(
+
+style: TextStyle(
                           fontSize: 11.5, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 4),
                   TextField(
@@ -455,8 +601,7 @@ style: TextStyle(color: Colors.black54, fontSize: 12),
                   const SizedBox(height: 10),
                   const Text("Host Bio / Intro",
                       style: TextStyle(
-
-fontSize: 11.5, fontWeight: FontWeight.bold)),
+                          fontSize: 11.5, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 4),
                   TextField(
                     controller: bioCtrl,
@@ -496,7 +641,7 @@ fontSize: 11.5, fontWeight: FontWeight.bold)),
     );
   }
 
-  Future _claimReward({
+  Future<void> _claimReward({
     required String claimKey,
     required int pointsAmount,
     required String taskTitle,
@@ -520,10 +665,10 @@ fontSize: 11.5, fontWeight: FontWeight.bold)),
         final snapshot = await transaction.get(userRef);
         if (!snapshot.exists) return;
 
-     final raw = snapshot.data();
-     final Map data = (raw as Map?) ?? {};
-     final rawTasks = data['claimedTaskKeys'];
-     final Map claimedMap = (rawTasks as Map?) ?? {};
+        final raw = snapshot.data();
+        final Map data = (raw as Map?) ?? {};
+        final rawTasks = data['claimedTaskKeys'];
+        final Map claimedMap = (rawTasks as Map?) ?? {};
 
         if (claimedMap[claimKey] == true) {
           return;
@@ -559,7 +704,7 @@ fontSize: 11.5, fontWeight: FontWeight.bold)),
         });
       });
 
-      if (mounted) {
+if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content:
@@ -579,7 +724,7 @@ fontSize: 11.5, fontWeight: FontWeight.bold)),
     }
   }
 
-void _showPolicyDialog() {
+  void _showPolicyDialog() {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -619,8 +764,8 @@ void _showPolicyDialog() {
             Expanded(
               child: ListView(
                 children: [
-                  _buildPolicyTile("1. Face & Profile Verification",
-                      "Hosts must take a live Front Camera Face Selfie and fill out required Profile details before task hours count."),
+                  _buildPolicyTile("1. 3-Step Biometric Face Verification",
+                      "Hosts must complete live Front Camera liveness detection (Eye Blink, Mouth Movement, and Head Turn Left/Right) and fill out required Profile details before task timer counts."),
                   _buildPolicyTile("2. Fixed 7-Day Daily Base Salary",
                       "Sit on mic for 2 hours (120 mins) daily to claim 8,000 Points. Renews every 24 hours for 7 consecutive days."),
                   _buildPolicyTile("3. 2-Hour Activity Tier Progression",
@@ -664,6 +809,94 @@ void _showPolicyDialog() {
     );
   }
 
+Widget _buildTopRightTimerBadge({
+    required int totalTodaySeconds,
+    required bool isLiveOnMicNow,
+    required bool isFullyVerifiedHost,
+    required int userCoins,
+  }) {
+    final String liveClockStr = _formatDurationHms(totalTodaySeconds);
+    final bool isCounting = isFullyVerifiedHost && isLiveOnMicNow;
+
+    Color borderCol = const Color(0xFFFACC15);
+    Color iconCol = const Color(0xFFFACC15);
+    String stateTag = "2H";
+    if (!isFullyVerifiedHost) {
+      borderCol = Colors.white30;
+      iconCol = Colors.white60;
+      stateTag = "LOCK";
+    } else if (isCounting) {
+      borderCol = const Color(0xFF4ADE80);
+      iconCol = const Color(0xFF4ADE80);
+      stateTag = "LIVE";
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(right: 12, top: 8, bottom: 8),
+      child: GestureDetector(
+        onTap: () {
+          if (isFullyVerifiedHost && !isCounting) {
+            _navigateToRoom(userCoins);
+          }
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
+          decoration: BoxDecoration(
+            color: const Color(0xFF3E2723),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: borderCol, width: 1.4),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.14),
+                blurRadius: 6,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                isCounting ? Icons.mic : Icons.timer_outlined,
+                color: iconCol,
+                size: 16,
+              ),
+              const SizedBox(width: 5),
+              Text(
+                liveClockStr,
+                style: const TextStyle(
+                  color: Color(0xFFFACC15),
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 0.6,
+                ),
+              ),
+              const SizedBox(width: 5),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                decoration: BoxDecoration(
+                  color: isCounting
+                      ? const Color(0xFF107C41)
+                      : Colors.white.withOpacity(0.14),
+                  borderRadius: BorderRadius.circular(7),
+                ),
+                child: Text(
+                  stateTag,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 8.5,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     String uid = "";
@@ -683,140 +916,194 @@ void _showPolicyDialog() {
       );
     }
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF5EFEB),
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
+    return StreamBuilder<DocumentSnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .snapshots(),
+      builder: (context, snapshot) {
+        Map userData = {};
+        if (snapshot.hasData && snapshot.data != null) {
+          final doc = snapshot.data!;
+          if (doc.exists && doc.data() is Map) {
+            userData = doc.data() as Map;
+          }
+        }
 
-elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios,
-              color: Color(0xFF1A1A1A), size: 20),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text(
-          "Task Center",
-          style: TextStyle(
-            color: Color(0xFF1A1A1A),
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        centerTitle: true,
-      ),
-      body: StreamBuilder(
-        stream: FirebaseFirestore.instance
-            .collection('users')
-            .doc(uid)
-            .snapshots(),
-        builder: (context, snapshot) {
-          Map userData = {};
-          if (snapshot.hasData && snapshot.data != null) {
-            final doc = snapshot.data as DocumentSnapshot;
-            if (doc.exists && doc.data() is Map) {
-              userData = doc.data() as Map;
+        final String todayKey = _getTodayDateKey();
+        final int userCoins = (userData['coins'] as num?)?.toInt() ?? 0;
+
+        final String facePhotoUrl =
+
+(userData['facePhotoUrl'] ?? '').toString().trim();
+        final bool isFaceVerified =
+            userData['isFaceVerified'] == true && facePhotoUrl.isNotEmpty;
+        final bool isProfileReady = _isProfileComplete(userData);
+        final bool isFullyVerifiedHost = isFaceVerified && isProfileReady;
+
+        String lastTaskDate = "";
+        if (userData['lastTaskDate'] != null) {
+          lastTaskDate = userData['lastTaskDate'].toString();
+        }
+        final bool isNewDay = lastTaskDate != todayKey;
+
+        String lastMicDate = "";
+        if (userData['lastMicDate'] != null) {
+          lastMicDate = userData['lastMicDate'].toString();
+        }
+        final bool isNewMicDay = lastMicDate != todayKey;
+
+        int todayPoints = (userData['todayTaskPoints'] as num?)?.toInt() ?? 0;
+        if (isNewDay) {
+          todayPoints = 0;
+        }
+        final int weekPoints =
+            (userData['weekTaskPoints'] as num?)?.toInt() ?? 0;
+
+        int rawMicMinutes =
+            (userData['todayMicMinutes'] as num?)?.toInt() ?? 0;
+        if (isNewMicDay) {
+          rawMicMinutes = 0;
+        }
+
+        final mgr = RoomSessionManager.instance;
+        bool isLiveOnMicNow = false;
+        if (mgr.hasActiveRoom) {
+          if (mgr.seatedIndex != null) {
+            if (!mgr.isMuted) {
+              isLiveOnMicNow = true;
             }
           }
-
-          final String todayKey = _getTodayDateKey();
-          final int userCoins = (userData['coins'] as num?)?.toInt() ?? 0;
-
-          final String facePhotoUrl =
-              (userData['facePhotoUrl'] ?? '').toString().trim();
-          final bool isFaceVerified =
-              userData['isFaceVerified'] == true && facePhotoUrl.isNotEmpty;
-          final bool isProfileReady = _isProfileComplete(userData);
-          final bool isFullyVerifiedHost = isFaceVerified && isProfileReady;
-
-          String lastTaskDate = "";
-          if (userData['lastTaskDate'] != null) {
-            lastTaskDate = userData['lastTaskDate'].toString();
-          }
-          final bool isNewDay = lastTaskDate != todayKey;
-
-          String lastMicDate = "";
-          if (userData['lastMicDate'] != null) {
-            lastMicDate = userData['lastMicDate'].toString();
-          }
-          final bool isNewMicDay = lastMicDate != todayKey;
-
-          int todayPoints =
-              (userData['todayTaskPoints'] as num?)?.toInt() ?? 0;
-          if (isNewDay) {
-            todayPoints = 0;
-          }
-          final int weekPoints =
-              (userData['weekTaskPoints'] as num?)?.toInt() ?? 0;
-
-          int rawMicMinutes =
-              (userData['todayMicMinutes'] as num?)?.toInt() ?? 0;
-          if (isNewMicDay) {
-            rawMicMinutes = 0;
-          }
-          int micMinutes = isFullyVerifiedHost ? rawMicMinutes : 0;
-
-          int rawCrownMinutes =
-              (userData['todayCrownMinutes'] as num?)?.toInt() ?? 0;
-          if (rawCrownMinutes == 0) {
-            rawCrownMinutes = rawMicMinutes;
-          }
-          if (isNewMicDay) {
-            rawCrownMinutes = 0;
-          }
-          int crownMinutes = isFullyVerifiedHost ? rawCrownMinutes : 0;
-
-          int rawCrownGiftCoins =
-              (userData['todayGiftCoins'] as num?)?.toInt() ?? 0;
-          if (rawCrownGiftCoins == 0) {
-            rawCrownGiftCoins =
-                (userData['todayPoints'] as num?)?.toInt() ?? 0;
-          }
-          if (isNewMicDay) {
-            rawCrownGiftCoins = 0;
-          }
-          int crownGiftCoins = isFullyVerifiedHost ? rawCrownGiftCoins : 0;
-
-          int giftIncomeLast7Days =
-              (userData['giftIncomeLast7Days'] as num?)?.toInt() ?? 0;
-          if (giftIncomeLast7Days == 0) {
-            giftIncomeLast7Days =
-                (userData['points'] as num?)?.toInt() ?? 0;
-          }
-
-          int daysSinceStart = 1;
-          if (userData['hostVerifiedDate'] != null) {
-            final parsedStart =
-                DateTime.tryParse(userData['hostVerifiedDate'].toString());
-            if (parsedStart != null) {
-              daysSinceStart =
-                  DateTime.now().difference(parsedStart).inDays + 1;
+        }
+        if (!isLiveOnMicNow) {
+          if (userData['isOnMic'] == true) {
+            if (userData['isMuted'] != true) {
+              isLiveOnMicNow = true;
             }
           }
+        }
 
-          final int consecutiveDays =
-              (userData['consecutiveHostDays'] as num?)?.toInt() ?? 0;
+        bool isOnCrownNow = false;
+        if (mgr.hasActiveRoom) {
+          if (mgr.seatedIndex == 0) {
+            isOnCrownNow = true;
+          }
+        }
+        if (!isOnCrownNow) {
+          final int seatIdx =
+              (userData['activeSeatIndex'] as num?)?.toInt() ?? -1;
+          if (seatIdx == 0) {
+            isOnCrownNow = true;
+          }
+        }
+
+        _latestIsVerified = isFullyVerifiedHost;
+        _latestIsOnMic = isLiveOnMicNow;
+        _latestIsCrownSeat = isOnCrownNow;
+
+        final int extraUnsyncedSeconds = _sessionLiveSeconds % 60;
+        final int totalTodaySeconds = isFullyVerifiedHost
+            ? ((rawMicMinutes * 60) + extraUnsyncedSeconds)
+            : 0;
+        final int micMinutes = totalTodaySeconds ~/ 60;
+
+        int rawCrownMinutes =
+            (userData['todayCrownMinutes'] as num?)?.toInt() ?? 0;
+        if (rawCrownMinutes == 0) {
+          rawCrownMinutes = rawMicMinutes;
+        }
+        if (isNewMicDay) {
+          rawCrownMinutes = 0;
+        }
+        int crownMinutes = isFullyVerifiedHost
+            ? (isOnCrownNow
+                ? max(rawCrownMinutes, micMinutes)
+                : rawCrownMinutes)
+            : 0;
+
+        int rawCrownGiftCoins =
+            (userData['todayGiftCoins'] as num?)?.toInt() ?? 0;
+        if (rawCrownGiftCoins == 0) {
+          rawCrownGiftCoins =
+              (userData['todayPoints'] as num?)?.toInt() ?? 0;
+        }
+        if (isNewMicDay) {
+          rawCrownGiftCoins = 0;
+        }
+        int crownGiftCoins = isFullyVerifiedHost ? rawCrownGiftCoins : 0;
+
+        int giftIncomeLast7Days =
+            (userData['giftIncomeLast7Days'] as num?)?.toInt() ?? 0;
+        if (giftIncomeLast7Days == 0) {
+          giftIncomeLast7Days = (userData['points'] as num?)?.toInt() ?? 0;
+        }
+
+        int daysSinceStart = 1;
+        if (userData['hostVerifiedDate'] != null) {
+          final parsedStart =
+              DateTime.tryParse(userData['hostVerifiedDate'].toString());
+          if (parsedStart != null) {
+            daysSinceStart =
+                DateTime.now().difference(parsedStart).inDays + 1;
+          }
+        }
+
+        final int consecutiveDays =
+            (userData['consecutiveHostDays'] as num?)?.toInt() ?? 0;
 
 final tierInfo = _resolveTwoHourTier(
-            giftIncome7Days: giftIncomeLast7Days,
-            daysSinceStart: daysSinceStart,
-          );
-          final int currentTwoHourReward = tierInfo['currentReward'] as int;
-          final String currentLevel = tierInfo['currentLevel'].toString();
-          final int stillNeed = tierInfo['stillNeed'] as int;
+          giftIncome7Days: giftIncomeLast7Days,
+          daysSinceStart: daysSinceStart,
+        );
+        final int currentTwoHourReward = tierInfo['currentReward'] as int;
+        final String currentLevel = tierInfo['currentLevel'].toString();
+        final int stillNeed = tierInfo['stillNeed'] as int;
 
-          Map claimedKeys = {};
-          if (userData['claimedTaskKeys'] is Map) {
-            claimedKeys = userData['claimedTaskKeys'] as Map;
-          }
+        Map claimedKeys = {};
+        if (userData['claimedTaskKeys'] is Map) {
+          claimedKeys = userData['claimedTaskKeys'] as Map;
+        }
 
-          final int wealthExp =
-              (userData['wealthExp'] as num?)?.toInt() ?? 0;
+        final int wealthExp = (userData['wealthExp'] as num?)?.toInt() ?? 0;
 
-          return Column(
+        return Scaffold(
+          backgroundColor: const Color(0xFFF5EFEB),
+          appBar: AppBar(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            centerTitle: false,
+            titleSpacing: 0,
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back_ios,
+                  color: Color(0xFF1A1A1A), size: 20),
+              onPressed: () => Navigator.pop(context),
+            ),
+            title: const Text(
+              "Task Center",
+              style: TextStyle(
+                color: Color(0xFF1A1A1A),
+                fontSize: 17.5,
+                fontWeight: FontWeight.bold,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+            actions: [
+              _buildTopRightTimerBadge(
+                totalTodaySeconds: totalTodaySeconds,
+                isLiveOnMicNow: isLiveOnMicNow,
+                isFullyVerifiedHost: isFullyVerifiedHost,
+                userCoins: userCoins,
+              ),
+            ],
+          ),
+          body: Column(
             children: [
               _buildTopHeaderCard(
                 todayPoints: todayPoints,
                 weekPoints: weekPoints,
+                totalTodaySeconds: totalTodaySeconds,
+                isLiveOnMicNow: isLiveOnMicNow,
+                isFullyVerifiedHost: isFullyVerifiedHost,
               ),
               Container(
                 margin:
@@ -853,12 +1140,15 @@ final tierInfo = _resolveTwoHourTier(
                       isFaceVerified: isFaceVerified,
                       isProfileReady: isProfileReady,
                       isFullyVerifiedHost: isFullyVerifiedHost,
+                      totalTodaySeconds: totalTodaySeconds,
+                      isLiveOnMicNow: isLiveOnMicNow,
                       micMinutes: micMinutes,
                       crownMinutes: crownMinutes,
                       crownGiftCoins: crownGiftCoins,
                       consecutiveDays: consecutiveDays,
                       giftIncomeLast7Days: giftIncomeLast7Days,
-                      currentTwoHourReward: currentTwoHourReward,
+
+currentTwoHourReward: currentTwoHourReward,
                       currentLevel: currentLevel,
                       stillNeed: stillNeed,
                       claimedKeys: claimedKeys,
@@ -876,19 +1166,25 @@ final tierInfo = _resolveTwoHourTier(
                 ),
               ),
             ],
-          );
-        },
-      ),
+          ),
+        );
+      },
     );
   }
 
   Widget _buildTopHeaderCard({
     required int todayPoints,
     required int weekPoints,
+    required int totalTodaySeconds,
+    required bool isLiveOnMicNow,
+    required bool isFullyVerifiedHost,
   }) {
+    final double goalProgress = (totalTodaySeconds / 7200.0).clamp(0.0, 1.0);
+    final bool isCounting = isFullyVerifiedHost && isLiveOnMicNow;
+
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      padding: const EdgeInsets.all(15),
       decoration: BoxDecoration(
         color: const Color(0xFFEFE6DE),
         borderRadius: BorderRadius.circular(20),
@@ -898,8 +1194,7 @@ final tierInfo = _resolveTwoHourTier(
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-
-children: [
+            children: [
               const Row(
                 children: [
                   Icon(Icons.stars, color: Color(0xFFD49B42), size: 22),
@@ -928,7 +1223,19 @@ children: [
               ),
             ],
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 10),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: goalProgress,
+              minHeight: 4.5,
+              backgroundColor: const Color(0xFFDDD0C2),
+              color: isCounting
+                  ? const Color(0xFF107C41)
+                  : const Color(0xFFD49B42),
+            ),
+          ),
+          const SizedBox(height: 12),
           Row(
             children: [
               Expanded(
@@ -954,7 +1261,8 @@ children: [
               ),
               Expanded(
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+
+crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
                       "This week",
@@ -986,9 +1294,9 @@ children: [
     required bool isProfileReady,
     required bool isFullyVerifiedHost,
   }) {
-    String statusTitle = "Face Verification Required";
+    String statusTitle = "Face Liveness Verification Required";
     String statusSubtitle =
-        "Take a front selfie & complete Profile details to unlock task hours.";
+        "Complete 3-Step Face Scan (Eye Blink, Mouth & Head Turn) + Profile to start timer.";
     Color cardBorderColor = const Color(0xFFF59E0B);
     Color iconBg = const Color(0xFFFEF3C7);
     Color iconColor = const Color(0xFFD97706);
@@ -999,9 +1307,9 @@ children: [
     VoidCallback? btnAction = () => _openFaceVerificationFlow(userData);
 
     if (isFullyVerifiedHost) {
-      statusTitle = "Host Verified & Active ✓";
+      statusTitle = "Biometric Face & Host Active ✓";
       statusSubtitle =
-          "Front face photo & profile verified. Task timer is active.";
+          "Eye, Mouth & Head verified. Top-right live mic timer is active.";
       cardBorderColor = const Color(0xFF107C41);
       iconBg = const Color(0xFFE8F5E9);
       iconColor = const Color(0xFF107C41);
@@ -1012,11 +1320,11 @@ children: [
     } else if (isFaceVerified) {
       statusTitle = "Complete Profile Details";
       statusSubtitle =
-          "Face photo verified! Fill out your Profile info to unlock task hours.";
+          "Face Liveness verified! Fill out your Profile info to unlock task timer.";
       btnText = "Complete";
     }
 
-return Container(
+    return Container(
       margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -1068,7 +1376,8 @@ return Container(
               foregroundColor: btnFg,
               disabledBackgroundColor: const Color(0xFF107C41),
               disabledForegroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
+
+shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16)),
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               elevation: 0,
@@ -1095,6 +1404,8 @@ return Container(
     required bool isFaceVerified,
     required bool isProfileReady,
     required bool isFullyVerifiedHost,
+    required int totalTodaySeconds,
+    required bool isLiveOnMicNow,
     required int micMinutes,
     required int crownMinutes,
     required int crownGiftCoins,
@@ -1109,6 +1420,8 @@ return Container(
     final String fixed2HrKey = "${todayKey}_fixed_2hr_8000";
     final bool isFixed2HrClaimed = claimedKeys[fixed2HrKey] == true;
     final int min2Display = micMinutes.clamp(0, 120);
+    final String timer2HrText =
+        _formatDurationHms(totalTodaySeconds.clamp(0, 7200));
 
     int streakDisplay = consecutiveDays;
     if (streakDisplay > 7) {
@@ -1135,7 +1448,7 @@ return Container(
           isFullyVerifiedHost: isFullyVerifiedHost,
         ),
 
-Row(
+        Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             const Text(
@@ -1161,7 +1474,8 @@ Row(
         _buildTaskActionCard(
           icon: Icons.mic,
           title: "On mic for 2 hours daily (7-Day Streak)",
-          subtitle: "Progress: $min2Display / 120 mins • Renews every 24h",
+          subtitle:
+              "Timer: $timer2HrText ($min2Display / 120 mins) • Renews every 24h",
           reward: 8000,
           isVerified: isFullyVerifiedHost,
           isCompleted: isFixed2HrDone,
@@ -1180,9 +1494,10 @@ Row(
 
         _buildTaskActionCard(
           icon: Icons.trending_up,
-          title: "2-Hour Activity Tier Reward ($currentLevel)",
+
+title: "2-Hour Activity Tier Reward ($currentLevel)",
           subtitle:
-              "Progress: $min2Display / 120 mins • 7d Starter 1,000 -> up to 180,000",
+              "Timer: $timer2HrText ($min2Display / 120 mins) • Starter 1,000 -> 180,000",
           reward: currentTwoHourReward,
           isVerified: isFullyVerifiedHost,
           isCompleted: isFixed2HrDone,
@@ -1240,13 +1555,12 @@ Row(
                 ],
               ),
               const SizedBox(height: 6),
-
-SingleChildScrollView(
+              SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: Row(
                   children: _twoHourTiers
-                      .map((t) => _buildTierPill(
-                          "${(t as Map)['level']}: ${t['reward']}/2h"))
+                      .map((t) =>
+                          _buildTierPill("${t['level']}: ${t['reward']}/2h"))
                       .toList(),
                 ),
               ),
@@ -1282,7 +1596,8 @@ SingleChildScrollView(
 
         _buildTaskActionCard(
           icon: Icons.workspace_premium,
-          title: "Crown Seat 1 Hour + 600 Coins Gift",
+
+title: "Crown Seat 1 Hour + 600 Coins Gift",
           subtitle:
               "Crown: $crownMinDisplay/60 mins • Gifts (Sent/Rec): $crownCoinDisplay/600 Coins",
           reward: 2500,
@@ -1361,7 +1676,7 @@ SingleChildScrollView(
     );
   }
 
-Widget _buildTierPill(String text) {
+  Widget _buildTierPill(String text) {
     return Container(
       margin: const EdgeInsets.only(right: 6),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -1409,7 +1724,7 @@ Widget _buildTierPill(String text) {
       btnAction = onClaim;
     }
 
-    return Container(
+return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -1481,58 +1796,331 @@ Widget _buildTierPill(String text) {
 }
 
 // ============================================================================
-// REAL FRONT-CAMERA FACE VERIFICATION DIALOG
+// 3-STEP REAL-TIME BIOMETRIC FACE LIVENESS DIALOG
+// Step 1: Eye Blink (ዓይን መጨፈንና መግለጥ)
+// Step 2: Mouth Movement (አፍ መክፈት ወይም ፈገግ ማለት)
+// Step 3: Head Movement (ራስን ወደ ግራና ቀኝ ማዞር)
 // ============================================================================
 class _FaceBiometricDialog extends StatefulWidget {
   final String uid;
   const _FaceBiometricDialog({required this.uid});
 
-@override
+  @override
   State<_FaceBiometricDialog> createState() => _FaceBiometricDialogState();
 }
 
 class _FaceBiometricDialogState extends State<_FaceBiometricDialog> {
-  final ImagePicker _picker = ImagePicker();
-  Uint8List? _capturedBytes;
+  CameraController? _cameraController;
+  CameraDescription? _frontCamera;
+  late final FaceDetector _faceDetector;
+
+  bool _isCameraReady = false;
+  bool _isProcessingFrame = false;
   bool _isUploading = false;
+  bool _faceDetected = false;
+
+  // 3 Liveness challenge flags
+  bool _sawEyesOpen = false;
+  bool _sawEyesClosed = false;
+  int _closedEyeFrames = 0;
+  bool _eyeVerified = false;
+
+  bool _mouthVerified = false;
+
+  bool _turnedHeadLeft = false;
+  bool _turnedHeadRight = false;
+  bool _headVerified = false;
+
   double _progress = 0.0;
-  String _statusText =
-      "Tap below to open your Front Camera and take a clear selfie of your face.";
+  String _statusText = "Initializing Front Camera...";
 
-  Future _captureAndUploadFace() async {
-    if (_isUploading) return;
+  @override
+  void initState() {
+    super.initState();
+    _faceDetector = FaceDetector(
+      options: FaceDetectorOptions(
+        enableClassification: true,
+        enableLandmarks: true,
+        enableContours: false,
+        enableTracking: true,
+        performanceMode: FaceDetectorMode.fast,
+      ),
+    );
+    _initFrontCamera();
+  }
 
+  @override
+  void dispose() {
+    _disposeCameraAndDetector();
+    super.dispose();
+  }
+
+Future<void> _disposeCameraAndDetector() async {
+    final ctrl = _cameraController;
+    _cameraController = null;
+    if (ctrl != null) {
+      try {
+        if (ctrl.value.isStreamingImages) {
+          await ctrl.stopImageStream();
+        }
+      } catch (_) {}
+      try {
+        await ctrl.dispose();
+      } catch (_) {}
+    }
+    try {
+      await _faceDetector.close();
+    } catch (_) {}
+  }
+
+  Future<void> _initFrontCamera() async {
     try {
       final camStatus = await Permission.camera.request();
       if (!camStatus.isGranted) {
         if (!mounted) return;
         setState(() {
           _statusText =
-              "Camera permission is required for Face Verification. Please allow camera access.";
+              "Camera permission is required. Please allow camera access.";
         });
         return;
       }
 
-      final XFile? photo = await _picker.pickImage(
-        source: ImageSource.camera,
-        preferredCameraDevice: CameraDevice.front,
-        maxWidth: 512,
-        maxHeight: 512,
-        imageQuality: 80,
+      final cameras = await availableCameras();
+      CameraDescription? selected;
+      for (final cam in cameras) {
+        if (cam.lensDirection == CameraLensDirection.front) {
+          selected = cam;
+          break;
+        }
+      }
+      if (selected == null && cameras.isNotEmpty) {
+        selected = cameras.first;
+      }
+      if (selected == null) {
+        if (!mounted) return;
+        setState(() {
+          _statusText = "No front camera found on this device.";
+        });
+        return;
+      }
+
+      _frontCamera = selected;
+      final controller = CameraController(
+        selected,
+        ResolutionPreset.medium,
+        enableAudio: false,
+        imageFormatGroup: Platform.isAndroid
+            ? ImageFormatGroup.nv21
+            : ImageFormatGroup.bgra8888,
       );
 
-      if (photo == null) return;
+      await controller.initialize();
+      if (!mounted) {
+        await controller.dispose();
+        return;
+      }
 
-      final Uint8List bytes = await photo.readAsBytes();
-      if (bytes.isEmpty) return;
+      _cameraController = controller;
+      setState(() {
+        _isCameraReady = true;
+        _statusText = "Step 1/3: Blink your eyes (ዓይንዎን ይጨፍኑና ይግለጡ)";
+      });
 
+      await controller.startImageStream(_onCameraFrame);
+    } catch (e) {
       if (!mounted) return;
       setState(() {
-        _capturedBytes = bytes;
-        _isUploading = true;
-        _progress = 0.45;
-        _statusText = "Analyzing face & uploading verification photo...";
+        _statusText = "Camera start error: $e";
       });
+    }
+  }
+
+  InputImage? _buildInputImage(CameraImage image) {
+    final cam = _frontCamera;
+    if (cam == null) return null;
+
+    final rotation =
+        InputImageRotationValue.fromRawValue(cam.sensorOrientation);
+    if (rotation == null) return null;
+
+    final format = InputImageFormatValue.fromRawValue(image.format.raw);
+    if (format == null) return null;
+
+    if (image.planes.isEmpty) return null;
+
+    final WriteBuffer allBytes = WriteBuffer();
+    for (final Plane plane in image.planes) {
+      allBytes.putUint8List(plane.bytes);
+    }
+    final bytes = allBytes.done().buffer.asUint8List();
+
+    return InputImage.fromBytes(
+      bytes: bytes,
+      metadata: InputImageMetadata(
+        size: Size(image.width.toDouble(), image.height.toDouble()),
+        rotation: rotation,
+        format: format,
+        bytesPerRow: image.planes.first.bytesPerRow,
+      ),
+    );
+  }
+
+  Future<void> _onCameraFrame(CameraImage image) async {
+    if (_isProcessingFrame) return;
+    if (_isUploading) return;
+    if (!mounted) return;
+
+    _isProcessingFrame = true;
+    try {
+      final inputImage = _buildInputImage(image);
+      if (inputImage == null) {
+        _isProcessingFrame = false;
+        return;
+      }
+
+      final List<Face> faces = await _faceDetector.processImage(inputImage);
+      if (!mounted) return;
+
+      if (faces.isEmpty) {
+        setState(() {
+          _faceDetected = false;
+          _statusText = "Position your face inside the circle (ፊትዎን ክቡ ውስጥ ያድርጉ)";
+        });
+        _isProcessingFrame = false;
+        return;
+      }
+
+      final Face face = faces.first;
+      _faceDetected = true;
+
+      // STEP 1: EYE BLINK DETECTION (ዓይን መጨፈንና መግለጥ)
+      if (!_eyeVerified) {
+        final double? leftOpen = face.leftEyeOpenProbability;
+
+final double? rightOpen = face.rightEyeOpenProbability;
+        if (leftOpen != null && rightOpen != null) {
+          if (leftOpen > 0.60 && rightOpen > 0.60) {
+            if (_sawEyesClosed) {
+              _eyeVerified = true;
+            } else {
+              _sawEyesOpen = true;
+            }
+          }
+          bool eitherEyeClosed = false;
+          if (leftOpen < 0.35) eitherEyeClosed = true;
+          if (rightOpen < 0.35) eitherEyeClosed = true;
+
+          if (eitherEyeClosed) {
+            _sawEyesClosed = true;
+            _closedEyeFrames += 1;
+            if (_sawEyesOpen && _closedEyeFrames >= 2) {
+              _eyeVerified = true;
+            }
+          }
+        }
+      }
+
+      // STEP 2: MOUTH MOVEMENT DETECTION (አፍ መክፈት ወይም ፈገግ ማለት)
+      if (_eyeVerified && !_mouthVerified) {
+        final double? smileProb = face.smilingProbability;
+        if (smileProb != null && smileProb > 0.70) {
+          _mouthVerified = true;
+        }
+        if (!_mouthVerified) {
+          final bottomMouth = face.landmarks[FaceLandmarkType.bottomMouth];
+          final leftMouth = face.landmarks[FaceLandmarkType.leftMouth];
+          final rightMouth = face.landmarks[FaceLandmarkType.rightMouth];
+          if (bottomMouth != null && leftMouth != null && rightMouth != null) {
+            final double mouthWidth =
+                (rightMouth.position.x - leftMouth.position.x).abs().toDouble();
+            final double centerMouthY =
+                (leftMouth.position.y + rightMouth.position.y) / 2.0;
+            final double mouthDrop =
+                (bottomMouth.position.y - centerMouthY).abs().toDouble();
+            if (mouthWidth > 0) {
+              final double ratio = mouthDrop / mouthWidth;
+              if (ratio > 0.42) {
+                _mouthVerified = true;
+              }
+            }
+          }
+        }
+      }
+
+      // STEP 3: HEAD TURN LEFT & RIGHT DETECTION (ራስን ወደ ግራና ቀኝ ማዞር)
+      if (_eyeVerified && _mouthVerified && !_headVerified) {
+        final double? yawY = face.headEulerAngleY;
+        if (yawY != null) {
+          if (yawY > 15.0) {
+            _turnedHeadLeft = true;
+          }
+          if (yawY < -15.0) {
+            _turnedHeadRight = true;
+          }
+          if (_turnedHeadLeft && _turnedHeadRight) {
+            _headVerified = true;
+          }
+        }
+      }
+
+      int completedSteps = 0;
+      if (_eyeVerified) completedSteps += 1;
+      if (_mouthVerified) completedSteps += 1;
+      if (_headVerified) completedSteps += 1;
+
+      String nextInstruction = "";
+      if (!_eyeVerified) {
+        nextInstruction =
+            "Step 1/3: Blink your eyes (ዓይንዎን ይጨፍኑና ይግለጡ)";
+      } else if (!_mouthVerified) {
+        nextInstruction =
+            "Step 2/3: Open your mouth or smile (አፍዎን ይክፈቱ ወይም ፈገግ ይበሉ)";
+      } else if (!_headVerified) {
+        if (!_turnedHeadLeft && !_turnedHeadRight) {
+          nextInstruction =
+              "Step 3/3: Turn your head Left & Right (ራስዎን ወደ ግራና ቀኝ ያዙሩ)";
+        } else if (!_turnedHeadLeft) {
+          nextInstruction =
+              "Step 3/3: Now turn head Left (አሁን ራስዎን ወደ ግራ ያዙሩ)";
+        } else {
+          nextInstruction =
+              "Step 3/3: Now turn head Right (አሁን ራስዎን ወደ ቀኝ ያዙሩ)";
+        }
+      } else {
+        nextInstruction = "All 3 Biometric Checks Passed! Saving...";
+      }
+
+      setState(() {
+        _progress = completedSteps / 3.0;
+        _statusText = nextInstruction;
+      });
+
+      if (_eyeVerified && _mouthVerified && _headVerified) {
+        await _completeAndUploadCapture();
+      }
+    } catch (_) {
+    } finally {
+      _isProcessingFrame = false;
+    }
+  }
+
+  Future<void> _completeAndUploadCapture() async {
+    if (_isUploading) return;
+    final ctrl = _cameraController;
+    if (ctrl == null) return;
+
+    setState(() {
+      _isUploading = true;
+      _progress = 1.0;
+      _statusText = "Capturing & saving verified face photo...";
+    });
+
+try {
+      if (ctrl.value.isStreamingImages) {
+        await ctrl.stopImageStream();
+      }
+      final XFile shot = await ctrl.takePicture();
+      final Uint8List bytes = await shot.readAsBytes();
 
       String uploadedUrl = "";
       try {
@@ -1555,13 +2143,6 @@ class _FaceBiometricDialogState extends State<_FaceBiometricDialog> {
         throw Exception("Could not save face photo");
       }
 
-      if (!mounted) return;
-      setState(() {
-        _progress = 1.0;
-        _statusText = "Face verification passed! Opening profile details...";
-      });
-
-      await Future.delayed(const Duration(milliseconds: 600));
       if (mounted) {
         Navigator.pop(context, uploadedUrl);
       }
@@ -1569,23 +2150,62 @@ class _FaceBiometricDialogState extends State<_FaceBiometricDialog> {
       if (!mounted) return;
       setState(() {
         _isUploading = false;
-        _progress = 0.0;
-        _statusText = "Verification error: $e. Please try again.";
+        _statusText = "Save error: $e";
       });
     }
   }
 
+  Widget _buildStepChip(String label, bool done, bool active) {
+    Color bg = Colors.black12;
+    Color fg = Colors.black54;
+    if (done) {
+      bg = const Color(0xFF107C41);
+      fg = Colors.white;
+    } else if (active) {
+      bg = const Color(0xFFFACC15);
+      fg = const Color(0xFF1A1A1A);
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            done ? Icons.check_circle : Icons.radio_button_unchecked,
+            size: 13,
+            color: fg,
+          ),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              color: fg,
+              fontSize: 10.5,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final Color ringColor =
-        _progress >= 1.0 ? const Color(0xFF107C41) : const Color(0xFFFACC15);
+    final Color ringColor = _progress >= 1.0
+        ? const Color(0xFF107C41)
+        : (_faceDetected ? const Color(0xFFFACC15) : Colors.redAccent);
 
     return AlertDialog(
       backgroundColor: const Color(0xFFFAF7F2),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
       title: const Center(
         child: Text(
-          "Face Camera Verification",
+          "3-Step Face Verification",
           style: TextStyle(
             color: Color(0xFF1A1A1A),
             fontSize: 16,
@@ -1596,32 +2216,48 @@ class _FaceBiometricDialogState extends State<_FaceBiometricDialog> {
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          // 3 Step Status Pills (Eye, Mouth, Head)
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              _buildStepChip("1. ዓይን (Eye)", _eyeVerified, !_eyeVerified),
+              _buildStepChip("2. አፍ (Mouth)", _mouthVerified,
+                  _eyeVerified && !_mouthVerified),
+              _buildStepChip("3. ራስ (Head)", _headVerified,
+                  _eyeVerified && _mouthVerified && !_headVerified),
+            ],
+          ),
+          const SizedBox(height: 14),
+          // Live Circular Front Camera Preview
           Container(
-            width: 150,
-            height: 150,
+            width: 190,
+            height: 190,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: Colors.white,
+              color: Colors.black,
               border: Border.all(color: ringColor, width: 4),
-              image: _capturedBytes != null
-                  ? DecorationImage(
-                      image: MemoryImage(_capturedBytes!),
-                      fit: BoxFit.cover,
-                    )
-                  : null,
             ),
-            child: _capturedBytes == null
-                ? Center(
-                    child: Icon(
-                      Icons.face_retouching_natural,
+            child: ClipOval(
+              child: (_isCameraReady && _cameraController != null)
+                  ? FittedBox(
+                      fit: BoxFit.cover,
+                      child: SizedBox(
 
-size: 74,
-                      color: ringColor,
+width: _cameraController!.value.previewSize?.height ??
+                            190,
+                        height:
+                            _cameraController!.value.previewSize?.width ?? 190,
+                        child: CameraPreview(_cameraController!),
+                      ),
+                    )
+                  : const Center(
+                      child: CircularProgressIndicator(
+                        color: Color(0xFFFACC15),
+                      ),
                     ),
-                  )
-                : null,
+            ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
           LinearProgressIndicator(
             value: _progress,
             backgroundColor: Colors.black12,
@@ -1629,14 +2265,14 @@ size: 74,
             minHeight: 6,
             borderRadius: BorderRadius.circular(4),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
           Text(
             _statusText,
             textAlign: TextAlign.center,
             style: const TextStyle(
               color: Color(0xFF1A1A1A),
               fontSize: 12.5,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w700,
               height: 1.35,
             ),
           ),
@@ -1646,20 +2282,6 @@ size: 74,
         TextButton(
           onPressed: _isUploading ? null : () => Navigator.pop(context, null),
           child: const Text("Cancel", style: TextStyle(color: Colors.black54)),
-        ),
-        ElevatedButton.icon(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFFFACC15),
-            foregroundColor: const Color(0xFF1A1A1A),
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          ),
-          onPressed: _isUploading ? null : _captureAndUploadFace,
-          icon: const Icon(Icons.camera_alt_rounded, size: 18),
-          label: Text(
-            _isUploading ? "Verifying..." : "Open Front Camera",
-            style: const TextStyle(fontWeight: FontWeight.bold),
-          ),
         ),
       ],
     );
