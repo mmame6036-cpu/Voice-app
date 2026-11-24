@@ -89,6 +89,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
   static const Color kGoldBorder = Color(0xFFD49B42);
   static const Color kGoldBright = Color(0xFFFFD700);
   static const Color kMintLive = Color(0xFF26E6C8);
+  static const int kMinWinSoundThreshold = 2000;
 
   late AgoraService _agoraService;
   final User? _currentUser = FirebaseAuth.instance.currentUser;
@@ -129,11 +130,11 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
   Map<String, dynamic>? _musicData;
   String _activeMusicKey = "";
 
-  Map<String, dynamic>? _activeRedPacket;
+Map<String, dynamic>? _activeRedPacket;
   String? _activeRedPacketId;
   bool _isClaimingPacket = false;
 
-int? _mySeatIndex;
+  int? _mySeatIndex;
   int _totalSeats = 30;
   late List<String?> _seats;
   late List<String?> _seatUids;
@@ -233,11 +234,9 @@ int? _mySeatIndex;
     return false;
   }
 
-  // Cached ImageProvider prevents Base64 re-decoding & eliminates avatar flickering
   ImageProvider? _resolveAvatarProvider(String? avatarUrl) {
     if (avatarUrl == null || avatarUrl.isEmpty) return null;
-    final String cacheKey =
-        "${avatarUrl.length}_${avatarUrl.hashCode}";
+    final String cacheKey = "${avatarUrl.length}_${avatarUrl.hashCode}";
     final cached = _avatarCache[cacheKey];
     if (cached != null) return cached;
 
@@ -286,7 +285,11 @@ String _toGiftImageAsset(String path) {
     if (enable) {
       _keepAliveTimer?.cancel();
       _keepAliveTimer = Timer.periodic(const Duration(seconds: 25), (_) async {
-        if (!mounted || _mySeatIndex == null) {
+        if (!mounted) {
+          _keepAliveTimer?.cancel();
+          return;
+        }
+        if (_mySeatIndex == null) {
           _keepAliveTimer?.cancel();
           return;
         }
@@ -391,20 +394,20 @@ String _toGiftImageAsset(String path) {
     if (_micMinutesTimer != null && _micMinutesTimer!.isActive) return;
     _micMinutesTimer =
         Timer.periodic(const Duration(minutes: 1), (timer) async {
-      if (_hasCleanedUp || _mySeatIndex == null || _isMuted) return;
+      if (_hasCleanedUp) return;
+      if (_mySeatIndex == null) return;
+      if (_isMuted) return;
 
       final String uid = _resolvedUid;
       if (uid.isEmpty || uid.startsWith('guest_')) return;
 
-      try {
+try {
         final userRef = FirebaseFirestore.instance.collection('users').doc(uid);
         final hostRef = FirebaseFirestore.instance.collection('hosts').doc(uid);
         final snap = await userRef.get();
         final data = snap.data() ?? <String, dynamic>{};
 
-// 24-hour daily cycle resets at 9:00 PM EAT (18:00 UTC)
-        final cycleNow =
-            DateTime.now().toUtc().add(const Duration(hours: 6));
+        final cycleNow = DateTime.now().toUtc().add(const Duration(hours: 6));
         final String todayKey =
             "${cycleNow.year}-${cycleNow.month.toString().padLeft(2, '0')}-${cycleNow.day.toString().padLeft(2, '0')}";
 
@@ -525,7 +528,7 @@ String _toGiftImageAsset(String path) {
     }).catchError((_) {});
   }
 
-  void _triggerEntryNotice(String name, {String levelTag = "Lv.1"}) {
+void _triggerEntryNotice(String name, {String levelTag = "Lv.1"}) {
     if (!mounted) return;
     setState(() {
       _entryBannerLevel = levelTag;
@@ -535,8 +538,9 @@ String _toGiftImageAsset(String path) {
     _entryMarqueeController.forward();
   }
 
-void _showCompactWinBadge(int wonCoins) {
-    if (wonCoins <= 0 || !mounted) return;
+  void _showCompactWinBadge(int wonCoins) {
+    if (wonCoins < kMinWinSoundThreshold) return;
+    if (!mounted) return;
     _luckyWinToastTimer?.cancel();
     setState(() {
       _luckyWinToast = "+$wonCoins Coins Won!";
@@ -641,18 +645,19 @@ void _showCompactWinBadge(int wonCoins) {
     });
   }
 
-  void _initWalletAndProfileSync() {
+void _initWalletAndProfileSync() {
     _walletSubscription = FirebaseFirestore.instance
         .collection('users')
         .doc(_resolvedUid)
         .snapshots()
         .listen((snapshot) {
       if (snapshot.exists && snapshot.data() != null && mounted) {
+        final data = snapshot.data()!;
+        bool amAgent = false;
+        if (data['isAgent'] == true) amAgent = true;
+        if (data['role'] == 'agent') amAgent = true;
+        if (data['isAgency'] == true) amAgent = true;
 
-final data = snapshot.data()!;
-        final bool amAgent = (data['isAgent'] == true) ||
-            (data['role'] == 'agent') ||
-            (data['isAgency'] == true);
         final String profileName =
             (data['name'] ?? data['nickname'] ?? '').toString().trim();
         final String profileAvatar =
@@ -728,7 +733,8 @@ final data = snapshot.data()!;
   }
 
   Future<void> _claimRedPacket() async {
-    if (_isClaimingPacket || _activeRedPacketId == null) return;
+    if (_isClaimingPacket) return;
+    if (_activeRedPacketId == null) return;
     _isClaimingPacket = true;
 
     final packetRef = FirebaseFirestore.instance
@@ -750,11 +756,11 @@ final data = snapshot.data()!;
         final List claimed = List.from((data['claimedBy'] as List?) ?? []);
         senderName = (data['senderName'] ?? 'User').toString();
 
-        if (remCount <= 0 || remCoins <= 0 || claimed.contains(_resolvedUid)) {
-          return;
-        }
+        if (remCount <= 0) return;
+        if (remCoins <= 0) return;
+        if (claimed.contains(_resolvedUid)) return;
 
-        if (remCount == 1) {
+if (remCount == 1) {
           wonAmount = remCoins;
         } else {
           final int maxGrab = max(1, ((remCoins / remCount) * 2).floor());
@@ -770,7 +776,7 @@ final data = snapshot.data()!;
         });
       });
 
-if (wonAmount > 0) {
+      if (wonAmount > 0) {
         await FirebaseFirestore.instance
             .collection('users')
             .doc(_resolvedUid)
@@ -778,7 +784,15 @@ if (wonAmount > 0) {
           'coins': FieldValue.increment(wonAmount),
         }, SetOptions(merge: true));
 
-        _showCompactWinBadge(wonAmount);
+        _luckyWinToastTimer?.cancel();
+        if (mounted) {
+          setState(() {
+            _luckyWinToast = "+$wonAmount Coins Grabbed!";
+          });
+          _luckyWinToastTimer = Timer(const Duration(seconds: 2), () {
+            if (mounted) setState(() => _luckyWinToast = null);
+          });
+        }
 
         await FirebaseFirestore.instance
             .collection('rooms')
@@ -835,7 +849,9 @@ if (wonAmount > 0) {
   void _startSeatHeartbeat() {
     _heartbeatTimer?.cancel();
     _heartbeatTimer = Timer.periodic(const Duration(seconds: 10), (_) {
-      if (_hasCleanedUp || _isMinimizing || !mounted) return;
+      if (_hasCleanedUp) return;
+      if (_isMinimizing) return;
+      if (!mounted) return;
 
       if (_mySeatIndex != null) {
         final idx = _mySeatIndex!;
@@ -865,12 +881,14 @@ if (wonAmount > 0) {
         FirebaseFirestore.instance.collection('rooms').doc(widget.roomId);
 
     _roomLiveSubscription = roomRef.snapshots().listen((snapshot) async {
-      if (!mounted || _hasCleanedUp) return;
+      if (!mounted) return;
+      if (_hasCleanedUp) return;
+
       final nowMs = DateTime.now().millisecondsSinceEpoch;
       final Map<String, dynamic> activeMap = {};
       final Map<String, dynamic> staleCleanup = {};
 
-      if (snapshot.exists && snapshot.data() != null) {
+if (snapshot.exists && snapshot.data() != null) {
         final data = snapshot.data()!;
 
         final List<String> kicked =
@@ -887,14 +905,16 @@ if (wonAmount > 0) {
           return;
         }
 
-final String updatedTitle =
+        final String updatedTitle =
             (data['roomTitle'] ?? data['title'] ?? '').toString();
         final String hostUidDoc = (data['hostUid'] ?? '').toString();
         final String announcementText =
             (data['announcement'] ?? '').toString();
         final bool allClosed = data['allMicsClosed'] == true;
-        final bool agentHost = (data['isAgentHost'] == true) ||
-            ((data['goldenSeatCount'] as num?)?.toInt() == 6);
+        bool agentHost = false;
+        if (data['isAgentHost'] == true) agentHost = true;
+        if ((data['goldenSeatCount'] as num?)?.toInt() == 6) agentHost = true;
+
         final String? pass = data['password']?.toString();
         final List<String> admins =
             (data['admins'] as List?)?.map((e) => e.toString()).toList() ?? [];
@@ -904,6 +924,13 @@ final String updatedTitle =
         final Map<String, dynamic>? music = data['musicState'] is Map
             ? Map<String, dynamic>.from(data['musicState'])
             : null;
+
+        final Map<String, int> persistedSeatGifts = {};
+        if (data['seatGifts'] is Map) {
+          (data['seatGifts'] as Map).forEach((k, v) {
+            persistedSeatGifts[k.toString()] = (v as num?)?.toInt() ?? 0;
+          });
+        }
 
         await _syncMusicPlayback(music);
 
@@ -948,6 +975,7 @@ final String updatedTitle =
 
           int? foundMySeat;
           for (int i = 0; i < 30; i++) {
+            final int dbGifts = persistedSeatGifts['$i'] ?? 0;
             final entry = activeMap['$i'];
             if (entry is Map) {
               final uid = (entry['uid'] ?? '').toString();
@@ -957,10 +985,12 @@ final String updatedTitle =
               final frame = (entry['frame'] ?? 'default').toString();
               final avatar = (entry['avatar'] ?? '').toString();
               _seats[i] = uid == _resolvedUid ? _effectiveUserName : name;
-              _seatUids[i] = uid;
+
+_seatUids[i] = uid;
               _seatNumericIds[i] = numId;
               _seatMutes[i] = muted;
               _seatFrames[i] = frame;
+              _seatGifts[i] = max(dbGifts, _seatGifts[i]);
               if (uid == _resolvedUid && _myAvatarUrl.isNotEmpty) {
                 _seatAvatars[i] = _myAvatarUrl;
               } else if (avatar.isNotEmpty) {
@@ -973,11 +1003,12 @@ final String updatedTitle =
             } else {
               if (_mySeatIndex == i && _seatUids[i] == _resolvedUid) {
                 foundMySeat = i;
+                _seatGifts[i] = max(dbGifts, _seatGifts[i]);
               } else {
                 _seats[i] = null;
                 _seatUids[i] = null;
                 _seatNumericIds[i] = 0;
-                _seatGifts[i] = 0;
+                _seatGifts[i] = dbGifts;
                 _seatMutes[i] = false;
                 _seatFrames[i] = 'default';
                 _seatAvatars[i] = '';
@@ -987,7 +1018,7 @@ final String updatedTitle =
           }
           _mySeatIndex = foundMySeat;
 
-if (_allMicsClosed &&
+          if (_allMicsClosed &&
               !_isAdminUser &&
               _mySeatIndex != null &&
               !_isMuted) {
@@ -1067,7 +1098,10 @@ if (_allMicsClosed &&
         final String giftName = (d['giftName'] ?? 'Gift').toString();
         final String giftIcon = (d['giftIcon'] ?? '🎁').toString();
         final String asset = (d['imageAsset'] ?? '').toString();
-        final String thumb = (d['thumbAsset'] ?? _toGiftImageAsset(asset)).toString();
+
+final String thumb =
+            (d['thumbAsset'] ?? _toGiftImageAsset(asset)).toString();
+        final bool isLucky = d['isLucky'] == true;
         final int mult = (d['multiplier'] as num?)?.toInt() ?? 1;
         final int totalCost = (d['totalCost'] as num?)?.toInt() ?? 0;
         final int wonCoins = (d['wonCoins'] as num?)?.toInt() ?? 0;
@@ -1076,29 +1110,39 @@ if (_allMicsClosed &&
         final int perSeatCost =
             seats.isNotEmpty ? (totalCost ~/ seats.length) : totalCost;
 
-        if (wonCoins > 0) {
+        if (wonCoins >= kMinWinSoundThreshold) {
           final String multLabel = luckyMult > 0 ? "${luckyMult}x" : "Lucky";
           _pushWinnerToMarquee(
               "🏆 VIP won $multLabel ($wonCoins Coins) in $giftName!");
         }
 
         _ensureSpeakerLoud();
-        _fullscreenAnimStreamController.add(
-          FullscreenGiftEvent(
-            giftId: (d['giftId'] ?? '').toString(),
-            giftName: "$giftName x$mult",
-            asset: asset,
-            giftIcon: giftIcon,
-            senderName: "VIP",
-          ),
-        );
+
+        if (!isLucky) {
+          _fullscreenAnimStreamController.add(
+            FullscreenGiftEvent(
+              giftId: (d['giftId'] ?? '').toString(),
+              giftName: "$giftName x$mult",
+              asset: asset,
+              giftIcon: giftIcon,
+              senderName: "VIP",
+            ),
+          );
+        }
 
         setState(() {
           for (final s in seats) {
             final idx = (s as num).toInt();
-            if (idx >= 0 && idx < 30 && _seats[idx] != null) {
-              _seatGifts[idx] += perSeatCost;
-              _triggerCenterGiftAnimation(thumb, idx, icon: giftIcon);
+            if (idx >= 0 && idx < 30) {
+              if (_seats[idx] != null) {
+                _seatGifts[idx] += perSeatCost;
+              }
+              _triggerCenterGiftAnimation(
+                thumb,
+                idx,
+                icon: giftIcon,
+                fromCenter: isLucky,
+              );
             }
           }
         });
@@ -1106,7 +1150,7 @@ if (_allMicsClosed &&
     });
   }
 
-void _addChatMessage(RoomChatMessage message) {
+  void _addChatMessage(RoomChatMessage message) {
     if (!mounted) return;
     setState(() {
       _messages.add(message);
@@ -1182,7 +1226,7 @@ void _addChatMessage(RoomChatMessage message) {
         },
       );
 
-      final String cleanChannelId = widget.roomId.trim();
+final String cleanChannelId = widget.roomId.trim();
 
       await _agoraService.joinRoom(
         channelId: cleanChannelId,
@@ -1227,8 +1271,7 @@ void _addChatMessage(RoomChatMessage message) {
               builder: (_) => VoiceRoomScreen(
                 roomTitle: rTitle,
                 roomId: rId,
-
-hostName: hName,
+                hostName: hName,
                 userNumericId: uNumId,
                 userUid: uUid,
                 userName: uName,
@@ -1240,8 +1283,9 @@ hostName: hName,
       leaveCallback: () async {
         final Map<String, dynamic> removeSeats = {};
         for (int i = 0; i < 30; i++) {
-          final bool matchSeat = (seatUidsSnapshot[i] == resolvedU) ||
-              (currentSeatSnapshot == i);
+          bool matchSeat = false;
+          if (seatUidsSnapshot[i] == resolvedU) matchSeat = true;
+          if (currentSeatSnapshot == i) matchSeat = true;
           if (matchSeat) {
             removeSeats['$i'] = FieldValue.delete();
           }
@@ -1297,24 +1341,27 @@ hostName: hName,
     Navigator.of(context).pop();
   }
 
-  // Exact RenderBox flight from bottom gift button directly to the target seat
   void _triggerCenterGiftAnimation(
     String imageAsset,
     int targetSeatIndex, {
     String icon = "🎁",
+    bool fromCenter = false,
   }) {
     final stackBox =
         _roomStackKey.currentContext?.findRenderObject() as RenderBox?;
     if (stackBox == null || !stackBox.hasSize) return;
 
-    Offset startPos =
-        Offset(stackBox.size.width * 0.78, stackBox.size.height - 34);
-    final giftBtnBox =
-        _giftDockBtnKey.currentContext?.findRenderObject() as RenderBox?;
-    if (giftBtnBox != null && giftBtnBox.hasSize) {
-      final globalBtnCenter =
-          giftBtnBox.localToGlobal(giftBtnBox.size.center(Offset.zero));
-      startPos = stackBox.globalToLocal(globalBtnCenter);
+Offset startPos =
+        Offset(stackBox.size.width * 0.5, stackBox.size.height * 0.44);
+
+    if (!fromCenter) {
+      final giftBtnBox =
+          _giftDockBtnKey.currentContext?.findRenderObject() as RenderBox?;
+      if (giftBtnBox != null && giftBtnBox.hasSize) {
+        final globalBtnCenter =
+            giftBtnBox.localToGlobal(giftBtnBox.size.center(Offset.zero));
+        startPos = stackBox.globalToLocal(globalBtnCenter);
+      }
     }
 
     Offset endPos = Offset(stackBox.size.width * 0.5, stackBox.size.height * 0.25);
@@ -1350,7 +1397,7 @@ hostName: hName,
       flightAnimation: animation,
     );
 
-setState(() {
+    setState(() {
       _activeFlyingGifts.add(giftItem);
     });
 
@@ -1386,7 +1433,8 @@ setState(() {
     _stopMicMinutesTracking();
 
     roomRef.set({
-      'activeSeats': {'$index': FieldValue.delete()}
+      'activeSeats': {'$index': FieldValue.delete()},
+      'seatGifts': {'$index': 0},
     }, SetOptions(merge: true)).catchError((_) {});
 
     await _agoraService.switchRole(isSpeaker: false);
@@ -1418,7 +1466,6 @@ setState(() {
                 ),
               ),
               const SizedBox(height: 14),
-              // Featured Dragon vs Tiger Card
               GestureDetector(
                 onTap: () {
                   Navigator.pop(ctx);
@@ -1427,7 +1474,8 @@ setState(() {
                     roomId: widget.roomId,
                     userName: _effectiveUserName,
                     userUid: _resolvedUid,
-                    userNumericId: activeNumId,
+
+userNumericId: activeNumId,
                   );
                 },
                 child: Container(
@@ -1461,8 +1509,7 @@ setState(() {
                             SizedBox(height: 2),
                             Text(
                               "Live Arena • X2 Dragon/Tiger • X22 Tie",
-
-style: TextStyle(
+                              style: TextStyle(
                                 color: Colors.white,
                                 fontSize: 11.5,
                               ),
@@ -1516,7 +1563,8 @@ style: TextStyle(
                                 fontWeight: FontWeight.w900,
                                 fontSize: 13.5,
                               ),
-                            ),
+
+),
                           ],
                         ),
                       ),
@@ -1552,8 +1600,7 @@ style: TextStyle(
                           children: [
                             Text("🎰", style: TextStyle(fontSize: 28)),
                             SizedBox(height: 4),
-
-Text(
+                            Text(
                               "Lucky Spin",
                               style: TextStyle(
                                 color: kMintLive,
@@ -1620,15 +1667,20 @@ Text(
     final int occupierNumId = _seatNumericIds[seatIndex];
     final int receivedGifts = _seatGifts[seatIndex];
     final bool isSeatMuted = _seatMutes[seatIndex];
-    final bool isMe =
-        (_mySeatIndex == seatIndex) || (occupierUid == _resolvedUid);
-    final bool isSeatHost =
-        (seatIndex == 0) || (occupierName == widget.hostName);
+    bool isMe = false;
+    if (_mySeatIndex == seatIndex) isMe = true;
+    if (occupierUid == _resolvedUid) isMe = true;
+
+    bool isSeatHost = false;
+    if (seatIndex == 0) isSeatHost = true;
+    if (occupierName == widget.hostName) isSeatHost = true;
+
     final String initialAvatar =
         isMe && _myAvatarUrl.isNotEmpty ? _myAvatarUrl : _seatAvatars[seatIndex];
 
     showModalBottomSheet(
-      context: context,
+
+context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (ctx) {
@@ -1672,7 +1724,7 @@ Text(
                     ? occupierUid.substring(0, 8)
                     : occupierUid);
 
-return Padding(
+            return Padding(
               padding: const EdgeInsets.only(top: 44),
               child: Stack(
                 clipBehavior: Clip.none,
@@ -1716,7 +1768,8 @@ return Padding(
                             ),
                             const SizedBox(width: 6),
                             Text(flag, style: const TextStyle(fontSize: 17)),
-                          ],
+
+],
                         ),
                         const SizedBox(height: 6),
                         Row(
@@ -1753,8 +1806,7 @@ return Padding(
                                     colors: [kGoldBlackTop, kGoldBlackBottom],
                                   ),
                                   borderRadius: BorderRadius.circular(10),
-
-border: Border.all(
+                                  border: Border.all(
                                       color: kGoldBright, width: 1.0),
                                 ),
                                 child: const Text(
@@ -1793,7 +1845,8 @@ border: Border.all(
                           onTap: () {
                             Clipboard.setData(ClipboardData(text: displayUid));
                             ScaffoldMessenger.of(this.context).showSnackBar(
-                              SnackBar(
+
+SnackBar(
                                 content: Text("UID $displayUid copied!"),
                                 duration: const Duration(seconds: 1),
                               ),
@@ -1831,8 +1884,7 @@ border: Border.all(
                                   borderRadius: BorderRadius.circular(16),
                                   border: Border.all(
                                       color: kGoldBorder, width: 1.2),
-
-),
+                                ),
                                 child: Row(
                                   children: [
                                     Container(
@@ -1867,7 +1919,8 @@ border: Border.all(
                                           style: TextStyle(
                                             color: Colors.white70,
                                             fontSize: 10,
-                                          ),
+
+),
                                         ),
                                       ],
                                     ),
@@ -1902,10 +1955,9 @@ border: Border.all(
                                             fontSize: 11,
                                             fontWeight: FontWeight.bold,
                                           ),
-
-),
+                                        ),
                                         Text(
-                                          "x$receivedGifts",
+                                          "$receivedGifts",
                                           style: const TextStyle(
                                             color: kGoldBright,
                                             fontSize: 12.5,
@@ -1942,7 +1994,8 @@ border: Border.all(
                                   style: OutlinedButton.styleFrom(
                                     foregroundColor: Colors.white,
                                     side: const BorderSide(color: kGoldBorder),
-                                    shape: RoundedRectangleBorder(
+
+shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(14),
                                     ),
                                   ),
@@ -1975,8 +2028,7 @@ border: Border.all(
                                 ),
                               ),
                               const SizedBox(width: 10),
-
-Expanded(
+                              Expanded(
                                 child: OutlinedButton.icon(
                                   style: OutlinedButton.styleFrom(
                                     foregroundColor: Colors.redAccent,
@@ -2002,7 +2054,10 @@ Expanded(
                                         .set({
                                       'activeSeats': {
                                         '$seatIndex': FieldValue.delete(),
-                                      }
+                                      },
+                                      'seatGifts': {
+                                        '$seatIndex': 0,
+                                      },
                                     }, SetOptions(merge: true)).catchError(
                                             (_) {});
                                   },
@@ -2010,7 +2065,8 @@ Expanded(
                               ),
                             ],
                           ),
-                        ],
+
+],
                         const SizedBox(height: 16),
                         Row(
                           children: [
@@ -2048,8 +2104,7 @@ Expanded(
                                     }
                                   },
                                   child: Text(
-
-isMe
+                                    isMe
                                         ? "Leave the microphone"
                                         : "@ Mention",
                                     style: const TextStyle(
@@ -2083,7 +2138,8 @@ isMe
                                     style: TextStyle(
                                       fontSize: 12.5,
                                       fontWeight: FontWeight.w800,
-                                    ),
+
+),
                                   ),
                                   onPressed: () {
                                     Navigator.pop(ctx);
@@ -2120,8 +2176,7 @@ isMe
                                   label: const Text(
                                     "Send gifts",
                                     style: TextStyle(
-
-fontSize: 13,
+                                      fontSize: 13,
                                       fontWeight: FontWeight.w900,
                                       color: Colors.black,
                                     ),
@@ -2163,7 +2218,8 @@ fontSize: 13,
                         backgroundColor: Colors.transparent,
                         backgroundImage: profileAvatarProvider,
                         child: profileAvatarProvider == null
-                            ? const Icon(
+
+? const Icon(
                                 Icons.person,
                                 color: kGoldBright,
                                 size: 44,
@@ -2241,7 +2297,7 @@ fontSize: 13,
       _startMicMinutesTracking();
     }
 
-final Map<String, dynamic> seatData = {
+    final Map<String, dynamic> seatData = {
       'uid': _resolvedUid,
       'name': _effectiveUserName,
       'numericId': activeNumId,
@@ -2256,13 +2312,19 @@ final Map<String, dynamic> seatData = {
     final Map<String, dynamic> seatUpdates = {
       '$index': seatData,
     };
+    final Map<String, dynamic> giftMoves = {};
     if (oldIndex != null && oldIndex != index) {
       seatUpdates['$oldIndex'] = FieldValue.delete();
+      giftMoves['$index'] = _seatGifts[index];
+      giftMoves['$oldIndex'] = 0;
     }
 
-    roomRef
-        .set({'activeSeats': seatUpdates}, SetOptions(merge: true))
-        .catchError((_) {});
+    final Map<String, dynamic> roomPayload = {'activeSeats': seatUpdates};
+    if (giftMoves.isNotEmpty) {
+      roomPayload['seatGifts'] = giftMoves;
+    }
+
+    roomRef.set(roomPayload, SetOptions(merge: true)).catchError((_) {});
 
     await _agoraService.switchRole(isSpeaker: true);
     await _agoraService.setMicrophoneMute(shouldMuteOnJoin);
@@ -2290,7 +2352,7 @@ final Map<String, dynamic> seatData = {
       _startMicMinutesTracking();
     }
 
-    if (_mySeatIndex != null) {
+if (_mySeatIndex != null) {
       final idx = _mySeatIndex!;
       final Map<String, dynamic> seatPayload = {
         'uid': _resolvedUid,
@@ -2391,7 +2453,7 @@ final Map<String, dynamic> seatData = {
     _comboRingController.reset();
     _comboRingController.forward();
 
-_comboTimer = Timer(const Duration(seconds: 3), () {
+    _comboTimer = Timer(const Duration(seconds: 3), () {
       if (mounted) {
         setState(() {
           _showComboButton = false;
@@ -2433,7 +2495,8 @@ _comboTimer = Timer(const Duration(seconds: 3), () {
 
     if (redAdd > 0) {
       FirebaseFirestore.instance.collection('rooms').doc(widget.roomId).set({
-        'pkBattle': {
+
+'pkBattle': {
           'redScore': FieldValue.increment(redAdd),
         }
       }, SetOptions(merge: true)).catchError((_) {});
@@ -2479,14 +2542,15 @@ _comboTimer = Timer(const Duration(seconds: 3), () {
       wonCoins += _rollLuckyWin(unitPrice);
     }
     _ensureSpeakerLoud();
-    _playLuckyCoinSound();
 
     final String giftIconStr = (config['icon'] ?? "🎁").toString();
     final String giftAssetStr = (config['asset'] ?? "").toString();
-    final String giftThumbStr = (config['imageAsset'] ?? _toGiftImageAsset(giftAssetStr)).toString();
+    final String giftThumbStr =
+        (config['imageAsset'] ?? _toGiftImageAsset(giftAssetStr)).toString();
     final String giftNameStr = (config['name'] ?? "Gift").toString();
 
-    if (wonCoins > 0) {
+    if (wonCoins >= kMinWinSoundThreshold) {
+      _playLuckyCoinSound();
       _showCompactWinBadge(wonCoins);
       final int multX = max(1, wonCoins ~/ max(1, unitPrice));
       _pushWinnerToMarquee(
@@ -2497,16 +2561,6 @@ _comboTimer = Timer(const Duration(seconds: 3), () {
       _effectiveUserName,
       "$giftNameStr (x$nextCombo)",
       giftIconStr,
-    );
-
-    _fullscreenAnimStreamController.add(
-      FullscreenGiftEvent(
-        giftId: (config['giftId'] ?? "").toString(),
-        giftName: "$giftNameStr x$nextCombo",
-        asset: giftAssetStr,
-        giftIcon: giftIconStr,
-        senderName: _effectiveUserName,
-      ),
     );
 
     final int netChange = -totalSpend + wonCoins;
@@ -2524,8 +2578,10 @@ _comboTimer = Timer(const Duration(seconds: 3), () {
           ]
         : targets;
 
-for (final seatIdx in activeTargets) {
+    final Map<String, dynamic> seatGiftIncrements = {};
+    for (final seatIdx in activeTargets) {
       if (seatIdx >= 0 && seatIdx < 30 && _seats[seatIdx] != null) {
+        seatGiftIncrements['$seatIdx'] = FieldValue.increment(sendCost);
         final targetUid = _seatUids[seatIdx] ?? _resolvedUid;
         FirebaseFirestore.instance.collection('users').doc(targetUid).set({
           'points': FieldValue.increment(ptsPerSeat),
@@ -2536,6 +2592,12 @@ for (final seatIdx in activeTargets) {
       }
     }
 
+    if (seatGiftIncrements.isNotEmpty) {
+      FirebaseFirestore.instance.collection('rooms').doc(widget.roomId).set({
+        'seatGifts': seatGiftIncrements,
+      }, SetOptions(merge: true)).catchError((_) {});
+    }
+
     FirebaseFirestore.instance
         .collection('rooms')
         .doc(widget.roomId)
@@ -2544,7 +2606,8 @@ for (final seatIdx in activeTargets) {
       'type': 'gift',
       'senderId': _resolvedUid,
       'giftId': (config['giftId'] ?? "").toString(),
-      'giftName': giftNameStr,
+
+'giftName': giftNameStr,
       'giftIcon': giftIconStr,
       'imageAsset': giftAssetStr,
       'thumbAsset': giftThumbStr,
@@ -2625,7 +2688,7 @@ for (final seatIdx in activeTargets) {
       final String playAsset = result.gift.playAsset;
       final String thumbAsset = result.gift.imageAsset;
 
-      if (isLucky && result.wonCoins > 0) {
+      if (isLucky && result.wonCoins >= kMinWinSoundThreshold) {
         _showCompactWinBadge(result.wonCoins);
         final int multX = max(1, result.wonCoins ~/ max(1, result.gift.price));
         _pushWinnerToMarquee(
@@ -2639,17 +2702,19 @@ for (final seatIdx in activeTargets) {
         result.gift.icon,
       );
 
-      _fullscreenAnimStreamController.add(
-        FullscreenGiftEvent(
-          giftId: result.gift.id,
-          giftName: "${result.gift.name} x${result.multiplier}",
-          asset: playAsset,
-          giftIcon: result.gift.icon,
-          senderName: _effectiveUserName,
-        ),
-      );
+      if (!isLucky) {
+        _fullscreenAnimStreamController.add(
+          FullscreenGiftEvent(
+            giftId: result.gift.id,
+            giftName: "${result.gift.name} x${result.multiplier}",
+            asset: playAsset,
+            giftIcon: result.gift.icon,
+            senderName: _effectiveUserName,
+          ),
+        );
+      }
 
-_executeMultiSeatSend(
+      _executeMultiSeatSend(
         giftId: result.gift.id,
         targetSeats: result.targetSeatIndices,
         isAll: result.isAll,
@@ -2684,7 +2749,7 @@ _executeMultiSeatSend(
   }) {
     if (targetSeats.isEmpty && !isAll) return;
 
-    _addPkPointsForSeats(targetSeats, isAll, cost);
+_addPkPointsForSeats(targetSeats, isAll, cost);
 
     final bool isFifthMilestone =
         isLucky && fromCombo && (_comboCount % 5 == 0);
@@ -2709,12 +2774,22 @@ _executeMultiSeatSend(
             anyOccupied = true;
             _seatGifts[i] += cost;
             for (int b = 0; b < burstCount; b++) {
-              _triggerCenterGiftAnimation(imageAsset, i, icon: icon);
+              _triggerCenterGiftAnimation(
+                imageAsset,
+                i,
+                icon: icon,
+                fromCenter: isLucky,
+              );
             }
           }
         }
         if (!anyOccupied) {
-          _triggerCenterGiftAnimation(imageAsset, 0, icon: icon);
+          _triggerCenterGiftAnimation(
+            imageAsset,
+            0,
+            icon: icon,
+            fromCenter: isLucky,
+          );
         }
       } else {
         for (final seatIdx in targetSeats) {
@@ -2723,7 +2798,12 @@ _executeMultiSeatSend(
               _seatGifts[seatIdx] += cost;
             }
             for (int b = 0; b < burstCount; b++) {
-              _triggerCenterGiftAnimation(imageAsset, seatIdx, icon: icon);
+              _triggerCenterGiftAnimation(
+                imageAsset,
+                seatIdx,
+                icon: icon,
+                fromCenter: isLucky,
+              );
             }
           }
         }
@@ -2761,8 +2841,9 @@ _executeMultiSeatSend(
         FirebaseFirestore.instance.collection('rooms').doc(widget.roomId);
     final Map<String, dynamic> removeSeats = {};
     for (int i = 0; i < 30; i++) {
-      final bool isMySeat =
-          (_seatUids[i] == _resolvedUid) || (_mySeatIndex == i);
+      bool isMySeat = false;
+      if (_seatUids[i] == _resolvedUid) isMySeat = true;
+      if (_mySeatIndex == i) isMySeat = true;
       if (isMySeat) {
         removeSeats['$i'] = FieldValue.delete();
       }
@@ -2789,8 +2870,7 @@ _executeMultiSeatSend(
     _luckyWinToastTimer?.cancel();
     _walletSubscription?.cancel();
     _roomLiveSubscription?.cancel();
-
-_eventsSubscription?.cancel();
+    _eventsSubscription?.cancel();
     _chatSubscription?.cancel();
     _redPacketSubscription?.cancel();
     _speakingWaveController.dispose();
@@ -2812,7 +2892,7 @@ _eventsSubscription?.cancel();
     return index >= 1 && index <= _goldenSeatsCount;
   }
 
-  Color _getSeatFrameColor(int index, bool isOccupied, bool isSpeaking) {
+Color _getSeatFrameColor(int index, bool isOccupied, bool isSpeaking) {
     if (isSpeaking) return kGoldBright;
     if (index == 0) return kGoldBright;
     if (_isGoldenSeat(index)) return kGoldBright;
@@ -2894,14 +2974,23 @@ _eventsSubscription?.cancel();
     final bool isCrownSeat = _isGoldenSeat(index);
     final Color frameColor = _getSeatFrameColor(index, isOccupied, isSpeaking);
     final bool hasCustomFrame = isOccupied && _seatFrames[index] != 'default';
-    final bool showGlow = isSpeaking || hasCustomFrame || isCrownSeat || isHostSeat;
+
+    bool showGlow = false;
+    if (isSpeaking) showGlow = true;
+    if (hasCustomFrame) showGlow = true;
+    if (isCrownSeat) showGlow = true;
+    if (isHostSeat) showGlow = true;
+
     final ImageProvider? seatAvatarImg =
         isOccupied ? _resolveAvatarProvider(_seatAvatars[index]) : null;
 
+    bool isGoldName = false;
+    if (isCrownSeat) isGoldName = true;
+    if (isHostSeat) isGoldName = true;
+
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-
-onTap: () => _handleSeatTap(index),
+      onTap: () => _handleSeatTap(index),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         mainAxisSize: MainAxisSize.min,
@@ -2912,7 +3001,8 @@ onTap: () => _handleSeatTap(index),
             children: [
               if (isSpeaking) _buildSpeakingRippleRings(seatDimension),
               if (isHostSeat)
-                Positioned(
+
+Positioned(
                   top: -seatDimension * 0.22,
                   child: Container(
                     padding:
@@ -2993,8 +3083,7 @@ onTap: () => _handleSeatTap(index),
                     if (showGlow)
                       BoxShadow(
                         color: frameColor.withOpacity(0.5),
-
-blurRadius: 9,
+                        blurRadius: 9,
                         spreadRadius: 1,
                       )
                     else
@@ -3004,7 +3093,8 @@ blurRadius: 9,
                         offset: const Offset(0, 2),
                       ),
                   ],
-                ),
+
+),
                 child: seatAvatarImg != null
                     ? ClipOval(
                         child: Image(
@@ -3064,9 +3154,7 @@ blurRadius: 9,
               style: TextStyle(
                 color: isOccupied
                     ? Colors.white
-                    : ((isCrownSeat || isHostSeat)
-                        ? kGoldBright
-                        : Colors.white70),
+                    : (isGoldName ? kGoldBright : Colors.white70),
                 fontSize: nameFontSize,
                 fontWeight: FontWeight.w800,
                 height: 1.05,
@@ -3086,13 +3174,12 @@ blurRadius: 9,
             margin: const EdgeInsets.only(top: 2.0),
             padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
             decoration: BoxDecoration(
-              color: (giftsCount > 0 && isOccupied)
+              color: giftsCount > 0
                   ? kGoldBlackBottom
                   : Colors.black.withOpacity(0.38),
               borderRadius: BorderRadius.circular(8),
               border: Border.all(
-
-color: (giftsCount > 0 && isOccupied)
+                color: giftsCount > 0
                     ? kGoldBright
                     : kGoldBorder.withOpacity(0.45),
                 width: 0.8,
@@ -3104,13 +3191,12 @@ color: (giftsCount > 0 && isOccupied)
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text("🎁", style: TextStyle(fontSize: badgeFontSize * 0.90)),
-                  const SizedBox(width: 2),
+
+const SizedBox(width: 2),
                   Text(
-                    isOccupied ? "$giftsCount" : "0",
+                    "$giftsCount",
                     style: TextStyle(
-                      color: (giftsCount > 0 && isOccupied)
-                          ? kGoldBright
-                          : Colors.white70,
+                      color: giftsCount > 0 ? kGoldBright : Colors.white70,
                       fontSize: badgeFontSize,
                       fontWeight: FontWeight.bold,
                       height: 1.0,
@@ -3203,8 +3289,7 @@ color: (giftsCount > 0 && isOccupied)
                   Text(
                     "Play",
                     style: TextStyle(
-
-color: Colors.black,
+                      color: Colors.black,
                       fontSize: 10.5,
                       fontWeight: FontWeight.w900,
                     ),
@@ -3225,7 +3310,7 @@ color: Colors.black,
       return const SizedBox.shrink();
     }
 
-    final int rScore = (_pkData!['redScore'] as num?)?.toInt() ?? 0;
+final int rScore = (_pkData!['redScore'] as num?)?.toInt() ?? 0;
     final int bScore = (_pkData!['blueScore'] as num?)?.toInt() ?? 0;
     final int total = rScore + bScore;
     final double redRatio =
@@ -3318,8 +3403,7 @@ color: Colors.black,
       child: Row(
         children: [
           const Icon(Icons.music_note, color: Color(0xFFFF4081), size: 16),
-
-const SizedBox(width: 6),
+          const SizedBox(width: 6),
           Expanded(
             child: Text(
               "Playing: ${_musicData!['trackTitle'] ?? 'Room Music'}",
@@ -3332,7 +3416,8 @@ const SizedBox(width: 6),
           ),
           if (_isAdminUser)
             GestureDetector(
-              onTap: () async {
+
+onTap: () async {
                 await FirebaseFirestore.instance
                     .collection('rooms')
                     .doc(widget.roomId)
@@ -3414,8 +3499,6 @@ const SizedBox(width: 6),
             ),
             const SizedBox(width: 8),
           ],
-
-          // "Say Hello" Chat Pill Input
           Expanded(
             child: Container(
               height: 40,
@@ -3434,8 +3517,7 @@ const SizedBox(width: 6),
                     child: TextField(
                       controller: _chatController,
                       style: const TextStyle(color: Colors.white, fontSize: 13),
-
-decoration: const InputDecoration(
+                      decoration: const InputDecoration(
                         hintText: "Say Hello",
                         hintStyle:
                             TextStyle(color: Colors.white60, fontSize: 13),
@@ -3445,7 +3527,8 @@ decoration: const InputDecoration(
                       ),
                       onSubmitted: (_) => _sendMessage(),
                     ),
-                  ),
+
+),
                   GestureDetector(
                     onTap: _sendMessage,
                     child: const Icon(
@@ -3459,8 +3542,6 @@ decoration: const InputDecoration(
             ),
           ),
           const SizedBox(width: 10),
-
-          // 1. Purple Game Controller Button (Dragon vs Tiger + Mini-Games)
           GestureDetector(
             onTap: _showMiniGamesSheet,
             child: Container(
@@ -3488,8 +3569,6 @@ decoration: const InputDecoration(
             ),
           ),
           const SizedBox(width: 8),
-
-          // 2. Golden-Orange Gift Box Circle Button
           GestureDetector(
             key: _giftDockBtnKey,
             onTap: () => _openGiftSheet(),
@@ -3519,8 +3598,6 @@ decoration: const InputDecoration(
             ),
           ),
           const SizedBox(width: 8),
-
-          // 3. Blue-Green Message Bubble Button -> Opens Main Private Messages Screen
           GestureDetector(
             onTap: _openMessagesInbox,
             child: Container(
@@ -3548,8 +3625,6 @@ decoration: const InputDecoration(
             ),
           ),
           const SizedBox(width: 8),
-
-// 4. Bottom-Right Corner 4-Square Tools Button
           GestureDetector(
             onTap: _openRoomToolsMenu,
             child: Container(
@@ -3575,7 +3650,7 @@ decoration: const InputDecoration(
     );
   }
 
-  dynamic _buildSeatedUsersList() {
+dynamic _buildSeatedUsersList() {
     dynamic dynVal = '';
     final sampleItem = {'seatIndex': 0, 'uid': dynVal, 'name': ''};
     final list = [sampleItem]..clear();
@@ -3667,8 +3742,7 @@ decoration: const InputDecoration(
                     ),
                     if (_roomPassword != null) ...[
                       const SizedBox(width: 4),
-
-const Icon(Icons.lock, color: kGoldBright, size: 14),
+                      const Icon(Icons.lock, color: kGoldBright, size: 14),
                     ],
                   ],
                 ),
@@ -3688,7 +3762,8 @@ const Icon(Icons.lock, color: kGoldBright, size: 14),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 margin: const EdgeInsets.symmetric(vertical: 12),
-                decoration: BoxDecoration(
+
+decoration: BoxDecoration(
                   color: kGoldBlackBottom.withOpacity(0.85),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: kGoldBright, width: 1.2),
@@ -3766,8 +3841,7 @@ const Icon(Icons.lock, color: kGoldBright, size: 14),
             child: Stack(
               key: _roomStackKey,
               children: [
-
-Positioned(
+                Positioned(
                   top: -60,
                   left: 0,
                   right: 0,
@@ -3789,7 +3863,8 @@ Positioned(
                 ),
                 Column(
                   children: [
-                    _buildTopLuckyWinnerMarquee(),
+
+_buildTopLuckyWinnerMarquee(),
                     _buildPkScoreboard(),
                     _buildMusicMiniBar(),
                     Expanded(
@@ -3846,8 +3921,7 @@ Positioned(
                                             seatDimension: dynamicSeatDim,
                                             nameFontSize: nameFontSize,
                                             badgeFontSize: badgeFontSize,
-
-),
+                                          ),
                                         ),
                                       );
                                     }),
@@ -3861,7 +3935,8 @@ Positioned(
                                       child: Row(
                                         children:
                                             List.generate(regularCols, (c) {
-                                          final int seatIdx = regularStart +
+
+final int seatIdx = regularStart +
                                               (r * regularCols) +
                                               c;
                                           if (seatIdx >= _totalSeats) {
@@ -3919,8 +3994,7 @@ Positioned(
                                       padding: const EdgeInsets.symmetric(
                                           horizontal: 10.0, vertical: 6.0),
                                       decoration: BoxDecoration(
-
-color: const Color(0xFF1F2B3E)
+                                        color: const Color(0xFF1F2B3E)
                                             .withOpacity(0.92),
                                         borderRadius: BorderRadius.circular(12),
                                         border: Border.all(
@@ -3932,7 +4006,8 @@ color: const Color(0xFF1F2B3E)
                                         text: TextSpan(
                                           children: [
                                             const TextSpan(
-                                              text: "📢 Announcement: ",
+
+text: "📢 Announcement: ",
                                               style: TextStyle(
                                                 color: kGoldBright,
                                                 fontWeight: FontWeight.w900,
@@ -3983,8 +4058,7 @@ color: const Color(0xFF1F2B3E)
                                                   padding: EdgeInsets.only(
                                                       right: 4.0),
                                                   child: Icon(
-
-Icons.campaign,
+                                                    Icons.campaign,
                                                     color: kGoldBright,
                                                     size: 13.5,
                                                   ),
@@ -3996,7 +4070,8 @@ Icons.campaign,
                                                 color: item.isSystem
                                                     ? kGoldBright
                                                     : kMintLive,
-                                                fontWeight: FontWeight.w900,
+
+fontWeight: FontWeight.w900,
                                                 fontSize: 12,
                                               ),
                                             ),
@@ -4025,8 +4100,6 @@ Icons.campaign,
                     _buildBottomActionDock(),
                   ],
                 ),
-
-                // Entry Marquee Banner
                 if (_entryBannerText != null)
                   Positioned(
                     top: 46,
@@ -4061,8 +4134,7 @@ Icons.campaign,
                                 const SizedBox(width: 6),
                                 Text(
                                   _entryBannerText!,
-
-style: const TextStyle(
+                                  style: const TextStyle(
                                     color: Colors.white,
                                     fontWeight: FontWeight.w800,
                                     fontSize: 12,
@@ -4075,8 +4147,6 @@ style: const TextStyle(
                       ),
                     ),
                   ),
-
-                // Lucky Win Toast
                 if (_luckyWinToast != null)
                   Positioned(
                     top: 86,
@@ -4086,7 +4156,8 @@ style: const TextStyle(
                       child: Center(
                         child: Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 7),
+
+horizontal: 16, vertical: 7),
                           decoration: BoxDecoration(
                             gradient: const LinearGradient(
                               colors: [Color(0xFFFFD700), Color(0xFFFF8F00)],
@@ -4111,8 +4182,6 @@ style: const TextStyle(
                       ),
                     ),
                   ),
-
-                // Active Red Packet Grab Button
                 if (_activeRedPacket != null)
                   Positioned(
                     right: 14,
@@ -4152,11 +4221,8 @@ style: const TextStyle(
                       ),
                     ),
                   ),
-
-                // Lucky Combo Floating Button
                 if (_showComboButton)
-
-Positioned(
+                  Positioned(
                     right: 16,
                     bottom: 66,
                     child: Transform.scale(
@@ -4177,7 +4243,8 @@ Positioned(
                                 color: kGoldBright.withOpacity(0.75),
                                 blurRadius: 14,
                               ),
-                            ],
+
+],
                           ),
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
@@ -4204,8 +4271,6 @@ Positioned(
                       ),
                     ),
                   ),
-
-                // Actual Gift Image Flying Directly to the Target Seat
                 ..._activeFlyingGifts.map((fg) {
                   return AnimatedBuilder(
                     key: ValueKey(fg.id),
@@ -4215,12 +4280,12 @@ Positioned(
                       final double arcLift = -sin(t * pi) * 32.0;
                       final double curX = fg.startOffset.dx +
                           ((fg.endOffset.dx - fg.startOffset.dx) * t) -
-                          26.0;
+                          28.0;
                       final double curY = fg.startOffset.dy +
                           ((fg.endOffset.dy - fg.startOffset.dy) * t) +
                           arcLift -
-                          26.0;
-                      final double scale = 1.15 - (0.30 * t);
+                          28.0;
+                      final double scale = 1.25 - (0.35 * t);
 
                       return Positioned(
                         left: curX,
@@ -4235,27 +4300,24 @@ Positioned(
                     },
                     child: fg.imageAsset.isNotEmpty
                         ? ClipRRect(
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(14),
                             child: Image.asset(
                               fg.imageAsset,
-                              width: 52,
-                              height: 52,
+                              width: 56,
+                              height: 56,
                               fit: BoxFit.contain,
                               errorBuilder: (ctx, err, stack) => Text(
-
-fg.icon,
-                                style: const TextStyle(fontSize: 36),
+                                fg.icon,
+                                style: const TextStyle(fontSize: 38),
                               ),
                             ),
                           )
                         : Text(
                             fg.icon,
-                            style: const TextStyle(fontSize: 36),
+                            style: const TextStyle(fontSize: 38),
                           ),
                   );
                 }),
-
-                // Fullscreen Gift Animation Layer (Top Yellow Text Removed)
                 FullscreenGiftAnimator(
                   giftStream: _fullscreenAnimStreamController.stream,
                 ),
