@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
-import 'package:audioplayers/audioplayers.dart';
 
 class FullscreenGiftEvent {
   final String giftId;
@@ -60,23 +59,6 @@ class _FullscreenGiftAnimatorState extends State<FullscreenGiftAnimator> {
     return assetPath;
   }
 
-  Future<void> _playLoudGiftSound() async {
-    try {
-      final AudioPlayer player = AudioPlayer();
-      await player.setPlayerMode(PlayerMode.mediaPlayer);
-      await player.setVolume(1.0);
-      try {
-        await player.play(AssetSource('sounds/Five_win.mp3'));
-      } catch (_) {
-        await player.play(AssetSource('sounds/five_win.mp3'));
-      }
-      await player.setVolume(1.0);
-      player.onPlayerComplete.listen((_) {
-        player.dispose();
-      });
-    } catch (_) {}
-  }
-
   Future<void> _disposeCurrentVideo() async {
     final oldCtrl = _videoController;
     _videoController = null;
@@ -118,7 +100,6 @@ class _FullscreenGiftAnimatorState extends State<FullscreenGiftAnimator> {
     });
 
     if (!isMp4) {
-      _playLoudGiftSound();
       setState(() {
         _useFallbackVisual = true;
       });
@@ -152,7 +133,7 @@ class _FullscreenGiftAnimatorState extends State<FullscreenGiftAnimator> {
       _videoController = ctrl;
       ctrl.addListener(_onVideoProgress);
 
-final int durMs = ctrl.value.duration.inMilliseconds;
+      final int durMs = ctrl.value.duration.inMilliseconds;
       if (durMs > 300) {
         _dismissTimer?.cancel();
         _dismissTimer = Timer(Duration(milliseconds: durMs + 250), () {
@@ -168,14 +149,14 @@ final int durMs = ctrl.value.duration.inMilliseconds;
       if (mounted) {
         if (_playToken == currentToken) {
           setState(() {
-            _isVideoReady = true;
+
+_isVideoReady = true;
           });
         }
       }
     } catch (_) {
       if (mounted) {
         if (_playToken == currentToken) {
-          _playLoudGiftSound();
           setState(() {
             _isVideoReady = false;
             _useFallbackVisual = true;
@@ -300,8 +281,7 @@ final int durMs = ctrl.value.duration.inMilliseconds;
                       height: videoH,
                       child: VideoPlayer(ctrl),
                     ),
-
-),
+                  ),
                 ),
               if (_useFallbackVisual)
                 Center(
@@ -313,7 +293,8 @@ final int durMs = ctrl.value.duration.inMilliseconds;
                         ? ClipRRect(
                             borderRadius: BorderRadius.circular(24),
                             child: Image.asset(
-                              _fallbackImagePath,
+
+_fallbackImagePath,
                               width: 240,
                               height: 240,
                               fit: BoxFit.contain,
