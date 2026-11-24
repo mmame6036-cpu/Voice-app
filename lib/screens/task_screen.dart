@@ -10,6 +10,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:camera/camera.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
+import 'package:flutter_tts/flutter_tts.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../services/room_session_manager.dart';
 import 'room_screen.dart';
@@ -27,18 +28,16 @@ class _TaskScreenState extends State<TaskScreen>
   final User? _user = FirebaseAuth.instance.currentUser;
   bool _isClaiming = false;
 
-  // Live Task Center Timer state (ticks every 1 second at top-right of Task Center)
+  // Main App Live Mic Timer inside Task Center
   Timer? _liveClockTimer;
   int _sessionLiveSeconds = 0;
   int _lastSyncedMinuteBucket = 0;
   String _trackedDateKey = "";
-  bool _latestIsVerified = false;
   bool _latestIsOnMic = false;
   bool _latestIsCrownSeat = false;
 
   static const List<Map<String, dynamic>> _twoHourTiers = [
     {"level": "L", "req": 0, "reward": 500},
-    {"level": "Starter", "req": 0, "reward": 1000},
     {"level": "K", "req": 24000, "reward": 2500},
     {"level": "J", "req": 50000, "reward": 5000},
     {"level": "I", "req": 150000, "reward": 10000},
@@ -96,17 +95,15 @@ class _TaskScreenState extends State<TaskScreen>
         }
       }
 
-      if (_latestIsVerified) {
-        if (onMicNow) {
-          setState(() {
-            _sessionLiveSeconds += 1;
-          });
-          final int completedMinutes = _sessionLiveSeconds ~/ 60;
-          if (completedMinutes > _lastSyncedMinuteBucket) {
-            final int diffMins = completedMinutes - _lastSyncedMinuteBucket;
-            _lastSyncedMinuteBucket = completedMinutes;
-            _persistTaskCenterMinutes(diffMins);
-          }
+      if (onMicNow) {
+        setState(() {
+          _sessionLiveSeconds += 1;
+        });
+        final int completedMinutes = _sessionLiveSeconds ~/ 60;
+        if (completedMinutes > _lastSyncedMinuteBucket) {
+          final int diffMins = completedMinutes - _lastSyncedMinuteBucket;
+          _lastSyncedMinuteBucket = completedMinutes;
+          _persistTaskCenterMinutes(diffMins);
         }
       }
     });
@@ -125,7 +122,7 @@ class _TaskScreenState extends State<TaskScreen>
       }
     }
 
-try {
+    try {
       final userRef =
           FirebaseFirestore.instance.collection('users').doc(user.uid);
       final hostRef =
@@ -220,38 +217,40 @@ try {
     return true;
   }
 
-  Map<String, dynamic> _resolveTwoHourTier({
+  // Dynamic Tier Resolution linked directly to 7-Day Activity Points & Still Need
+  Map<String, dynamic> _resolveActivityTier({
     required int giftIncome7Days,
-    required int daysSinceStart,
+    required bool isStarterPeriod,
   }) {
-    int currentReward = 1000;
-    String currentLevel = "Starter (7d)";
+    if (isStarterPeriod) {
+      int nextReq = 24000;
+      int stillNeed = nextReq - giftIncome7Days;
+      if (stillNeed < 0) stillNeed = 0;
+      return {
+        "currentReward": 1000,
+        "currentLevel": "Starter (1h)",
+        "nextReq": nextReq,
+        "stillNeed": stillNeed,
+      };
+    }
+
+    int currentReward = 500;
+    String currentLevel = "L";
     int nextReq = 24000;
-
-    if (daysSinceStart > 7) {
-      currentReward = 500;
-      currentLevel = "L";
-    }
-
     int stillNeed = nextReq - giftIncome7Days;
-    if (stillNeed < 0) {
-      stillNeed = 0;
-    }
+    if (stillNeed < 0) stillNeed = 0;
 
-    for (int i = 2; i < _twoHourTiers.length; i++) {
+    for (int i = 0; i < _twoHourTiers.length; i++) {
       final tier = _twoHourTiers[i];
       final int req = tier['req'] as int;
       if (giftIncome7Days >= req) {
         currentReward = tier['reward'] as int;
         currentLevel = tier['level'].toString();
         if (i + 1 < _twoHourTiers.length) {
-
-final nextTier = _twoHourTiers[i + 1];
+          final nextTier = _twoHourTiers[i + 1];
           nextReq = nextTier['req'] as int;
           stillNeed = nextReq - giftIncome7Days;
-          if (stillNeed < 0) {
-            stillNeed = 0;
-          }
+          if (stillNeed < 0) stillNeed = 0;
         } else {
           nextReq = req;
           stillNeed = 0;
@@ -385,7 +384,7 @@ final nextTier = _twoHourTiers[i + 1];
     String selectedGender = initGender;
     bool isSaving = false;
 
-showDialog(
+    showDialog(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => StatefulBuilder(
@@ -493,8 +492,7 @@ showDialog(
             title: const Row(
               children: [
                 Icon(Icons.verified_user, color: Color(0xFF107C41), size: 22),
-
-SizedBox(width: 8),
+                SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     "Complete Host Profile",
@@ -513,7 +511,7 @@ SizedBox(width: 8),
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    "3-Step Face Liveness passed! Fill in your required profile details to unlock task hour tracking:",
+                    "Biometric verification passed! Fill in your required profile details to unlock reward claims:",
                     style: TextStyle(color: Colors.black54, fontSize: 12),
                   ),
                   const SizedBox(height: 12),
@@ -583,8 +581,7 @@ SizedBox(width: 8),
                   ),
                   const SizedBox(height: 10),
                   const Text("Country / Region *",
-
-style: TextStyle(
+                      style: TextStyle(
                           fontSize: 11.5, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 4),
                   TextField(
@@ -704,7 +701,7 @@ style: TextStyle(
         });
       });
 
-if (mounted) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content:
@@ -764,14 +761,14 @@ if (mounted) {
             Expanded(
               child: ListView(
                 children: [
-                  _buildPolicyTile("1. 3-Step Biometric Face Verification",
-                      "Hosts must complete live Front Camera liveness detection (Eye Blink, Mouth Movement, and Head Turn Left/Right) and fill out required Profile details before task timer counts."),
-                  _buildPolicyTile("2. Fixed 7-Day Daily Base Salary",
-                      "Sit on mic for 2 hours (120 mins) daily to claim 8,000 Points. Renews every 24 hours for 7 consecutive days."),
-                  _buildPolicyTile("3. 2-Hour Activity Tier Progression",
-                      "Starts at 1,000 Points per 2 hours for the first 7 days. If inactive after 7 days, drops to 500 Points per 2 hours. As activity grows, rewards climb up to 180,000 Points per 2 hours."),
+                  _buildPolicyTile("1. Voice-Guided Biometric Verification",
+                      "Complete the 3-step live front camera scan (Eye Blink, Mouth Movement, and Head Turn Left/Right) and fill out required Profile details to claim task rewards."),
+                  _buildPolicyTile("2. First 7 Days Starter Period (1 Hour Daily)",
+                      "For the first 7 consecutive days, sitting on mic for 1 hour (60 mins) daily earns 1,000 Points per day, alongside the 7-day daily 8,000 Points base bonus."),
+                  _buildPolicyTile("3. After 7 Days (Permanent 2-Hour Tier System)",
+                      "After the first 7 days end, the 8,000 daily bonus finishes and the task permanently switches to 2 hours (120 mins) daily. Your 2-hour reward moves dynamically with your 7-Day Activity Points and Still Need bar (from 500 up to 180,000 Points per 2 hours)."),
                   _buildPolicyTile("4. Crown Seat Task (24h Renewal)",
-                      "Sit on the Crown Seat (Host Seat) for 1 hour (60 mins) AND send or receive at least 600 Coins in gifts to claim daily bonus points."),
+                      "Sit on the Crown Seat (Host Seat) for 1 hour (60 mins) AND send or receive at least 600 Coins in gifts to claim 1,000 Points daily."),
                   _buildPolicyTile("5. Exchange Rate",
                       "10,000 Points = \$1.00 USD."),
                 ],
@@ -809,23 +806,19 @@ if (mounted) {
     );
   }
 
-Widget _buildTopRightTimerBadge({
+  Widget _buildTopRightTimerBadge({
     required int totalTodaySeconds,
     required bool isLiveOnMicNow,
-    required bool isFullyVerifiedHost,
+    required bool isStarterPeriod,
     required int userCoins,
   }) {
     final String liveClockStr = _formatDurationHms(totalTodaySeconds);
-    final bool isCounting = isFullyVerifiedHost && isLiveOnMicNow;
+    final bool isCounting = isLiveOnMicNow;
 
     Color borderCol = const Color(0xFFFACC15);
     Color iconCol = const Color(0xFFFACC15);
-    String stateTag = "2H";
-    if (!isFullyVerifiedHost) {
-      borderCol = Colors.white30;
-      iconCol = Colors.white60;
-      stateTag = "LOCK";
-    } else if (isCounting) {
+    String stateTag = isStarterPeriod ? "1H" : "2H";
+    if (isCounting) {
       borderCol = const Color(0xFF4ADE80);
       iconCol = const Color(0xFF4ADE80);
       stateTag = "LIVE";
@@ -835,7 +828,7 @@ Widget _buildTopRightTimerBadge({
       padding: const EdgeInsets.only(right: 12, top: 8, bottom: 8),
       child: GestureDetector(
         onTap: () {
-          if (isFullyVerifiedHost && !isCounting) {
+          if (!isCounting) {
             _navigateToRoom(userCoins);
           }
         },
@@ -934,8 +927,7 @@ Widget _buildTopRightTimerBadge({
         final int userCoins = (userData['coins'] as num?)?.toInt() ?? 0;
 
         final String facePhotoUrl =
-
-(userData['facePhotoUrl'] ?? '').toString().trim();
+            (userData['facePhotoUrl'] ?? '').toString().trim();
         final bool isFaceVerified =
             userData['isFaceVerified'] == true && facePhotoUrl.isNotEmpty;
         final bool isProfileReady = _isProfileComplete(userData);
@@ -997,14 +989,13 @@ Widget _buildTopRightTimerBadge({
           }
         }
 
-        _latestIsVerified = isFullyVerifiedHost;
         _latestIsOnMic = isLiveOnMicNow;
         _latestIsCrownSeat = isOnCrownNow;
 
+        // Main App Timer counts directly inside Task Center
         final int extraUnsyncedSeconds = _sessionLiveSeconds % 60;
-        final int totalTodaySeconds = isFullyVerifiedHost
-            ? ((rawMicMinutes * 60) + extraUnsyncedSeconds)
-            : 0;
+        final int totalTodaySeconds =
+            (rawMicMinutes * 60) + extraUnsyncedSeconds;
         final int micMinutes = totalTodaySeconds ~/ 60;
 
         int rawCrownMinutes =
@@ -1015,11 +1006,9 @@ Widget _buildTopRightTimerBadge({
         if (isNewMicDay) {
           rawCrownMinutes = 0;
         }
-        int crownMinutes = isFullyVerifiedHost
-            ? (isOnCrownNow
-                ? max(rawCrownMinutes, micMinutes)
-                : rawCrownMinutes)
-            : 0;
+        final int crownMinutes = isOnCrownNow
+            ? max(rawCrownMinutes, micMinutes)
+            : rawCrownMinutes;
 
         int rawCrownGiftCoins =
             (userData['todayGiftCoins'] as num?)?.toInt() ?? 0;
@@ -1030,7 +1019,7 @@ Widget _buildTopRightTimerBadge({
         if (isNewMicDay) {
           rawCrownGiftCoins = 0;
         }
-        int crownGiftCoins = isFullyVerifiedHost ? rawCrownGiftCoins : 0;
+        final int crownGiftCoins = rawCrownGiftCoins;
 
         int giftIncomeLast7Days =
             (userData['giftIncomeLast7Days'] as num?)?.toInt() ?? 0;
@@ -1051,11 +1040,21 @@ Widget _buildTopRightTimerBadge({
         final int consecutiveDays =
             (userData['consecutiveHostDays'] as num?)?.toInt() ?? 0;
 
-final tierInfo = _resolveTwoHourTier(
+        // First 7 consecutive days = Starter Period (1 hour = 1,000 Pts)
+        // After 7 days = Permanent 2-hour tier progression linked with Still Need
+        bool isStarterPeriod = true;
+        if (daysSinceStart > 7) {
+          isStarterPeriod = false;
+        }
+        if (consecutiveDays >= 7) {
+          isStarterPeriod = false;
+        }
+
+        final tierInfo = _resolveActivityTier(
           giftIncome7Days: giftIncomeLast7Days,
-          daysSinceStart: daysSinceStart,
+          isStarterPeriod: isStarterPeriod,
         );
-        final int currentTwoHourReward = tierInfo['currentReward'] as int;
+        final int currentActivityReward = tierInfo['currentReward'] as int;
         final String currentLevel = tierInfo['currentLevel'].toString();
         final int stillNeed = tierInfo['stillNeed'] as int;
 
@@ -1091,7 +1090,7 @@ final tierInfo = _resolveTwoHourTier(
               _buildTopRightTimerBadge(
                 totalTodaySeconds: totalTodaySeconds,
                 isLiveOnMicNow: isLiveOnMicNow,
-                isFullyVerifiedHost: isFullyVerifiedHost,
+                isStarterPeriod: isStarterPeriod,
                 userCoins: userCoins,
               ),
             ],
@@ -1103,7 +1102,7 @@ final tierInfo = _resolveTwoHourTier(
                 weekPoints: weekPoints,
                 totalTodaySeconds: totalTodaySeconds,
                 isLiveOnMicNow: isLiveOnMicNow,
-                isFullyVerifiedHost: isFullyVerifiedHost,
+                isStarterPeriod: isStarterPeriod,
               ),
               Container(
                 margin:
@@ -1140,15 +1139,14 @@ final tierInfo = _resolveTwoHourTier(
                       isFaceVerified: isFaceVerified,
                       isProfileReady: isProfileReady,
                       isFullyVerifiedHost: isFullyVerifiedHost,
+                      isStarterPeriod: isStarterPeriod,
                       totalTodaySeconds: totalTodaySeconds,
-                      isLiveOnMicNow: isLiveOnMicNow,
                       micMinutes: micMinutes,
                       crownMinutes: crownMinutes,
                       crownGiftCoins: crownGiftCoins,
                       consecutiveDays: consecutiveDays,
                       giftIncomeLast7Days: giftIncomeLast7Days,
-
-currentTwoHourReward: currentTwoHourReward,
+                      currentActivityReward: currentActivityReward,
                       currentLevel: currentLevel,
                       stillNeed: stillNeed,
                       claimedKeys: claimedKeys,
@@ -1177,10 +1175,12 @@ currentTwoHourReward: currentTwoHourReward,
     required int weekPoints,
     required int totalTodaySeconds,
     required bool isLiveOnMicNow,
-    required bool isFullyVerifiedHost,
+    required bool isStarterPeriod,
   }) {
-    final double goalProgress = (totalTodaySeconds / 7200.0).clamp(0.0, 1.0);
-    final bool isCounting = isFullyVerifiedHost && isLiveOnMicNow;
+    final double targetSeconds = isStarterPeriod ? 3600.0 : 7200.0;
+    final double goalProgress =
+        (totalTodaySeconds / targetSeconds).clamp(0.0, 1.0);
+    final bool isCounting = isLiveOnMicNow;
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
@@ -1261,8 +1261,7 @@ currentTwoHourReward: currentTwoHourReward,
               ),
               Expanded(
                 child: Column(
-
-crossAxisAlignment: CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
                       "This week",
@@ -1294,9 +1293,9 @@ crossAxisAlignment: CrossAxisAlignment.start,
     required bool isProfileReady,
     required bool isFullyVerifiedHost,
   }) {
-    String statusTitle = "Face Liveness Verification Required";
+    String statusTitle = "Face Verification Required";
     String statusSubtitle =
-        "Complete 3-Step Face Scan (Eye Blink, Mouth & Head Turn) + Profile to start timer.";
+        "Complete voice-guided Face Scan & Profile to unlock reward claims.";
     Color cardBorderColor = const Color(0xFFF59E0B);
     Color iconBg = const Color(0xFFFEF3C7);
     Color iconColor = const Color(0xFFD97706);
@@ -1309,7 +1308,7 @@ crossAxisAlignment: CrossAxisAlignment.start,
     if (isFullyVerifiedHost) {
       statusTitle = "Biometric Face & Host Active ✓";
       statusSubtitle =
-          "Eye, Mouth & Head verified. Top-right live mic timer is active.";
+          "Face & profile verified. All host reward claims are unlocked.";
       cardBorderColor = const Color(0xFF107C41);
       iconBg = const Color(0xFFE8F5E9);
       iconColor = const Color(0xFF107C41);
@@ -1320,7 +1319,7 @@ crossAxisAlignment: CrossAxisAlignment.start,
     } else if (isFaceVerified) {
       statusTitle = "Complete Profile Details";
       statusSubtitle =
-          "Face Liveness verified! Fill out your Profile info to unlock task timer.";
+          "Face verified! Fill out your Profile info to unlock reward claims.";
       btnText = "Complete";
     }
 
@@ -1376,8 +1375,7 @@ crossAxisAlignment: CrossAxisAlignment.start,
               foregroundColor: btnFg,
               disabledBackgroundColor: const Color(0xFF107C41),
               disabledForegroundColor: Colors.white,
-
-shape: RoundedRectangleBorder(
+              shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16)),
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               elevation: 0,
@@ -1404,32 +1402,35 @@ shape: RoundedRectangleBorder(
     required bool isFaceVerified,
     required bool isProfileReady,
     required bool isFullyVerifiedHost,
+    required bool isStarterPeriod,
     required int totalTodaySeconds,
-    required bool isLiveOnMicNow,
     required int micMinutes,
     required int crownMinutes,
     required int crownGiftCoins,
     required int consecutiveDays,
     required int giftIncomeLast7Days,
-    required int currentTwoHourReward,
+    required int currentActivityReward,
     required String currentLevel,
     required int stillNeed,
     required Map claimedKeys,
   }) {
-    final bool isFixed2HrDone = micMinutes >= 120;
-    final String fixed2HrKey = "${todayKey}_fixed_2hr_8000";
-    final bool isFixed2HrClaimed = claimedKeys[fixed2HrKey] == true;
-    final int min2Display = micMinutes.clamp(0, 120);
-    final String timer2HrText =
-        _formatDurationHms(totalTodaySeconds.clamp(0, 7200));
+    final int requiredMins = isStarterPeriod ? 60 : 120;
+    final int requiredSecs = requiredMins * 60;
+    final bool isActivityDone = micMinutes >= requiredMins;
+    final int minDisplay = micMinutes.clamp(0, requiredMins);
+    final String timerText =
+        _formatDurationHms(totalTodaySeconds.clamp(0, requiredSecs));
 
     int streakDisplay = consecutiveDays;
     if (streakDisplay > 7) {
       streakDisplay = 7;
     }
 
-    final String tier2HrKey = "${todayKey}_tier_2hr_salary";
-    final bool isTier2HrClaimed = claimedKeys[tier2HrKey] == true;
+    final String fixed7DayKey = "${todayKey}_fixed_7day_8000";
+    final bool isFixed7DayClaimed = claimedKeys[fixed7DayKey] == true;
+
+    final String activityTierKey = "${todayKey}_tier_activity_salary";
+    final bool isActivityTierClaimed = claimedKeys[activityTierKey] == true;
 
     final bool isCrownDone = crownMinutes >= 60 && crownGiftCoins >= 600;
     final String crownKey = "${todayKey}_crown_1hr_600";
@@ -1448,68 +1449,106 @@ shape: RoundedRectangleBorder(
           isFullyVerifiedHost: isFullyVerifiedHost,
         ),
 
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Text(
-              "7-Day Consecutive Daily Salary (24h)",
-              style: TextStyle(
-                color: Color(0xFF1A1A1A),
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
+        if (isStarterPeriod) ...[
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                "7-Day Starter Daily Salary (24h)",
+                style: TextStyle(
+                  color: Color(0xFF1A1A1A),
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
-            ),
-            Text(
-              "Day $streakDisplay / 7",
-              style: const TextStyle(
-                color: Color(0xFFD49B42),
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
+              Text(
+                "Day $streakDisplay / 7",
+                style: const TextStyle(
+                  color: Color(0xFFD49B42),
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          _buildTaskActionCard(
+            icon: Icons.mic,
+            title: "7-Day Consecutive Daily Bonus (1 Hour)",
+            subtitle:
+                "Timer: $timerText ($minDisplay / 60 mins) • Days 1-7 Bonus",
+            reward: 8000,
+            isVerified: isFullyVerifiedHost,
+            isCompleted: isActivityDone,
+            isClaimed: isFixed7DayClaimed,
+            onGo: () => _navigateToRoom(userCoins),
+            onClaim: () => _claimReward(
+              claimKey: fixed7DayKey,
+              pointsAmount: 8000,
+              taskTitle: "7-Day Starter Daily Bonus",
+              isNewDay: isNewDay,
+              incrementStreak: true,
             ),
-          ],
-        ),
-        const SizedBox(height: 8),
-
-        _buildTaskActionCard(
-          icon: Icons.mic,
-          title: "On mic for 2 hours daily (7-Day Streak)",
-          subtitle:
-              "Timer: $timer2HrText ($min2Display / 120 mins) • Renews every 24h",
-          reward: 8000,
-          isVerified: isFullyVerifiedHost,
-          isCompleted: isFixed2HrDone,
-          isClaimed: isFixed2HrClaimed,
-          onGo: () => _navigateToRoom(userCoins),
-          onClaim: () => _claimReward(
-            claimKey: fixed2HrKey,
-            pointsAmount: 8000,
-            taskTitle: "7-Day Daily 2h Base Salary",
-            isNewDay: isNewDay,
-            incrementStreak: true,
           ),
-        ),
-
-        const SizedBox(height: 10),
-
-        _buildTaskActionCard(
-          icon: Icons.trending_up,
-
-title: "2-Hour Activity Tier Reward ($currentLevel)",
-          subtitle:
-              "Timer: $timer2HrText ($min2Display / 120 mins) • Starter 1,000 -> 180,000",
-          reward: currentTwoHourReward,
-          isVerified: isFullyVerifiedHost,
-          isCompleted: isFixed2HrDone,
-          isClaimed: isTier2HrClaimed,
-          onGo: () => _navigateToRoom(userCoins),
-          onClaim: () => _claimReward(
-            claimKey: tier2HrKey,
-            pointsAmount: currentTwoHourReward,
-            taskTitle: "2-Hour Activity Tier ($currentLevel)",
-            isNewDay: isNewDay,
+          const SizedBox(height: 10),
+          _buildTaskActionCard(
+            icon: Icons.trending_up,
+            title: "Starter 1-Hour Daily Reward ($currentLevel)",
+            subtitle:
+                "Timer: $timerText ($minDisplay / 60 mins) • Switches to 2h after Day 7",
+            reward: currentActivityReward,
+            isVerified: isFullyVerifiedHost,
+            isCompleted: isActivityDone,
+            isClaimed: isActivityTierClaimed,
+            onGo: () => _navigateToRoom(userCoins),
+            onClaim: () => _claimReward(
+              claimKey: activityTierKey,
+              pointsAmount: currentActivityReward,
+              taskTitle: "Starter 1-Hour Daily Reward",
+              isNewDay: isNewDay,
+            ),
           ),
-        ),
+        ] else ...[
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                "Permanent 2-Hour Activity Salary (24h)",
+                style: TextStyle(
+                  color: Color(0xFF1A1A1A),
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              Text(
+                "Level $currentLevel",
+                style: const TextStyle(
+                  color: Color(0xFFD49B42),
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          _buildTaskActionCard(
+            icon: Icons.trending_up,
+            title: "2-Hour Activity Tier Reward (Level $currentLevel)",
+            subtitle:
+                "Timer: $timerText ($minDisplay / 120 mins) • Dynamic with 7d Activity",
+            reward: currentActivityReward,
+            isVerified: isFullyVerifiedHost,
+            isCompleted: isActivityDone,
+            isClaimed: isActivityTierClaimed,
+            onGo: () => _navigateToRoom(userCoins),
+            onClaim: () => _claimReward(
+              claimKey: activityTierKey,
+              pointsAmount: currentActivityReward,
+              taskTitle: "2-Hour Activity Tier ($currentLevel)",
+              isNewDay: isNewDay,
+            ),
+          ),
+        ],
 
         const SizedBox(height: 12),
 
@@ -1531,7 +1570,8 @@ title: "2-Hour Activity Tier Reward ($currentLevel)",
                           fontSize: 11.5,
                           color: Color(0xFF1A1A1A),
                           fontWeight: FontWeight.w600)),
-                  Text("$currentTwoHourReward Pts / 2h",
+                  Text(
+                      "$currentActivityReward Pts / ${isStarterPeriod ? '1h' : '2h'}",
                       style: const TextStyle(
                           fontSize: 11.5,
                           color: Color(0xFF3E2723),
@@ -1596,18 +1636,17 @@ title: "2-Hour Activity Tier Reward ($currentLevel)",
 
         _buildTaskActionCard(
           icon: Icons.workspace_premium,
-
-title: "Crown Seat 1 Hour + 600 Coins Gift",
+          title: "Crown Seat 1 Hour + 600 Coins Gift",
           subtitle:
               "Crown: $crownMinDisplay/60 mins • Gifts (Sent/Rec): $crownCoinDisplay/600 Coins",
-          reward: 2500,
+          reward: 1000,
           isVerified: isFullyVerifiedHost,
           isCompleted: isCrownDone,
           isClaimed: isCrownClaimed,
           onGo: () => _navigateToRoom(userCoins),
           onClaim: () => _claimReward(
             claimKey: crownKey,
-            pointsAmount: 2500,
+            pointsAmount: 1000,
             taskTitle: "Crown Seat 1h + 600 Coins Gift",
             isNewDay: isNewDay,
           ),
@@ -1724,7 +1763,7 @@ title: "Crown Seat 1 Hour + 600 Coins Gift",
       btnAction = onClaim;
     }
 
-return Container(
+    return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -1796,10 +1835,8 @@ return Container(
 }
 
 // ============================================================================
-// 3-STEP REAL-TIME BIOMETRIC FACE LIVENESS DIALOG
-// Step 1: Eye Blink (ዓይን መጨፈንና መግለጥ)
-// Step 2: Mouth Movement (አፍ መክፈት ወይም ፈገግ ማለት)
-// Step 3: Head Movement (ራስን ወደ ግራና ቀኝ ማዞር)
+// VOICE-GUIDED 3-STEP BIOMETRIC FACE VERIFICATION DIALOG
+// Commands spoken aloud via Text-to-Speech (No Amharic, Audio Voice Guidance)
 // ============================================================================
 class _FaceBiometricDialog extends StatefulWidget {
   final String uid;
@@ -1813,11 +1850,13 @@ class _FaceBiometricDialogState extends State<_FaceBiometricDialog> {
   CameraController? _cameraController;
   CameraDescription? _frontCamera;
   late final FaceDetector _faceDetector;
+  final FlutterTts _tts = FlutterTts();
 
   bool _isCameraReady = false;
   bool _isProcessingFrame = false;
   bool _isUploading = false;
   bool _faceDetected = false;
+  String _lastSpokenPrompt = "";
 
   // 3 Liveness challenge flags
   bool _sawEyesOpen = false;
@@ -1832,7 +1871,6 @@ class _FaceBiometricDialogState extends State<_FaceBiometricDialog> {
   bool _headVerified = false;
 
   double _progress = 0.0;
-  String _statusText = "Initializing Front Camera...";
 
   @override
   void initState() {
@@ -1846,16 +1884,26 @@ class _FaceBiometricDialogState extends State<_FaceBiometricDialog> {
         performanceMode: FaceDetectorMode.fast,
       ),
     );
-    _initFrontCamera();
+    _initVoiceAndCamera();
   }
 
   @override
   void dispose() {
+    _tts.stop();
     _disposeCameraAndDetector();
     super.dispose();
   }
 
-Future<void> _disposeCameraAndDetector() async {
+  Future<void> _speakVoiceCommand(String command, {bool force = false}) async {
+    if (!force && _lastSpokenPrompt == command) return;
+    _lastSpokenPrompt = command;
+    try {
+      await _tts.stop();
+      await _tts.speak(command);
+    } catch (_) {}
+  }
+
+  Future<void> _disposeCameraAndDetector() async {
     final ctrl = _cameraController;
     _cameraController = null;
     if (ctrl != null) {
@@ -1873,15 +1921,19 @@ Future<void> _disposeCameraAndDetector() async {
     } catch (_) {}
   }
 
-  Future<void> _initFrontCamera() async {
+  Future<void> _initVoiceAndCamera() async {
+    try {
+      await _tts.setLanguage("en-US");
+      await _tts.setSpeechRate(0.46);
+      await _tts.setVolume(1.0);
+      await _tts.setPitch(1.0);
+    } catch (_) {}
+
     try {
       final camStatus = await Permission.camera.request();
       if (!camStatus.isGranted) {
-        if (!mounted) return;
-        setState(() {
-          _statusText =
-              "Camera permission is required. Please allow camera access.";
-        });
+        await _speakVoiceCommand(
+            "Camera permission is required. Please allow camera access.");
         return;
       }
 
@@ -1897,10 +1949,7 @@ Future<void> _disposeCameraAndDetector() async {
         selected = cameras.first;
       }
       if (selected == null) {
-        if (!mounted) return;
-        setState(() {
-          _statusText = "No front camera found on this device.";
-        });
+        await _speakVoiceCommand("No front camera found on this device.");
         return;
       }
 
@@ -1923,15 +1972,15 @@ Future<void> _disposeCameraAndDetector() async {
       _cameraController = controller;
       setState(() {
         _isCameraReady = true;
-        _statusText = "Step 1/3: Blink your eyes (ዓይንዎን ይጨፍኑና ይግለጡ)";
       });
 
+      await _speakVoiceCommand(
+          "Step one. Please blink your eyes.",
+          force: true);
+
       await controller.startImageStream(_onCameraFrame);
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _statusText = "Camera start error: $e";
-      });
+    } catch (_) {
+      await _speakVoiceCommand("Camera error. Please try again.");
     }
   }
 
@@ -1984,8 +2033,8 @@ Future<void> _disposeCameraAndDetector() async {
       if (faces.isEmpty) {
         setState(() {
           _faceDetected = false;
-          _statusText = "Position your face inside the circle (ፊትዎን ክቡ ውስጥ ያድርጉ)";
         });
+        _speakVoiceCommand("Please place your face inside the circle.");
         _isProcessingFrame = false;
         return;
       }
@@ -1993,11 +2042,10 @@ Future<void> _disposeCameraAndDetector() async {
       final Face face = faces.first;
       _faceDetected = true;
 
-      // STEP 1: EYE BLINK DETECTION (ዓይን መጨፈንና መግለጥ)
+      // STEP 1: EYE BLINK DETECTION
       if (!_eyeVerified) {
         final double? leftOpen = face.leftEyeOpenProbability;
-
-final double? rightOpen = face.rightEyeOpenProbability;
+        final double? rightOpen = face.rightEyeOpenProbability;
         if (leftOpen != null && rightOpen != null) {
           if (leftOpen > 0.60 && rightOpen > 0.60) {
             if (_sawEyesClosed) {
@@ -2020,7 +2068,7 @@ final double? rightOpen = face.rightEyeOpenProbability;
         }
       }
 
-      // STEP 2: MOUTH MOVEMENT DETECTION (አፍ መክፈት ወይም ፈገግ ማለት)
+      // STEP 2: MOUTH MOVEMENT DETECTION
       if (_eyeVerified && !_mouthVerified) {
         final double? smileProb = face.smilingProbability;
         if (smileProb != null && smileProb > 0.70) {
@@ -2047,7 +2095,7 @@ final double? rightOpen = face.rightEyeOpenProbability;
         }
       }
 
-      // STEP 3: HEAD TURN LEFT & RIGHT DETECTION (ራስን ወደ ግራና ቀኝ ማዞር)
+      // STEP 3: HEAD TURN LEFT & RIGHT DETECTION
       if (_eyeVerified && _mouthVerified && !_headVerified) {
         final double? yawY = face.headEulerAngleY;
         if (yawY != null) {
@@ -2068,32 +2116,28 @@ final double? rightOpen = face.rightEyeOpenProbability;
       if (_mouthVerified) completedSteps += 1;
       if (_headVerified) completedSteps += 1;
 
-      String nextInstruction = "";
+      String voiceInstruction = "";
       if (!_eyeVerified) {
-        nextInstruction =
-            "Step 1/3: Blink your eyes (ዓይንዎን ይጨፍኑና ይግለጡ)";
+        voiceInstruction = "Step one. Please blink your eyes.";
       } else if (!_mouthVerified) {
-        nextInstruction =
-            "Step 2/3: Open your mouth or smile (አፍዎን ይክፈቱ ወይም ፈገግ ይበሉ)";
+        voiceInstruction = "Step two. Please open your mouth or smile.";
       } else if (!_headVerified) {
         if (!_turnedHeadLeft && !_turnedHeadRight) {
-          nextInstruction =
-              "Step 3/3: Turn your head Left & Right (ራስዎን ወደ ግራና ቀኝ ያዙሩ)";
+          voiceInstruction =
+              "Step three. Slowly turn your head left and right.";
         } else if (!_turnedHeadLeft) {
-          nextInstruction =
-              "Step 3/3: Now turn head Left (አሁን ራስዎን ወደ ግራ ያዙሩ)";
+          voiceInstruction = "Now turn your head to the left.";
         } else {
-          nextInstruction =
-              "Step 3/3: Now turn head Right (አሁን ራስዎን ወደ ቀኝ ያዙሩ)";
+          voiceInstruction = "Now turn your head to the right.";
         }
       } else {
-        nextInstruction = "All 3 Biometric Checks Passed! Saving...";
+        voiceInstruction = "Verification complete. Saving your face scan.";
       }
 
       setState(() {
         _progress = completedSteps / 3.0;
-        _statusText = nextInstruction;
       });
+      _speakVoiceCommand(voiceInstruction);
 
       if (_eyeVerified && _mouthVerified && _headVerified) {
         await _completeAndUploadCapture();
@@ -2112,10 +2156,9 @@ final double? rightOpen = face.rightEyeOpenProbability;
     setState(() {
       _isUploading = true;
       _progress = 1.0;
-      _statusText = "Capturing & saving verified face photo...";
     });
 
-try {
+    try {
       if (ctrl.value.isStreamingImages) {
         await ctrl.stopImageStream();
       }
@@ -2146,16 +2189,16 @@ try {
       if (mounted) {
         Navigator.pop(context, uploadedUrl);
       }
-    } catch (e) {
+    } catch (_) {
       if (!mounted) return;
       setState(() {
         _isUploading = false;
-        _statusText = "Save error: $e";
       });
+      await _speakVoiceCommand("Error saving scan. Please try again.");
     }
   }
 
-  Widget _buildStepChip(String label, bool done, bool active) {
+  Widget _buildVoiceStepBadge(IconData icon, String label, bool done, bool active) {
     Color bg = Colors.black12;
     Color fg = Colors.black54;
     if (done) {
@@ -2167,17 +2210,17 @@ try {
     }
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: bg,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(14),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(
-            done ? Icons.check_circle : Icons.radio_button_unchecked,
-            size: 13,
+            done ? Icons.check_circle : icon,
+            size: 14,
             color: fg,
           ),
           const SizedBox(width: 4),
@@ -2185,7 +2228,7 @@ try {
             label,
             style: TextStyle(
               color: fg,
-              fontSize: 10.5,
+              fontSize: 11,
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -2203,35 +2246,57 @@ try {
     return AlertDialog(
       backgroundColor: const Color(0xFFFAF7F2),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
-      title: const Center(
-        child: Text(
-          "3-Step Face Verification",
-          style: TextStyle(
-            color: Color(0xFF1A1A1A),
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
+      title: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.volume_up_rounded,
+              color: Color(0xFF107C41), size: 20),
+          const SizedBox(width: 6),
+          const Text(
+            "Face Verification",
+            style: TextStyle(
+              color: Color(0xFF1A1A1A),
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+            ),
           ),
-        ),
+          const SizedBox(width: 6),
+          GestureDetector(
+            onTap: () {
+              if (_lastSpokenPrompt.isNotEmpty) {
+                _speakVoiceCommand(_lastSpokenPrompt, force: true);
+              }
+            },
+            child: Container(
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                color: const Color(0xFFEFE6DE),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.replay_rounded,
+                  size: 16, color: Color(0xFF3E2723)),
+            ),
+          ),
+        ],
       ),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // 3 Step Status Pills (Eye, Mouth, Head)
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
-              _buildStepChip("1. ዓይን (Eye)", _eyeVerified, !_eyeVerified),
-              _buildStepChip("2. አፍ (Mouth)", _mouthVerified,
+              _buildVoiceStepBadge(
+                  Icons.visibility, "Eye", _eyeVerified, !_eyeVerified),
+              _buildVoiceStepBadge(Icons.tag_faces, "Mouth", _mouthVerified,
                   _eyeVerified && !_mouthVerified),
-              _buildStepChip("3. ራስ (Head)", _headVerified,
+              _buildVoiceStepBadge(Icons.swap_horiz, "Head", _headVerified,
                   _eyeVerified && _mouthVerified && !_headVerified),
             ],
           ),
-          const SizedBox(height: 14),
-          // Live Circular Front Camera Preview
+          const SizedBox(height: 16),
           Container(
-            width: 190,
-            height: 190,
+            width: 196,
+            height: 196,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: Colors.black,
@@ -2242,11 +2307,10 @@ try {
                   ? FittedBox(
                       fit: BoxFit.cover,
                       child: SizedBox(
-
-width: _cameraController!.value.previewSize?.height ??
-                            190,
+                        width: _cameraController!.value.previewSize?.height ??
+                            196,
                         height:
-                            _cameraController!.value.previewSize?.width ?? 190,
+                            _cameraController!.value.previewSize?.width ?? 196,
                         child: CameraPreview(_cameraController!),
                       ),
                     )
@@ -2264,17 +2328,6 @@ width: _cameraController!.value.previewSize?.height ??
             color: ringColor,
             minHeight: 6,
             borderRadius: BorderRadius.circular(4),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            _statusText,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: Color(0xFF1A1A1A),
-              fontSize: 12.5,
-              fontWeight: FontWeight.w700,
-              height: 1.35,
-            ),
           ),
         ],
       ),
