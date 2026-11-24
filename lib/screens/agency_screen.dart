@@ -2127,3 +2127,2120 @@ child: Text(
       },
     );
   }
+
+void _showIncomeAndPayoutSheet({
+    required String title,
+    required String agencyId,
+    required String agencyName,
+    required int availableCommissionPoints,
+    required double commissionUsd,
+    required int ratePct,
+    List<QueryDocumentSnapshot> breakdownDocs = const [],
+    bool isSubAgencyBreakdown = false,
+  }) {
+    final bool canWithdraw = _gte(commissionUsd, 10.0);
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setSheetState) {
+            String accountHint = "Enter Binance Pay ID";
+            if (_selectedPayoutMethod == "Telebirr") {
+              accountHint = "Enter Telebirr Phone (+251...)";
+            } else if (_selectedPayoutMethod == "CBE Bank") {
+              accountHint = "Enter CBE Account (1000...)";
+            }
+
+            return Padding(
+              padding: EdgeInsets.only(
+                left: 20,
+                right: 20,
+                top: 20,
+                bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: kTextDark,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [kMintCardStart, kMintCardEnd],
+                        ),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            "Available Net Commission ($ratePct% Rate)",
+                            style: const TextStyle(
+                                fontSize: 12, color: kTextMuted),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            "\$${commissionUsd.toStringAsFixed(2)} USD",
+                            style: const TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.w900,
+                              color: kTextDark,
+                            ),
+                          ),
+                          Text(
+                            "$availableCommissionPoints Points (10,000 Pts = \$1)",
+                            style: const TextStyle(
+                                fontSize: 11.5, color: kTextMuted),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (breakdownDocs.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      Text(
+                        isSubAgencyBreakdown
+                            ? "Sub-Agency Breakdown:"
+                            : "Host Income Breakdown:",
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+
+color: kTextDark,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Container(
+                        constraints: const BoxConstraints(maxHeight: 150),
+                        decoration: BoxDecoration(
+                          color: kBgColor,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: ListView.separated(
+                          shrinkWrap: true,
+                          itemCount: breakdownDocs.length,
+                          separatorBuilder: (_, __) => const Divider(height: 1),
+                          itemBuilder: (_, i) {
+                            final raw = breakdownDocs[i].data();
+                            final Map<String, dynamic> item =
+                                raw is Map<String, dynamic> ? raw : {};
+                            final String itemName =
+                                (item['name'] ?? 'Member').toString();
+                            int pts = (item['points'] as num?)?.toInt() ?? 0;
+                            if (pts == 0) {
+                              pts = (item['diamonds'] as num?)?.toInt() ?? 0;
+                            }
+                            if (pts == 0) {
+                              pts =
+                                  (item['totalHostPoints'] as num?)?.toInt() ??
+                                      0;
+                            }
+                            final int commEarned =
+                                ((pts * ratePct) / 100).round();
+                            return ListTile(
+                              dense: true,
+                              title: Text(
+                                itemName,
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.bold, fontSize: 13),
+                              ),
+                              subtitle: Text(
+                                "Points: ${_fmtNum(pts, decimals: 0)}",
+                                style: const TextStyle(fontSize: 11),
+                              ),
+                              trailing: Text(
+                                "+${_fmtNum(commEarned, decimals: 0)} Comm",
+                                style: const TextStyle(
+                                  color: kTealGreen,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 14),
+                    const Text(
+                      "Withdraw Method:",
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.bold,
+                        color: kTextDark,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 6,
+                      children: [
+                        "Binance Pay (USDT)",
+                        "Telebirr",
+                        "CBE Bank",
+                      ].map((method) {
+                        final isSel = _selectedPayoutMethod == method;
+                        return ChoiceChip(
+                          label: Text(method),
+                          selected: isSel,
+                          selectedColor: kTealGreen,
+                          labelStyle: TextStyle(
+                            color: isSel ? Colors.white : kTextDark,
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.bold,
+
+),
+                          onSelected: (_) {
+                            setSheetState(() {
+                              _selectedPayoutMethod = method;
+                            });
+                          },
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: _payoutAccountController,
+                      decoration: InputDecoration(
+                        hintText: accountHint,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 46,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor:
+                              canWithdraw ? kTealGreen : Colors.black26,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(23),
+                          ),
+                        ),
+                        onPressed: canWithdraw
+                            ? () async {
+                                final accountVal =
+                                    _payoutAccountController.text.trim();
+                                if (accountVal.isEmpty) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content:
+                                          Text("Please enter account details"),
+                                    ),
+                                  );
+                                  return;
+                                }
+
+                                Navigator.pop(ctx);
+
+                                final String currencyCode =
+                                    _selectedPayoutMethod ==
+                                            "Binance Pay (USDT)"
+                                        ? "USDT"
+                                        : "ETB";
+
+                                final batch =
+                                    FirebaseFirestore.instance.batch();
+                                final requestRef = FirebaseFirestore.instance
+                                    .collection('withdraw_requests')
+                                    .doc();
+
+                                batch.set(requestRef, {
+                                  'requestId': _d(requestRef.id),
+                                  'userUid': _d(_currentUser!.uid),
+                                  'uid': _d(_currentUser!.uid),
+                                  'userNumericId': _d(widget.userNumericId),
+                                  'userName': _d("$agencyName (Agency)"),
+                                  'agencyId': _d(agencyId),
+                                  'points': _d(availableCommissionPoints),
+                                  'usdAmount': _d(commissionUsd),
+                                  'method': _d(_selectedPayoutMethod),
+                                  'currency': _d(currencyCode),
+                                  'account': _d(accountVal),
+                                  'accountDetails': _d(accountVal),
+                                  'type': _d('AGENCY_COMMISSION'),
+                                  'status': _d('PENDING'),
+                                  'createdAt': _d(FieldValue.serverTimestamp()),
+                                });
+
+final agencyRef = FirebaseFirestore.instance
+                                    .collection('agencies')
+                                    .doc(agencyId);
+                                batch.update(agencyRef, {
+                                  'withdrawnCommissionPoints': _d(
+                                      FieldValue.increment(
+                                          availableCommissionPoints)),
+                                });
+
+                                await batch.commit();
+                                _payoutAccountController.clear();
+
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                        "Agency payout request submitted for review!",
+                                      ),
+                                      backgroundColor: kTealGreen,
+                                    ),
+                                  );
+                                }
+                              }
+                            : null,
+                        child: Text(
+                          canWithdraw
+                              ? "Withdraw Agency Profit"
+                              : "Min. \$10.00 USD to Withdraw",
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final user = _currentUser;
+    if (user == null) {
+      return const Scaffold(
+        backgroundColor: kBgColor,
+        body: Center(
+          child: Text("Please login first", style: TextStyle(color: kTextDark)),
+        ),
+      );
+    }
+
+    return StreamBuilder<DocumentSnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .snapshots(),
+      builder: (context, userSnap) {
+        final docSnap = userSnap.data;
+        final rawUser = docSnap?.data();
+        final Map<String, dynamic> userData =
+            rawUser is Map<String, dynamic> ? rawUser : {};
+        final String joinedAgencyId =
+            (userData['agencyId'] ?? '').toString().trim();
+        final String joinedAgencyName =
+            (userData['agencyName'] ?? '').toString().trim();
+        final String userAvatarUrl =
+            (userData['avatarUrl'] ?? userData['photoURL'] ?? '')
+                .toString()
+                .trim();
+        final int dbNumId = (userData['numericId'] as num?)?.toInt() ?? 0;
+        final int myNumericId =
+            widget.userNumericId != 0 ? widget.userNumericId : dbNumId;
+
+        return StreamBuilder<QuerySnapshot>(
+          stream: FirebaseFirestore.instance
+              .collection('agencies')
+              .where('ownerUid', isEqualTo: user.uid)
+              .limit(1)
+              .snapshots(),
+          builder: (context, snapshot) {
+            if (!snapshot.hasData) {
+              return const Scaffold(
+                backgroundColor: kBgColor,
+                body: Center(
+                  child: CircularProgressIndicator(color: kTealGreen),
+                ),
+              );
+            }
+
+            final qSnap = snapshot.data!;
+            if (qSnap.docs.isEmpty) {
+              return _buildAgentEntryScreen(
+                myNumericId: myNumericId,
+                joinedAgencyId: joinedAgencyId,
+                joinedAgencyName: joinedAgencyName,
+                pendingAgencyData: null,
+              );
+            }
+
+            final agencyDoc = qSnap.docs.first;
+            final rawAgency = agencyDoc.data();
+            final Map<String, dynamic> agencyData =
+                rawAgency is Map<String, dynamic> ? rawAgency : {};
+
+if (myNumericId != 0) {
+              if (agencyDoc.id != myNumericId.toString()) {
+                if (!_isMigratingId) {
+                  _isMigratingId = true;
+                  final String targetId = myNumericId.toString();
+                  final Map<String, dynamic> updatedData = {
+                    'agencyId': _d(targetId)
+                  };
+                  agencyData.forEach((k, v) {
+                    updatedData[k] = v;
+                  });
+                  updatedData['agencyId'] = targetId;
+                  updatedData['ownerNumericId'] = myNumericId;
+                  if (updatedData['status'] == null) {
+                    updatedData['status'] = 'APPROVED';
+                  }
+                  FirebaseFirestore.instance
+                      .collection('agencies')
+                      .doc(targetId)
+                      .set(updatedData, SetOptions(merge: true))
+                      .then((_) {
+                    agencyDoc.reference.delete();
+                    _isMigratingId = false;
+                  });
+                }
+                return const Scaffold(
+                  backgroundColor: kBgColor,
+                  body: Center(
+                    child: CircularProgressIndicator(color: kTealGreen),
+                  ),
+                );
+              }
+            }
+
+            final String status =
+                (agencyData['status'] ?? 'APPROVED').toString().toUpperCase();
+
+            if (status != 'APPROVED') {
+              return _buildAgentEntryScreen(
+                myNumericId: myNumericId,
+                joinedAgencyId: joinedAgencyId,
+                joinedAgencyName: joinedAgencyName,
+                pendingAgencyData: agencyData,
+              );
+            }
+
+            final agencyId = agencyDoc.id;
+            final String agencyName =
+                (agencyData['name'] ?? "MY AGENCY").toString();
+            final int withdrawnPoints =
+                (agencyData['withdrawnCommissionPoints'] as num?)?.toInt() ?? 0;
+            final int bonusCommissionPoints =
+                (agencyData['bonusCommissionPoints'] as num?)?.toInt() ?? 0;
+            final List<dynamic> tags = agencyData['tags'] is List
+                ? List.of(agencyData['tags'] as List)
+                : ["VIP Voice"];
+
+            return StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('users')
+                  .where('agencyId', isEqualTo: agencyId)
+                  .snapshots(),
+              builder: (context, hostsSnap) {
+                final List<QueryDocumentSnapshot> hostsList =
+                    hostsSnap.hasData ? hostsSnap.data!.docs : [];
+
+                int totalHostPoints = 0;
+                int todayHostPoints = 0;
+
+                for (final doc in hostsList) {
+                  final rawH = doc.data();
+                  final Map<String, dynamic> hData =
+                      rawH is Map<String, dynamic> ? rawH : {};
+                  int pts = (hData['points'] as num?)?.toInt() ?? 0;
+                  if (pts == 0) {
+                    pts = (hData['diamonds'] as num?)?.toInt() ?? 0;
+                  }
+                  final int tPts =
+                      (hData['todayTaskPoints'] as num?)?.toInt() ?? 0;
+                  totalHostPoints += pts;
+                  todayHostPoints += tPts;
+                }
+
+                return StreamBuilder<QuerySnapshot>(
+                  stream: FirebaseFirestore.instance
+                      .collection('agencies')
+                      .where('parentAgencyId', isEqualTo: agencyId)
+                      .snapshots(),
+                  builder: (context, subSnap) {
+                    final List<QueryDocumentSnapshot> allChildDocs =
+                        subSnap.hasData ? subSnap.data!.docs : [];
+
+                    final List<QueryDocumentSnapshot> approvedSubAgencies = [];
+                    final List<QueryDocumentSnapshot> pendingSubRequests = [];
+                    final List<String> approvedSubIds = [];
+
+for (final sDoc in allChildDocs) {
+                      final Map<String, dynamic> sMap =
+                          sDoc.data() is Map<String, dynamic>
+                              ? sDoc.data() as Map<String, dynamic>
+                              : {};
+                      final String sStatus =
+                          (sMap['status'] ?? 'APPROVED').toString();
+                      if (sStatus == 'PENDING_PARENT') {
+                        pendingSubRequests.add(sDoc);
+                      } else if (sStatus == 'APPROVED') {
+                        approvedSubAgencies.add(sDoc);
+                        approvedSubIds.add(sDoc.id);
+                      }
+                    }
+
+                    if (approvedSubIds.isEmpty) {
+                      return _buildAgencyDashboardScaffold(
+                        agencyId: agencyId,
+                        agencyName: agencyName,
+                        userAvatarUrl: userAvatarUrl,
+                        tags: tags,
+                        hostsList: hostsList,
+                        approvedSubAgencies: approvedSubAgencies,
+                        pendingSubRequests: pendingSubRequests,
+                        totalHostPoints: totalHostPoints,
+                        todayHostPoints: todayHostPoints,
+                        totalSubHostPoints: 0,
+                        todaySubHostPoints: 0,
+                        withdrawnPoints: withdrawnPoints,
+                        bonusCommissionPoints: bonusCommissionPoints,
+                      );
+                    }
+
+                    return StreamBuilder<QuerySnapshot>(
+                      stream: FirebaseFirestore.instance
+                          .collection('users')
+                          .where('agencyId',
+                              whereIn: approvedSubIds.take(10).toList())
+                          .snapshots(),
+                      builder: (context, subHostsSnap) {
+                        int totalSubHostPoints = 0;
+                        int todaySubHostPoints = 0;
+
+                        if (subHostsSnap.hasData) {
+                          for (final shDoc in subHostsSnap.data!.docs) {
+                            final rawSh = shDoc.data();
+                            final Map<String, dynamic> shData =
+                                rawSh is Map<String, dynamic> ? rawSh : {};
+                            int sPts = (shData['points'] as num?)?.toInt() ?? 0;
+                            if (sPts == 0) {
+                              sPts = (shData['diamonds'] as num?)?.toInt() ?? 0;
+                            }
+                            final int stPts =
+                                (shData['todayTaskPoints'] as num?)?.toInt() ??
+                                    0;
+                            totalSubHostPoints += sPts;
+                            todaySubHostPoints += stPts;
+                          }
+                        }
+
+                        return _buildAgencyDashboardScaffold(
+                          agencyId: agencyId,
+                          agencyName: agencyName,
+                          userAvatarUrl: userAvatarUrl,
+                          tags: tags,
+                          hostsList: hostsList,
+                          approvedSubAgencies: approvedSubAgencies,
+                          pendingSubRequests: pendingSubRequests,
+                          totalHostPoints: totalHostPoints,
+                          todayHostPoints: todayHostPoints,
+                          totalSubHostPoints: totalSubHostPoints,
+                          todaySubHostPoints: todaySubHostPoints,
+                          withdrawnPoints: withdrawnPoints,
+                          bonusCommissionPoints: bonusCommissionPoints,
+                        );
+                      },
+                    );
+                  },
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+
+Widget _buildAgencyDashboardScaffold({
+    required String agencyId,
+    required String agencyName,
+    required String userAvatarUrl,
+    required List<dynamic> tags,
+    required List<QueryDocumentSnapshot> hostsList,
+    required List<QueryDocumentSnapshot> approvedSubAgencies,
+    required List<QueryDocumentSnapshot> pendingSubRequests,
+    required int totalHostPoints,
+    required int todayHostPoints,
+    required int totalSubHostPoints,
+    required int todaySubHostPoints,
+    required int withdrawnPoints,
+    required int bonusCommissionPoints,
+  }) {
+    final int combinedPoints = totalHostPoints + totalSubHostPoints;
+    final tier = _getTierForPoints(combinedPoints);
+    final int tierMin = (tier['min'] as num).toInt();
+    final int tierMax = (tier['max'] as num).toInt();
+    final double rate = (tier['rate'] as num).toDouble();
+    final int currentPct = (rate * 100).round();
+    final int nextPct = (((tier['nextRate'] as num).toDouble()) * 100).round();
+
+    final int remainingPoints = max(0, tierMax - combinedPoints);
+    final double progress =
+        ((combinedPoints - tierMin) / max(1, tierMax - tierMin)).clamp(0.0, 1.0);
+
+    final double myIncomeToday =
+        (todayHostPoints * rate) + (todaySubHostPoints * 0.02);
+    final int grossCommissionPoints = (totalHostPoints * rate).round() +
+        (totalSubHostPoints * 0.02).round() +
+        bonusCommissionPoints;
+    final int availableCommissionPoints =
+        max(0, grossCommissionPoints - withdrawnPoints);
+    final double commissionUsd = availableCommissionPoints / _pointsPerUsd;
+    final ImageProvider? profileAvatar = _resolveAvatarProvider(userAvatarUrl);
+
+    return Scaffold(
+      backgroundColor: kBgColor,
+      appBar: AppBar(
+        backgroundColor: kBgColor,
+        elevation: 0,
+        centerTitle: true,
+        leading: IconButton(
+          icon: const Icon(
+            Icons.arrow_back_ios_new,
+            color: kTextDark,
+            size: 20,
+          ),
+          onPressed: () {
+            Navigator.pop(context);
+          },
+        ),
+        title: const Text(
+          "Agency Center",
+          style: TextStyle(
+            color: kTextDark,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(
+              Icons.help_outline_rounded,
+              color: kTextDark,
+              size: 23,
+            ),
+            onPressed: _showRulesSheet,
+          ),
+        ],
+      ),
+      body: SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(16, 6, 16, 28),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (pendingSubRequests.isNotEmpty) ...[
+              _buildPendingSubRequestsCard(pendingSubRequests),
+              const SizedBox(height: 14),
+            ],
+            Row(
+              children: [
+                Container(
+                  width: 60,
+                  height: 60,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: const LinearGradient(
+                      colors: [
+                        Color(0xFF2D2216),
+                        Color(0xFF120D08),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    border: Border.all(
+                      color: const Color(0xFFFFD700),
+                      width: 2,
+                    ),
+                  ),
+                  child: profileAvatar != null
+                      ? ClipOval(
+                          child: Image(
+                            image: profileAvatar,
+
+width: 56,
+                            height: 56,
+                            fit: BoxFit.cover,
+                            gaplessPlayback: true,
+                          ),
+                        )
+                      : const Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.emoji_events,
+                              color: Color(0xFFFFD700),
+                              size: 22,
+                            ),
+                            Text(
+                              "KING",
+                              style: TextStyle(
+                                color: Color(0xFFFFD700),
+                                fontSize: 8.5,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ],
+                        ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        agencyName,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          color: kTextDark,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      GestureDetector(
+                        onTap: () {
+                          _copyText(agencyId, "Agency ID");
+                        },
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              "ID:$agencyId",
+                              style: const TextStyle(
+                                fontSize: 13,
+                                color: kTextMuted,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            const Icon(
+                              Icons.copy_rounded,
+                              size: 15,
+                              color: kTextMuted,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(
+                    Icons.edit_outlined,
+                    color: kTextMuted,
+                    size: 22,
+                  ),
+                  onPressed: () {
+                    _showEditNameDialog(agencyId, agencyName);
+                  },
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: SizedBox(
+                    height: 46,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: kTealGreen,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(23),
+                        ),
+                      ),
+                      onPressed: () {
+                        _showInviteHostSheet(agencyId, agencyName);
+                      },
+
+child: const Text(
+                        "Invite Host",
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: SizedBox(
+                    height: 46,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: kCyanBlue,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(23),
+                        ),
+                      ),
+                      onPressed: () {
+                        _showInviteAgencySheet(agencyId);
+                      },
+                      child: const Text(
+                        "Invite Agency",
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            GestureDetector(
+              onTap: () {
+                _showAgencyTagSheet(agencyId, tags);
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 14,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Row(
+                  children: [
+                    const Text(
+                      "Agency Tag",
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: kTextDark,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Wrap(
+                        spacing: 6,
+                        children: tags.take(2).map((rawT) {
+                          final String t = rawT.toString();
+                          return Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: kOverviewTileBg,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              t,
+                              style: const TextStyle(
+                                fontSize: 11,
+                                color: kTealGreen,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                    const Icon(
+                      Icons.chevron_right_rounded,
+                      color: kTextMuted,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+
+colors: [kMintCardStart, kMintCardEnd],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      const Text(
+                        "My Income Today:",
+                        style: TextStyle(
+                          fontSize: 14.5,
+                          color: kTextDark,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      _coinBadge(),
+                      const SizedBox(width: 6),
+                      Text(
+                        _fmtNum(myIncomeToday, decimals: 1),
+                        style: const TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w800,
+                          color: kTextDark,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      const Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            "Total Host Points:",
+                            style: TextStyle(
+                              fontSize: 14.5,
+                              color: kTextDark,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          Text(
+                            "Past 30 Days",
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: kTextMuted,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(width: 8),
+                      _coinBadge(),
+                      const SizedBox(width: 6),
+                      Text(
+                        _fmtNum(combinedPoints, decimals: 1),
+                        style: const TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w800,
+                          color: kTextDark,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      const Text(
+                        "Commission Rate",
+                        style: TextStyle(
+                          fontSize: 14.5,
+                          color: kTextDark,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      _coinBadge(),
+                      const SizedBox(width: 6),
+                      Text(
+                        "$currentPct%",
+                        style: const TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w800,
+                          color: kTextDark,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+
+),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Wrap(
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          spacing: 4,
+                          children: [
+                            const Text(
+                              "Still need",
+                              style: TextStyle(
+                                fontSize: 12.5,
+                                color: kTextDark,
+                              ),
+                            ),
+                            _coinBadge(),
+                            Text(
+                              _fmtNum(remainingPoints, decimals: 1),
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                                color: kTextDark,
+                              ),
+                            ),
+                            const Text(
+                              "to reach next level",
+                              style: TextStyle(
+                                fontSize: 12.5,
+                                color: kTextDark,
+                              ),
+                            ),
+                            Text(
+                              "$nextPct%",
+                              style: const TextStyle(
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w800,
+                                color: kCoralRed,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(6),
+                          child: LinearProgressIndicator(
+                            value: progress,
+                            minHeight: 7,
+                            backgroundColor: const Color(0xFFE6ECEF),
+                            valueColor: const AlwaysStoppedAnimation(
+                              kTealGreen,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(
+                              children: [
+                                _coinBadge(),
+                                const SizedBox(width: 4),
+                                Text(
+                                  _fmtNum(combinedPoints, decimals: 0),
+                                  style: const TextStyle(
+                                    fontSize: 11.5,
+                                    color: kTextDark,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            Row(
+                              children: [
+                                _coinBadge(),
+                                const SizedBox(width: 4),
+                                Text(
+                                  _fmtNum(tierMax, decimals: 0),
+                                  style: const TextStyle(
+                                    fontSize: 11.5,
+                                    color: kTextDark,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+
+),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    "Overview",
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: kTextDark,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _overviewMetricBox(
+                          title: "Host Points",
+                          subtitle: "Today",
+                          value: _fmtNum(todayHostPoints),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _overviewMetricBox(
+                          title: "My Hosts Points",
+                          subtitle: "Past 30 Days",
+                          value: _fmtNum(totalHostPoints),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _overviewMetricBox(
+                          title: "Sub-agent Host Points",
+                          subtitle: "Today",
+                          value: _fmtNum(todaySubHostPoints),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _overviewMetricBox(
+                          title: "Sub-agent Host Points",
+                          subtitle: "Past 30 Days",
+                          value: _fmtNum(totalSubHostPoints),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _overviewCountBox(
+                          title: "Host Number",
+                          count: "${hostsList.length}",
+                          onTap: () {
+                            _showHostsSheet(
+                              agencyId,
+                              agencyName,
+                              hostsList,
+                            );
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _overviewCountBox(
+                          title: "Sub-agency Number",
+                          count: "${approvedSubAgencies.length}",
+                          onTap: () {
+                            _showSubAgenciesSheet(
+                              agencyId,
+                              approvedSubAgencies,
+                              pendingSubRequests,
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+            Container(
+
+decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Column(
+                children: [
+                  _incomeNavRow(
+                    icon: Icons.mic_none_rounded,
+                    title: "Host Income",
+                    onTap: () {
+                      _showIncomeAndPayoutSheet(
+                        title: "Host Income & Profit Payout",
+                        agencyId: agencyId,
+                        agencyName: agencyName,
+                        availableCommissionPoints: availableCommissionPoints,
+                        commissionUsd: commissionUsd,
+                        ratePct: currentPct,
+                        breakdownDocs: hostsList,
+                        isSubAgencyBreakdown: false,
+                      );
+                    },
+                  ),
+                  const Divider(
+                    height: 1,
+                    indent: 50,
+                    color: Color(0xFFF0F2F5),
+                  ),
+                  _incomeNavRow(
+                    icon: Icons.verified_user_outlined,
+                    title: "Sub-agency Income",
+                    onTap: () {
+                      _showIncomeAndPayoutSheet(
+                        title: "Sub-agency Income",
+                        agencyId: agencyId,
+                        agencyName: agencyName,
+                        availableCommissionPoints: availableCommissionPoints,
+                        commissionUsd: commissionUsd,
+                        ratePct: 2,
+                        breakdownDocs: approvedSubAgencies,
+                        isSubAgencyBreakdown: true,
+                      );
+                    },
+                  ),
+                  const Divider(
+                    height: 1,
+                    indent: 50,
+                    color: Color(0xFFF0F2F5),
+                  ),
+                  _incomeNavRow(
+                    icon: Icons.pending_outlined,
+                    title: "Other income",
+                    onTap: () {
+                      _showIncomeAndPayoutSheet(
+                        title: "Other Income",
+                        agencyId: agencyId,
+                        agencyName: agencyName,
+                        availableCommissionPoints: availableCommissionPoints,
+                        commissionUsd: commissionUsd,
+                        ratePct: currentPct,
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    "Contact Admin",
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: kTextDark,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    children: [
+                      Container(
+                        width: 40,
+                        height: 40,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFF25D366),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.chat_rounded,
+                          color: Colors.white,
+                          size: 22,
+
+),
+                      ),
+                      const SizedBox(width: 12),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              "WhatsApp",
+                              style: TextStyle(
+                                fontSize: 14.5,
+                                fontWeight: FontWeight.w600,
+                                color: kTextDark,
+                              ),
+                            ),
+                            SizedBox(height: 2),
+                            Text(
+                              kAdminWhatsapp,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: kTextMuted,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      _contactPillButton(
+                        onTap: () {
+                          _copyText(
+                            kAdminWhatsapp,
+                            "Admin WhatsApp",
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    children: [
+                      Container(
+                        width: 40,
+                        height: 40,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFF2AABEE),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.send_rounded,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              "Telegram",
+                              style: TextStyle(
+                                fontSize: 14.5,
+                                fontWeight: FontWeight.w600,
+                                color: kTextDark,
+                              ),
+                            ),
+                            SizedBox(height: 2),
+                            Text(
+                              kAdminTelegram,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: kTextMuted,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      _contactPillButton(
+                        onTap: () {
+                          _copyText(
+                            kAdminTelegram,
+                            "Admin Telegram",
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPendingSubRequestsCard(
+      List<QueryDocumentSnapshot> pendingSubRequests) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF7ED),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: kOrangeCardStart, width: 1.5),
+      ),
+      child: Column(
+
+crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.notifications_active_rounded,
+                  color: kOrangeCardEnd, size: 22),
+              const SizedBox(width: 8),
+              Text(
+                "Sub-Agency Requests (${pendingSubRequests.length})",
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w900,
+                  color: kTextDark,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          ...pendingSubRequests.map((doc) {
+            final Map<String, dynamic> req = doc.data() is Map<String, dynamic>
+                ? doc.data() as Map<String, dynamic>
+                : {};
+            final String subName = (req['name'] ?? 'Sub-Agency').toString();
+            final String ownerName = (req['ownerName'] ?? 'Host').toString();
+            final String subOwnerUid = (req['ownerUid'] ?? '').toString();
+            final String phone = (req['phone'] ?? '').toString();
+            final String country = (req['country'] ?? '').toString();
+
+            return Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "$subName (ID: ${doc.id})",
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                      color: kTextDark,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    "Applicant: $ownerName • $country",
+                    style: const TextStyle(fontSize: 12, color: kTextMuted),
+                  ),
+                  Text(
+                    "Phone: $phone",
+                    style: const TextStyle(fontSize: 12, color: kTextMuted),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: kTealGreen,
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                          onPressed: () {
+                            _respondToSubAgencyRequest(
+                              subAgencyId: doc.id,
+                              subOwnerUid: subOwnerUid,
+                              subAgencyName: subName,
+                              agree: true,
+                            );
+                          },
+                          child: const Text("Agree",
+                              style: TextStyle(fontWeight: FontWeight.bold)),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: OutlinedButton(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: kCoralRed,
+                            side: const BorderSide(color: kCoralRed),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+
+),
+                          ),
+                          onPressed: () {
+                            _respondToSubAgencyRequest(
+                              subAgencyId: doc.id,
+                              subOwnerUid: subOwnerUid,
+                              subAgencyName: subName,
+                              agree: false,
+                            );
+                          },
+                          child: const Text("Reject",
+                              style: TextStyle(fontWeight: FontWeight.bold)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAgentEntryScreen({
+    required int myNumericId,
+    required String joinedAgencyId,
+    required String joinedAgencyName,
+    required Map<String, dynamic>? pendingAgencyData,
+  }) {
+    final bool hasJoinedAgency = joinedAgencyId.isNotEmpty;
+    final String appStatus = pendingAgencyData != null
+        ? (pendingAgencyData['status'] ?? '').toString().toUpperCase()
+        : "";
+    bool hasPendingApp = false;
+    if (appStatus == 'PENDING') hasPendingApp = true;
+    if (appStatus == 'PENDING_PARENT') hasPendingApp = true;
+    final bool wasRejected = appStatus == 'REJECTED';
+
+    return Scaffold(
+      backgroundColor: kBgColor,
+      appBar: AppBar(
+        backgroundColor: kBgColor,
+        elevation: 0,
+        centerTitle: true,
+        leading: IconButton(
+          icon: const Icon(
+            Icons.arrow_back_ios_new,
+            color: kTextDark,
+            size: 20,
+          ),
+          onPressed: () {
+            Navigator.pop(context);
+          },
+        ),
+        title: const Text(
+          "Agent Center",
+          style: TextStyle(
+            color: kTextDark,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
+        child: Column(
+          children: [
+            if (hasPendingApp) ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(
+                    color: kOrangeCardStart,
+                    width: 1.5,
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.hourglass_top_rounded,
+                          color: kOrangeCardEnd,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            appStatus == 'PENDING_PARENT'
+                                ? "Waiting for Agent Approval"
+                                : "Waiting for Admin Dashboard Approval",
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w800,
+                              color: kTextDark,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      "Agency Name: ${pendingAgencyData!['name'] ?? ''}",
+                      style: const TextStyle(
+
+fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: kTextDark),
+                    ),
+                    Text(
+                      "Agency ID: ${pendingAgencyData['agencyId'] ?? myNumericId}",
+                      style: const TextStyle(fontSize: 12.5, color: kTextMuted),
+                    ),
+                    Text(
+                      "Phone: ${pendingAgencyData['phone'] ?? ''} • ${pendingAgencyData['country'] ?? ''}",
+                      style: const TextStyle(fontSize: 12.5, color: kTextMuted),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      appStatus == 'PENDING_PARENT'
+                          ? "Your agent ($joinedAgencyName) will review and Agree or Reject your request."
+                          : "Once approved from the Admin Dashboard, your Agency Center will open automatically.",
+                      style: const TextStyle(
+                          fontSize: 12, color: kTextMuted, height: 1.35),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            if (wasRejected) ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(
+                    color: kCoralRed,
+                    width: 1.5,
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Row(
+                      children: [
+                        Icon(
+                          Icons.cancel_rounded,
+                          color: kCoralRed,
+                        ),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            "Agency Application Rejected",
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w800,
+                              color: kTextDark,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      "Your request was not approved. You can submit a new application below.",
+                      style: TextStyle(
+                          fontSize: 12, color: kTextMuted, height: 1.35),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(18),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.04),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Column(
+                children: [
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 18,
+                      vertical: 14,
+                    ),
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [kPurpleBannerStart, kPurpleBannerEnd],
+                        begin: Alignment.centerLeft,
+
+end: Alignment.centerRight,
+                      ),
+                      borderRadius: BorderRadius.vertical(
+                        top: Radius.circular(18),
+                      ),
+                    ),
+                    child: const Text(
+                      "My Agent",
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16.5,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 18,
+                    ),
+                    child: hasJoinedAgency
+                        ? Row(
+                            children: [
+                              Container(
+                                width: 52,
+                                height: 52,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  gradient: const LinearGradient(
+                                    colors: [
+                                      Color(0xFF2D2216),
+                                      Color(0xFF120D08),
+                                    ],
+                                  ),
+                                  border: Border.all(
+                                    color: const Color(0xFFFFD700),
+                                    width: 1.8,
+                                  ),
+                                ),
+                                child: const Icon(
+                                  Icons.emoji_events,
+                                  color: Color(0xFFFFD700),
+                                  size: 26,
+                                ),
+                              ),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      joinedAgencyName.isNotEmpty
+                                          ? joinedAgencyName
+                                          : "Agency",
+                                      style: const TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w800,
+                                        color: kTextDark,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      "ID:$joinedAgencyId",
+                                      style: const TextStyle(
+                                        fontSize: 13,
+                                        color: kTextMuted,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const Text(
+                                "Joined",
+                                style: TextStyle(
+                                  color: Color(0xFF2B6CB0),
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          )
+                        : Row(
+                            children: [
+
+Container(
+                                width: 50,
+                                height: 50,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: kOverviewTileBg,
+                                  border: Border.all(
+                                    color: kTealGreen.withOpacity(0.35),
+                                  ),
+                                ),
+                                child: const Icon(
+                                  Icons.groups_rounded,
+                                  color: kTealGreen,
+                                  size: 26,
+                                ),
+                              ),
+                              const SizedBox(width: 14),
+                              const Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      "Join an Agency",
+                                      style: TextStyle(
+                                        fontSize: 15.5,
+                                        fontWeight: FontWeight.bold,
+                                        color: kTextDark,
+                                      ),
+                                    ),
+                                    SizedBox(height: 3),
+                                    Text(
+                                      "Paste invite link or Agency ID",
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: kTextMuted,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              ElevatedButton(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: kTealGreen,
+                                  foregroundColor: Colors.white,
+                                  elevation: 0,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 20,
+                                    vertical: 10,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                ),
+                                onPressed: () {
+                                  _showJoinAgencyDialog(
+                                      myNumericId: myNumericId);
+                                },
+                                child: const Text(
+                                  "Join",
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [kOrangeCardStart, kOrangeCardEnd],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+
+borderRadius: BorderRadius.circular(18),
+                boxShadow: [
+                  BoxShadow(
+                    color: kOrangeCardEnd.withOpacity(0.28),
+                    blurRadius: 12,
+                    offset: const Offset(0, 5),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    flex: 6,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          "I am an agent",
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 19,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.white,
+                            foregroundColor: kOrangeCardEnd,
+                            elevation: 0,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 20,
+                              vertical: 12,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          onPressed: hasPendingApp
+                              ? null
+                              : () {
+                                  _openCreateAgencyForm(
+                                    myNumericId: myNumericId,
+                                    joinedAgencyId: joinedAgencyId,
+                                    joinedAgencyName: joinedAgencyName,
+                                  );
+                                },
+                          child: Text(
+                            hasPendingApp
+                                ? "Application Pending"
+                                : "Create An Agency",
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    flex: 4,
+                    child: Container(
+                      height: 110,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.16),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: const Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.monetization_on_rounded,
+                            color: Color(0xFFFFF59D),
+                            size: 46,
+                          ),
+                          SizedBox(height: 6),
+                          Icon(
+                            Icons.thumb_up_alt_rounded,
+                            color: Colors.white,
+                            size: 28,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              decoration: BoxDecoration(
+
+color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.03),
+                    blurRadius: 8,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: kOverviewTileBg,
+                      border: Border.all(color: kTealGreen.withOpacity(0.3)),
+                    ),
+                    child: const Icon(
+                      Icons.support_agent_rounded,
+                      color: kTealGreen,
+                      size: 26,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Text(
+                      "Customer Support",
+                      style: TextStyle(
+                        fontSize: 15.5,
+                        fontWeight: FontWeight.bold,
+                        color: kTextDark,
+                      ),
+                    ),
+                  ),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF1BC5BD),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 10,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    onPressed: _showSupportSheet,
+                    child: const Text(
+                      "Contact",
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _overviewMetricBox({
+    required String title,
+    required String subtitle,
+    required String value,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: kOverviewTileBg,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 12.5,
+              color: kTextDark,
+              fontWeight: FontWeight.w500,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 2),
+          Text(
+            subtitle,
+            style: const TextStyle(fontSize: 10.5, color: kTextMuted),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              _coinBadge(),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  value,
+                  style: const TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
+                    color: kTextDark,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _overviewCountBox({
+    required String title,
+
+required String count,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: kOverviewTileBg,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 12.5,
+                      color: kTextDark,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const Icon(
+                  Icons.chevron_right_rounded,
+                  size: 18,
+                  color: kTextMuted,
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              count,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                color: kTextDark,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _incomeNavRow({
+    required IconData icon,
+    required String title,
+    required VoidCallback onTap,
+  }) {
+    return ListTile(
+      onTap: onTap,
+      leading: Icon(icon, color: kTextDark, size: 22),
+      title: Text(
+        title,
+        style: const TextStyle(
+          fontSize: 14.5,
+          fontWeight: FontWeight.w600,
+          color: kTextDark,
+        ),
+      ),
+      trailing: const Icon(Icons.chevron_right_rounded, color: kTextMuted),
+    );
+  }
+
+  Widget _contactPillButton({required VoidCallback onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+        decoration: BoxDecoration(
+          color: const Color(0xFFE3F8F1),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: const Text(
+          "Contact",
+          style: TextStyle(
+            color: Color(0xFF00A86B),
+            fontWeight: FontWeight.bold,
+            fontSize: 13,
+          ),
+        ),
+      ),
+    );
+  }
+}
