@@ -28,7 +28,6 @@ class _TaskScreenState extends State<TaskScreen>
   final User? _user = FirebaseAuth.instance.currentUser;
   bool _isClaiming = false;
 
-  // Synchronized Live Mic Timer (ticks every 1s in sync with Host Center)
   Timer? _liveClockTimer;
   int _sessionLiveSeconds = 0;
   int _lastSyncedMinuteBucket = 0;
@@ -36,7 +35,7 @@ class _TaskScreenState extends State<TaskScreen>
   bool _latestIsOnMic = false;
   bool _latestIsCrownSeat = false;
 
-  static const List> _twoHourTiers = [
+  static const List<Map<String, dynamic>> _twoHourTiers = [
     {"level": "L", "req": 0, "reward": 500},
     {"level": "K", "req": 24000, "reward": 2500},
     {"level": "J", "req": 50000, "reward": 5000},
@@ -67,12 +66,10 @@ class _TaskScreenState extends State<TaskScreen>
     super.dispose();
   }
 
-  // Current time in East Africa Time (UTC+3)
   DateTime _getEatNow() {
     return DateTime.now().toUtc().add(const Duration(hours: 3));
   }
 
-  // Resets daily at 21:00 EAT (9:00 PM EAT) -> 00:00:00
   String _getDailyResetCycleKey() {
     final eatNow = _getEatNow();
     final shifted = eatNow.add(const Duration(hours: 3));
@@ -115,9 +112,7 @@ class _TaskScreenState extends State<TaskScreen>
         setState(() {
           _trackedCycleKey = nowCycle;
           _sessionLiveSeconds = 0;
-          _lastSyncedM
-
-inuteBucket = 0;
+          _lastSyncedMinuteBucket = 0;
         });
         return;
       }
@@ -219,7 +214,6 @@ inuteBucket = 0;
     return "$hStr:$mStr:$sStr";
   }
 
-  // Strictly verify that all 4 voice biometric steps were completed
   bool _hasCompletedBiometricScan(Map userData) {
     if (userData['isFaceVerified'] != true) return false;
     if (userData['faceLivenessPassed'] != true) return false;
@@ -240,11 +234,8 @@ inuteBucket = 0;
     return false;
   }
 
-  // Dynamic Tier & Still Need Resolution linked directly to 7-Day Activity Points
   Map<String, dynamic> _resolveActivityTier({
-    required int giftIncome7Da
-
-ys,
+    required int giftIncome7Days,
     required bool isStarterPeriod,
   }) {
     int tierReward = 500;
@@ -288,7 +279,6 @@ ys,
     };
   }
 
-  // Navigate directly to the main room (or expand active room)
   Future<void> _navigateToMainRoom(int currentCoins) async {
     final mgr = RoomSessionManager.instance;
     if (mgr.hasActiveRoom) {
@@ -393,9 +383,7 @@ ys,
 
   Future<void> _claimReward({
     required String claimKey,
-    required int rewardAmo
-
-unt,
+    required int rewardAmount,
     required String taskTitle,
     required bool isNewDay,
     bool isCoinReward = false,
@@ -523,8 +511,7 @@ unt,
             Expanded(
               child: ListView(
                 children: [
-
-_buildPolicyTile("1. Daily Reset at 9:00 PM EAT (21:00)",
+                  _buildPolicyTile("1. Daily Reset at 9:00 PM EAT (21:00)",
                       "The live mic timer and all daily tasks reset automatically to 00:00:00 every night at 9:00 PM EAT."),
                   _buildPolicyTile("2. 4-Step Voice Biometric Verification",
                       "Align your face inside the circle first, then follow the spoken voice steps in order: Blink Eyes, Open Mouth/Smile, and Turn Head Left & Right."),
@@ -625,8 +612,7 @@ _buildPolicyTile("1. Daily Reset at 9:00 PM EAT (21:00)",
                   fontSize: 13.5,
                   fontWeight: FontWeight.w900,
                   letterSpacing: 0.6,
-
-),
+                ),
               ),
               const SizedBox(width: 5),
               Container(
@@ -751,8 +737,7 @@ _buildPolicyTile("1. Daily Reset at 9:00 PM EAT (21:00)",
               if (userData['isOnMic'] == true) {
                 if (userData['isMuted'] != true) {
                   isLiveOnMicNow = true;
-
-}
+                }
               }
             }
 
@@ -797,7 +782,6 @@ _buildPolicyTile("1. Daily Reset at 9:00 PM EAT (21:00)",
             }
             final int crownGiftCoins = rawCrownGiftCoins;
 
-            // Strictly read TODAY's sent gifts (never lifetime wealthExp)
             int todayGiftSentCoins =
                 (userData['todayGiftSentCoins'] as num?)?.toInt() ?? 0;
             if (isNewMicDay) {
@@ -866,9 +850,7 @@ _buildPolicyTile("1. Daily Reset at 9:00 PM EAT (21:00)",
             }
 
             return Scaffold(
-              backgroundColor: const Color(0xF
-
-FF5EFEB),
+              backgroundColor: const Color(0xFFF5EFEB),
               appBar: AppBar(
                 backgroundColor: Colors.transparent,
                 elevation: 0,
@@ -961,8 +943,7 @@ FF5EFEB),
                           dragonPlays: dragonPlays,
                           claimedKeys: claimedKeys,
                         ),
-
-],
+                      ],
                     ),
                   ),
                 ],
@@ -1084,9 +1065,7 @@ FF5EFEB),
                     const Text(
                       "This week",
                       style:
-                          TextStyle(color: Color(0xFF5C564D), fontSize:
-
-12),
+                          TextStyle(color: Color(0xFF5C564D), fontSize: 12),
                     ),
                     const SizedBox(height: 4),
                     Text(
@@ -1217,9 +1196,7 @@ FF5EFEB),
     required int totalTodaySeconds,
     required int micMinutes,
     required int crownMinutes,
-    required int cr
-
-ownGiftCoins,
+    required int crownGiftCoins,
     required int consecutiveDays,
     required int giftIncomeLast7Days,
     required int currentActivityReward,
@@ -1259,7 +1236,6 @@ ownGiftCoins,
           userData: userData,
           isFaceVerified: isFaceVerified,
         ),
-
         if (isStarterPeriod) ...[
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1328,9 +1304,7 @@ ownGiftCoins,
                 style: TextStyle(
                   color: Color(0xFF1A1A1A),
                   fontSize: 14,
-                  fontWeight: FontW
-
-eight.bold,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
               Text(
@@ -1362,9 +1336,7 @@ eight.bold,
             ),
           ),
         ],
-
         const SizedBox(height: 12),
-
         Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
@@ -1434,13 +1406,9 @@ eight.bold,
             ],
           ),
         ),
-
         const SizedBox(height: 18),
-
         const Text(
-          "Crown Seat Daily Task (24h
-
-Renewal)",
+          "Crown Seat Daily Task (24h Renewal)",
           style: TextStyle(
             color: Color(0xFF1A1A1A),
             fontSize: 14,
@@ -1448,7 +1416,6 @@ Renewal)",
           ),
         ),
         const SizedBox(height: 8),
-
         _buildTaskActionCard(
           icon: Icons.workspace_premium,
           title: "Crown Seat 1 Hour + 600 Coins Gift",
@@ -1466,7 +1433,6 @@ Renewal)",
             isNewDay: isNewDay,
           ),
         ),
-
         const SizedBox(height: 16),
       ],
     );
@@ -1492,7 +1458,6 @@ Renewal)",
     final String gift500Key = "${cycleKey}_daily_wealth_500";
     final bool gift500Claimed = claimedKeys[gift500Key] == true;
 
-    // Open 24h Tasks (Never locked behind Face Verification, tracked strictly for today's 24h cycle)
     final bool gift100kDone = giftSentProgress >= 100000;
     final String gift100kKey = "${cycleKey}_daily_gift_100k";
     final bool gift100kClaimed = claimedKeys[gift100kKey] == true;
@@ -1553,9 +1518,7 @@ Renewal)",
           isClaimed: gift500kClaimed,
           onGo: () => _navigateToMainRoom(userCoins),
           onClaim: () => _claimReward(
-            claimKe
-
-y: gift500kKey,
+            claimKey: gift500kKey,
             rewardAmount: 10000,
             taskTitle: "Send 500,000 Coins Gift",
             isNewDay: isNewDay,
@@ -1682,9 +1645,7 @@ y: gift500kKey,
     required VoidCallback onClaim,
   }) {
     Color btnBg = const Color(0xFF4A3528);
-    String btnLab
-
-el = "Go";
+    String btnLabel = "Go";
     VoidCallback? btnAction = onGo;
 
     if (isClaimed) {
@@ -1777,13 +1738,6 @@ el = "Go";
   }
 }
 
-// ============================================================================
-// STRICT 4-STEP VOICE-GUIDED BIOMETRIC FACE VERIFICATION DIALOG
-// Step 1: Align Face Inside Circle (Must lock face position first!)
-// Step 2: Eye Blink (Only after Step 1 passes)
-// Step 3: Mouth Movement (Only after Step 2 passes)
-// Step 4: Head Turn Left & Right (Only after Step 3 passes)
-// ============================================================================
 class _FaceBiometricDialog extends StatefulWidget {
   final String uid;
   const _FaceBiometricDialog({required this.uid});
@@ -1804,22 +1758,16 @@ class _FaceBiometricDialogState extends State<_FaceBiometricDialog> {
   bool _faceInCircle = false;
   String _lastSpokenPrompt = "";
 
-  // Step 1: Face Alignment inside the circle
-  int _alignedS
-
-tableFrames = 0;
+  int _alignedStableFrames = 0;
   bool _faceAlignedVerified = false;
 
-  // Step 2: Eye Blink (unlocked only after _faceAlignedVerified)
   bool _sawEyesOpen = false;
   bool _sawEyesClosed = false;
   int _closedEyeFrames = 0;
   bool _eyeVerified = false;
 
-  // Step 3: Mouth Movement (unlocked only after _eyeVerified)
   bool _mouthVerified = false;
 
-  // Step 4: Head Movement Left & Right (unlocked only after _mouthVerified)
   bool _turnedHeadLeft = false;
   bool _turnedHeadRight = false;
   bool _headVerified = false;
@@ -1960,9 +1908,7 @@ tableFrames = 0;
     return InputImage.fromBytes(
       bytes: bytes,
       metadata: InputImageMetadata(
-        size: Size(image.width.toDouble(
-
-), image.height.toDouble()),
+        size: Size(image.width.toDouble(), image.height.toDouble()),
         rotation: rotation,
         format: format,
         bytesPerRow: image.planes.first.bytesPerRow,
@@ -2023,7 +1969,6 @@ tableFrames = 0;
         image.height.toDouble(),
       );
 
-      // STEP 1: FACE ALIGNMENT & LOCK INSIDE CIRCLE
       if (!_faceAlignedVerified) {
         if (!insideCircle) {
           setState(() {
@@ -2070,7 +2015,6 @@ tableFrames = 0;
       }
       _faceInCircle = true;
 
-      // STEP 2: EYE BLINK (ONLY AFTER STEP 1 FACE ALIGNED)
       if (_faceAlignedVerified && !_eyeVerified) {
         final double? leftOpen = face.leftEyeOpenProbability;
         final double? rightOpen = face.rightEyeOpenProbability;
@@ -2096,11 +2040,8 @@ tableFrames = 0;
         }
       }
 
-      // STEP 3: MOUTH MOVEMENT (ONLY AFTER STEP 2 EYE BLINK)
       if (_faceAlignedVerified && _eyeVerified && !_mouthVerified) {
-        final double? s
-
-mileProb = face.smilingProbability;
+        final double? smileProb = face.smilingProbability;
         if (smileProb != null && smileProb > 0.70) {
           _mouthVerified = true;
         }
@@ -2125,7 +2066,6 @@ mileProb = face.smilingProbability;
         }
       }
 
-      // STEP 4: HEAD TURN LEFT & RIGHT (ONLY AFTER STEP 3 MOUTH)
       if (_faceAlignedVerified &&
           _eyeVerified &&
           _mouthVerified &&
@@ -2223,9 +2163,7 @@ mileProb = face.smilingProbability;
       }
 
       if (uploadedUrl.isEmpty) {
-        throw Exception("Could not save face phot
-
-o");
+        throw Exception("Could not save face photo");
       }
 
       if (mounted) {
@@ -2357,9 +2295,7 @@ o");
               child: (_isCameraReady && _cameraController != null)
                   ? FittedBox(
                       fit: BoxFit.cover,
-                      chi
-
-ld: SizedBox(
+                      child: SizedBox(
                         width: _cameraController!.value.previewSize?.height ??
                             200,
                         height:
