@@ -7,6 +7,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 
+import 'vip_screen.dart';
 import 'wallet_screen.dart';
 import 'points_wallet_screen.dart';
 import 'store_screen.dart';
@@ -143,7 +144,7 @@ class _ProfileScreenState extends State {
     } catch (_) {}
   }
 
-ImageProvider? _resolveAvatarProvider(String? avatarUrl) {
+  ImageProvider? _resolveAvatarProvider(String? avatarUrl) {
     if (avatarUrl == null) return null;
     if (avatarUrl.isEmpty) return null;
     if (avatarUrl.startsWith('data:image')) {
@@ -242,8 +243,7 @@ ImageProvider? _resolveAvatarProvider(String? avatarUrl) {
                     backgroundColor: Color(0xFFEEF2FF),
                     child: Icon(Icons.camera_alt_rounded,
                         color: Color(0xFF4F46E5)),
-
-),
+                  ),
                   title: const Text(
                     "Take Photo",
                     style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
@@ -377,8 +377,7 @@ ImageProvider? _resolveAvatarProvider(String? avatarUrl) {
     required String currentName,
     required String currentBio,
     required String currentGender,
-
-required String currentCountry,
+    required String currentCountry,
     required String? avatarUrl,
     required int numericId,
   }) {
@@ -396,6 +395,17 @@ required String currentCountry,
             onChangePhotoTap: _showAvatarPickerSheet,
             resolveAvatar: _resolveAvatarProvider,
           );
+        },
+      ),
+    );
+  }
+
+  void _openVipClub() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) {
+          return const VipScreen();
         },
       ),
     );
@@ -508,7 +518,7 @@ required String currentCountry,
                       (userData['points'] as num?)?.toDouble() ??
                       0.0;
 
-final int followedCount =
+              final int followedCount =
                   (userData['followedCount'] as num?)?.toInt() ?? 0;
               final int followingCount =
                   (userData['followingCount'] as num?)?.toInt() ?? 0;
@@ -521,6 +531,24 @@ final int followedCount =
                   (userData['charmLevel'] as num?)?.toInt() ?? 0;
               final int chatLevel =
                   (userData['chatLevel'] as num?)?.toInt() ?? 0;
+              final int vipLevel =
+                  (userData['vipLevel'] as num?)?.toInt() ?? 0;
+              final int activeVipFrame =
+                  (userData['activeVipFrameLevel'] as num?)?.toInt() ??
+                      vipLevel;
+              final Timestamp? vipExpiresAt =
+                  userData['vipExpiresAt'] as Timestamp?;
+              bool isVipActive = false;
+              if (vipLevel > 0) {
+                if (vipExpiresAt == null) {
+                  isVipActive = true;
+                } else if (vipExpiresAt.toDate().isAfter(DateTime.now())) {
+                  isVipActive = true;
+                }
+              }
+              final int effectiveFrameLevel =
+                  isVipActive ? activeVipFrame : 0;
+
               final String? agencyId = userData['agencyId']?.toString();
               final String? avatarUrl =
                   (userData['avatarUrl'] ?? userData['photoURL'])?.toString();
@@ -566,13 +594,17 @@ final int followedCount =
                             wealthLevel: wealthLevel,
                             charmLevel: charmLevel,
                             chatLevel: chatLevel,
+                            vipLevel: isVipActive ? vipLevel : 0,
+                            activeFrameLevel: effectiveFrameLevel,
                             hasAgency: hasAgency,
                             followed: followedCount,
                             following: followingCount,
                             friends: friendsCount,
                           ),
                           const SizedBox(height: 16),
-                          _buildVipClubCard(),
+                          _buildVipClubCard(
+                            activeVipLevel: isVipActive ? vipLevel : 0,
+                          ),
                         ],
                       ),
                     ),
@@ -605,7 +637,7 @@ final int followedCount =
                     ),
                     const SizedBox(height: 12),
 
-Padding(
+                    Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 14),
                       child: _buildBusinessSection(
                         numericId: numericId,
@@ -655,12 +687,41 @@ Padding(
     required int wealthLevel,
     required int charmLevel,
     required int chatLevel,
+    required int vipLevel,
+    required int activeFrameLevel,
     required bool hasAgency,
     required int followed,
     required int following,
     required int friends,
   }) {
     final ImageProvider? avatarImg = _resolveAvatarProvider(avatarUrl);
+
+    final Widget baseAvatar = Container(
+      width: 74,
+      height: 74,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(color: Colors.white, width: 2.8),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.14),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: CircleAvatar(
+        backgroundColor: const Color(0xFF9B87B5),
+        backgroundImage: avatarImg,
+        child: avatarImg == null
+            ? const Icon(
+                Icons.person_rounded,
+                size: 42,
+                color: Colors.white,
+              )
+            : null,
+      ),
+    );
 
     return Column(
       children: [
@@ -671,32 +732,24 @@ Padding(
               child: Stack(
                 clipBehavior: Clip.none,
                 children: [
-                  Container(
-                    width: 74,
-                    height: 74,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white, width: 2.8),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.14),
-                          blurRadius: 10,
-                          offset: const Offset(0, 3),
-                        ),
-                      ],
-                    ),
-                    child: CircleAvatar(
-                      backgroundColor: const Color(0xFF9B87B5),
-                      backgroundImage: avatarImg,
-                      child: avatarImg == null
-                          ? const Icon(
-                              Icons.person_rounded,
-                              size: 42,
-                              color: Colors.white,
-                            )
-                          : null,
-                    ),
-                  ),
+                  activeFrameLevel > 0
+                      ? VipAvatarFrame(
+                          vipLevel: activeFrameLevel,
+                          size: 74,
+                          showBadge: true,
+                          child: CircleAvatar(
+                            backgroundColor: const Color(0xFF9B87B5),
+                            backgroundImage: avatarImg,
+                            child: avatarImg == null
+                                ? const Icon(
+                                    Icons.person_rounded,
+                                    size: 40,
+                                    color: Colors.white,
+                                  )
+                                : null,
+                          ),
+                        )
+                      : baseAvatar,
                   Positioned(
                     bottom: 0,
                     right: 0,
@@ -720,8 +773,7 @@ Padding(
             ),
             const SizedBox(width: 14),
             Expanded(
-
-child: GestureDetector(
+              child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
                 onTap: () {
                   _openEditProfile(
@@ -766,6 +818,12 @@ child: GestureDetector(
                             spacing: 6,
                             runSpacing: 4,
                             children: [
+                              if (vipLevel > 0)
+                                _buildLevelTag(
+                                  Icons.workspace_premium_rounded,
+                                  "VIP$vipLevel",
+                                  const Color(0xFFD97706),
+                                ),
                               _buildLevelTag(Icons.shield, "$wealthLevel",
                                   const Color(0xFF14B8A6)),
                               _buildLevelTag(Icons.arrow_upward, "$charmLevel",
@@ -803,8 +861,7 @@ child: GestureDetector(
                                   style: const TextStyle(
                                       fontSize: 13,
                                       color: Color(0xFF475569),
-
-fontWeight: FontWeight.w700),
+                                      fontWeight: FontWeight.w700),
                                 ),
                                 const SizedBox(width: 6),
                                 const Icon(Icons.copy_rounded,
@@ -894,70 +951,78 @@ fontWeight: FontWeight.w700),
     );
   }
 
-  Widget _buildVipClubCard() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF3E2D1D), Color(0xFF26190E)],
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
-        ),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.12),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.workspace_premium,
-              color: Color(0xFFFFD580), size: 32),
-          const SizedBox(width: 12),
-          const Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
+  Widget _buildVipClubCard({int activeVipLevel = 0}) {
+    final String subtitleText = activeVipLevel > 0
+        ? "VIP$activeVipLevel Active • Claim your free coins daily"
+        : "Upgrade to VIP and get free coins daily";
+    final String buttonLabel = activeVipLevel > 0 ? "My VIP" : "Get VIP";
 
-"VIP Club",
-                  style: TextStyle(
-                      color: Color(0xFFFFE099),
-                      fontSize: 15.5,
-                      fontWeight: FontWeight.w900),
-                ),
-                SizedBox(height: 2),
-                Text(
-                  "Upgrade to VIP and get free coins daily",
-                  style: TextStyle(
-                      color: Color(0xFFE5D3C5),
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w500),
-                ),
-              ],
-            ),
+    return GestureDetector(
+      onTap: _openVipClub,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFF3E2D1D), Color(0xFF26190E)],
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
           ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFFFFDF9E), Color(0xFFF3BA2F)],
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.12),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.workspace_premium,
+                color: Color(0xFFFFD580), size: 32),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    "VIP Club",
+                    style: TextStyle(
+                        color: Color(0xFFFFE099),
+                        fontSize: 15.5,
+                        fontWeight: FontWeight.w900),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitleText,
+                    style: const TextStyle(
+                        color: Color(0xFFE5D3C5),
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w500),
+                  ),
+                ],
               ),
-              borderRadius: BorderRadius.circular(20),
             ),
-            child: const Text(
-              "Get VIP",
-              style: TextStyle(
-                  color: Color(0xFF2B1D10),
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w900),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFFFFDF9E), Color(0xFFF3BA2F)],
+                ),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                buttonLabel,
+                style: const TextStyle(
+                    color: Color(0xFF2B1D10),
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w900),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -1041,8 +1106,7 @@ fontWeight: FontWeight.w700),
             ),
           ),
           Container(width: 1, height: 40, color: const Color(0xFFE2E8F0)),
-
-const SizedBox(width: 18),
+          const SizedBox(width: 18),
           Expanded(
             child: InkWell(
               onTap: _openPointsWallet,
@@ -1157,8 +1221,7 @@ const SizedBox(width: 18),
             icon: Icons.mark_email_unread_rounded,
             colors: const [Color(0xFFFF758F), Color(0xFFC9184A)],
             label: "Invitation",
-
-onTap: () {
+            onTap: () {
               Navigator.push(
                 context,
                 MaterialPageRoute(
@@ -1288,8 +1351,7 @@ onTap: () {
             Column(
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
-
-children: [
+              children: [
                 Text(
                   "UP TO 60% OFF",
                   style: TextStyle(
@@ -1432,8 +1494,7 @@ children: [
       behavior: HitTestBehavior.opaque,
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
-
-children: [
+        children: [
           Container(
             width: 50,
             height: 50,
@@ -1583,7 +1644,7 @@ class _EditProfileScreenState extends State {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-final String newName = _nameController.text.trim();
+    final String newName = _nameController.text.trim();
     if (newName.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Nickname cannot be empty.")),
@@ -1707,8 +1768,7 @@ final String newName = _nameController.text.trim();
           return SingleChildScrollView(
             padding: const EdgeInsets.all(16),
             child: Column(
-
-children: [
+              children: [
                 GestureDetector(
                   onTap: _w.onChangePhotoTap,
                   child: Column(
@@ -1796,8 +1856,7 @@ children: [
                           fontWeight: FontWeight.w700,
                           color: Color(0xFF111827),
                         ),
-
-decoration: InputDecoration(
+                        decoration: InputDecoration(
                           hintText: "Enter your nickname",
                           filled: true,
                           fillColor: const Color(0xFFF3F5F7),
@@ -1877,8 +1936,7 @@ decoration: InputDecoration(
                                 ),
                               ),
                             ),
-
-),
+                          ),
                         ],
                       ),
                       const SizedBox(height: 16),
