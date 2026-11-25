@@ -36,7 +36,7 @@ class _TaskScreenState extends State<TaskScreen>
   bool _latestIsOnMic = false;
   bool _latestIsCrownSeat = false;
 
-  static const List<Map<String, dynamic>> _twoHourTiers = [
+  static const List> _twoHourTiers = [
     {"level": "L", "req": 0, "reward": 500},
     {"level": "K", "req": 24000, "reward": 2500},
     {"level": "J", "req": 50000, "reward": 5000},
@@ -115,7 +115,9 @@ class _TaskScreenState extends State<TaskScreen>
         setState(() {
           _trackedCycleKey = nowCycle;
           _sessionLiveSeconds = 0;
-          _lastSyncedMinuteBucket = 0;
+          _lastSyncedM
+
+inuteBucket = 0;
         });
         return;
       }
@@ -217,9 +219,32 @@ class _TaskScreenState extends State<TaskScreen>
     return "$hStr:$mStr:$sStr";
   }
 
+  // Strictly verify that all 4 voice biometric steps were completed
+  bool _hasCompletedBiometricScan(Map userData) {
+    if (userData['isFaceVerified'] != true) return false;
+    if (userData['faceLivenessPassed'] != true) return false;
+    final String facePhotoUrl =
+        (userData['facePhotoUrl'] ?? '').toString().trim();
+    if (facePhotoUrl.isEmpty) return false;
+
+    final rawSteps = userData['faceLivenessSteps'];
+    if (rawSteps is List) {
+      final steps = rawSteps.map((e) => e.toString()).toList();
+      if (steps.contains('FACE_ALIGNED') &&
+          steps.contains('EYE_BLINK') &&
+          steps.contains('MOUTH_MOVE') &&
+          steps.contains('HEAD_TURN')) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   // Dynamic Tier & Still Need Resolution linked directly to 7-Day Activity Points
   Map<String, dynamic> _resolveActivityTier({
-    required int giftIncome7Days,
+    required int giftIncome7Da
+
+ys,
     required bool isStarterPeriod,
   }) {
     int tierReward = 500;
@@ -263,18 +288,49 @@ class _TaskScreenState extends State<TaskScreen>
     };
   }
 
-  void _navigateToRoom(int currentCoins) {
+  // Navigate directly to the main room (or expand active room)
+  Future<void> _navigateToMainRoom(int currentCoins) async {
     final mgr = RoomSessionManager.instance;
     if (mgr.hasActiveRoom) {
       mgr.expandRoom();
+      if (mounted && Navigator.canPop(context)) {
+        Navigator.pop(context);
+      }
       return;
     }
-    Navigator.push(
+
+    String mainRoomTitle = "Habesha VIP Party";
+    int mainSeatCount = 12;
+
+    try {
+      final roomDoc = await FirebaseFirestore.instance
+          .collection('rooms')
+          .doc(channelName)
+          .get();
+      if (roomDoc.exists && roomDoc.data() != null) {
+        final rData = roomDoc.data()!;
+        final String fetchedTitle =
+            (rData['roomName'] ?? rData['title'] ?? '').toString().trim();
+        if (fetchedTitle.isNotEmpty) {
+          mainRoomTitle = fetchedTitle;
+        }
+        if (rData['seats'] is List) {
+          final int len = (rData['seats'] as List).length;
+          if (len >= 8) {
+            mainSeatCount = len;
+          }
+        }
+      }
+    } catch (_) {}
+
+    if (!mounted) return;
+    Navigator.pushReplacement(
       context,
       MaterialPageRoute(
         builder: (_) => RoomScreen(
-          roomTitle: "VIP Voice Room",
+          roomTitle: mainRoomTitle,
           initialCoins: currentCoins,
+          seatCount: mainSeatCount,
           onCoinUpdate: (newCoins) {},
         ),
       ),
@@ -337,7 +393,9 @@ class _TaskScreenState extends State<TaskScreen>
 
   Future<void> _claimReward({
     required String claimKey,
-    required int rewardAmount,
+    required int rewardAmo
+
+unt,
     required String taskTitle,
     required bool isNewDay,
     bool isCoinReward = false,
@@ -465,7 +523,8 @@ class _TaskScreenState extends State<TaskScreen>
             Expanded(
               child: ListView(
                 children: [
-                  _buildPolicyTile("1. Daily Reset at 9:00 PM EAT (21:00)",
+
+_buildPolicyTile("1. Daily Reset at 9:00 PM EAT (21:00)",
                       "The live mic timer and all daily tasks reset automatically to 00:00:00 every night at 9:00 PM EAT."),
                   _buildPolicyTile("2. 4-Step Voice Biometric Verification",
                       "Align your face inside the circle first, then follow the spoken voice steps in order: Blink Eyes, Open Mouth/Smile, and Turn Head Left & Right."),
@@ -533,7 +592,7 @@ class _TaskScreenState extends State<TaskScreen>
       child: GestureDetector(
         onTap: () {
           if (!isCounting) {
-            _navigateToRoom(userCoins);
+            _navigateToMainRoom(userCoins);
           }
         },
         child: Container(
@@ -566,7 +625,8 @@ class _TaskScreenState extends State<TaskScreen>
                   fontSize: 13.5,
                   fontWeight: FontWeight.w900,
                   letterSpacing: 0.6,
-                ),
+
+),
               ),
               const SizedBox(width: 5),
               Container(
@@ -644,10 +704,7 @@ class _TaskScreenState extends State<TaskScreen>
             final String cycleKey = _getDailyResetCycleKey();
             final int userCoins = (userData['coins'] as num?)?.toInt() ?? 0;
 
-            final String facePhotoUrl =
-                (userData['facePhotoUrl'] ?? '').toString().trim();
-            final bool isFaceVerified =
-                userData['isFaceVerified'] == true && facePhotoUrl.isNotEmpty;
+            final bool isFaceVerified = _hasCompletedBiometricScan(userData);
 
             String lastTaskDate = "";
             if (userData['lastTaskDate'] != null) {
@@ -694,7 +751,8 @@ class _TaskScreenState extends State<TaskScreen>
               if (userData['isOnMic'] == true) {
                 if (userData['isMuted'] != true) {
                   isLiveOnMicNow = true;
-                }
+
+}
               }
             }
 
@@ -734,21 +792,14 @@ class _TaskScreenState extends State<TaskScreen>
 
             int rawCrownGiftCoins =
                 (userData['todayGiftCoins'] as num?)?.toInt() ?? 0;
-            if (rawCrownGiftCoins == 0) {
-              rawCrownGiftCoins =
-                  (userData['todayPoints'] as num?)?.toInt() ?? 0;
-            }
             if (isNewMicDay) {
               rawCrownGiftCoins = 0;
             }
             final int crownGiftCoins = rawCrownGiftCoins;
 
+            // Strictly read TODAY's sent gifts (never lifetime wealthExp)
             int todayGiftSentCoins =
                 (userData['todayGiftSentCoins'] as num?)?.toInt() ?? 0;
-            if (todayGiftSentCoins == 0) {
-              todayGiftSentCoins =
-                  (userData['dailyGiftSent'] as num?)?.toInt() ?? 0;
-            }
             if (isNewMicDay) {
               todayGiftSentCoins = 0;
             }
@@ -757,7 +808,7 @@ class _TaskScreenState extends State<TaskScreen>
                 (userData['todayTeenPattiPlays'] as num?)?.toInt() ?? 0;
             if (userData['playedTeenPattiDate'] == cycleKey) {
               if (teenPattiPlays == 0) teenPattiPlays = 1;
-            } else if (isNewMicDay) {
+            } else {
               teenPattiPlays = 0;
             }
 
@@ -765,7 +816,7 @@ class _TaskScreenState extends State<TaskScreen>
                 (userData['todayDragonPlays'] as num?)?.toInt() ?? 0;
             if (userData['playedDragonDate'] == cycleKey) {
               if (dragonPlays == 0) dragonPlays = 1;
-            } else if (isNewMicDay) {
+            } else {
               dragonPlays = 0;
             }
 
@@ -814,11 +865,10 @@ class _TaskScreenState extends State<TaskScreen>
               claimedKeys = userData['claimedTaskKeys'] as Map;
             }
 
-            final int wealthExp =
-                (userData['wealthExp'] as num?)?.toInt() ?? 0;
-
             return Scaffold(
-              backgroundColor: const Color(0xFFF5EFEB),
+              backgroundColor: const Color(0xF
+
+FF5EFEB),
               appBar: AppBar(
                 backgroundColor: Colors.transparent,
                 elevation: 0,
@@ -906,13 +956,13 @@ class _TaskScreenState extends State<TaskScreen>
                           cycleKey: cycleKey,
                           isNewDay: isNewDay,
                           micMinutes: micMinutes,
-                          wealthExp: wealthExp,
                           todayGiftSentCoins: todayGiftSentCoins,
                           teenPattiPlays: teenPattiPlays,
                           dragonPlays: dragonPlays,
                           claimedKeys: claimedKeys,
                         ),
-                      ],
+
+],
                     ),
                   ),
                 ],
@@ -1034,7 +1084,9 @@ class _TaskScreenState extends State<TaskScreen>
                     const Text(
                       "This week",
                       style:
-                          TextStyle(color: Color(0xFF5C564D), fontSize: 12),
+                          TextStyle(color: Color(0xFF5C564D), fontSize:
+
+12),
                     ),
                     const SizedBox(height: 4),
                     Text(
@@ -1074,7 +1126,7 @@ class _TaskScreenState extends State<TaskScreen>
     if (isFaceVerified) {
       statusTitle = "Biometric Face Verified ✓";
       statusSubtitle =
-          "Face scan complete. All Host tasks and reward claims are active.";
+          "4-step voice biometric scan passed. Host tasks are unlocked.";
       cardBorderColor = const Color(0xFF107C41);
       iconBg = const Color(0xFFE8F5E9);
       iconColor = const Color(0xFF107C41);
@@ -1165,7 +1217,9 @@ class _TaskScreenState extends State<TaskScreen>
     required int totalTodaySeconds,
     required int micMinutes,
     required int crownMinutes,
-    required int crownGiftCoins,
+    required int cr
+
+ownGiftCoins,
     required int consecutiveDays,
     required int giftIncomeLast7Days,
     required int currentActivityReward,
@@ -1238,7 +1292,7 @@ class _TaskScreenState extends State<TaskScreen>
             isVerified: isFaceVerified,
             isCompleted: isActivityDone,
             isClaimed: isFixed7DayClaimed,
-            onGo: () => _navigateToRoom(userCoins),
+            onGo: () => _navigateToMainRoom(userCoins),
             onClaim: () => _claimReward(
               claimKey: fixed7DayKey,
               rewardAmount: 8000,
@@ -1257,7 +1311,7 @@ class _TaskScreenState extends State<TaskScreen>
             isVerified: isFaceVerified,
             isCompleted: isActivityDone,
             isClaimed: isActivityTierClaimed,
-            onGo: () => _navigateToRoom(userCoins),
+            onGo: () => _navigateToMainRoom(userCoins),
             onClaim: () => _claimReward(
               claimKey: activityTierKey,
               rewardAmount: currentActivityReward,
@@ -1274,7 +1328,9 @@ class _TaskScreenState extends State<TaskScreen>
                 style: TextStyle(
                   color: Color(0xFF1A1A1A),
                   fontSize: 14,
-                  fontWeight: FontWeight.bold,
+                  fontWeight: FontW
+
+eight.bold,
                 ),
               ),
               Text(
@@ -1297,7 +1353,7 @@ class _TaskScreenState extends State<TaskScreen>
             isVerified: isFaceVerified,
             isCompleted: isActivityDone,
             isClaimed: isActivityTierClaimed,
-            onGo: () => _navigateToRoom(userCoins),
+            onGo: () => _navigateToMainRoom(userCoins),
             onClaim: () => _claimReward(
               claimKey: activityTierKey,
               rewardAmount: currentActivityReward,
@@ -1382,7 +1438,9 @@ class _TaskScreenState extends State<TaskScreen>
         const SizedBox(height: 18),
 
         const Text(
-          "Crown Seat Daily Task (24h Renewal)",
+          "Crown Seat Daily Task (24h
+
+Renewal)",
           style: TextStyle(
             color: Color(0xFF1A1A1A),
             fontSize: 14,
@@ -1400,7 +1458,7 @@ class _TaskScreenState extends State<TaskScreen>
           isVerified: isFaceVerified,
           isCompleted: isCrownDone,
           isClaimed: isCrownClaimed,
-          onGo: () => _navigateToRoom(userCoins),
+          onGo: () => _navigateToMainRoom(userCoins),
           onClaim: () => _claimReward(
             claimKey: crownKey,
             rewardAmount: 1000,
@@ -1419,7 +1477,6 @@ class _TaskScreenState extends State<TaskScreen>
     required String cycleKey,
     required bool isNewDay,
     required int micMinutes,
-    required int wealthExp,
     required int todayGiftSentCoins,
     required int teenPattiPlays,
     required int dragonPlays,
@@ -1429,14 +1486,13 @@ class _TaskScreenState extends State<TaskScreen>
     final String stayKey = "${cycleKey}_daily_stay_10m";
     final bool stayClaimed = claimedKeys[stayKey] == true;
 
-    final int giftSentProgress =
-        todayGiftSentCoins > 0 ? todayGiftSentCoins : wealthExp;
+    final int giftSentProgress = todayGiftSentCoins;
 
     final bool gift500Done = giftSentProgress >= 500;
     final String gift500Key = "${cycleKey}_daily_wealth_500";
     final bool gift500Claimed = claimedKeys[gift500Key] == true;
 
-    // Open 24h Tasks (Never locked behind Face Verification)
+    // Open 24h Tasks (Never locked behind Face Verification, tracked strictly for today's 24h cycle)
     final bool gift100kDone = giftSentProgress >= 100000;
     final String gift100kKey = "${cycleKey}_daily_gift_100k";
     final bool gift100kClaimed = claimedKeys[gift100kKey] == true;
@@ -1477,7 +1533,7 @@ class _TaskScreenState extends State<TaskScreen>
           isVerified: true,
           isCompleted: gift100kDone,
           isClaimed: gift100kClaimed,
-          onGo: () => _navigateToRoom(userCoins),
+          onGo: () => _navigateToMainRoom(userCoins),
           onClaim: () => _claimReward(
             claimKey: gift100kKey,
             rewardAmount: 5000,
@@ -1495,9 +1551,11 @@ class _TaskScreenState extends State<TaskScreen>
           isVerified: true,
           isCompleted: gift500kDone,
           isClaimed: gift500kClaimed,
-          onGo: () => _navigateToRoom(userCoins),
+          onGo: () => _navigateToMainRoom(userCoins),
           onClaim: () => _claimReward(
-            claimKey: gift500kKey,
+            claimKe
+
+y: gift500kKey,
             rewardAmount: 10000,
             taskTitle: "Send 500,000 Coins Gift",
             isNewDay: isNewDay,
@@ -1514,7 +1572,7 @@ class _TaskScreenState extends State<TaskScreen>
           isVerified: true,
           isCompleted: teenPattiDone,
           isClaimed: teenPattiClaimed,
-          onGo: () => _navigateToRoom(userCoins),
+          onGo: () => _navigateToMainRoom(userCoins),
           onClaim: () => _claimReward(
             claimKey: teenPattiKey,
             rewardAmount: 100,
@@ -1534,7 +1592,7 @@ class _TaskScreenState extends State<TaskScreen>
           isVerified: true,
           isCompleted: dragonDone,
           isClaimed: dragonClaimed,
-          onGo: () => _navigateToRoom(userCoins),
+          onGo: () => _navigateToMainRoom(userCoins),
           onClaim: () => _claimReward(
             claimKey: dragonKey,
             rewardAmount: 200,
@@ -1563,7 +1621,7 @@ class _TaskScreenState extends State<TaskScreen>
           isVerified: true,
           isCompleted: stayDone,
           isClaimed: stayClaimed,
-          onGo: () => _navigateToRoom(userCoins),
+          onGo: () => _navigateToMainRoom(userCoins),
           onClaim: () => _claimReward(
             claimKey: stayKey,
             rewardAmount: 200,
@@ -1580,7 +1638,7 @@ class _TaskScreenState extends State<TaskScreen>
           isVerified: true,
           isCompleted: gift500Done,
           isClaimed: gift500Claimed,
-          onGo: () => _navigateToRoom(userCoins),
+          onGo: () => _navigateToMainRoom(userCoins),
           onClaim: () => _claimReward(
             claimKey: gift500Key,
             rewardAmount: 300,
@@ -1624,7 +1682,9 @@ class _TaskScreenState extends State<TaskScreen>
     required VoidCallback onClaim,
   }) {
     Color btnBg = const Color(0xFF4A3528);
-    String btnLabel = "Go";
+    String btnLab
+
+el = "Go";
     VoidCallback? btnAction = onGo;
 
     if (isClaimed) {
@@ -1745,7 +1805,9 @@ class _FaceBiometricDialogState extends State<_FaceBiometricDialog> {
   String _lastSpokenPrompt = "";
 
   // Step 1: Face Alignment inside the circle
-  int _alignedStableFrames = 0;
+  int _alignedS
+
+tableFrames = 0;
   bool _faceAlignedVerified = false;
 
   // Step 2: Eye Blink (unlocked only after _faceAlignedVerified)
@@ -1898,7 +1960,9 @@ class _FaceBiometricDialogState extends State<_FaceBiometricDialog> {
     return InputImage.fromBytes(
       bytes: bytes,
       metadata: InputImageMetadata(
-        size: Size(image.width.toDouble(), image.height.toDouble()),
+        size: Size(image.width.toDouble(
+
+), image.height.toDouble()),
         rotation: rotation,
         format: format,
         bytesPerRow: image.planes.first.bytesPerRow,
@@ -2034,7 +2098,9 @@ class _FaceBiometricDialogState extends State<_FaceBiometricDialog> {
 
       // STEP 3: MOUTH MOVEMENT (ONLY AFTER STEP 2 EYE BLINK)
       if (_faceAlignedVerified && _eyeVerified && !_mouthVerified) {
-        final double? smileProb = face.smilingProbability;
+        final double? s
+
+mileProb = face.smilingProbability;
         if (smileProb != null && smileProb > 0.70) {
           _mouthVerified = true;
         }
@@ -2157,7 +2223,9 @@ class _FaceBiometricDialogState extends State<_FaceBiometricDialog> {
       }
 
       if (uploadedUrl.isEmpty) {
-        throw Exception("Could not save face photo");
+        throw Exception("Could not save face phot
+
+o");
       }
 
       if (mounted) {
@@ -2289,7 +2357,9 @@ class _FaceBiometricDialogState extends State<_FaceBiometricDialog> {
               child: (_isCameraReady && _cameraController != null)
                   ? FittedBox(
                       fit: BoxFit.cover,
-                      child: SizedBox(
+                      chi
+
+ld: SizedBox(
                         width: _cameraController!.value.previewSize?.height ??
                             200,
                         height:
