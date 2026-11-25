@@ -292,7 +292,7 @@ class _AssetFrameImageState extends State<_AssetFrameImage> {
       width: widget.width,
       height: widget.height,
       fit: BoxFit.contain,
-      errorBuilder: (_, , _) {
+      errorBuilder: (_, __, __a) {
         if (_index + 1 < widget.candidates.length) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (mounted) {
