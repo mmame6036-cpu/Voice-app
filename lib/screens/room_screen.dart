@@ -8,6 +8,7 @@ import '../widgets/lucky_wheel_dialog.dart';
 import '../widgets/teen_patti_dialog.dart';
 import '../widgets/room_control_sheets.dart';
 import '../services/agora_service.dart';
+import '../services/room_session_manager.dart';
 
 const String channelName = "habesha_vip_room";
 
@@ -47,14 +48,14 @@ const List<GiftModel> availableGifts = [
   GiftModel(
     id: "3",
     name: "Crown Rose",
-    icon: "🌹",
+    icon: "👑",
     cost: 50,
     videoPath: "assets/svga/svga12.mp4",
   ),
   GiftModel(
     id: "4",
     name: "VIP Angel",
-    icon: "💎",
+    icon: "🧚",
     cost: 500,
     videoPath: "assets/svga/svga13.mp4",
     isLucky: true,
@@ -149,9 +150,92 @@ class _RoomScreenState extends State<RoomScreen>
   static const Color borderColor = Color(0xFFE2D6C5);
   static const Color buttonDark = Color(0xFF4A3528);
 
-  @override
+  // Daily reset cycle key: resets every night at 21:00 EAT (9:00 PM EAT)
+  String _getDailyResetCycleKey() {
+    final cycleNow = DateTime.now().toUtc().add(const Duration(hours: 6));
+    final String y = cycleNow.year.toString();
+    final String m = cycleNow.month.toString().padLeft(2, '0');
+    final String d = cycleNow.day.toString().padLeft(2, '0');
+    return "$y-$m-$d";
+  }
 
-void initState() {
+  void _syncLiveMicStatusToSessionAndCloud() {
+    final bool isOnMicNow = _mySeatIndex != null && !_isMicMuted;
+    final mgr = RoomSessionManager.instance;
+    mgr.hasActiveRoom = true;
+    mgr.seatedIndex = _mySeatIndex;
+    mgr.isMuted = _isMicMuted;
+
+    final user = _currentUser;
+    if (user != null) {
+      FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .set(<String, dynamic>{
+        'isOnMic': isOnMicNow,
+        'isMuted': _isMicMuted,
+        'activeSeatIndex': _mySeatIndex ?? -1,
+      }, SetOptions(merge: true));
+    }
+  }
+
+  void _recordMiniGamePlay(String gameType) {
+    final user = _currentUser;
+    if (user == null) return;
+    final String cycleKey = _getDailyResetCycleKey();
+    final userRef =
+        FirebaseFirestore.instance.collection('users').doc(user.uid);
+
+    FirebaseFirestore.instance.runTransaction((tx) async {
+      final snap = await tx.get(userRef);
+      if (!snap.exists) return;
+      final data = snap.data() ?? <String, dynamic>{};
+
+      if (gameType == 'TEEN_PATTI') {
+        final String storedDate =
+            (data['playedTeenPattiDate'] ?? '').toString();
+        if (storedDate != cycleKey) {
+          tx.set(
+              userRef,
+              {
+                'playedTeenPattiDate': cycleKey,
+                'todayTeenPattiPlays': 1,
+              },
+              SetOptions(merge: true));
+        } else {
+          tx.set(
+              userRef,
+              {
+                'playedTeenPattiDate': cycleKey,
+                'todayTeenPattiPlays': FieldValue.increment(1),
+              },
+              SetOptions(merge: true));
+        }
+      } else if (gameType == 'DRAGON') {
+        final String storedDate = (data['playedDragonDate'] ?? '').toString();
+        if (storedDate != cycleKey) {
+          tx.set(
+              userRef,
+              {
+                'playedDragonDate': cycleKey,
+                'todayDragonPlays': 1,
+              },
+              SetOptions(merge: true));
+        } else {
+          tx.set(
+              userRef,
+              {
+                'playedDragonDate': cycleKey,
+                'todayDragonPlays': FieldValue.increment(1),
+              },
+              SetOptions(merge: true));
+        }
+      }
+    });
+  }
+
+  @override
+  void initState() {
     super.initState();
     _currentCoins = widget.initialCoins;
     _activeSeatCount = widget.seatCount;
@@ -273,10 +357,11 @@ void initState() {
             _mySeatIndex = updatedSeat;
           });
 
+          _syncLiveMicStatusToSessionAndCloud();
+
           if (previousSeat == null) {
             if (updatedSeat != null) {
-
-_updateBroadcasterRole(true);
+              _updateBroadcasterRole(true);
               if (!_isMicMuted) {
                 _startMicMinutesTracking();
               }
@@ -326,6 +411,7 @@ _updateBroadcasterRole(true);
   }
 
   void _startMicMinutesTracking() {
+    _syncLiveMicStatusToSessionAndCloud();
     if (_micTrackerTimer != null && _micTrackerTimer!.isActive) {
       return;
     }
@@ -344,11 +430,8 @@ _updateBroadcasterRole(true);
         final snap = await userRef.get();
         final data = snap.data() ?? <String, dynamic>{};
 
-        // 24-hour daily cycle resets at 9:00 PM EAT (18:00 UTC)
-        final cycleNow =
-            DateTime.now().toUtc().add(const Duration(hours: 6));
-        final String todayKey =
-            "${cycleNow.year}-${cycleNow.month.toString().padLeft(2, '0')}-${cycleNow.day.toString().padLeft(2, '0')}";
+        // 24-hour daily cycle resets at 9:00 PM EAT (21:00 EAT)
+        final String todayKey = _getDailyResetCycleKey();
 
         final String storedKey =
             (data['micDateKey'] ?? data['lastMicDate'] ?? '').toString();
@@ -360,6 +443,8 @@ _updateBroadcasterRole(true);
             'lastMicDate': todayKey,
             'todayMicMinutes': 1,
             'todayCrownMinutes': crownInit,
+            'isOnMic': true,
+            'isMuted': false,
           }, SetOptions(merge: true));
 
           await hostRef.set(<String, dynamic>{
@@ -372,6 +457,8 @@ _updateBroadcasterRole(true);
             'micDateKey': todayKey,
             'lastMicDate': todayKey,
             'todayMicMinutes': FieldValue.increment(1),
+            'isOnMic': true,
+            'isMuted': false,
           };
           if (_mySeatIndex == 0) {
             incData['todayCrownMinutes'] = FieldValue.increment(1);
@@ -393,6 +480,7 @@ _updateBroadcasterRole(true);
   void _stopMicMinutesTracking() {
     _micTrackerTimer?.cancel();
     _micTrackerTimer = null;
+    _syncLiveMicStatusToSessionAndCloud();
   }
 
   Future<void> _initVoiceEngine() async {
@@ -405,7 +493,7 @@ _updateBroadcasterRole(true);
         }
       };
 
-await _agoraService.initEngine(
+      await _agoraService.initEngine(
         onUserJoined: (uid) {
           if (mounted) {
             setState(() {
@@ -555,7 +643,7 @@ await _agoraService.initEngine(
     }
   }
 
-void _toggleAllMic() {
+  void _toggleAllMic() {
     setState(() {
       _roomSettings.isAllMicClosed = !_roomSettings.isAllMicClosed;
       if (_roomSettings.isAllMicClosed) {
@@ -664,8 +752,7 @@ void _toggleAllMic() {
               "Room Administrators",
               style: TextStyle(
                   color: primaryBrown,
-
-fontSize: 16,
+                  fontSize: 16,
                   fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 12),
@@ -765,8 +852,7 @@ fontSize: 16,
                   "Send Red Packet",
                   style: TextStyle(
                       color: primaryBrown,
-
-fontSize: 18,
+                      fontSize: 18,
                       fontWeight: FontWeight.bold),
                 ),
               ),
@@ -857,7 +943,7 @@ fontSize: 18,
                       'timestamp': FieldValue.serverTimestamp(),
                     });
 
-if (_currentUser != null) {
+                    if (_currentUser != null) {
                       FirebaseFirestore.instance
                           .collection('users')
                           .doc(_currentUser!.uid)
@@ -973,7 +1059,7 @@ if (_currentUser != null) {
     );
   }
 
-Future<void> _playGiftVideo(GiftModel gift) async {
+  Future<void> _playGiftVideo(GiftModel gift) async {
     try {
       _videoController?.dispose();
       _videoController = VideoPlayerController.asset(gift.videoPath);
@@ -1064,19 +1150,50 @@ Future<void> _playGiftVideo(GiftModel gift) async {
     required String recipientUid,
     required String senderUid,
     required int pointsPerRecipient,
+    required int totalCoinsGift,
   }) {
-    FirebaseFirestore.instance
-        .collection('users')
-        .doc(recipientUid)
-        .set(<String, dynamic>{
-      'points': FieldValue.increment(pointsPerRecipient),
-      'receivedGiftPoints': FieldValue.increment(pointsPerRecipient),
-      'giftIncomeLast7Days': FieldValue.increment(pointsPerRecipient),
-      'todayPoints': FieldValue.increment(pointsPerRecipient),
-      'charmExp': FieldValue.increment(pointsPerRecipient),
-      'todayTaskPoints': FieldValue.increment(pointsPerRecipient),
-      'weekTaskPoints': FieldValue.increment(pointsPerRecipient),
-    }, SetOptions(merge: true));
+    final String cycleKey = _getDailyResetCycleKey();
+    final userRef =
+        FirebaseFirestore.instance.collection('users').doc(recipientUid);
+
+    FirebaseFirestore.instance.runTransaction((tx) async {
+      final snap = await tx.get(userRef);
+      final data = snap.data() ?? <String, dynamic>{};
+      final String storedDate =
+          (data['lastMicDate'] ?? data['micDateKey'] ?? '').toString();
+
+      if (storedDate != cycleKey) {
+        tx.set(
+            userRef,
+            {
+              'lastMicDate': cycleKey,
+              'micDateKey': cycleKey,
+              'points': FieldValue.increment(pointsPerRecipient),
+              'receivedGiftPoints': FieldValue.increment(pointsPerRecipient),
+              'giftIncomeLast7Days': FieldValue.increment(pointsPerRecipient),
+              'todayPoints': pointsPerRecipient,
+              'todayGiftCoins': totalCoinsGift,
+              'charmExp': FieldValue.increment(pointsPerRecipient),
+              'todayTaskPoints': pointsPerRecipient,
+              'weekTaskPoints': FieldValue.increment(pointsPerRecipient),
+            },
+            SetOptions(merge: true));
+      } else {
+        tx.set(
+            userRef,
+            {
+              'points': FieldValue.increment(pointsPerRecipient),
+              'receivedGiftPoints': FieldValue.increment(pointsPerRecipient),
+              'giftIncomeLast7Days': FieldValue.increment(pointsPerRecipient),
+              'todayPoints': FieldValue.increment(pointsPerRecipient),
+              'todayGiftCoins': FieldValue.increment(totalCoinsGift),
+              'charmExp': FieldValue.increment(pointsPerRecipient),
+              'todayTaskPoints': FieldValue.increment(pointsPerRecipient),
+              'weekTaskPoints': FieldValue.increment(pointsPerRecipient),
+            },
+            SetOptions(merge: true));
+      }
+    });
 
     FirebaseFirestore.instance
         .collection('hosts')
@@ -1124,7 +1241,7 @@ Future<void> _playGiftVideo(GiftModel gift) async {
       senderUid = _currentUser!.uid;
     }
 
-setState(() {
+    setState(() {
       _currentCoins -= totalCost;
 
       if (targetSeatIndex != null) {
@@ -1136,6 +1253,7 @@ setState(() {
               recipientUid: recipientUid,
               senderUid: senderUid,
               pointsPerRecipient: pointsPerRecipient,
+              totalCoinsGift: totalCost,
             );
           }
         }
@@ -1149,6 +1267,7 @@ setState(() {
                 recipientUid: recipientUid,
                 senderUid: senderUid,
                 pointsPerRecipient: pointsPerRecipient,
+                totalCoinsGift: totalCost,
               );
             }
           }
@@ -1174,13 +1293,43 @@ setState(() {
     }, SetOptions(merge: true));
 
     if (_currentUser != null) {
-      await FirebaseFirestore.instance
+      final String cycleKey = _getDailyResetCycleKey();
+      final senderRef = FirebaseFirestore.instance
           .collection('users')
-          .doc(_currentUser!.uid)
-          .set(<String, dynamic>{
-        'coins': FieldValue.increment(-totalCost),
-        'wealthExp': FieldValue.increment(totalCost),
-      }, SetOptions(merge: true));
+          .doc(_currentUser!.uid);
+
+      await FirebaseFirestore.instance.runTransaction((tx) async {
+        final snap = await tx.get(senderRef);
+        final data = snap.data() ?? <String, dynamic>{};
+        final String storedDate =
+            (data['lastMicDate'] ?? data['micDateKey'] ?? '').toString();
+
+        if (storedDate != cycleKey) {
+          tx.set(
+              senderRef,
+              {
+                'lastMicDate': cycleKey,
+                'micDateKey': cycleKey,
+                'coins': FieldValue.increment(-totalCost),
+                'wealthExp': FieldValue.increment(totalCost),
+                'todayGiftSentCoins': totalCost,
+                'dailyGiftSent': totalCost,
+                'todayGiftCoins': totalCost,
+              },
+              SetOptions(merge: true));
+        } else {
+          tx.set(
+              senderRef,
+              {
+                'coins': FieldValue.increment(-totalCost),
+                'wealthExp': FieldValue.increment(totalCost),
+                'todayGiftSentCoins': FieldValue.increment(totalCost),
+                'dailyGiftSent': FieldValue.increment(totalCost),
+                'todayGiftCoins': FieldValue.increment(totalCost),
+              },
+              SetOptions(merge: true));
+        }
+      });
     }
 
     widget.onCoinUpdate(_currentCoins);
@@ -1239,8 +1388,7 @@ setState(() {
                           onTap: () {
                             setSheetState(() {
                               selectedTarget = "All Seats";
-
-selectedSeatIndex = null;
+                              selectedSeatIndex = null;
                             });
                             setState(() {
                               _isAllSeatsTargeted = true;
@@ -1324,8 +1472,7 @@ selectedSeatIndex = null;
                                   textAlign: TextAlign.center,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-
-),
+                                ),
                                 const SizedBox(height: 4),
                                 Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
@@ -1410,8 +1557,7 @@ selectedSeatIndex = null;
                               color: primaryBrown,
                               fontWeight: FontWeight.bold,
                               fontSize: 15,
-
-),
+                            ),
                           ),
                           const SizedBox(width: 8),
                           GestureDetector(
@@ -1511,7 +1657,7 @@ selectedSeatIndex = null;
       chipText = Colors.white;
     }
 
-return GestureDetector(
+    return GestureDetector(
       onTap: onTap,
       child: Container(
         margin: const EdgeInsets.only(right: 8),
@@ -1538,6 +1684,20 @@ return GestureDetector(
   @override
   void dispose() {
     _stopMicMinutesTracking();
+    final mgr = RoomSessionManager.instance;
+    mgr.hasActiveRoom = false;
+    mgr.seatedIndex = null;
+    mgr.isMuted = true;
+    if (_currentUser != null) {
+      FirebaseFirestore.instance
+          .collection('users')
+          .doc(_currentUser!.uid)
+          .set(<String, dynamic>{
+        'isOnMic': false,
+        'isMuted': true,
+        'activeSeatIndex': -1,
+      }, SetOptions(merge: true));
+    }
     _roomSubscription?.cancel();
     _chatSubscription?.cancel();
     _pulseController.dispose();
@@ -1648,8 +1808,7 @@ return GestureDetector(
                         const SizedBox(height: 10),
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 14),
-
-child: GridView.builder(
+                          child: GridView.builder(
                             shrinkWrap: true,
                             physics: const NeverScrollableScrollPhysics(),
                             itemCount: gridItemCount,
@@ -1721,8 +1880,7 @@ child: GridView.builder(
                                               accentGold.withOpacity(0.4);
                                         } else if (isSpeaking) {
                                           ringColor = const Color(0xFF107C41);
-
-ringWidth = 2.0 + pulse * 1.5;
+                                          ringWidth = 2.0 + pulse * 1.5;
                                           glowColor = const Color(0xFF107C41)
                                               .withOpacity(0.3);
                                         }
@@ -1795,8 +1953,7 @@ ringWidth = 2.0 + pulse * 1.5;
                 Container(
                   height: 90,
                   padding: const EdgeInsets.symmetric(horizontal: 16),
-
-alignment: Alignment.bottomLeft,
+                  alignment: Alignment.bottomLeft,
                   child: ListView.builder(
                     reverse: true,
                     itemCount: _chatMessages.length,
@@ -1880,7 +2037,7 @@ alignment: Alignment.bottomLeft,
                               if (txt.isNotEmpty) {
                                 _msgController.clear();
 
-await FirebaseFirestore.instance
+                                await FirebaseFirestore.instance
                                     .collection('rooms')
                                     .doc(channelName)
                                     .collection('chats')
@@ -1941,7 +2098,7 @@ await FirebaseFirestore.instance
                                         ListTile(
                                           leading: const CircleAvatar(
                                             backgroundColor: bgColor,
-                                            child: Text("🎰",
+                                            child: Text("🎡",
                                                 style: TextStyle(fontSize: 20)),
                                           ),
                                           title: const Text(
@@ -1950,13 +2107,13 @@ await FirebaseFirestore.instance
                                                 color: primaryBrown,
                                                 fontWeight: FontWeight.bold,
                                                 fontSize: 13),
-
-),
+                                          ),
                                           trailing: const Icon(
                                               Icons.chevron_right,
                                               color: primaryBrown),
                                           onTap: () {
                                             Navigator.pop(context);
+                                            _recordMiniGamePlay('DRAGON');
                                             showModalBottomSheet(
                                               context: context,
                                               isScrollControlled: true,
@@ -1993,6 +2150,7 @@ await FirebaseFirestore.instance
                                               color: primaryBrown),
                                           onTap: () {
                                             Navigator.pop(context);
+                                            _recordMiniGamePlay('TEEN_PATTI');
                                             showModalBottomSheet(
                                               context: context,
                                               isScrollControlled: true,
@@ -2012,8 +2170,7 @@ await FirebaseFirestore.instance
                                       ],
                                     ),
                                   ),
-
-],
+                                ],
                               ),
                             ),
                           );
@@ -2093,8 +2250,7 @@ await FirebaseFirestore.instance
                   Container(
                     padding:
                         const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-
-decoration: BoxDecoration(
+                    decoration: BoxDecoration(
                       color: cardBg,
                       borderRadius: BorderRadius.circular(30),
                       boxShadow: [
@@ -2199,7 +2355,7 @@ decoration: BoxDecoration(
       hostLabel = _seats[0]!;
     }
 
-return GestureDetector(
+    return GestureDetector(
       onTap: () => _handleSeatTap(0),
       child: Column(
         children: [
