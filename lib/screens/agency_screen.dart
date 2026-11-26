@@ -1877,7 +1877,7 @@ return Padding(
                                       height: 28,
                                       child: Switch(
                                         value: canCreate,
-                                        activeThumbColor: kTealGreen,
+                                        activeColor: kTealGreen,
                                         onChanged: (val) {
                                           Navigator.pop(ctx);
                                           _toggleHostCreateAgencyPermission(
