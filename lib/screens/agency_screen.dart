@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'vip_screen.dart';
 
 bool _gt(num a, num b) {
   return a.compareTo(b).sign == 1;
@@ -2457,6 +2458,17 @@ final agencyRef = FirebaseFirestore.instance
         final int dbNumId = (userData['numericId'] as num?)?.toInt() ?? 0;
         final int myNumericId =
             widget.userNumericId != 0 ? widget.userNumericId : dbNumId;
+        final int rawVipLvl = (userData['vipLevel'] as num?)?.toInt() ?? 0;
+        final int rawFrameLvl =
+            (userData['activeVipFrameLevel'] as num?)?.toInt() ?? rawVipLvl;
+        final Timestamp? vipExpTs = userData['vipExpiresAt'] as Timestamp?;
+        bool vipIsActive = false;
+        if (rawVipLvl > 0) {
+          if (vipExpTs == null || vipExpTs.toDate().isAfter(DateTime.now())) {
+            vipIsActive = true;
+          }
+        }
+        final int activeAgencyVipFrame = vipIsActive ? rawFrameLvl : 0;
 
         return StreamBuilder<QuerySnapshot>(
           stream: FirebaseFirestore.instance
@@ -2631,6 +2643,7 @@ for (final sDoc in allChildDocs) {
                         agencyId: agencyId,
                         agencyName: agencyName,
                         userAvatarUrl: userAvatarUrl,
+                        activeVipFrameLevel: activeAgencyVipFrame,
                         tags: tags,
                         hostsList: hostsList,
                         approvedSubAgencies: approvedSubAgencies,
@@ -2684,6 +2697,7 @@ for (final sDoc in allChildDocs) {
                           agencyId: agencyId,
                           agencyName: agencyName,
                           userAvatarUrl: userAvatarUrl,
+                          activeVipFrameLevel: activeAgencyVipFrame,
                           tags: tags,
                           hostsList: hostsList,
                           approvedSubAgencies: approvedSubAgencies,
@@ -2711,6 +2725,7 @@ Widget _buildAgencyDashboardScaffold({
     required String agencyId,
     required String agencyName,
     required String userAvatarUrl,
+    required int activeVipFrameLevel,
     required List<dynamic> tags,
     required List<QueryDocumentSnapshot> hostsList,
     required List<QueryDocumentSnapshot> approvedSubAgencies,
@@ -2791,54 +2806,73 @@ Widget _buildAgencyDashboardScaffold({
             ],
             Row(
               children: [
-                Container(
-                  width: 60,
-                  height: 60,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: const LinearGradient(
-                      colors: [
-                        Color(0xFF2D2216),
-                        Color(0xFF120D08),
-                      ],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    border: Border.all(
-                      color: const Color(0xFFFFD700),
-                      width: 2,
-                    ),
-                  ),
-                  child: profileAvatar != null
-                      ? ClipOval(
-                          child: Image(
-                            image: profileAvatar,
-
-width: 56,
-                            height: 56,
-                            fit: BoxFit.cover,
-                            gaplessPlayback: true,
-                          ),
-                        )
-                      : const Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.emoji_events,
-                              color: Color(0xFFFFD700),
-                              size: 22,
-                            ),
-                            Text(
-                              "KING",
-                              style: TextStyle(
-                                color: Color(0xFFFFD700),
-                                fontSize: 8.5,
-                                fontWeight: FontWeight.w900,
+                activeVipFrameLevel > 0
+                    ? VipAvatarFrame(
+                        vipLevel: activeVipFrameLevel,
+                        size: 56,
+                        showBadge: false,
+                        child: profileAvatar != null
+                            ? Image(
+                                image: profileAvatar,
+                                fit: BoxFit.cover,
+                                gaplessPlayback: true,
+                              )
+                            : Container(
+                                color: const Color(0xFF2D2216),
+                                child: const Icon(
+                                  Icons.emoji_events,
+                                  color: Color(0xFFFFD700),
+                                  size: 24,
+                                ),
                               ),
-                            ),
-                          ],
+                      )
+                    : Container(
+                        width: 60,
+                        height: 60,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: const LinearGradient(
+                            colors: [
+                              Color(0xFF2D2216),
+                              Color(0xFF120D08),
+                            ],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          border: Border.all(
+                            color: const Color(0xFFFFD700),
+                            width: 2,
+                          ),
                         ),
-                ),
+                        child: profileAvatar != null
+                            ? ClipOval(
+                                child: Image(
+                                  image: profileAvatar,
+                                  width: 56,
+                                  height: 56,
+                                  fit: BoxFit.cover,
+                                  gaplessPlayback: true,
+                                ),
+                              )
+                            : const Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.emoji_events,
+                                    color: Color(0xFFFFD700),
+                                    size: 22,
+                                  ),
+                                  Text(
+                                    "KING",
+                                    style: TextStyle(
+                                      color: Color(0xFFFFD700),
+                                      fontSize: 8.5,
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                      ),
                 const SizedBox(width: 14),
                 Expanded(
                   child: Column(
