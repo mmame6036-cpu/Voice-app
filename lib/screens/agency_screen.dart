@@ -2563,13 +2563,29 @@ if (myNumericId != 0) {
                   final Map<String, dynamic> hData =
                       rawH is Map<String, dynamic> ? rawH : {};
                   int pts = (hData['points'] as num?)?.toInt() ?? 0;
-                  if (pts == 0) {
-                    pts = (hData['diamonds'] as num?)?.toInt() ?? 0;
-                  }
-                  final int tPts =
-                      (hData['todayTaskPoints'] as num?)?.toInt() ?? 0;
+                  final int dia = (hData['diamonds'] as num?)?.toInt() ?? 0;
+                  final int recGift =
+                      (hData['receivedGiftPoints'] as num?)?.toInt() ?? 0;
+                  if (dia > pts) pts = dia;
+                  if (recGift > pts) pts = recGift;
+
+                  int tPts = (hData['todayTaskPoints'] as num?)?.toInt() ?? 0;
+                  final int tGiftPts =
+                      (hData['todayPoints'] as num?)?.toInt() ?? 0;
+                  if (tGiftPts > tPts) tPts = tGiftPts;
+
                   totalHostPoints += pts;
                   todayHostPoints += tPts;
+                }
+                final int docTotalPts =
+                    (agencyData['totalHostPoints'] as num?)?.toInt() ?? 0;
+                final int docTodayPts =
+                    (agencyData['todayHostPoints'] as num?)?.toInt() ?? 0;
+                if (docTotalPts > totalHostPoints) {
+                  totalHostPoints = docTotalPts;
+                }
+                if (docTodayPts > todayHostPoints) {
+                  todayHostPoints = docTodayPts;
                 }
 
                 return StreamBuilder<QuerySnapshot>(
