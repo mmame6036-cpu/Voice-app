@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'points_wallet_screen.dart';
+import 'vip_screen.dart';
 
 bool _gt(num a, num b) {
   return a.compareTo(b).sign == 1;
@@ -964,6 +965,18 @@ hostData['micDateKey'] ??
                   taskPoints +
                   otherPoints;
 
+              final int rawVipLvl = (userData['vipLevel'] as num?)?.toInt() ?? 0;
+              final int rawFrameLvl =
+                  (userData['activeVipFrameLevel'] as num?)?.toInt() ?? rawVipLvl;
+              final Timestamp? vipExpTs = userData['vipExpiresAt'] as Timestamp?;
+              bool vipIsActive = false;
+              if (rawVipLvl > 0) {
+                if (vipExpTs == null || vipExpTs.toDate().isAfter(DateTime.now())) {
+                  vipIsActive = true;
+                }
+              }
+              final int activeHostVipFrame = vipIsActive ? rawFrameLvl : 0;
+
               final ImageProvider? avatarProvider =
                   _resolveAvatarProvider(avatarUrl);
 
@@ -1024,15 +1037,29 @@ if (alreadyClaimedToday) {
                 children: [
                   Row(
                     children: [
-                      CircleAvatar(
-                        radius: 27,
-                        backgroundColor: const Color(0xFFE7DDD2),
-                        backgroundImage: avatarProvider,
-                        child: avatarProvider == null
-                            ? const Icon(Icons.person,
-                                color: Color(0xFF8D6E63), size: 30)
-                            : null,
-                      ),
+                      activeHostVipFrame > 0
+                          ? VipAvatarFrame(
+                              vipLevel: activeHostVipFrame,
+                              size: 54,
+                              showBadge: false,
+                              child: CircleAvatar(
+                                backgroundColor: const Color(0xFFE7DDD2),
+                                backgroundImage: avatarProvider,
+                                child: avatarProvider == null
+                                    ? const Icon(Icons.person,
+                                        color: Color(0xFF8D6E63), size: 28)
+                                    : null,
+                              ),
+                            )
+                          : CircleAvatar(
+                              radius: 27,
+                              backgroundColor: const Color(0xFFE7DDD2),
+                              backgroundImage: avatarProvider,
+                              child: avatarProvider == null
+                                  ? const Icon(Icons.person,
+                                      color: Color(0xFF8D6E63), size: 30)
+                                  : null,
+                            ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Column(
