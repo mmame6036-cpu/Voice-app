@@ -104,6 +104,8 @@ class _ProfileScreenState extends State {
     if (role == 'agency') return true;
     if (role == 'coinseller') return true;
     if (role == 'agency_owner') return true;
+    final String agencyId = (data['agencyId'] ?? '').toString().trim();
+    if (agencyId.isNotEmpty) return true;
     return false;
   }
 
@@ -525,10 +527,25 @@ class _ProfileScreenState extends State {
               final int friendsCount =
                   (userData['friendsCount'] as num?)?.toInt() ?? 0;
 
-              final int wealthLevel =
+              final int wealthExp =
+                  (userData['wealthExp'] as num?)?.toInt() ?? 0;
+              final int rawWealthLvl =
                   (userData['wealthLevel'] as num?)?.toInt() ?? 0;
-              final int charmLevel =
+              final int computedWealthLvl =
+                  wealthExp > 0 ? ((wealthExp ~/ 5000) + 1).clamp(1, 99) : 0;
+              final int wealthLevel =
+                  computedWealthLvl > rawWealthLvl ? computedWealthLvl : rawWealthLvl;
+
+              int charmExp = (userData['charmExp'] as num?)?.toInt() ?? 0;
+              final int recPts =
+                  (userData['receivedGiftPoints'] as num?)?.toInt() ?? 0;
+              if (recPts > charmExp) charmExp = recPts;
+              final int rawCharmLvl =
                   (userData['charmLevel'] as num?)?.toInt() ?? 0;
+              final int computedCharmLvl =
+                  charmExp > 0 ? ((charmExp ~/ 5000) + 1).clamp(1, 99) : 0;
+              final int charmLevel =
+                  computedCharmLvl > rawCharmLvl ? computedCharmLvl : rawCharmLvl;
               final int chatLevel =
                   (userData['chatLevel'] as num?)?.toInt() ?? 0;
               final int vipLevel =
@@ -830,7 +847,7 @@ class _ProfileScreenState extends State {
                                   const Color(0xFF22C55E)),
                               _buildLevelTag(Icons.auto_awesome, "$chatLevel",
                                   const Color(0xFF9333EA)),
-                              if (hasAgency)
+                              if (hasAgency || _isAgencyOwnerFromDb)
                                 Container(
                                   padding: const EdgeInsets.symmetric(
                                       horizontal: 7, vertical: 2),
