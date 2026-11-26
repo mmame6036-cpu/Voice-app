@@ -1,1320 +1,1660 @@
 import 'dart:async';
-import 'dart:convert';
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'points_wallet_screen.dart';
+import 'package:video_player/video_player.dart';
+import 'wallet_screen.dart';
 import 'vip_screen.dart';
+import '../widgets/lucky_wheel_dialog.dart';
+import '../widgets/teen_patti_dialog.dart';
+import '../widgets/room_control_sheets.dart';
+import '../services/agora_service.dart';
+import '../services/room_session_manager.dart';
 
-bool _gt(num a, num b) {
-  return a.compareTo(b).sign == 1;
+const String channelName = "habesha_vip_room";
+
+class GiftModel {
+  final String id;
+  final String name;
+  final String icon;
+  final int cost;
+  final String videoPath;
+  final bool isLucky;
+
+  const GiftModel({
+    required this.id,
+    required this.name,
+    required this.icon,
+    this.cost = 0,
+    required this.videoPath,
+    this.isLucky = false,
+  });
 }
 
-bool _lt(num a, num b) {
-  return a.compareTo(b).sign == -1;
+const List<GiftModel> availableGifts = [
+  GiftModel(
+    id: "1",
+    name: "Luxury Airplane",
+    icon: "✈️",
+    cost: 500000,
+    videoPath: "assets/svga/svga10.mp4",
+  ),
+  GiftModel(
+    id: "2",
+    name: "Lucky Package",
+    icon: "🎁",
+    cost: 500,
+    videoPath: "assets/svga/svga13.mp4",
+    isLucky: true,
+  ),
+  GiftModel(
+    id: "3",
+    name: "Wishing Lamp",
+    icon: "🏮",
+    cost: 60000,
+    videoPath: "assets/svga/svga12.mp4",
+  ),
+  GiftModel(
+    id: "4",
+    name: "Thunder Descen...",
+    icon: "⚡",
+    cost: 10000000,
+    videoPath: "assets/svga/svga10.mp4",
+  ),
+  GiftModel(
+    id: "5",
+    name: "Miracle Crystal",
+    icon: "💎",
+    cost: 40000,
+    videoPath: "assets/svga/svga11.mp4",
+  ),
+  GiftModel(
+    id: "6",
+    name: "Rose cruise",
+    icon: "🌹",
+    cost: 1000000,
+    videoPath: "assets/svga/svga12.mp4",
+  ),
+  GiftModel(
+    id: "7",
+    name: "Magic Hourglass",
+    icon: "⏳",
+    cost: 60000,
+    videoPath: "assets/svga/svga13.mp4",
+  ),
+  GiftModel(
+    id: "8",
+    name: "Dreamy Castle",
+    icon: "🏰",
+    cost: 2500000,
+    videoPath: "assets/svga/svga10.mp4",
+  ),
+  GiftModel(
+    id: "9",
+    name: "Off",
+    icon: "👑",
+    cost: 200,
+    videoPath: "assets/svga/svga11.mp4",
+  ),
+  GiftModel(
+    id: "10",
+    name: "Cat",
+    icon: "🐱",
+    cost: 600,
+    videoPath: "assets/svga/svga12.mp4",
+  ),
+  GiftModel(
+    id: "11",
+    name: "Fragrant Flowers",
+    icon: "💐",
+    cost: 200,
+    videoPath: "assets/svga/svga12.mp4",
+  ),
+  GiftModel(
+    id: "12",
+    name: "Cool Bells",
+    icon: "🔔",
+    cost: 1000,
+    videoPath: "assets/svga/svga13.mp4",
+  ),
+  GiftModel(
+    id: "13",
+    name: "Ice Cream",
+    icon: "🍨",
+    cost: 200,
+    videoPath: "assets/svga/svga11.mp4",
+  ),
+  GiftModel(
+    id: "14",
+    name: "Phonograph",
+    icon: "🎶",
+    cost: 2000,
+    videoPath: "assets/svga/svga10.mp4",
+  ),
+  GiftModel(
+    id: "15",
+    name: "Perfume Bottle",
+    icon: "🧴",
+    cost: 300,
+    videoPath: "assets/svga/svga11.mp4",
+  ),
+  GiftModel(
+    id: "16",
+    name: "Angel's Heart",
+    icon: "💠",
+    cost: 4000,
+    videoPath: "assets/svga/svga13.mp4",
+  ),
+];
+
+const List<int> giftMultipliers = [1, 3, 7, 10, 33, 77, 100];
+
+class GiftComboData {
+  final String senderName;
+  final String targetName;
+  final String giftName;
+  final String giftIcon;
+  final int comboCount;
+
+  GiftComboData({
+    required this.senderName,
+    required this.targetName,
+    required this.giftName,
+    required this.giftIcon,
+    required this.comboCount,
+  });
 }
 
-bool _gte(num a, num b) {
-  return a.compareTo(b).sign != -1;
-}
+class RoomScreen extends StatefulWidget {
+  final String roomTitle;
+  final int initialCoins;
+  final Function(int) onCoinUpdate;
+  final int seatCount;
 
-bool _lte(num a, num b) {
-  return a.compareTo(b).sign != 1;
-}
-
-dynamic _d(Object? v) {
-  return v;
-}
-
-class HostCenterScreen extends StatefulWidget {
-  const HostCenterScreen({super.key});
+  const RoomScreen({
+    super.key,
+    required this.roomTitle,
+    required this.initialCoins,
+    required this.onCoinUpdate,
+    this.seatCount = 12,
+  });
 
   @override
-  State createState() {
-    return _HostCenterScreenState();
-  }
+  State<RoomScreen> createState() => _RoomScreenState();
 }
 
-class _HostCenterScreenState extends State {
-  final User? currentUser = FirebaseAuth.instance.currentUser;
-  final TextEditingController _agencyInputController = TextEditingController();
-  bool _isJoining = false;
-  bool _isClaimingReward = false;
-  int _selectedRecordTab = 0;
-  String _ownedAgencyId = "";
-  String _ownedAgencyName = "";
-  Timer? _clockTicker;
+class _RoomScreenState extends State<RoomScreen>
+    with TickerProviderStateMixin {
+  final User? _currentUser = FirebaseAuth.instance.currentUser;
+  final AgoraService _agoraService = AgoraService();
 
-  static const List _hostPolicyTiers = [
-    {"level": "S", "req": 50000000, "reward": 180000, "maxHours": 2},
-    {"level": "A", "req": 20000000, "reward": 90000, "maxHours": 2},
-    {"level": "B", "req": 10000000, "reward": 75000, "maxHours": 2},
-    {"level": "C", "req": 7000000, "reward": 54000, "maxHours": 2},
-    {"level": "D", "req": 4000000, "reward": 43000, "maxHours": 2},
-    {"level": "E", "req": 2000000, "reward": 27000, "maxHours": 2},
-    {"level": "F", "req": 1200000, "reward": 18000, "maxHours": 2},
-    {"level": "G", "req": 900000, "reward": 13500, "maxHours": 2},
-    {"level": "H", "req": 300000, "reward": 5000, "maxHours": 2},
-    {"level": "I", "req": 150000, "reward": 3000, "maxHours": 2},
-    {"level": "J", "req": 50000, "reward": 1200, "maxHours": 2},
-    {"level": "K", "req": 24000, "reward": 600, "maxHours": 2},
-    {"level": "L", "req": 0, "reward": 500, "maxHours": 2},
+  late int _currentCoins;
+  late int _activeSeatCount;
+  bool _isMicMuted = false;
+  int? _mySeatIndex;
+  late List<String?> _seats;
+  late List<String?> _seatUids;
+  late List<int> _seatGiftsCount;
+
+  bool _isAllSeatsTargeted = false;
+
+  final List<String> _chatMessages = [
+    "System: Please protect your privacy and stay safe.",
+    "Announcement: Welcome to VIP Live Party!"
   ];
+  final TextEditingController _msgController = TextEditingController();
 
-  @override
-  void initState() {
-    super.initState();
-    _checkOwnedAgency();
-    _clockTicker = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted) {
-        setState(() {});
-      }
-    });
-  }
+  int _myUid = 0;
+  String _myDisplayName = "User";
+  int _myVipFrameLevel = 0;
 
-  Future _checkOwnedAgency() async {
-    final user = currentUser;
-    if (user == null) return;
-    try {
-      final snap = await FirebaseFirestore.instance
-          .collection('agencies')
-          .where('ownerUid', isEqualTo: user.uid)
-          .limit(1)
-          .get();
-      if (snap.docs.isNotEmpty) {
-        final doc = snap.docs.first;
-        final data = doc.data();
-        if (mounted) {
-          setState(() {
-            _ownedAgencyId = doc.id;
-            _ownedAgencyName = (data['name'] ?? 'My Agency').toString();
-          });
-        }
-      }
-    } catch (_) {}
-  }
+  VideoPlayerController? _videoController;
+  bool _isPlayingVideo = false;
 
-  @override
-  void dispose() {
-    _clockTicker?.cancel();
-    _agencyInputController.dispose();
-    super.dispose();
-  }
+  GiftComboData? _activeComboData;
+  Timer? _comboDismissTimer;
+  late AnimationController _comboScaleController;
+  late Animation<double> _comboScaleAnimation;
+  int _currentComboStreak = 0;
+  DateTime? _lastGiftTimestamp;
+  String? _lastGiftTargetKey;
 
-  // App 24-hour day resets at 9:00 PM EAT (ማታ 3:00) == 18:00 UTC
-  DateTime _getAppCycleNow() {
-    return DateTime.now().toUtc().add(const Duration(hours: 6));
-  }
+  late AnimationController _pulseController;
+  final Set<int> _speakingSeatIndices = {};
+  final Set<int> _mutedSeats = {};
 
-  String _getTodayDateKey() {
-    final cycleNow = _getAppCycleNow();
+  late RoomSettingsData _roomSettings;
+
+  Timer? _micTrackerTimer;
+  StreamSubscription<DocumentSnapshot>? _roomSubscription;
+  StreamSubscription<QuerySnapshot>? _chatSubscription;
+
+  static const Color bgColor = Color(0xFFF5EFEB);
+  static const Color cardBg = Colors.white;
+  static const Color primaryBrown = Color(0xFF3E2723);
+  static const Color accentGold = Color(0xFFD49B42);
+  static const Color borderColor = Color(0xFFE2D6C5);
+  static const Color buttonDark = Color(0xFF4A3528);
+
+  // Daily reset cycle key: resets every night at 21:00 EAT (9:00 PM EAT)
+  String _getDailyResetCycleKey() {
+    final cycleNow = DateTime.now().toUtc().add(const Duration(hours: 6));
     final String y = cycleNow.year.toString();
     final String m = cycleNow.month.toString().padLeft(2, '0');
     final String d = cycleNow.day.toString().padLeft(2, '0');
     return "$y-$m-$d";
   }
 
-  String _getCountdownToReset() {
-    final cycleNow = _getAppCycleNow();
-    final nextReset =
-        DateTime.utc(cycleNow.year, cycleNow.month, cycleNow.day + 1);
-    final diff = nextReset.difference(cycleNow);
-    final String hh = diff.inHours.toString().padLeft(2, '0');
-    final String mm = diff.inMinutes.remainder(60).toString().padLeft(2, '0');
-    final String ss = diff.inSeconds.remainder(60).toString().padLeft(2, '0');
-    return "$hh:$mm:$ss";
-  }
+  void _syncLiveMicStatusToSessionAndCloud() {
+    final bool isOnMicNow = _mySeatIndex != null && !_isMicMuted;
+    final mgr = RoomSessionManager.instance;
+    mgr.hasActiveRoom = true;
+    mgr.seatedIndex = _mySeatIndex;
+    mgr.isMuted = _isMicMuted;
 
-  String _getFormattedShortDate() {
-    final cycleNow = _getAppCycleNow();
-    final String m = cycleNow.month.toString().padLeft(2, '0');
-    final String d = cycleNow.day.toString().padLeft(2, '0');
-    return "$m.$d - $m.$d";
-  }
-
-String _getFormattedTime() {
-    final now = DateTime.now().toUtc().add(const Duration(hours: 3));
-    final String h = now.hour.toString().padLeft(2, '0');
-    final String min = now.minute.toString().padLeft(2, '0');
-    return "$h:$min (EAT)";
-  }
-
-  ImageProvider? _resolveAvatarProvider(String avatarUrl) {
-    if (avatarUrl.isEmpty) return null;
-    if (avatarUrl.startsWith('data:image')) {
-      try {
-        final int commaIdx = avatarUrl.indexOf(',');
-        if (commaIdx != -1) {
-          final Uint8List bytes =
-              base64Decode(avatarUrl.substring(commaIdx + 1));
-          return MemoryImage(bytes);
-        }
-      } catch (_) {
-        return null;
-      }
+    final user = _currentUser;
+    if (user != null) {
+      FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .set(<String, dynamic>{
+        'isOnMic': isOnMicNow,
+        'isMuted': _isMicMuted,
+        'activeSeatIndex': _mySeatIndex ?? -1,
+      }, SetOptions(merge: true));
     }
-    return NetworkImage(avatarUrl);
   }
 
-  Map _calculateTier(int giftIncome7Days) {
-    for (int i = 0; _lt(i, _hostPolicyTiers.length); i++) {
-      final tier = _hostPolicyTiers[i] as Map;
-      final int req = (tier['req'] as num).toInt();
-      if (_gte(giftIncome7Days, req)) {
-        final int currentReward = (tier['reward'] as num).toInt();
-        if (i == 0) {
-          return {
-            "currentReward": currentReward,
-            "nextReward": currentReward,
-            "nextReq": req,
-            "stillNeed": 0,
-            "progress": 1.0,
-            "level": tier['level'],
-          };
+  void _recordMiniGamePlay(String gameType) {
+    final user = _currentUser;
+    if (user == null) return;
+    final String cycleKey = _getDailyResetCycleKey();
+    final userRef =
+        FirebaseFirestore.instance.collection('users').doc(user.uid);
+
+    FirebaseFirestore.instance.runTransaction((tx) async {
+      final snap = await tx.get(userRef);
+      if (!snap.exists) return;
+      final data = snap.data() ?? <String, dynamic>{};
+
+      if (gameType == 'TEEN_PATTI') {
+        final String storedDate =
+            (data['playedTeenPattiDate'] ?? '').toString();
+        if (storedDate != cycleKey) {
+          tx.set(
+              userRef,
+              {
+                'playedTeenPattiDate': cycleKey,
+                'todayTeenPattiPlays': 1,
+              },
+              SetOptions(merge: true));
+        } else {
+          tx.set(
+              userRef,
+              {
+                'playedTeenPattiDate': cycleKey,
+                'todayTeenPattiPlays': FieldValue.increment(1),
+              },
+              SetOptions(merge: true));
         }
-        final higherTier = _hostPolicyTiers[i - 1] as Map;
-        final int nextReq = (higherTier['req'] as num).toInt();
-        final int nextReward = (higherTier['reward'] as num).toInt();
-        final int stillNeed = (nextReq - giftIncome7Days).clamp(0, nextReq);
-        final int base = req;
-        int span = nextReq - base;
-        if (_lte(span, 0)) {
-          span = 1;
+      } else if (gameType == 'DRAGON') {
+        final String storedDate = (data['playedDragonDate'] ?? '').toString();
+        if (storedDate != cycleKey) {
+          tx.set(
+              userRef,
+              {
+                'playedDragonDate': cycleKey,
+                'todayDragonPlays': 1,
+              },
+              SetOptions(merge: true));
+        } else {
+          tx.set(
+              userRef,
+              {
+                'playedDragonDate': cycleKey,
+                'todayDragonPlays': FieldValue.increment(1),
+              },
+              SetOptions(merge: true));
         }
-        final double progress =
-            ((giftIncome7Days - base) / span).clamp(0.0, 1.0);
-        return {
-          "currentReward": currentReward,
-          "nextReward": nextReward,
-          "nextReq": nextReq,
-          "stillNeed": stillNeed,
-          "progress": progress,
-          "level": tier['level'],
-        };
       }
+    });
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _currentCoins = widget.initialCoins;
+    _activeSeatCount = widget.seatCount;
+    _seats = List<String?>.filled(_activeSeatCount, null);
+    _seatUids = List<String?>.filled(_activeSeatCount, null);
+    _seatGiftsCount = List<int>.filled(_activeSeatCount, 0);
+
+    if (_currentUser != null) {
+      _myUid = (_currentUser!.uid.hashCode.abs() % 899999) + 100000;
+    } else {
+      _myUid = 100001;
     }
 
-    return {
-      "currentReward": 0,
-      "nextReward": 600,
-      "nextReq": 24000,
-      "stillNeed": (24000 - giftIncome7Days).clamp(0, 24000),
-      "progress": (giftIncome7Days / 24000.0).clamp(0.0, 1.0),
-      "level": "None",
-    };
+    _roomSettings = RoomSettingsData(
+      roomName: widget.roomTitle,
+      roomDescription: "Welcome to our room!",
+      seatCount: _activeSeatCount,
+    );
+
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    )..repeat(reverse: true);
+
+    _comboScaleController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 250),
+    );
+
+    _comboScaleAnimation = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween(begin: 1.0, end: 1.55), weight: 50),
+      TweenSequenceItem(tween: Tween(begin: 1.55, end: 1.0), weight: 50),
+    ]).animate(CurvedAnimation(
+      parent: _comboScaleController,
+      curve: Curves.easeOutBack,
+    ));
+
+    _bootRoom();
   }
 
-  Future _claimDailyMicReward({
-    required int liveMinutesToday,
-    required int currentHourlyIncome,
-    required String currentLevel,
-    required String lastClaimDate,
-  }) async {
-    final user = currentUser;
+  Future<void> _bootRoom() async {
+    await _fetchUserProfile();
+    await _initVoiceEngine();
+    _syncRoomWithFirestore();
+    _listenToLiveRoomChats();
+  }
+
+  Future<void> _fetchUserProfile() async {
+    final user = _currentUser;
     if (user == null) return;
 
-    final String todayKey = _getTodayDateKey();
-    if (lastClaimDate == todayKey) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text("Today's mic reward has already been claimed.")),
-      );
-      return;
-    }
-
-    if (_lt(liveMinutesToday, 60)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text("Minimum 60 mic minutes required today to claim.")),
-      );
-      return;
-    }
-
-    int qualifiedHours = liveMinutesToday ~/ 60;
-    if (_gt(qualifiedHours, 2)) {
-      qualifiedHours = 2;
-    }
-
-    int rewardPoints = currentHourlyIncome * qualifiedHours;
-    if (currentLevel == "L") {
-      if (qualifiedHours == 1) {
-        rewardPoints = 2000;
-      } else {
-        rewardPoints = 3000;
-      }
-    }
-
-    setState(() {
-      _isClaimingReward = true;
-    });
-
     try {
-      final batch = FirebaseFirestore.instance.batch();
-      final userRef =
-          FirebaseFirestore.instance.collection('users').doc(user.uid);
-      final hostRef =
-          FirebaseFirestore.instance.collection('hosts').doc(user.uid);
-      final recordRef = hostRef.collection('live_records').doc(todayKey);
+      final snap = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+      if (snap.exists) {
+        final d = snap.data();
+        if (d != null) {
+          final int fetchedId = (d['numericId'] as num?)?.toInt() ?? 0;
+          String fetchedName = "User";
+          if (d['name'] != null) {
+            fetchedName = d['name'].toString();
+          } else if (d['displayName'] != null) {
+            fetchedName = d['displayName'].toString();
+          }
 
-      batch.set(
-        userRef,
-        {
-          'points': _d(FieldValue.increment(rewardPoints)),
-          'lastMicClaimDate': _d(todayKey),
-        },
-        SetOptions(merge: true),
-      );
+          final int vipLvl = (d['vipLevel'] as num?)?.toInt() ?? 0;
+          final int frameLvl =
+              (d['activeVipFrameLevel'] as num?)?.toInt() ?? vipLvl;
+          final Timestamp? expTs = d['vipExpiresAt'] as Timestamp?;
+          bool vipActive = false;
+          if (vipLvl > 0) {
+            if (expTs == null || expTs.toDate().isAfter(DateTime.now())) {
+              vipActive = true;
+            }
+          }
 
-batch.set(
-        hostRef,
-        {
-          'baseSalaryPoints': _d(FieldValue.increment(rewardPoints)),
-          'lastMicClaimDate': _d(todayKey),
-          'updatedAt': _d(FieldValue.serverTimestamp()),
-        },
-        SetOptions(merge: true),
-      );
-
-      batch.set(
-        recordRef,
-        {
-          'startTime': _d(todayKey),
-          'endTime': _d(_getFormattedTime()),
-          'durationMinutes': _d(liveMinutesToday),
-          'pointsEarned': _d(rewardPoints),
-          'createdAt': _d(FieldValue.serverTimestamp()),
-        },
-        SetOptions(merge: true),
-      );
-
-      await batch.commit();
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Claimed +$rewardPoints Base Salary Points!")),
-        );
+          if (mounted) {
+            setState(() {
+              if (fetchedId > 0) {
+                _myUid = fetchedId;
+              }
+              _myDisplayName = fetchedName;
+              _currentCoins = (d['coins'] as num?)?.toInt() ?? _currentCoins;
+              _myVipFrameLevel = vipActive ? frameLvl : 0;
+            });
+          }
+        }
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Claim failed: $e")),
-        );
+      debugPrint("Fetch profile error: $e");
+    }
+  }
+
+  void _syncRoomWithFirestore() {
+    final roomRef =
+        FirebaseFirestore.instance.collection('rooms').doc(channelName);
+    _roomSubscription = roomRef.snapshots().listen((snapshot) {
+      if (!snapshot.exists) return;
+      final data = snapshot.data();
+      if (data == null) return;
+
+      if (data['seats'] is List) {
+        final List incomingSeats = data['seats'] as List;
+        final List incomingUids = (data['seatUids'] as List?) ?? [];
+        final List incomingGifts = (data['seatGifts'] as List?) ?? [];
+
+        if (mounted) {
+          final int? previousSeat = _mySeatIndex;
+          int? updatedSeat;
+
+          setState(() {
+            for (int i = 0; i < _activeSeatCount; i++) {
+              if (i < incomingSeats.length) {
+                _seats[i] = incomingSeats[i]?.toString();
+              }
+              if (i < incomingUids.length) {
+                _seatUids[i] = incomingUids[i]?.toString();
+              }
+              if (i < incomingGifts.length) {
+                _seatGiftsCount[i] = (incomingGifts[i] as num?)?.toInt() ?? 0;
+              }
+            }
+
+            if (_currentUser != null) {
+              if (_seatUids.contains(_currentUser!.uid)) {
+                updatedSeat = _seatUids.indexOf(_currentUser!.uid);
+              }
+            }
+            _mySeatIndex = updatedSeat;
+          });
+
+          _syncLiveMicStatusToSessionAndCloud();
+
+          if (previousSeat == null) {
+            if (updatedSeat != null) {
+              _updateBroadcasterRole(true);
+              if (!_isMicMuted) {
+                _startMicMinutesTracking();
+              }
+            }
+          } else if (updatedSeat == null) {
+            _updateBroadcasterRole(false);
+            _stopMicMinutesTracking();
+          }
+        }
       }
-    } finally {
+    });
+  }
+
+  void _listenToLiveRoomChats() {
+    _chatSubscription = FirebaseFirestore.instance
+        .collection('rooms')
+        .doc(channelName)
+        .collection('chats')
+        .orderBy('timestamp', descending: true)
+        .limit(30)
+        .snapshots()
+        .listen((querySnapshot) {
+      if (querySnapshot.docs.isNotEmpty) {
+        if (mounted) {
+          final List<String> loadedMsgs = [];
+          for (var doc in querySnapshot.docs.reversed) {
+            final d = doc.data();
+            String sender = "User";
+            if (d['sender'] != null) {
+              sender = d['sender'].toString();
+            }
+            String txt = "";
+            if (d['text'] != null) {
+              txt = d['text'].toString();
+            }
+            if (txt.isNotEmpty) {
+              loadedMsgs.add("$sender: $txt");
+            }
+          }
+          setState(() {
+            _chatMessages.clear();
+            _chatMessages.addAll(loadedMsgs);
+          });
+        }
+      }
+    });
+  }
+
+  void _startMicMinutesTracking() {
+    _syncLiveMicStatusToSessionAndCloud();
+    if (_micTrackerTimer != null && _micTrackerTimer!.isActive) {
+      return;
+    }
+    _micTrackerTimer =
+        Timer.periodic(const Duration(minutes: 1), (timer) async {
+      final user = _currentUser;
+      if (user == null) return;
+      if (_mySeatIndex == null) return;
+      if (_isMicMuted) return;
+
+      try {
+        final userRef =
+            FirebaseFirestore.instance.collection('users').doc(user.uid);
+        final hostRef =
+            FirebaseFirestore.instance.collection('hosts').doc(user.uid);
+        final snap = await userRef.get();
+        final data = snap.data() ?? <String, dynamic>{};
+
+        // 24-hour daily cycle resets at 9:00 PM EAT (21:00 EAT)
+        final String todayKey = _getDailyResetCycleKey();
+
+        final String storedKey =
+            (data['micDateKey'] ?? data['lastMicDate'] ?? '').toString();
+
+        if (storedKey != todayKey) {
+          final int crownInit = _mySeatIndex == 0 ? 1 : 0;
+          await userRef.set(<String, dynamic>{
+            'micDateKey': todayKey,
+            'lastMicDate': todayKey,
+            'todayMicMinutes': 1,
+            'todayCrownMinutes': crownInit,
+            'isOnMic': true,
+            'isMuted': false,
+          }, SetOptions(merge: true));
+
+          await hostRef.set(<String, dynamic>{
+            'micDateKey': todayKey,
+            'liveDurationMinutesToday': 1,
+            'updatedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
+        } else {
+          final Map<String, dynamic> incData = <String, dynamic>{
+            'micDateKey': todayKey,
+            'lastMicDate': todayKey,
+            'todayMicMinutes': FieldValue.increment(1),
+            'isOnMic': true,
+            'isMuted': false,
+          };
+          if (_mySeatIndex == 0) {
+            incData['todayCrownMinutes'] = FieldValue.increment(1);
+          }
+          await userRef.set(incData, SetOptions(merge: true));
+
+          await hostRef.set(<String, dynamic>{
+            'micDateKey': todayKey,
+            'liveDurationMinutesToday': FieldValue.increment(1),
+            'updatedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
+        }
+      } catch (e) {
+        debugPrint("Mic minutes tracking error: $e");
+      }
+    });
+  }
+
+  void _stopMicMinutesTracking() {
+    _micTrackerTimer?.cancel();
+    _micTrackerTimer = null;
+    _syncLiveMicStatusToSessionAndCloud();
+  }
+
+  Future<void> _initVoiceEngine() async {
+    try {
+      _agoraService.onErrorCallback = (String errMsg) {
+        if (mounted) {
+          setState(() {
+            _chatMessages.add("System: $errMsg");
+          });
+        }
+      };
+
+      await _agoraService.initEngine(
+        onUserJoined: (uid) {
+          if (mounted) {
+            setState(() {
+              _chatMessages.add("System: User $uid connected to audio");
+            });
+          }
+        },
+        onUserOffline: (uid) {
+          if (mounted) {
+            setState(() {
+              _chatMessages.add("System: User $uid left audio");
+            });
+          }
+        },
+        onVolumeChanged: (speakers) {
+          if (mounted) {
+            setState(() {
+              _speakingSeatIndices.clear();
+              for (var speaker in speakers) {
+                final int vol = speaker.volume ?? 0;
+                if (vol > 4) {
+                  bool isLocalSpeaker = false;
+                  if (speaker.uid == 0) {
+                    isLocalSpeaker = true;
+                  } else if (speaker.uid == _myUid) {
+                    isLocalSpeaker = true;
+                  }
+
+                  if (isLocalSpeaker) {
+                    if (_mySeatIndex != null) {
+                      _speakingSeatIndices.add(_mySeatIndex!);
+                    }
+                  }
+                }
+              }
+            });
+          }
+        },
+      );
+
+      await _agoraService.joinRoom(
+        channelId: channelName,
+        uid: _myUid,
+        isSpeaker: _mySeatIndex != null,
+        roomTitle: widget.roomTitle,
+        seatCount: _activeSeatCount,
+      );
+
       if (mounted) {
         setState(() {
-          _isClaimingReward = false;
+          _chatMessages.add("System: Connected to voice network (UID: $_myUid)");
         });
+      }
+    } catch (e) {
+      debugPrint("Voice Engine Error: $e");
+    }
+  }
+
+  Future<void> _updateBroadcasterRole(bool isSpeaker) async {
+    await _agoraService.switchRole(isSpeaker: isSpeaker);
+  }
+
+  void _handleSeatTap(int index) async {
+    if (_roomSettings.isAllMicClosed) {
+      if (index != 0) {
+        if (_mySeatIndex != 0) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("All mics are closed by the host")),
+          );
+          return;
+        }
+      }
+    }
+
+    final user = _seats[index];
+    if (user != null) {
+      if (_mySeatIndex != index) {
+        _openSeatUserAction(index, user);
+        return;
+      }
+    }
+
+    if (_seats[index] == null) {
+      if (_mySeatIndex != null) {
+        _seats[_mySeatIndex!] = null;
+        _seatUids[_mySeatIndex!] = null;
+      }
+      _seats[index] = _myDisplayName;
+      _seatUids[index] = _currentUser?.uid;
+      _mySeatIndex = index;
+      _isMicMuted = false;
+      setState(() {});
+
+      await _updateBroadcasterRole(true);
+      _startMicMinutesTracking();
+    } else if (_mySeatIndex == index) {
+      _seats[index] = null;
+      _seatUids[index] = null;
+      _mySeatIndex = null;
+      _isMicMuted = true;
+      setState(() {});
+
+      await _updateBroadcasterRole(false);
+      _stopMicMinutesTracking();
+    }
+
+    await FirebaseFirestore.instance
+        .collection('rooms')
+        .doc(channelName)
+        .set(<String, dynamic>{
+      'seats': _seats,
+      'seatUids': _seatUids,
+      'seatGifts': _seatGiftsCount,
+    }, SetOptions(merge: true));
+  }
+
+  Future<void> _toggleMic() async {
+    setState(() {
+      _isMicMuted = !_isMicMuted;
+    });
+    if (_mySeatIndex != null) {
+      await _agoraService.setMicrophoneMute(_isMicMuted);
+      if (_isMicMuted) {
+        _stopMicMinutesTracking();
+      } else {
+        _startMicMinutesTracking();
       }
     }
   }
 
-  void _showPolicyDialog() {
+  Future<void> _toggleRoomVoice() async {
+    setState(() {
+      _roomSettings.isRoomAudioMuted = !_roomSettings.isRoomAudioMuted;
+    });
+    final eng = _agoraService.engine;
+    if (eng != null) {
+      await eng.muteAllRemoteAudioStreams(_roomSettings.isRoomAudioMuted);
+    }
+    if (mounted) {
+      String msg = "Room Voice Active";
+      if (_roomSettings.isRoomAudioMuted) {
+        msg = "Room Voice Muted";
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(msg)),
+      );
+    }
+  }
+
+  void _toggleAllMic() {
+    setState(() {
+      _roomSettings.isAllMicClosed = !_roomSettings.isAllMicClosed;
+      if (_roomSettings.isAllMicClosed) {
+        if (_mySeatIndex != 0) {
+          _isMicMuted = true;
+          _agoraService.setMicrophoneMute(true);
+          _stopMicMinutesTracking();
+        }
+      }
+    });
+    String msg = "All Mics Opened";
+    if (_roomSettings.isAllMicClosed) {
+      msg = "All Mics Closed";
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg)),
+    );
+  }
+
+  void _openPasswordDialog() {
+    String currentPass = "";
+    if (_roomSettings.password != null) {
+      currentPass = _roomSettings.password!;
+    }
+    final passCtrl = TextEditingController(text: currentPass);
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: bgColor,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text("Set Room Password",
+            style: TextStyle(color: primaryBrown, fontWeight: FontWeight.bold)),
+        content: TextField(
+          controller: passCtrl,
+          keyboardType: TextInputType.number,
+          style: const TextStyle(color: primaryBrown),
+          decoration: InputDecoration(
+            hintText: "Enter 4-digit code (Leave blank to remove)",
+            hintStyle: const TextStyle(color: Colors.black38, fontSize: 12),
+            filled: true,
+            fillColor: cardBg,
+            border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: borderColor)),
+            enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: borderColor)),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancel", style: TextStyle(color: Colors.black54)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: buttonDark),
+            onPressed: () {
+              setState(() {
+                final txt = passCtrl.text.trim();
+                if (txt.isEmpty) {
+                  _roomSettings.password = null;
+                } else {
+                  _roomSettings.password = txt;
+                }
+              });
+              Navigator.pop(context);
+              String statusMsg = "Password set successfully";
+              if (_roomSettings.password == null) {
+                statusMsg = "Password removed";
+              }
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(statusMsg)),
+              );
+            },
+            child: const Text("Save", style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _openAdminSheet() {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (ctx) {
-        return Container(
-          height: MediaQuery.of(context).size.height * 0.85,
-          decoration: const BoxDecoration(
-            color: Color(0xFFFAF7F2),
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-          child: Column(
-            children: [
-              Center(
-                child: Container(
+      builder: (_) => Container(
+        height: 340,
+        padding: const EdgeInsets.all(18),
+        decoration: const BoxDecoration(
+          color: bgColor,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
                   width: 44,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: Colors.black26,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 14),
-              const Text(
-                "Host Policy & Hourly Reward Rules",
-                style: TextStyle(
+                      color: Colors.black26,
+                      borderRadius: BorderRadius.circular(2))),
+            ),
+            const SizedBox(height: 14),
+            const Text(
+              "Room Administrators",
+              style: TextStyle(
+                  color: primaryBrown,
                   fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF3E2723),
-                ),
-              ),
-              const SizedBox(height: 12),
-              Expanded(
-                child: ListView(
-                  physics: const BouncingScrollPhysics(),
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFFE2D6C5)),
-                      ),
-                      child: const Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            "New Host First Week Base Salary",
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFF4E342E),
-                            ),
-                          ),
-                          SizedBox(height: 4),
-                          Text(
-                            "Income Requirement: None\n"
-                            "• On mic for 1 hour: 2,000 Points\n"
-                            "• On mic for 2 hours: 3,000 Points\n"
-                            "• Daily Reset Time: 9:00 PM EAT (3:00 ማታ)",
-                            style: TextStyle(
-                                fontSize: 11.5,
-                                color: Colors.black87,
-
-height: 1.4),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    const Text(
-                      "Ordinary Host Hourly Reward Table",
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF3E2723),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFFE2D6C5)),
-                      ),
-                      child: Table(
-                        border: TableBorder.all(color: const Color(0xFFEFE6DE)),
-                        children: [
-                          const TableRow(
-                            decoration:
-                                BoxDecoration(color: Color(0xFFF5EFEB)),
-                            children: [
-                              Padding(
-                                padding: EdgeInsets.all(8),
-                                child: Text("Level",
-                                    style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 11)),
-                              ),
-                              Padding(
-                                padding: EdgeInsets.all(8),
-                                child: Text("Income (7d)",
-                                    style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 11)),
-                              ),
-                              Padding(
-                                padding: EdgeInsets.all(8),
-                                child: Text("Reward /h",
-                                    style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 11)),
-                              ),
-                              Padding(
-                                padding: EdgeInsets.all(8),
-                                child: Text("Max Daily",
-                                    style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 11)),
-                              ),
-                            ],
-                          ),
-                          ..._hostPolicyTiers.map((rawT) {
-                            final t = rawT as Map;
-                            String reqLabel = "${t['req']}";
-                            if (t['req'] == 0) {
-                              reqLabel = "No Target";
-                            }
-                            return TableRow(
-                              children: [
-                                Padding(
-                                  padding: const EdgeInsets.all(8),
-                                  child: Text("${t['level']}",
-                                      style: const TextStyle(
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.bold)),
-                                ),
-                                Padding(
-                                  padding: const EdgeInsets.all(8),
-                                  child: Text(reqLabel,
-                                      style: const TextStyle(fontSize: 11)),
-                                ),
-
-Padding(
-                                  padding: const EdgeInsets.all(8),
-                                  child: Text("${t['reward']} /h",
-                                      style: const TextStyle(
-                                          fontSize: 11,
-                                          color: Color(0xFFD49B42),
-                                          fontWeight: FontWeight.bold)),
-                                ),
-                                Padding(
-                                  padding: const EdgeInsets.all(8),
-                                  child: Text("${t['maxHours']} Hours",
-                                      style: const TextStyle(fontSize: 11)),
-                                ),
-                              ],
-                            );
-                          }),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  void _showJoinAgencyDialog() {
-    showDialog(
-      context: context,
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            VoidCallback? submitAction = () async {
-              final inputId = _agencyInputController.text.trim();
-              if (inputId.isEmpty) return;
-
-              setDialogState(() {
-                _isJoining = true;
-              });
-
-              try {
-                final agencyDoc = await FirebaseFirestore.instance
-                    .collection('agencies')
-                    .doc(inputId)
-                    .get();
-
-                if (!agencyDoc.exists) {
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text("Agency ID not found.")),
-                    );
+                  fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 12),
+            Expanded(
+              child: ListView.builder(
+                itemCount: _seats.length,
+                itemBuilder: (context, idx) {
+                  final u = _seats[idx];
+                  if (u == null) return const SizedBox.shrink();
+                  final isAdmin = _roomSettings.admins.contains(u);
+                  Color btnBg = const Color(0xFF107C41);
+                  String btnTxt = "Make Admin";
+                  if (isAdmin) {
+                    btnBg = Colors.redAccent;
+                    btnTxt = "Remove Admin";
                   }
-                  setDialogState(() {
-                    _isJoining = false;
-                  });
-                  return;
-                }
-
-                final agencyData = agencyDoc.data() ?? {};
-                String agencyName = inputId;
-                if (agencyData['name'] != null) {
-                  agencyName = agencyData['name'].toString();
-                }
-
-                await FirebaseFirestore.instance
-                    .collection('hosts')
-                    .doc(currentUser!.uid)
-                    .set({
-                  'agencyId': _d(inputId),
-                  'agencyName': _d(agencyName),
-                  'status': _d('active'),
-                  'updatedAt': _d(FieldValue.serverTimestamp()),
-                }, SetOptions(merge: true));
-
-                await FirebaseFirestore.instance
-                    .collection('users')
-                    .doc(currentUser!.uid)
-                    .set({
-                  'agencyId': _d(inputId),
-                  'agencyName': _d(agencyName),
-                }, SetOptions(merge: true));
-
-                if (mounted) {
-                  Navigator.pop(ctx);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                        content: Text("Successfully linked to agency!")),
-                  );
-                }
-              } catch (e) {
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text("Error: $e")),
-                  );
-                }
-              } finally {
-                setDialogState(() {
-                  _isJoining = false;
-                });
-              }
-            };
-
-            Widget submitChild = const Text(
-              "Submit",
-              style:
-                  TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-            );
-
-if (_isJoining) {
-              submitAction = null;
-              submitChild = const SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(
-                    strokeWidth: 2, color: Colors.white),
-              );
-            }
-
-            return AlertDialog(
-              backgroundColor: const Color(0xFFFAF7F2),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16)),
-              title: const Text(
-                "Join Agency",
-                style: TextStyle(
-                    color: Color(0xFF3E2723),
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16),
-              ),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text(
-                    "Enter the Agency ID provided by your agency manager to link your host account.",
-                    style: TextStyle(color: Colors.black54, fontSize: 12),
-                  ),
-                  const SizedBox(height: 14),
-                  TextField(
-                    controller: _agencyInputController,
-                    style: const TextStyle(color: Color(0xFF3E2723)),
-                    decoration: InputDecoration(
-                      hintText: "e.g. 100083",
-                      hintStyle: const TextStyle(color: Colors.black38),
-                      filled: true,
-                      fillColor: Colors.white,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide:
-                            const BorderSide(color: Color(0xFFE2D6C5)),
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    decoration: BoxDecoration(
+                      color: cardBg,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: borderColor),
+                    ),
+                    child: ListTile(
+                      leading: const CircleAvatar(
+                        backgroundColor: bgColor,
+                        child: Icon(Icons.person, color: primaryBrown),
                       ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide:
-                            const BorderSide(color: Color(0xFFE2D6C5)),
+                      title: Text(u,
+                          style: const TextStyle(
+                              color: primaryBrown,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13)),
+                      trailing: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: btnBg,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10)),
+                          elevation: 0,
+                        ),
+                        onPressed: () {
+                          setState(() {
+                            if (isAdmin) {
+                              _roomSettings.admins.remove(u);
+                            } else {
+                              _roomSettings.admins.add(u);
+                            }
+                          });
+                          Navigator.pop(context);
+                        },
+                        child: Text(btnTxt,
+                            style: const TextStyle(
+                                color: Colors.white, fontSize: 11)),
                       ),
                     ),
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () {
-                    Navigator.pop(ctx);
-                  },
-                  child: const Text("Cancel",
-                      style: TextStyle(color: Colors.black54)),
-                ),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF4A3528),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10)),
-                  ),
-                  onPressed: submitAction,
-                  child: submitChild,
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-  }
-
-  void _showWithdrawDialog(int points, String currentLevel, bool isLinked) {
-    final double usdValue = points / 10000.0;
-    bool isLevelEligible = true;
-    if (currentLevel == "None") {
-      isLevelEligible = false;
-    } else if (currentLevel == "L") {
-      isLevelEligible = false;
-    }
-
-    bool canWithdraw = false;
-    if (isLinked) {
-      if (isLevelEligible) {
-        canWithdraw = true;
-      }
-    }
-
-    String statusText = "Withdrawal locked: Must join an agency first.";
-    Color statusColor = const Color(0xFFD32F2F);
-    if (isLinked) {
-      if (canWithdraw) {
-        statusText = "Host Tier: Level $currentLevel (Eligible)";
-        statusColor = const Color(0xFF107C41);
-      } else {
-        statusText =
-            "Host Tier: Level $currentLevel (Requires Level K or higher)";
-      }
-    }
-
-    Color btnColor = Colors.black26;
-    if (canWithdraw) {
-      btnColor = const Color(0xFF4A3528);
-    }
-
-    showModalBottomSheet(
-
-context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (ctx) {
-        VoidCallback? btnAction;
-        if (canWithdraw) {
-          btnAction = () {
-            Navigator.pop(ctx);
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) {
-                  return const PointsWalletScreen();
+                  );
                 },
               ),
-            );
-          };
-        }
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
-        return Container(
+  void _openRedPacketDialog() {
+    int selectedAmount = 100;
+    int selectedCount = 5;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => StatefulBuilder(
+        builder: (ctx, setDialogState) => Container(
           padding: const EdgeInsets.all(20),
           decoration: const BoxDecoration(
-            color: Color(0xFFFAF7F2),
+            color: bgColor,
             borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                "Withdraw Earnings",
-                style: TextStyle(
-                    color: Color(0xFF3E2723),
-                    fontSize: 17,
-                    fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                "Available Balance: $points Points (\$${usdValue.toStringAsFixed(2)} USD)",
-                style: const TextStyle(color: Colors.black87, fontSize: 13),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                statusText,
-                style: TextStyle(
-                  color: statusColor,
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
+              Center(
+                child: Container(
+                  width: 44,
+                  height: 4,
+                  decoration: BoxDecoration(
+                      color: Colors.black26,
+                      borderRadius: BorderRadius.circular(2)),
                 ),
               ),
               const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFFE2D6C5)),
-                ),
-                child: const Row(
-                  children: [
-                    Icon(Icons.account_balance_wallet,
-                        color: Color(0xFFD49B42)),
-                    SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        "Telebirr / CBE / Abyssinia / Awash / Binance Pay",
-                        style: TextStyle(
-                            color: Color(0xFF3E2723),
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                  ],
+              const Center(
+                child: Text(
+                  "Send Red Packet",
+                  style: TextStyle(
+                      color: primaryBrown,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold),
                 ),
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 16),
+              const Text("Total Coins in Red Packets",
+                  style: TextStyle(color: Colors.black54, fontSize: 12.5)),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [100, 500, 1000].map((amt) {
+                  final sel = selectedAmount == amt;
+                  Color lblColor = primaryBrown;
+                  if (sel) {
+                    lblColor = Colors.white;
+                  }
+                  return ChoiceChip(
+                    label: Text("$amt Coins"),
+                    selected: sel,
+                    selectedColor: buttonDark,
+                    backgroundColor: cardBg,
+                    labelStyle: TextStyle(
+                        color: lblColor,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12),
+                    onSelected: (_) =>
+                        setDialogState(() => selectedAmount = amt),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 16),
+              const Text("Red Packet Quantity",
+                  style: TextStyle(color: Colors.black54, fontSize: 12.5)),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [5, 10, 15, 20].map((qty) {
+                  final sel = selectedCount == qty;
+                  Color lblColor = primaryBrown;
+                  if (sel) {
+                    lblColor = Colors.white;
+                  }
+                  return ChoiceChip(
+                    label: Text("x$qty"),
+                    selected: sel,
+                    selectedColor: buttonDark,
+                    backgroundColor: cardBg,
+                    labelStyle: TextStyle(
+                        color: lblColor,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12),
+                    onSelected: (_) =>
+                        setDialogState(() => selectedCount = qty),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 20),
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: btnColor,
+                    backgroundColor: const Color(0xFF107C41),
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
+                        borderRadius: BorderRadius.circular(16)),
                     elevation: 0,
                   ),
-                  onPressed: btnAction,
-                  child: const Text(
-                    "Proceed to Points Wallet",
-                    style: TextStyle(
-                        color: Colors.white, fontWeight: FontWeight.bold),
-                  ),
+                  onPressed: () {
+                    if (_currentCoins < selectedAmount) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                            content:
+                                Text("Insufficient coins to send Red Packet!")),
+                      );
+                      return;
+                    }
+                    setState(() {
+                      _currentCoins -= selectedAmount;
+                    });
+
+                    FirebaseFirestore.instance
+                        .collection('rooms')
+                        .doc(channelName)
+                        .collection('chats')
+                        .add(<String, dynamic>{
+                      'sender': 'System',
+                      'text':
+                          "Red Packet of $selectedAmount Coins dropped in room!",
+                      'timestamp': FieldValue.serverTimestamp(),
+                    });
+
+                    if (_currentUser != null) {
+                      FirebaseFirestore.instance
+                          .collection('users')
+                          .doc(_currentUser!.uid)
+                          .update(<String, dynamic>{
+                        'coins': FieldValue.increment(-selectedAmount),
+                      });
+                    }
+                    widget.onCoinUpdate(_currentCoins);
+                    Navigator.pop(context);
+                  },
+                  child: const Text("Send Red Packets",
+                      style: TextStyle(
+                          color: Colors.white, fontWeight: FontWeight.bold)),
                 ),
               ),
+              const SizedBox(height: 10),
             ],
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    if (currentUser == null) {
-      return const Scaffold(
-        backgroundColor: Color(0xFFF5EFEB),
-        body: Center(
-          child: Text("Please sign in first.",
-              style: TextStyle(color: Colors.black54)),
-        ),
-      );
+  void _openSeatUserAction(int index, String user) {
+    final isMuted = _mutedSeats.contains(index);
+    IconData micIcon = Icons.mic_off;
+    String micLabel = "Mute User";
+    if (isMuted) {
+      micIcon = Icons.mic;
+      micLabel = "Unmute User";
     }
 
-    final String todayAppKey = _getTodayDateKey();
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => Container(
+        padding: const EdgeInsets.all(18),
+        decoration: const BoxDecoration(
+          color: bgColor,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Center(
+              child: Container(
+                  width: 44,
+                  height: 4,
+                  decoration: BoxDecoration(
+                      color: Colors.black26,
+                      borderRadius: BorderRadius.circular(2))),
+            ),
+            const SizedBox(height: 12),
+            Text(user,
+                style: const TextStyle(
+                    color: primaryBrown,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold)),
+            const SizedBox(height: 14),
+            Container(
+              decoration: BoxDecoration(
+                  color: cardBg,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: borderColor)),
+              child: Column(
+                children: [
+                  ListTile(
+                    leading: Icon(micIcon, color: primaryBrown),
+                    title: Text(micLabel,
+                        style: const TextStyle(
+                            color: primaryBrown, fontWeight: FontWeight.w600)),
+                    onTap: () {
+                      setState(() {
+                        if (isMuted) {
+                          _mutedSeats.remove(index);
+                        } else {
+                          _mutedSeats.add(index);
+                        }
+                      });
+                      Navigator.pop(context);
+                    },
+                  ),
+                  const Divider(height: 1, color: borderColor),
+                  ListTile(
+                    leading: const Icon(Icons.exit_to_app,
+                        color: Colors.redAccent),
+                    title: const Text("Kick from Seat",
+                        style: TextStyle(
+                            color: Colors.redAccent,
+                            fontWeight: FontWeight.w600)),
+                    onTap: () async {
+                      setState(() {
+                        _seats[index] = null;
+                        _seatUids[index] = null;
+                      });
+                      Navigator.pop(context);
 
-return Scaffold(
-      backgroundColor: const Color(0xFFF5EFEB),
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios,
-              color: Color(0xFF3E2723), size: 20),
-          onPressed: () {
-            Navigator.pop(context);
-          },
+                      await FirebaseFirestore.instance
+                          .collection('rooms')
+                          .doc(channelName)
+                          .set(<String, dynamic>{
+                        'seats': _seats,
+                        'seatUids': _seatUids,
+                      }, SetOptions(merge: true));
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
-        title: const Text(
-          "Host Center",
-          style: TextStyle(
-            color: Color(0xFF3E2723),
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        centerTitle: true,
       ),
-      body: StreamBuilder(
-        stream: FirebaseFirestore.instance
-            .collection('users')
-            .doc(currentUser!.uid)
-            .snapshots(),
-        builder: (context, userSnapshot) {
-          Map userData = {};
-          if (userSnapshot.hasData) {
-            final doc = userSnapshot.data as DocumentSnapshot;
-            if (doc.exists) {
-              final raw = doc.data();
-              if (raw is Map) {
-                userData = raw;
+    );
+  }
+
+  Future<void> _playGiftVideo(GiftModel gift) async {
+    try {
+      _videoController?.dispose();
+      _videoController = VideoPlayerController.asset(gift.videoPath);
+      await _videoController!.initialize();
+
+      if (mounted) {
+        setState(() {
+          _isPlayingVideo = true;
+        });
+        _videoController!.play();
+      }
+
+      _videoController!.addListener(() {
+        final ctrl = _videoController;
+        if (ctrl != null) {
+          if (ctrl.value.isInitialized) {
+            if (ctrl.value.position >= ctrl.value.duration) {
+              if (mounted) {
+                setState(() {
+                  _isPlayingVideo = false;
+                });
               }
             }
           }
+        }
+      });
+    } catch (e) {
+      debugPrint("Video Play Error: $e");
+      if (mounted) {
+        setState(() {
+          _isPlayingVideo = false;
+        });
+      }
+    }
+  }
 
-          return StreamBuilder(
-            stream: FirebaseFirestore.instance
-                .collection('hosts')
-                .doc(currentUser!.uid)
-                .snapshots(),
-            builder: (context, hostSnapshot) {
-              Map hostData = {};
-              if (hostSnapshot.hasData) {
-                final doc = hostSnapshot.data as DocumentSnapshot;
-                if (doc.exists) {
-                  final raw = doc.data();
-                  if (raw is Map) {
-                    hostData = raw;
-                  }
-                }
-              }
+  void _triggerFloatingGiftCombo({
+    required GiftModel gift,
+    required String target,
+    required int multiplier,
+  }) {
+    final now = DateTime.now();
+    final targetKey = "${gift.id}_$target";
 
-              String userName = "Host";
-              if (userData['name'] != null) {
-                userName = userData['name'].toString();
-              } else if (userData['nickname'] != null) {
-                userName = userData['nickname'].toString();
-              } else if (userData['displayName'] != null) {
-                userName = userData['displayName'].toString();
-              }
+    bool isStreak = false;
+    if (_lastGiftTargetKey == targetKey) {
+      if (_lastGiftTimestamp != null) {
+        if (now.difference(_lastGiftTimestamp!).inSeconds < 4) {
+          isStreak = true;
+        }
+      }
+    }
 
-              String userNumericId = "100000";
-              if (userData['numericId'] != null) {
-                userNumericId = userData['numericId'].toString();
-              } else if (userData['id'] != null) {
-                userNumericId = userData['id'].toString();
-              }
+    if (isStreak) {
+      _currentComboStreak += multiplier;
+    } else {
+      _currentComboStreak = multiplier;
+    }
 
-              String avatarUrl = "";
-              if (userData['avatarUrl'] != null) {
-                avatarUrl = userData['avatarUrl'].toString();
-              } else if (userData['photoURL'] != null) {
-                avatarUrl = userData['photoURL'].toString();
-              } else if (userData['avatar'] != null) {
-                avatarUrl = userData['avatar'].toString();
-              }
+    _lastGiftTargetKey = targetKey;
+    _lastGiftTimestamp = now;
 
-              String agencyName = "";
-              if (hostData['agencyName'] != null) {
-                agencyName = hostData['agencyName'].toString();
-              } else if (userData['agencyName'] != null) {
-                agencyName = userData['agencyName'].toString();
-              } else if (_ownedAgencyName.isNotEmpty) {
-                agencyName = _ownedAgencyName;
-              }
+    _comboDismissTimer?.cancel();
 
-              String agencyId = "";
-              if (hostData['agencyId'] != null) {
-                agencyId = hostData['agencyId'].toString();
-              } else if (userData['agencyId'] != null) {
-                agencyId = userData['agencyId'].toString();
-              } else if (_ownedAgencyId.isNotEmpty) {
-                agencyId = _ownedAgencyId;
-              }
-              final bool isLinked = agencyId.isNotEmpty;
+    setState(() {
+      _activeComboData = GiftComboData(
+        senderName: _myDisplayName,
+        targetName: target,
+        giftName: gift.name,
+        giftIcon: gift.icon,
+        comboCount: _currentComboStreak,
+      );
+    });
 
-              // 24-Hour Daily Reset at 9:00 PM EAT (3:00 ማታ):
-              // Only count today's minutes if stored micDateKey matches todayAppKey!
-              final String storedDateKey = (userData['micDateKey'] ??
+    _comboScaleController.reset();
+    _comboScaleController.forward();
 
-hostData['micDateKey'] ??
-                      todayAppKey)
-                  .toString();
-              int liveMinutesToday = 0;
-              if (storedDateKey == todayAppKey) {
-                liveMinutesToday =
-                    (hostData['liveDurationMinutesToday'] as num?)?.toInt() ??
-                        0;
-                if (liveMinutesToday == 0) {
-                  liveMinutesToday =
-                      (userData['todayMicMinutes'] as num?)?.toInt() ?? 0;
-                }
-              }
+    _comboDismissTimer = Timer(const Duration(milliseconds: 2800), () {
+      if (mounted) {
+        setState(() {
+          _activeComboData = null;
+        });
+      }
+    });
+  }
 
-              String lastClaimDate = "";
-              if (userData['lastMicClaimDate'] != null) {
-                lastClaimDate = userData['lastMicClaimDate'].toString();
-              } else if (hostData['lastMicClaimDate'] != null) {
-                lastClaimDate = hostData['lastMicClaimDate'].toString();
-              }
+  void _creditRecipientGiftPoints({
+    required String recipientUid,
+    required String senderUid,
+    required int pointsPerRecipient,
+    required int totalCoinsGift,
+  }) {
+    final String cycleKey = _getDailyResetCycleKey();
+    final userRef =
+        FirebaseFirestore.instance.collection('users').doc(recipientUid);
 
-              int giftPoints = (hostData['giftPoints'] as num?)?.toInt() ?? 0;
-              if (giftPoints == 0) {
-                giftPoints =
-                    (userData['receivedGiftPoints'] as num?)?.toInt() ?? 0;
-              }
-              if (giftPoints == 0) {
-                giftPoints = (userData['points'] as num?)?.toInt() ?? 0;
-              }
+    FirebaseFirestore.instance.runTransaction((tx) async {
+      final snap = await tx.get(userRef);
+      final data = snap.data() ?? <String, dynamic>{};
+      final String storedDate =
+          (data['lastMicDate'] ?? data['micDateKey'] ?? '').toString();
 
-              // Ensure Gift Income (Last 7 days) & Still Need progress bar move with received gifts
-              int giftIncome7Days =
-                  (hostData['giftIncomeLast7Days'] as num?)?.toInt() ?? 0;
-              if (giftIncome7Days == 0) {
-                giftIncome7Days =
-                    (userData['giftIncomeLast7Days'] as num?)?.toInt() ?? 0;
-              }
-              if (giftIncome7Days == 0) {
-                giftIncome7Days = giftPoints;
-              }
+      if (storedDate != cycleKey) {
+        tx.set(
+            userRef,
+            {
+              'lastMicDate': cycleKey,
+              'micDateKey': cycleKey,
+              'points': FieldValue.increment(pointsPerRecipient),
+              'receivedGiftPoints': FieldValue.increment(pointsPerRecipient),
+              'giftIncomeLast7Days': FieldValue.increment(pointsPerRecipient),
+              'todayPoints': pointsPerRecipient,
+              'todayGiftCoins': totalCoinsGift,
+              'charmExp': FieldValue.increment(pointsPerRecipient),
+              'todayTaskPoints': pointsPerRecipient,
+              'weekTaskPoints': FieldValue.increment(pointsPerRecipient),
+            },
+            SetOptions(merge: true));
+      } else {
+        tx.set(
+            userRef,
+            {
+              'points': FieldValue.increment(pointsPerRecipient),
+              'receivedGiftPoints': FieldValue.increment(pointsPerRecipient),
+              'giftIncomeLast7Days': FieldValue.increment(pointsPerRecipient),
+              'todayPoints': FieldValue.increment(pointsPerRecipient),
+              'todayGiftCoins': FieldValue.increment(totalCoinsGift),
+              'charmExp': FieldValue.increment(pointsPerRecipient),
+              'todayTaskPoints': FieldValue.increment(pointsPerRecipient),
+              'weekTaskPoints': FieldValue.increment(pointsPerRecipient),
+            },
+            SetOptions(merge: true));
+      }
+    });
 
-              final tierCalc = _calculateTier(giftIncome7Days);
-              final int currentHourlyIncome =
-                  (tierCalc['currentReward'] as num).toInt();
-              final int nextHourlyIncome =
-                  (tierCalc['nextReward'] as num).toInt();
-              final int stillNeed = (tierCalc['stillNeed'] as num).toInt();
-              final double tierProgress =
-                  (tierCalc['progress'] as num).toDouble();
-              final String currentLevel = tierCalc['level'].toString();
+    FirebaseFirestore.instance
+        .collection('hosts')
+        .doc(recipientUid)
+        .set(<String, dynamic>{
+      'giftPoints': FieldValue.increment(pointsPerRecipient),
+      'giftIncomeLast7Days': FieldValue.increment(pointsPerRecipient),
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
 
-              final int baseSalaryPoints =
-                  (hostData['baseSalaryPoints'] as num?)?.toInt() ?? 0;
-              final int invitationPoints =
-                  (hostData['invitationPoints'] as num?)?.toInt() ?? 0;
-              int taskPoints = (hostData['taskPoints'] as num?)?.toInt() ?? 0;
-              if (taskPoints == 0) {
-                taskPoints =
-                    (userData['todayTaskPoints'] as num?)?.toInt() ?? 0;
-              }
-              final int otherPoints =
-                  (hostData['otherPoints'] as num?)?.toInt() ?? 0;
-              final int totalPoints = giftPoints +
-                  baseSalaryPoints +
-                  invitationPoints +
-                  taskPoints +
-                  otherPoints;
+    FirebaseFirestore.instance
+        .collection('point_transactions')
+        .add(<String, dynamic>{
+      'userUid': recipientUid,
+      'senderUid': senderUid,
+      'type': 'GIFT_RECEIVED',
+      'points': pointsPerRecipient,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+  }
 
-              final int rawVipLvl = (userData['vipLevel'] as num?)?.toInt() ?? 0;
-              final int rawFrameLvl =
-                  (userData['activeVipFrameLevel'] as num?)?.toInt() ?? rawVipLvl;
-              final Timestamp? vipExpTs = userData['vipExpiresAt'] as Timestamp?;
-              bool vipIsActive = false;
-              if (rawVipLvl > 0) {
-                if (vipExpTs == null || vipExpTs.toDate().isAfter(DateTime.now())) {
-                  vipIsActive = true;
-                }
-              }
-              final int activeHostVipFrame = vipIsActive ? rawFrameLvl : 0;
+  void _sendGift({
+    required GiftModel gift,
+    required String target,
+    int? targetSeatIndex,
+    required int multiplier,
+  }) async {
+    final int totalCost = gift.cost * multiplier;
 
-              final ImageProvider? avatarProvider =
-                  _resolveAvatarProvider(avatarUrl);
+    if (_currentCoins < totalCost) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Insufficient coins! Please recharge.")),
+      );
+      return;
+    }
 
-              VoidCallback? agencyTap = _showJoinAgencyDialog;
-              String agencyLabel = "Agency: Tap to Join";
-              Color agencyColor = const Color(0xFFD32F2F);
-              if (isLinked) {
-                agencyTap = null;
-                agencyLabel = "Agency: $agencyName";
-                agencyColor = const Color(0xFF107C41);
-              }
+    double rate = 0.70;
+    if (gift.isLucky) {
+      rate = 0.04;
+    }
+    final int pointsPerRecipient = (totalCost * rate).round();
 
-              final bool alreadyClaimedToday = lastClaimDate == todayAppKey;
-              bool canClaimMic = false;
-              if (_gte(liveMinutesToday, 60)) {
-                if (!alreadyClaimedToday) {
-                  canClaimMic = true;
-                }
-              }
+    String senderUid = "";
+    if (_currentUser != null) {
+      senderUid = _currentUser!.uid;
+    }
 
-              String claimBtnText = "60m Required";
-              Color claimBtnBg = Colors.black12;
-              Color claimBtnTextCol = Colors.black45;
-              VoidCallback? claimBtnAction;
+    setState(() {
+      _currentCoins -= totalCost;
 
-if (alreadyClaimedToday) {
-                claimBtnText = "Claimed Today";
-                claimBtnBg = const Color(0xFFE8F5E9);
-                claimBtnTextCol = const Color(0xFF107C41);
-              } else if (canClaimMic) {
-                claimBtnText = "Claim Reward";
-                claimBtnBg = const Color(0xFF107C41);
-                claimBtnTextCol = Colors.white;
-                if (!_isClaimingReward) {
-                  claimBtnAction = () {
-                    _claimDailyMicReward(
-                      liveMinutesToday: liveMinutesToday,
-                      currentHourlyIncome: currentHourlyIncome,
-                      currentLevel: currentLevel,
-                      lastClaimDate: lastClaimDate,
-                    );
-                  };
-                }
-              }
+      if (targetSeatIndex != null) {
+        if (targetSeatIndex < _seatGiftsCount.length) {
+          _seatGiftsCount[targetSeatIndex] += totalCost;
+          final recipientUid = _seatUids[targetSeatIndex];
+          if (recipientUid != null && recipientUid.isNotEmpty) {
+            _creditRecipientGiftPoints(
+              recipientUid: recipientUid,
+              senderUid: senderUid,
+              pointsPerRecipient: pointsPerRecipient,
+              totalCoinsGift: totalCost,
+            );
+          }
+        }
+      } else if (target == "All Seats") {
+        for (int i = 0; i < _seatGiftsCount.length; i++) {
+          if (_seats[i] != null) {
+            _seatGiftsCount[i] += totalCost;
+            final recipientUid = _seatUids[i];
+            if (recipientUid != null && recipientUid.isNotEmpty) {
+              _creditRecipientGiftPoints(
+                recipientUid: recipientUid,
+                senderUid: senderUid,
+                pointsPerRecipient: pointsPerRecipient,
+                totalCoinsGift: totalCost,
+              );
+            }
+          }
+        }
+      }
+    });
 
-              Color tab0Color = Colors.black38;
-              Color tab1Color = Colors.black38;
-              if (_selectedRecordTab == 0) {
-                tab0Color = const Color(0xFF3E2723);
-              } else {
-                tab1Color = const Color(0xFF3E2723);
-              }
+    await FirebaseFirestore.instance
+        .collection('rooms')
+        .doc(channelName)
+        .collection('chats')
+        .add(<String, dynamic>{
+      'sender': _myDisplayName,
+      'text': "sent ${gift.name} ${gift.icon} x$multiplier to $target",
+      'timestamp': FieldValue.serverTimestamp(),
+    });
 
-              return ListView(
-                physics: const BouncingScrollPhysics(),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+    await FirebaseFirestore.instance
+        .collection('rooms')
+        .doc(channelName)
+        .set(<String, dynamic>{
+      'seatGifts': _seatGiftsCount,
+    }, SetOptions(merge: true));
+
+    if (_currentUser != null) {
+      final String cycleKey = _getDailyResetCycleKey();
+      final senderRef = FirebaseFirestore.instance
+          .collection('users')
+          .doc(_currentUser!.uid);
+
+      await FirebaseFirestore.instance.runTransaction((tx) async {
+        final snap = await tx.get(senderRef);
+        final data = snap.data() ?? <String, dynamic>{};
+        final String storedDate =
+            (data['lastMicDate'] ?? data['micDateKey'] ?? '').toString();
+
+        if (storedDate != cycleKey) {
+          tx.set(
+              senderRef,
+              {
+                'lastMicDate': cycleKey,
+                'micDateKey': cycleKey,
+                'coins': FieldValue.increment(-totalCost),
+                'wealthExp': FieldValue.increment(totalCost),
+                'todayGiftSentCoins': totalCost,
+                'dailyGiftSent': totalCost,
+                'todayGiftCoins': totalCost,
+              },
+              SetOptions(merge: true));
+        } else {
+          tx.set(
+              senderRef,
+              {
+                'coins': FieldValue.increment(-totalCost),
+                'wealthExp': FieldValue.increment(totalCost),
+                'todayGiftSentCoins': FieldValue.increment(totalCost),
+                'dailyGiftSent': FieldValue.increment(totalCost),
+                'todayGiftCoins': FieldValue.increment(totalCost),
+              },
+              SetOptions(merge: true));
+        }
+      });
+    }
+
+    widget.onCoinUpdate(_currentCoins);
+    if (mounted) {
+      Navigator.pop(context);
+    }
+
+    _triggerFloatingGiftCombo(
+        gift: gift, target: target, multiplier: multiplier);
+    _playGiftVideo(gift);
+  }
+
+  void _openGiftSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        GiftModel selectedGift = availableGifts[0];
+        String selectedTarget = "All Seats";
+        int? selectedSeatIndex;
+        int selectedMultiplier = 1;
+
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            String currentUid = "";
+            if (_currentUser != null) {
+              currentUid = _currentUser!.uid;
+            }
+
+            return Container(
+              height: 530,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: const BoxDecoration(
+                color: bgColor,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              child: Column(
                 children: [
-                  Row(
-                    children: [
-                      activeHostVipFrame > 0
-                          ? VipAvatarFrame(
-                              vipLevel: activeHostVipFrame,
-                              size: 54,
-                              showBadge: false,
-                              child: CircleAvatar(
-                                backgroundColor: const Color(0xFFE7DDD2),
-                                backgroundImage: avatarProvider,
-                                child: avatarProvider == null
-                                    ? const Icon(Icons.person,
-                                        color: Color(0xFF8D6E63), size: 28)
-                                    : null,
-                              ),
-                            )
-                          : CircleAvatar(
-                              radius: 27,
-                              backgroundColor: const Color(0xFFE7DDD2),
-                              backgroundImage: avatarProvider,
-                              child: avatarProvider == null
-                                  ? const Icon(Icons.person,
-                                      color: Color(0xFF8D6E63), size: 30)
-                                  : null,
-                            ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Flexible(
-                                  child: Text(
-                                    userName,
-                                    style: const TextStyle(
-                                      color: Color(0xFF3E2723),
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                const SizedBox(width: 6),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFD49B42),
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                  child: Text(
-                                    currentLevel,
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 9.5,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 3),
-                            Text(
-
-"ID: $userNumericId",
-                              style: const TextStyle(
-                                  color: Colors.black45, fontSize: 11),
-                            ),
-                            const SizedBox(height: 2),
-                            GestureDetector(
-                              onTap: agencyTap,
-                              child: Text(
-                                agencyLabel,
-                                style: TextStyle(
-                                  color: agencyColor,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text(
-                            _getFormattedTime(),
-                            style: const TextStyle(
-                                color: Colors.black45, fontSize: 11),
-                          ),
-                          const SizedBox(height: 6),
-                          GestureDetector(
-                            onTap: () {
-                              _showWithdrawDialog(
-                                  totalPoints, currentLevel, isLinked);
-                            },
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 12, vertical: 5),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF4A3528),
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                              child: const Text(
-                                "Withdraw",
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  // Gift Income & Still Need Progress Card
                   Container(
-                    padding: const EdgeInsets.all(16),
+                    width: 44,
+                    height: 4,
                     decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(18),
-                      border: Border.all(color: const Color(0xFFE2D6C5)),
+                      color: Colors.black26,
+                      borderRadius: BorderRadius.circular(2),
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                  ),
+                  const SizedBox(height: 12),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
                       children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text("Gift income (Last 7 days)",
-                                    style: TextStyle(
-                                        color: Colors.black45, fontSize: 11)),
-                                const SizedBox(height: 4),
-                                Text(
-                                  "$giftIncome7Days",
-                                  style: const TextStyle(
-                                    color: Color(0xFF3E2723),
-                                    fontSize: 16,
-
-fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                const Text("Hourly income",
-                                    style: TextStyle(
-                                        color: Colors.black45, fontSize: 11)),
-                                const SizedBox(height: 4),
-                                Text(
-                                  "$currentHourlyIncome /h",
-                                  style: const TextStyle(
-                                    color: Color(0xFFD49B42),
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
+                        _targetChip(
+                          title: "All Seats",
+                          isSelected: selectedTarget == "All Seats",
+                          onTap: () {
+                            setSheetState(() {
+                              selectedTarget = "All Seats";
+                              selectedSeatIndex = null;
+                            });
+                            setState(() {
+                              _isAllSeatsTargeted = true;
+                            });
+                          },
                         ),
-                        const SizedBox(height: 14),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Expanded(
-                              child: Text(
-                                "Still need $stillNeed points to reach $nextHourlyIncome /h",
-                                style: const TextStyle(
-                                    color: Colors.black54, fontSize: 11.5),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            GestureDetector(
-                              onTap: _showPolicyDialog,
-                              child: const Text(
-                                "Rules >",
-                                style: TextStyle(
-                                  color: Color(0xFF8D6E63),
-                                  fontSize: 11.5,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Container(
-                          width: double.infinity,
-                          height: 7,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF5EFEB),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: FractionallySizedBox(
-                            alignment: Alignment.centerLeft,
-                            widthFactor: tierProgress,
-                            child: Container(
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFD49B42),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text("$currentHourlyIncome /h",
-                                style: const TextStyle(
-                                    color: Colors.black38, fontSize: 10)),
-                            Text("$nextHourlyIncome /h",
-                                style: const TextStyle(
-                                    color: Colors.black38, fontSize: 10)),
-                          ],
-                        ),
+                        ...List.generate(_activeSeatCount, (i) {
+                          String seatLabel = "Seat ${i + 1}";
+                          if (i == 0) {
+                            seatLabel = "Host (1)";
+                          }
+                          return _targetChip(
+                            title: seatLabel,
+                            isSelected: selectedTarget == seatLabel,
+                            onTap: () {
+                              setSheetState(() {
+                                selectedTarget = seatLabel;
+                                selectedSeatIndex = i;
+                              });
+                              setState(() {
+                                _isAllSeatsTargeted = false;
+                              });
+                            },
+                          );
+                        }),
                       ],
                     ),
                   ),
+                  const SizedBox(height: 12),
+                  Expanded(
+                    child: GridView.builder(
+                      itemCount: availableGifts.length,
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 4,
+                        mainAxisSpacing: 10,
+                        crossAxisSpacing: 10,
+                        childAspectRatio: 0.8,
+                      ),
+                      itemBuilder: (context, index) {
+                        final gift = availableGifts[index];
+                        final isSelected = selectedGift.id == gift.id;
 
-                  const SizedBox(height: 16),
+                        Color itemBg = cardBg;
+                        Color itemBorder = borderColor;
+                        double itemBorderW = 1.0;
+                        if (isSelected) {
+                          itemBg = const Color(0xFFFBF4E6);
+                          itemBorder = accentGold;
+                          itemBorderW = 2.0;
+                        }
 
-Row(
+                        return GestureDetector(
+                          onTap: () {
+                            setSheetState(() {
+                              selectedGift = gift;
+                            });
+                          },
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: itemBg,
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: itemBorder,
+                                width: itemBorderW,
+                              ),
+                            ),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(gift.icon,
+                                    style: const TextStyle(fontSize: 30)),
+                                const SizedBox(height: 4),
+                                Text(
+                                  gift.name,
+                                  style: const TextStyle(
+                                    color: primaryBrown,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                const SizedBox(height: 4),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    const Icon(Icons.monetization_on,
+                                        size: 12, color: accentGold),
+                                    const SizedBox(width: 2),
+                                    Text(
+                                      "${gift.cost}",
+                                      style: const TextStyle(
+                                        color: accentGold,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: giftMultipliers.map((mult) {
+                        final isChosen = selectedMultiplier == mult;
+                        Color pillBg = cardBg;
+                        Color pillBorder = borderColor;
+                        Color pillText = primaryBrown;
+                        if (isChosen) {
+                          pillBg = buttonDark;
+                          pillBorder = buttonDark;
+                          pillText = Colors.white;
+                        }
+
+                        return GestureDetector(
+                          onTap: () {
+                            setSheetState(() {
+                              selectedMultiplier = mult;
+                            });
+                          },
+                          child: Container(
+                            margin: const EdgeInsets.only(right: 8),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: pillBg,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: pillBorder,
+                              ),
+                            ),
+                            child: Text(
+                              "x$mult",
+                              style: TextStyle(
+                                color: pillText,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: const Color(0xFFE2D6C5)),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.calendar_today,
-                                size: 12, color: Color(0xFF8D6E63)),
-                            const SizedBox(width: 6),
-                            Text(
-                              _getFormattedShortDate(),
-                              style: const TextStyle(
-                                  fontSize: 11,
-                                  color: Color(0xFF3E2723),
-                                  fontWeight: FontWeight.bold),
-                            ),
-                          ],
-                        ),
-                      ),
                       Row(
                         children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 5),
-                            decoration: BoxDecoration(
-                              gradient: const LinearGradient(
-                                colors: [Color(0xFFE91E63), Color(0xFF9C27B0)],
-                              ),
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                            child: const Text(
-                              "Total Income",
-                              style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.bold),
+                          const Icon(Icons.monetization_on,
+                              color: accentGold, size: 20),
+                          const SizedBox(width: 4),
+                          Text(
+                            "$_currentCoins",
+                            style: const TextStyle(
+                              color: primaryBrown,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 15,
                             ),
                           ),
                           const SizedBox(width: 8),
@@ -1323,364 +1663,895 @@ Row(
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                  builder: (_) {
-                                    return const PointsWalletScreen();
-                                  },
+                                  builder: (_) => WalletScreen(
+                                    userUid: currentUid,
+                                    userNumericId: _myUid,
+                                    currentCoins: _currentCoins,
+                                    onCoinsRecharged: (newCoins) {
+                                      setState(() {
+                                        _currentCoins = newCoins;
+                                      });
+                                      setSheetState(() {});
+                                      widget.onCoinUpdate(newCoins);
+                                    },
+                                  ),
                                 ),
                               );
                             },
                             child: Container(
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 12, vertical: 5),
+                                  horizontal: 8, vertical: 3),
                               decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(14),
-                                border:
-                                    Border.all(color: const Color(0xFFE2D6C5)),
-                              ),
-                              child: const Text(
-                                "Wallet >",
-                                style: TextStyle(
-                                    color: Color(0xFF3E2723),
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 12),
-
-                  GridView.count(
-                    crossAxisCount: 3,
-
-shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    crossAxisSpacing: 8,
-                    mainAxisSpacing: 8,
-                    childAspectRatio: 1.25,
-                    children: [
-                      _buildSourceCard("Total Points", "$totalPoints"),
-                      _buildSourceCard("Gifts", "$giftPoints"),
-                      _buildSourceCard("Base Salary", "$baseSalaryPoints"),
-                      _buildSourceCard("Invitation", "$invitationPoints"),
-                      _buildSourceCard("Tasks", "$taskPoints"),
-                      _buildSourceCard("Other", "$otherPoints"),
-                    ],
-                  ),
-
-                  const SizedBox(height: 18),
-
-                  // Work Detail + 24-Hour Countdown (Resets at 3:00 ማታ / 9:00 PM EAT)
-                  Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: const Color(0xFFE2D6C5)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text(
-                              "Work Detail",
-                              style: TextStyle(
-                                color: Color(0xFF3E2723),
-                                fontSize: 14,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            GestureDetector(
-                              onTap: claimBtnAction,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 10, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: claimBtnBg,
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Text(
-                                  claimBtnText,
-                                  style: TextStyle(
-                                    color: claimBtnTextCol,
-                                    fontSize: 10.5,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 10),
-                        Row(
-                          children: [
-                            const Icon(Icons.access_time,
-                                color: Color(0xFF8D6E63), size: 20),
-                            const SizedBox(width: 8),
-                            const Text("Live Duration",
-                                style: TextStyle(
-                                    color: Colors.black54, fontSize: 12)),
-                            const Spacer(),
-                            Text(
-                              "$liveMinutesToday mins",
-                              style: const TextStyle(
-                                color: Color(0xFF3E2723),
-                                fontSize: 14,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
-                        ),
-
-const Divider(height: 16, color: Color(0xFFF5EFEB)),
-                        Row(
-                          children: [
-                            const Icon(Icons.autorenew_rounded,
-                                color: Color(0xFFD49B42), size: 16),
-                            const SizedBox(width: 6),
-                            const Text(
-                              "24h Reset (3:00 ማታ):",
-                              style: TextStyle(
-                                  color: Colors.black45, fontSize: 11),
-                            ),
-                            const Spacer(),
-                            Text(
-                              _getCountdownToReset(),
-                              style: const TextStyle(
-                                color: Color(0xFFD49B42),
-                                fontSize: 11.5,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  Row(
-                    children: [
-                      GestureDetector(
-                        onTap: () {
-                          setState(() {
-                            _selectedRecordTab = 0;
-                          });
-                        },
-                        child: Text(
-                          "Today's live record",
-                          style: TextStyle(
-                            color: tab0Color,
-                            fontSize: 13.5,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      GestureDetector(
-                        onTap: () {
-                          setState(() {
-                            _selectedRecordTab = 1;
-                          });
-                        },
-                        child: Text(
-                          "Daily Statistics",
-                          style: TextStyle(
-                            color: tab1Color,
-                            fontSize: 13.5,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 10),
-
-                  if (_selectedRecordTab == 1)
-                    Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: const Color(0xFFE2D6C5)),
-                      ),
-                      child: Column(
-                        children: [
-                          _buildStatRow(
-                              "Current Host Tier", "Level $currentLevel"),
-                          const Divider(color: Color(0xFFEFE6DE)),
-                          _buildStatRow("Hourly Reward Rate",
-                              "$currentHourlyIncome Points / h"),
-                          const Divider(color: Color(0xFFEFE6DE)),
-                          _buildStatRow("Today Qualified Minutes",
-                              "$liveMinutesToday / 120 mins"),
-                          const Divider(color: Color(0xFFEFE6DE)),
-                          _buildStatRow("Estimated USD Value",
-                              "\$${(totalPoints / 10000.0).toStringAsFixed(2)} USD"),
-                        ],
-                      ),
-                    )
-                  else
-
-StreamBuilder(
-                      stream: FirebaseFirestore.instance
-                          .collection('hosts')
-                          .doc(currentUser!.uid)
-                          .collection('live_records')
-                          .orderBy('createdAt', descending: true)
-                          .limit(10)
-                          .snapshots(),
-                      builder: (context, recordSnapshot) {
-                        List records = [];
-                        if (recordSnapshot.hasData) {
-                          records =
-                              (recordSnapshot.data as QuerySnapshot).docs;
-                        }
-
-                        if (records.isEmpty) {
-                          return Container(
-                            padding: const EdgeInsets.symmetric(vertical: 28),
-                            alignment: Alignment.center,
-                            child: const Column(
-                              children: [
-                                Icon(Icons.receipt_long,
-                                    color: Colors.black26, size: 36),
-                                SizedBox(height: 6),
-                                Text("No streaming records today",
-                                    style: TextStyle(
-                                        color: Colors.black38, fontSize: 11)),
-                              ],
-                            ),
-                          );
-                        }
-
-                        return Column(
-                          children: records.map((rawDoc) {
-                            final doc = rawDoc as QueryDocumentSnapshot;
-                            final raw = doc.data();
-                            final Map data = raw is Map ? raw : {};
-                            String start = "00:00";
-                            if (data['startTime'] != null) {
-                              start = data['startTime'].toString();
-                            }
-                            String end = "00:00";
-                            if (data['endTime'] != null) {
-                              end = data['endTime'].toString();
-                            }
-                            final duration =
-                                (data['durationMinutes'] ?? 0).toString();
-                            final earned =
-                                (data['pointsEarned'] ?? 0).toString();
-
-                            return Container(
-                              margin: const EdgeInsets.only(bottom: 8),
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
+                                color: cardBg,
                                 borderRadius: BorderRadius.circular(12),
-                                border:
-                                    Border.all(color: const Color(0xFFE2D6C5)),
+                                border: Border.all(color: borderColor),
                               ),
-                              child: Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
+                              child: const Row(
                                 children: [
-                                  Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text("$start - $end",
-                                          style: const TextStyle(
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 12,
-                                              color: Color(0xFF3E2723))),
-                                      const SizedBox(height: 2),
-                                      Text("Duration: $duration mins",
-
-style: const TextStyle(
-                                              color: Colors.black45,
-                                              fontSize: 10.5)),
-                                    ],
-                                  ),
                                   Text(
-                                    "+$earned Pts",
-                                    style: const TextStyle(
-                                      color: Color(0xFFD49B42),
+                                    "Recharge",
+                                    style: TextStyle(
+                                      color: primaryBrown,
+                                      fontSize: 11,
                                       fontWeight: FontWeight.bold,
-                                      fontSize: 12,
                                     ),
                                   ),
+                                  Icon(Icons.chevron_right,
+                                      size: 14, color: primaryBrown),
                                 ],
                               ),
-                            );
-                          }).toList(),
-                        );
-                      },
-                    ),
-
-                  const SizedBox(height: 20),
+                            ),
+                          ),
+                        ],
+                      ),
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF107C41),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 24, vertical: 12),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16)),
+                          elevation: 0,
+                        ),
+                        onPressed: () => _sendGift(
+                          gift: selectedGift,
+                          target: selectedTarget,
+                          targetSeatIndex: selectedSeatIndex,
+                          multiplier: selectedMultiplier,
+                        ),
+                        child: Text(
+                          "Send (Total: ${selectedGift.cost * selectedMultiplier})",
+                          style: const TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 13),
+                        ),
+                      ),
+                    ],
+                  ),
                 ],
-              );
-            },
-          );
-        },
+              ),
+            );
+          },
+        );
+      },
+    ).whenComplete(() {
+      setState(() {
+        _isAllSeatsTargeted = false;
+      });
+    });
+  }
+
+  Widget _targetChip({
+    required String title,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    Color chipBg = cardBg;
+    Color chipBorder = borderColor;
+    Color chipText = primaryBrown;
+    if (isSelected) {
+      chipBg = buttonDark;
+      chipBorder = buttonDark;
+      chipText = Colors.white;
+    }
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.only(right: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        decoration: BoxDecoration(
+          color: chipBg,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: chipBorder,
+          ),
+        ),
+        child: Text(
+          title,
+          style: TextStyle(
+            color: chipText,
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
       ),
     );
   }
 
-  Widget _buildStatRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label,
-              style: const TextStyle(color: Colors.black54, fontSize: 12)),
-          Text(value,
+  @override
+  void dispose() {
+    _stopMicMinutesTracking();
+    final mgr = RoomSessionManager.instance;
+    mgr.hasActiveRoom = false;
+    mgr.seatedIndex = null;
+    mgr.isMuted = true;
+    if (_currentUser != null) {
+      FirebaseFirestore.instance
+          .collection('users')
+          .doc(_currentUser!.uid)
+          .set(<String, dynamic>{
+        'isOnMic': false,
+        'isMuted': true,
+        'activeSeatIndex': -1,
+      }, SetOptions(merge: true));
+    }
+    _roomSubscription?.cancel();
+    _chatSubscription?.cancel();
+    _pulseController.dispose();
+    _comboScaleController.dispose();
+    _comboDismissTimer?.cancel();
+    _videoController?.dispose();
+    _msgController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    double seatSize = 44.0;
+    if (_activeSeatCount > 20) {
+      seatSize = 38.0;
+    }
+
+    int crossCount = 4;
+    if (_activeSeatCount > 20) {
+      crossCount = 6;
+    } else if (_activeSeatCount > 12) {
+      crossCount = 5;
+    }
+
+    int gridItemCount = 0;
+    if (_activeSeatCount > 1) {
+      gridItemCount = _activeSeatCount - 1;
+    }
+
+    IconData bottomMicIcon = Icons.mic;
+    Color bottomMicColor = const Color(0xFF107C41);
+    if (_isMicMuted) {
+      bottomMicIcon = Icons.mic_off;
+      bottomMicColor = Colors.redAccent;
+    }
+
+    bool showVideoOverlay = false;
+    if (_isPlayingVideo) {
+      if (_videoController != null) {
+        if (_videoController!.value.isInitialized) {
+          showVideoOverlay = true;
+        }
+      }
+    }
+
+    return Scaffold(
+      backgroundColor: bgColor,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.keyboard_arrow_down,
+              color: primaryBrown, size: 28),
+          tooltip: "Minimize Room",
+          onPressed: () {
+            _agoraService.minimizeRoom();
+            Navigator.pop(context);
+          },
+        ),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              _roomSettings.roomName,
               style: const TextStyle(
-                  color: Color(0xFF3E2723),
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.bold)),
+                  fontSize: 15,
+                  color: primaryBrown,
+                  fontWeight: FontWeight.bold),
+            ),
+            Row(
+              children: [
+                Text("UID: $_myUid",
+                    style:
+                        const TextStyle(fontSize: 11, color: Colors.black54)),
+                if (_roomSettings.password != null) ...[
+                  const SizedBox(width: 6),
+                  const Icon(Icons.lock, color: accentGold, size: 12),
+                ],
+              ],
+            ),
+          ],
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.share, color: primaryBrown),
+            onPressed: () {},
+          ),
+          IconButton(
+            icon: const Icon(Icons.power_settings_new, color: Colors.redAccent),
+            onPressed: () async {
+              await _agoraService.leaveRoom();
+              if (mounted) Navigator.pop(context);
+            },
+          ),
+        ],
+      ),
+      body: Stack(
+        children: [
+          SafeArea(
+            child: Column(
+              children: [
+                const SizedBox(height: 6),
+                Expanded(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      children: [
+                        _buildHostSeat(),
+                        const SizedBox(height: 10),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 14),
+                          child: GridView.builder(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            itemCount: gridItemCount,
+                            gridDelegate:
+                                SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: crossCount,
+                              mainAxisSpacing: 10,
+                              crossAxisSpacing: 8,
+                              childAspectRatio: 0.82,
+                            ),
+                            itemBuilder: (context, index) {
+                              final seatIndex = index + 1;
+                              final isTaken = _seats[seatIndex] != null;
+
+                              bool isSpeaking =
+                                  _speakingSeatIndices.contains(seatIndex);
+                              if (_mySeatIndex == seatIndex) {
+                                if (!_isMicMuted) {
+                                  isSpeaking = true;
+                                }
+                              }
+
+                              bool isMuted = _roomSettings.isAllMicClosed;
+                              if (_mutedSeats.contains(seatIndex)) {
+                                isMuted = true;
+                              }
+
+                              final giftPoints = _seatGiftsCount[seatIndex];
+
+                              Widget seatCenterIcon = const Icon(Icons.chair,
+                                  color: Colors.black38, size: 18);
+                              if (isTaken) {
+                                if (isMuted) {
+                                  seatCenterIcon = const Icon(Icons.mic_off,
+                                      color: Colors.redAccent, size: 18);
+                                } else {
+                                  seatCenterIcon = const Icon(Icons.person,
+                                      color: primaryBrown, size: 20);
+                                }
+                              } else if (isMuted) {
+                                seatCenterIcon = const Icon(Icons.lock,
+                                    color: Colors.black26, size: 16);
+                              }
+
+                              String seatLabelText = "$seatIndex";
+                              Color seatLabelColor = Colors.black54;
+                              if (isTaken) {
+                                seatLabelText = _seats[seatIndex]!;
+                                seatLabelColor = primaryBrown;
+                              }
+
+                              return GestureDetector(
+                                onTap: () => _handleSeatTap(seatIndex),
+                                child: Column(
+                                  children: [
+                                    AnimatedBuilder(
+                                      animation: _pulseController,
+                                      builder: (context, _) {
+                                        final pulse = _pulseController.value;
+                                        Color ringColor = borderColor;
+                                        double ringWidth = 1.0;
+                                        Color glowColor =
+                                            Colors.black.withOpacity(0.04);
+
+                                        if (_isAllSeatsTargeted) {
+                                          ringColor = accentGold;
+                                          ringWidth = 2.5;
+                                          glowColor =
+                                              accentGold.withOpacity(0.4);
+                                        } else if (isSpeaking) {
+                                          ringColor = const Color(0xFF107C41);
+                                          ringWidth = 2.0 + pulse * 1.5;
+                                          glowColor = const Color(0xFF107C41)
+                                              .withOpacity(0.3);
+                                        }
+
+                                        final Widget plainSeatCircle = Container(
+                                          width: seatSize,
+                                          height: seatSize,
+                                          decoration: BoxDecoration(
+                                            shape: BoxShape.circle,
+                                            color: cardBg,
+                                            border: Border.all(
+                                              color: ringColor,
+                                              width: ringWidth,
+                                            ),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: glowColor,
+                                                blurRadius: 6 + (pulse * 4),
+                                                spreadRadius: 1,
+                                              ),
+                                            ],
+                                          ),
+                                          child: Center(
+                                            child: seatCenterIcon,
+                                          ),
+                                        );
+
+                                        if (isTaken &&
+                                            _mySeatIndex == seatIndex &&
+                                            _myVipFrameLevel > 0) {
+                                          return VipAvatarFrame(
+                                            vipLevel: _myVipFrameLevel,
+                                            size: seatSize,
+                                            showBadge: false,
+                                            child: Container(
+                                              color: cardBg,
+                                              child: Center(
+                                                  child: seatCenterIcon),
+                                            ),
+                                          );
+                                        }
+                                        return plainSeatCircle;
+                                      },
+                                    ),
+                                    const SizedBox(height: 3),
+                                    Text(
+                                      seatLabelText,
+                                      style: TextStyle(
+                                        color: seatLabelColor,
+                                        fontSize: 9.5,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    if (giftPoints > 0)
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 4, vertical: 1),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFFBF4E6),
+                                          borderRadius:
+                                              BorderRadius.circular(6),
+                                          border: Border.all(
+                                              color:
+                                                  accentGold.withOpacity(0.5)),
+                                        ),
+                                        child: Text(
+                                          "$giftPoints",
+                                          style: const TextStyle(
+                                              color: accentGold,
+                                              fontSize: 8.5,
+                                              fontWeight: FontWeight.bold),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                Container(
+                  height: 90,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  alignment: Alignment.bottomLeft,
+                  child: ListView.builder(
+                    reverse: true,
+                    itemCount: _chatMessages.length,
+                    itemBuilder: (context, index) {
+                      final msg =
+                          _chatMessages[_chatMessages.length - 1 - index];
+                      final isSystem = RegExp(
+                              r'^(System:|Announcement:|Red Packet)')
+                          .hasMatch(msg);
+
+                      Color msgBg = cardBg.withOpacity(0.9);
+                      Color msgColor = primaryBrown;
+                      FontWeight msgWeight = FontWeight.normal;
+                      if (isSystem) {
+                        msgBg = const Color(0xFFFBF4E6);
+                        msgColor = accentGold;
+                        msgWeight = FontWeight.bold;
+                      }
+
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 2.0),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: msgBg,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: borderColor),
+                            ),
+                            child: Text(
+                              msg,
+                              style: TextStyle(
+                                color: msgColor,
+                                fontSize: 11,
+                                fontWeight: msgWeight,
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: const BoxDecoration(
+                    color: cardBg,
+                    border: Border(top: BorderSide(color: borderColor)),
+                  ),
+                  child: Row(
+                    children: [
+                      IconButton(
+                        icon: Icon(
+                          bottomMicIcon,
+                          color: bottomMicColor,
+                        ),
+                        onPressed: _toggleMic,
+                      ),
+                      Expanded(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14),
+                          decoration: BoxDecoration(
+                            color: bgColor,
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: borderColor),
+                          ),
+                          child: TextField(
+                            controller: _msgController,
+                            style: const TextStyle(
+                                color: primaryBrown, fontSize: 13),
+                            decoration: const InputDecoration(
+                              hintText: "Say Hello...",
+                              hintStyle: TextStyle(color: Colors.black38),
+                              border: InputBorder.none,
+                            ),
+                            onSubmitted: (val) async {
+                              final txt = val.trim();
+                              if (txt.isNotEmpty) {
+                                _msgController.clear();
+
+                                await FirebaseFirestore.instance
+                                    .collection('rooms')
+                                    .doc(channelName)
+                                    .collection('chats')
+                                    .add(<String, dynamic>{
+                                  'sender': _myDisplayName,
+                                  'text': txt,
+                                  'timestamp': FieldValue.serverTimestamp(),
+                                });
+                              }
+                            },
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        icon:
+                            const Icon(Icons.sports_esports, color: accentGold),
+                        onPressed: () {
+                          showModalBottomSheet(
+                            context: context,
+                            backgroundColor: Colors.transparent,
+                            builder: (context) => Container(
+                              padding: const EdgeInsets.all(20.0),
+                              decoration: const BoxDecoration(
+                                color: bgColor,
+                                borderRadius: BorderRadius.vertical(
+                                    top: Radius.circular(24)),
+                              ),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Center(
+                                    child: Container(
+                                      width: 44,
+                                      height: 4,
+                                      decoration: BoxDecoration(
+                                          color: Colors.black26,
+                                          borderRadius:
+                                              BorderRadius.circular(2)),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 16),
+                                  const Text(
+                                    "Select Mini-Game",
+                                    style: TextStyle(
+                                      color: primaryBrown,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 17,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 16),
+                                  Container(
+                                    decoration: BoxDecoration(
+                                        color: cardBg,
+                                        borderRadius: BorderRadius.circular(16),
+                                        border: Border.all(color: borderColor)),
+                                    child: Column(
+                                      children: [
+                                        ListTile(
+                                          leading: const CircleAvatar(
+                                            backgroundColor: bgColor,
+                                            child: Text("🎡",
+                                                style: TextStyle(fontSize: 20)),
+                                          ),
+                                          title: const Text(
+                                            "Lucky Spin Wheel",
+                                            style: TextStyle(
+                                                color: primaryBrown,
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 13),
+                                          ),
+                                          trailing: const Icon(
+                                              Icons.chevron_right,
+                                              color: primaryBrown),
+                                          onTap: () {
+                                            Navigator.pop(context);
+                                            _recordMiniGamePlay('DRAGON');
+                                            showModalBottomSheet(
+                                              context: context,
+                                              isScrollControlled: true,
+                                              backgroundColor:
+                                                  Colors.transparent,
+                                              builder: (_) => LuckyWheelDialog(
+                                                currentCoins: _currentCoins,
+                                                onCoinsUpdated: (newCoins) {
+                                                  setState(() =>
+                                                      _currentCoins = newCoins);
+                                                  widget.onCoinUpdate(newCoins);
+                                                },
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                        const Divider(
+                                            height: 1, color: borderColor),
+                                        ListTile(
+                                          leading: const CircleAvatar(
+                                            backgroundColor: bgColor,
+                                            child: Text("🃏",
+                                                style: TextStyle(fontSize: 20)),
+                                          ),
+                                          title: const Text(
+                                            "Teen Patti (3 Cards)",
+                                            style: TextStyle(
+                                                color: primaryBrown,
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 13),
+                                          ),
+                                          trailing: const Icon(
+                                              Icons.chevron_right,
+                                              color: primaryBrown),
+                                          onTap: () {
+                                            Navigator.pop(context);
+                                            _recordMiniGamePlay('TEEN_PATTI');
+                                            showModalBottomSheet(
+                                              context: context,
+                                              isScrollControlled: true,
+                                              backgroundColor:
+                                                  Colors.transparent,
+                                              builder: (_) => TeenPattiDialog(
+                                                currentCoins: _currentCoins,
+                                                onCoinsUpdated: (newCoins) {
+                                                  setState(() =>
+                                                      _currentCoins = newCoins);
+                                                  widget.onCoinUpdate(newCoins);
+                                                },
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                      IconButton(
+                        icon:
+                            const Icon(Icons.card_giftcard, color: accentGold),
+                        onPressed: _openGiftSheet,
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.grid_view_rounded,
+                            color: primaryBrown),
+                        onPressed: () {
+                          showModalBottomSheet(
+                            context: context,
+                            backgroundColor: Colors.transparent,
+                            builder: (_) => BasicToolsSheet(
+                              settings: _roomSettings,
+                              onToggleRoomVoice: _toggleRoomVoice,
+                              onToggleAllMic: _toggleAllMic,
+                              onOpenPasswordDialog: _openPasswordDialog,
+                              onOpenAdminSheet: _openAdminSheet,
+                              onOpenRedPacket: _openRedPacketDialog,
+                              onOpenRoomSettings: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => RoomSettingsScreen(
+                                      settings: _roomSettings,
+                                      currentSeats: _seats,
+                                      onKickSeat: (idx) async {
+                                        setState(() {
+                                          _seats[idx] = null;
+                                          _seatUids[idx] = null;
+                                        });
+                                        await FirebaseFirestore.instance
+                                            .collection('rooms')
+                                            .doc(channelName)
+                                            .set(<String, dynamic>{
+                                          'seats': _seats,
+                                          'seatUids': _seatUids,
+                                        }, SetOptions(merge: true));
+                                      },
+                                      onUpdateSettings: (newSet) {
+                                        setState(() {
+                                          _roomSettings = newSet;
+                                          _activeSeatCount = newSet.seatCount;
+                                          _seats = List<String?>.filled(
+                                              _activeSeatCount, null);
+                                          _seatUids = List<String?>.filled(
+                                              _activeSeatCount, null);
+                                          _seatGiftsCount =
+                                              List<int>.filled(_activeSeatCount, 0);
+                                        });
+                                      },
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (_activeComboData != null)
+            Positioned(
+              left: 16,
+              top: 110,
+              child: Row(
+                children: [
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: cardBg,
+                      borderRadius: BorderRadius.circular(30),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.08),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                      border: Border.all(color: accentGold, width: 1.5),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const CircleAvatar(
+                          radius: 16,
+                          backgroundColor: bgColor,
+                          child:
+                              Icon(Icons.person, color: primaryBrown, size: 20),
+                        ),
+                        const SizedBox(width: 8),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              _activeComboData!.senderName,
+                              style: const TextStyle(
+                                color: primaryBrown,
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            Text(
+                              "Sent ${_activeComboData!.giftName} to ${_activeComboData!.targetName}",
+                              style: const TextStyle(
+                                color: accentGold,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          _activeComboData!.giftIcon,
+                          style: const TextStyle(fontSize: 26),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  ScaleTransition(
+                    scale: _comboScaleAnimation,
+                    child: Text(
+                      "x${_activeComboData!.comboCount}",
+                      style: const TextStyle(
+                        fontSize: 30,
+                        fontWeight: FontWeight.w900,
+                        fontStyle: FontStyle.italic,
+                        color: accentGold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          if (showVideoOverlay)
+            Positioned.fill(
+              child: IgnorePointer(
+                ignoring: true,
+                child: FittedBox(
+                  fit: BoxFit.cover,
+                  child: SizedBox(
+                    width: _videoController!.value.size.width,
+                    height: _videoController!.value.size.height,
+                    child: VideoPlayer(_videoController!),
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );
   }
 
-  Widget _buildSourceCard(String title, String value) {
-    return Container(
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE2D6C5)),
-      ),
+  Widget _buildHostSeat() {
+    final isTaken = _seats[0] != null;
+    bool isSpeaking = _speakingSeatIndices.contains(0);
+    if (_mySeatIndex == 0) {
+      if (!_isMicMuted) {
+        isSpeaking = true;
+      }
+    }
+    final hostGifts = _seatGiftsCount[0];
+
+    Widget hostCenterIcon =
+        const Icon(Icons.chair, color: accentGold, size: 30);
+    String hostLabel = "Host (1)";
+    if (isTaken) {
+      hostCenterIcon = const Icon(Icons.person, color: accentGold, size: 34);
+      hostLabel = _seats[0]!;
+    }
+
+    return GestureDetector(
+      onTap: () => _handleSeatTap(0),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text(title,
-              style: const TextStyle(color: Colors.black54, fontSize: 10.5),
-              maxLines: 1),
+          AnimatedBuilder(
+            animation: _pulseController,
+            builder: (context, _) {
+              final pulse = _pulseController.value;
+              Color ringColor = accentGold;
+              double ringWidth = 2.0;
+              Color glowColor = accentGold.withOpacity(0.25);
+
+              if (_isAllSeatsTargeted) {
+                ringColor = accentGold;
+                ringWidth = 3.0;
+                glowColor = accentGold.withOpacity(0.5);
+              } else if (isSpeaking) {
+                ringColor = const Color(0xFF107C41);
+                ringWidth = 2.5 + pulse * 1.5;
+                glowColor = const Color(0xFF107C41).withOpacity(0.4);
+              }
+
+              if (_mySeatIndex == 0 && _myVipFrameLevel > 0) {
+                return VipAvatarFrame(
+                  vipLevel: _myVipFrameLevel,
+                  size: 72,
+                  showBadge: false,
+                  child: Container(
+                    color: cardBg,
+                    child: Center(child: hostCenterIcon),
+                  ),
+                );
+              }
+
+              return Container(
+                width: 72,
+                height: 72,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: cardBg,
+                  border: Border.all(
+                    color: ringColor,
+                    width: ringWidth,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: glowColor,
+                      blurRadius: 10 + (pulse * 6),
+                      spreadRadius: 2,
+                    ),
+                  ],
+                ),
+                child: Center(
+                  child: hostCenterIcon,
+                ),
+              );
+            },
+          ),
           const SizedBox(height: 4),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Text(
-              value,
-              style: const TextStyle(
-                color: Color(0xFF3E2723),
-                fontWeight: FontWeight.bold,
-                fontSize: 14.5,
-              ),
+          Text(
+            hostLabel,
+            style: const TextStyle(
+              color: primaryBrown,
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
             ),
           ),
+          if (hostGifts > 0)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFBF4E6),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: accentGold.withOpacity(0.5)),
+              ),
+              child: Text(
+                "$hostGifts",
+                style: const TextStyle(
+                    color: accentGold,
+                    fontSize: 9,
+                    fontWeight: FontWeight.bold),
+              ),
+            ),
         ],
       ),
     );
