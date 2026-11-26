@@ -1877,7 +1877,7 @@ return Padding(
                                       height: 28,
                                       child: Switch(
                                         value: canCreate,
-                                        activeColor: kTealGreen,
+                                        activeThumbColor: kTealGreen,
                                         onChanged: (val) {
                                           Navigator.pop(ctx);
                                           _toggleHostCreateAgencyPermission(
@@ -2566,8 +2566,11 @@ if (myNumericId != 0) {
                   final int dia = (hData['diamonds'] as num?)?.toInt() ?? 0;
                   final int recGift =
                       (hData['receivedGiftPoints'] as num?)?.toInt() ?? 0;
+                  final int weekPts =
+                      (hData['weekTaskPoints'] as num?)?.toInt() ?? 0;
                   if (dia > pts) pts = dia;
                   if (recGift > pts) pts = recGift;
+                  if (weekPts > pts) pts = weekPts;
 
                   int tPts = (hData['todayTaskPoints'] as num?)?.toInt() ?? 0;
                   final int tGiftPts =
@@ -2576,6 +2579,13 @@ if (myNumericId != 0) {
 
                   totalHostPoints += pts;
                   todayHostPoints += tPts;
+                }
+                final int ownerPts =
+                    (userData['receivedGiftPoints'] as num?)?.toInt() ??
+                        (userData['points'] as num?)?.toInt() ??
+                        0;
+                if (hostsList.isEmpty && ownerPts > totalHostPoints) {
+                  totalHostPoints = ownerPts;
                 }
                 final int docTotalPts =
                     (agencyData['totalHostPoints'] as num?)?.toInt() ?? 0;
@@ -2650,12 +2660,21 @@ for (final sDoc in allChildDocs) {
                             final Map<String, dynamic> shData =
                                 rawSh is Map<String, dynamic> ? rawSh : {};
                             int sPts = (shData['points'] as num?)?.toInt() ?? 0;
-                            if (sPts == 0) {
-                              sPts = (shData['diamonds'] as num?)?.toInt() ?? 0;
-                            }
-                            final int stPts =
+                            final int sDia =
+                                (shData['diamonds'] as num?)?.toInt() ?? 0;
+                            final int sRec =
+                                (shData['receivedGiftPoints'] as num?)?.toInt() ??
+                                    0;
+                            if (sDia > sPts) sPts = sDia;
+                            if (sRec > sPts) sPts = sRec;
+
+                            int stPts =
                                 (shData['todayTaskPoints'] as num?)?.toInt() ??
                                     0;
+                            final int stGift =
+                                (shData['todayPoints'] as num?)?.toInt() ?? 0;
+                            if (stGift > stPts) stPts = stGift;
+
                             totalSubHostPoints += sPts;
                             todaySubHostPoints += stPts;
                           }
