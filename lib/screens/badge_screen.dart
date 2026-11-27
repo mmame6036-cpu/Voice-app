@@ -36,6 +36,9 @@ class _BadgeScreenState extends State<BadgeScreen>
   final User? _currentUser = FirebaseAuth.instance.currentUser;
   late TabController _tabController;
 
+  String _lastSyncedBadgeKey = "";
+  bool _isSyncingBadges = false;
+
   static const Color bgColor = Color(0xFFF5EFEB);
   static const Color cardBg = Colors.white;
   static const Color primaryBrown = Color(0xFF3E2723);
@@ -135,7 +138,7 @@ class _BadgeScreenState extends State<BadgeScreen>
       requirementKey: "wealthExp",
     ),
 
-// Activity Badges
+    // Activity Badges
     BadgeItem(
       id: "act_daily_login",
       name: "Faithful Fan",
@@ -223,7 +226,8 @@ class _BadgeScreenState extends State<BadgeScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: _badgeCategories.length, vsync: this);
+    _tabController =
+        TabController(length: _badgeCategories.length, vsync: this);
   }
 
   @override
@@ -238,7 +242,8 @@ class _BadgeScreenState extends State<BadgeScreen>
       SnackBar(
         content: Text(
           message,
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          style:
+              const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
         backgroundColor: primaryBrown,
         duration: const Duration(seconds: 2),
@@ -246,42 +251,169 @@ class _BadgeScreenState extends State<BadgeScreen>
     );
   }
 
-  bool _checkIsUnlocked(BadgeItem badge, Map<String, dynamic> userData) {
-    final manualUnlocked = (userData['unlockedBadges'] as List?) ?? [];
-    if (manualUnlocked.contains(badge.id)) return true;
-
+  int _resolveRequirementCurrentValue(
+      BadgeItem badge, Map<String, dynamic> userData) {
     if (badge.requirementKey == "hasAgency") {
-      final agencyId = (userData['agencyId'] ?? "").toString();
-      return agencyId.isNotEmpty;
+      final String agencyId = (userData['agencyId'] ?? "").toString().trim();
+      final bool isAgent = userData['isAgent'] == true;
+      return (agencyId.isNotEmpty || isAgent) ? 1 : 0;
     }
 
     if (badge.requirementKey == "isSeller") {
-      final role = (userData['sellerLevel'] ?? userData['role'] ?? "").toString();
-      return role.isNotEmpty;
+      final String sellerLvl =
+          (userData['sellerLevel'] ?? "").toString().trim();
+      final String role = (userData['role'] ?? "").toString().trim().toLowerCase();
+      final bool isSeller = userData['isCoinSeller'] == true ||
+          sellerLvl.isNotEmpty ||
+          role == 'coinseller' ||
+          role == 'agent';
+      return isSeller ? 1 : 0;
     }
 
-    final int userValue = (userData[badge.requirementKey] as num?)?.toInt() ?? 0;
-    return userValue >= badge.requiredValue;
+    if (badge.requirementKey == "totalGiftsSent") {
+      final int direct = (userData['totalGiftsSent'] as num?)?.toInt() ?? 0;
+      final int dailySent =
+          (userData['todayGiftSentCoins'] as num?)?.toInt() ?? 0;
+      final int wealthExp = (userData['wealthExp'] as num?)?.toInt() ?? 0;
+      if (direct > 0) return direct;
+      if (dailySent > 0 || wealthExp > 0) return 1;
+      return 0;
+    }
+
+    if (badge.requirementKey == "charmExp") {
+      final int charmExp = (userData['charmExp'] as num?)?.toInt() ?? 0;
+      final int receivedPts =
+          (userData['receivedGiftPoints'] as num?)?.toInt() ?? 0;
+      return charmExp > receivedPts ? charmExp : receivedPts;
+    }
+
+    if (badge.requirementKey == "charmLevel") {
+      final int charmLvl = (userData['charmLevel'] as num?)?.toInt() ?? 0;
+      final int charmExp = _resolveRequirementCurrentValue(
+        const BadgeItem(
+          id: "_charm",
+          name: "",
+          category: "",
+          description: "",
+          icon: Icons.star,
+          badgeColor: Colors.pink,
+          requiredValue: 0,
+          requirementKey: "charmExp",
+        ),
+        userData,
+      );
+      final int derivedLvl = charmExp > 0 ? ((charmExp ~/ 5000) + 1) : 0;
+      return charmLvl > derivedLvl ? charmLvl : derivedLvl;
+    }
+
+    if (badge.requirementKey == "wealthLevel") {
+      final int wealthLvl = (userData['wealthLevel'] as num?)?.toInt() ?? 0;
+      final int wealthExp = (userData['wealthExp'] as num?)?.toInt() ?? 0;
+      final int derivedLvl = wealthExp > 0 ? ((wealthExp ~/ 5000) + 1) : 0;
+      return wealthLvl > derivedLvl ? wealthLvl : derivedLvl;
+    }
+
+    if (badge.requirementKey == "todayTaskPoints") {
+      final int todayTask = (userData['todayTaskPoints'] as num?)?.toInt() ?? 0;
+      final int weekTask = (userData['weekTaskPoints'] as num?)?.toInt() ?? 0;
+      return todayTask > weekTask ? todayTask : weekTask;
+    }
+
+    return (userData[badge.requirementKey] as num?)?.toInt() ?? 0;
   }
 
-  Future<void> _toggleWearBadge(String badgeId, String currentEquippedBadge) async {
-    if (_currentUser == null) return;
-    final userRef = FirebaseFirestore.instance.collection('users').doc(_currentUser!.uid);
+  bool _checkIsUnlocked(BadgeItem badge, Map<String, dynamic> userData) {
+    final List<dynamic> manualUnlocked =
+        (userData['unlockedBadges'] as List?) ?? const [];
+    if (manualUnlocked.contains(badge.id)) return true;
 
-try {
+    final int currentVal = _resolveRequirementCurrentValue(badge, userData);
+    return currentVal >= badge.requiredValue;
+  }
+
+  Future<void> _syncUnlockedBadgesToFirestore(
+      Map<String, dynamic> userData) async {
+    if (_currentUser == null || _isSyncingBadges) return;
+
+    final List<dynamic> existingRaw =
+        (userData['unlockedBadges'] as List?) ?? const [];
+    final Set<String> mergedIds = existingRaw.map((e) => e.toString()).toSet();
+
+    for (final badge in _allBadges) {
+      if (_checkIsUnlocked(badge, userData)) {
+        mergedIds.add(badge.id);
+      }
+    }
+
+    final List<String> sortedIds = mergedIds.toList()..sort();
+    final String stateKey = "${_currentUser!.uid}:${sortedIds.join(',')}";
+    if (stateKey == _lastSyncedBadgeKey) return;
+
+    final Set<String> existingSet = existingRaw.map((e) => e.toString()).toSet();
+    final bool hasNewUnlock = sortedIds.any((id) => !existingSet.contains(id));
+
+    _lastSyncedBadgeKey = stateKey;
+    if (!hasNewUnlock) return;
+
+    _isSyncingBadges = true;
+    try {
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(_currentUser!.uid)
+          .set({
+        'unlockedBadges': sortedIds,
+        'unlockedBadgesCount': sortedIds.length,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    } catch (_) {
+    } finally {
+      _isSyncingBadges = false;
+    }
+  }
+
+  Future<void> _toggleWearBadge(
+      String badgeId, String currentEquippedBadge) async {
+    if (_currentUser == null) {
+      _showToast("Please sign in first.");
+      return;
+    }
+    final userRef =
+        FirebaseFirestore.instance.collection('users').doc(_currentUser!.uid);
+
+    try {
       if (currentEquippedBadge == badgeId) {
-        await userRef.set({'equippedBadge': ""}, SetOptions(merge: true));
+        await userRef.set({
+          'equippedBadge': "",
+          'equippedBadgeName': "",
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
         _showToast("Badge unequipped.");
       } else {
-        await userRef.set({'equippedBadge': badgeId}, SetOptions(merge: true));
-        _showToast("Badge equipped successfully!");
+        String badgeName = badgeId;
+        for (final b in _allBadges) {
+          if (b.id == badgeId) {
+            badgeName = b.name;
+            break;
+          }
+        }
+        await userRef.set({
+          'equippedBadge': badgeId,
+          'equippedBadgeName': badgeName,
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+        _showToast("$badgeName equipped successfully!");
       }
     } catch (e) {
       _showToast("Error updating badge: $e");
     }
   }
 
-  void _showBadgeDetailModal(BadgeItem badge, bool isUnlocked, bool isEquipped) {
+  void _showBadgeDetailModal(
+      BadgeItem badge, int currentVal, bool isUnlocked, bool isEquipped) {
+    final double progress = badge.requiredValue > 0
+        ? (currentVal / badge.requiredValue).clamp(0.0, 1.0)
+        : (isUnlocked ? 1.0 : 0.0);
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -311,7 +443,9 @@ try {
               height: 76,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: isUnlocked ? badge.badgeColor.withOpacity(0.18) : Colors.black12,
+                color: isUnlocked
+                    ? badge.badgeColor.withOpacity(0.18)
+                    : Colors.black12,
                 border: Border.all(
                   color: isUnlocked ? badge.badgeColor : Colors.black26,
                   width: 2,
@@ -338,44 +472,66 @@ try {
               style: const TextStyle(fontSize: 12, color: Colors.black54),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 14),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: cardBg,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(14),
                 border: Border.all(color: borderColor),
               ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
+              child: Column(
                 children: [
-                  Icon(
-                    isUnlocked ? Icons.check_circle : Icons.lock,
-                    color: isUnlocked ? const Color(0xFF107C41) : Colors.black45,
-                    size: 16,
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        isUnlocked ? "Status: Unlocked" : "Status: Locked",
+                        style: TextStyle(
+                          color: isUnlocked
+                              ? const Color(0xFF107C41)
+                              : Colors.black54,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      Text(
+                        "$currentVal / ${badge.requiredValue} (${(progress * 100).toInt()}%)",
+                        style: const TextStyle(
+                          color: primaryBrown,
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 8),
-                  Text(
-                    isUnlocked ? "Status: Unlocked" : "Status: Locked",
-                    style: TextStyle(
-                      color: isUnlocked ? const Color(0xFF107C41) : Colors.black54,
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
+                  const SizedBox(height: 8),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: LinearProgressIndicator(
+                      value: progress,
+                      minHeight: 7,
+                      backgroundColor: bgColor,
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        isUnlocked ? const Color(0xFF107C41) : accentGold,
+                      ),
                     ),
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 18),
             if (isUnlocked)
               SizedBox(
                 width: double.infinity,
                 height: 46,
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: isEquipped ? const Color(0xFFD32F2F) : buttonDark,
-
-shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    backgroundColor:
+                        isEquipped ? const Color(0xFFD32F2F) : buttonDark,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14)),
                     elevation: 0,
                   ),
                   onPressed: () {
@@ -384,7 +540,10 @@ shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                   },
                   child: Text(
                     isEquipped ? "Unequip Badge" : "Wear Badge",
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13),
                   ),
                 ),
               ),
@@ -404,7 +563,8 @@ shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: primaryBrown, size: 20),
+          icon:
+              const Icon(Icons.arrow_back_ios, color: primaryBrown, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
@@ -422,16 +582,28 @@ shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
             ? FirebaseFirestore.instance.collection('users').doc(uid).snapshots()
             : null,
         builder: (context, snapshot) {
-          final userData = (snapshot.hasData && snapshot.data!.exists)
-              ? snapshot.data!.data() as Map<String, dynamic>
-              : <String, dynamic>{};
+          final Map<String, dynamic> userData =
+              (snapshot.hasData && snapshot.data!.exists && snapshot.data!.data() is Map<String, dynamic>)
+                  ? snapshot.data!.data() as Map<String, dynamic>
+                  : <String, dynamic>{};
 
-          final String equippedBadgeId = userData['equippedBadge'] ?? "";
+          if (snapshot.hasData && snapshot.data!.exists) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              _syncUnlockedBadgesToFirestore(userData);
+            });
+          }
+
+          final String equippedBadgeId =
+              (userData['equippedBadge'] ?? "").toString();
 
           int unlockedTotal = 0;
+          String equippedBadgeName = "";
           for (final b in _allBadges) {
             if (_checkIsUnlocked(b, userData)) {
               unlockedTotal++;
+            }
+            if (b.id == equippedBadgeId) {
+              equippedBadgeName = b.name;
             }
           }
 
@@ -457,7 +629,8 @@ shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                         border: Border.all(color: borderColor),
                       ),
                       child: const Center(
-                        child: Icon(Icons.military_tech, color: accentGold, size: 30),
+                        child: Icon(Icons.military_tech,
+                            color: accentGold, size: 30),
                       ),
                     ),
                     const SizedBox(width: 14),
@@ -476,22 +649,37 @@ shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                           const SizedBox(height: 3),
                           Text(
                             "Unlocked: $unlockedTotal / ${_allBadges.length}",
-                            style: const TextStyle(color: Colors.black45, fontSize: 12),
+                            style: const TextStyle(
+                                color: Colors.black45, fontSize: 12),
                           ),
+                          if (equippedBadgeName.isNotEmpty) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              "Wearing: $equippedBadgeName",
+                              style: const TextStyle(
+                                color: Color(0xFF107C41),
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
                         ],
-
-),
+                      ),
                     ),
                     if (equippedBadgeId.isNotEmpty)
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
                           color: const Color(0xFF107C41),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: const Text(
                           "Active",
-                          style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold),
                         ),
                       ),
                   ],
@@ -515,8 +703,11 @@ shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                   ),
                   labelColor: Colors.white,
                   unselectedLabelColor: const Color(0xFF6D5446),
-                  labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5),
-                  tabs: _badgeCategories.map((cat) => Tab(text: cat)).toList(),
+                  labelStyle: const TextStyle(
+                      fontWeight: FontWeight.bold, fontSize: 12.5),
+                  tabs: _badgeCategories
+                      .map((cat) => Tab(text: cat))
+                      .toList(),
                 ),
               ),
 
@@ -527,8 +718,10 @@ shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 child: TabBarView(
                   controller: _tabController,
                   children: _badgeCategories.map((cat) {
-                    final categoryBadges = _allBadges.where((b) => b.category == cat).toList();
-                    return _buildBadgeGrid(categoryBadges, userData, equippedBadgeId);
+                    final categoryBadges =
+                        _allBadges.where((b) => b.category == cat).toList();
+                    return _buildBadgeGrid(
+                        categoryBadges, userData, equippedBadgeId);
                   }).toList(),
                 ),
               ),
@@ -552,15 +745,17 @@ shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         crossAxisCount: 2,
         mainAxisSpacing: 12,
         crossAxisSpacing: 12,
-        childAspectRatio: 0.85,
+        childAspectRatio: 0.82,
       ),
       itemBuilder: (context, idx) {
         final badge = badges[idx];
+        final int currentVal = _resolveRequirementCurrentValue(badge, userData);
         final bool isUnlocked = _checkIsUnlocked(badge, userData);
         final bool isEquipped = equippedBadgeId == badge.id;
 
         return GestureDetector(
-          onTap: () => _showBadgeDetailModal(badge, isUnlocked, isEquipped),
+          onTap: () =>
+              _showBadgeDetailModal(badge, currentVal, isUnlocked, isEquipped),
           child: Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
@@ -585,8 +780,7 @@ shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
               children: [
                 Stack(
                   alignment: Alignment.center,
-
-children: [
+                  children: [
                     Container(
                       width: 58,
                       height: 58,
@@ -614,12 +808,13 @@ children: [
                         child: CircleAvatar(
                           radius: 10,
                           backgroundColor: Colors.white,
-                          child: Icon(Icons.lock, color: Colors.black45, size: 12),
+                          child: Icon(Icons.lock,
+                              color: Colors.black45, size: 12),
                         ),
                       ),
                   ],
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 8),
                 Text(
                   badge.name,
                   style: TextStyle(
@@ -630,22 +825,29 @@ children: [
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
-                const SizedBox(height: 3),
+                const SizedBox(height: 2),
                 Text(
-                  isUnlocked ? "Unlocked" : "Locked",
+                  isUnlocked
+                      ? "Unlocked ($currentVal/${badge.requiredValue})"
+                      : "$currentVal / ${badge.requiredValue}",
                   style: TextStyle(
-                    color: isUnlocked ? const Color(0xFF107C41) : Colors.black38,
+                    color: isUnlocked
+                        ? const Color(0xFF107C41)
+                        : Colors.black45,
                     fontSize: 10.5,
                     fontWeight: FontWeight.w600,
                   ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 8),
                 GestureDetector(
                   onTap: isUnlocked
                       ? () => _toggleWearBadge(badge.id, equippedBadgeId)
                       : null,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
                     decoration: BoxDecoration(
                       color: isEquipped
                           ? accentGold
@@ -653,7 +855,9 @@ children: [
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
-                      isEquipped ? "Wearing" : (isUnlocked ? "Wear" : "Locked"),
+                      isEquipped
+                          ? "Wearing"
+                          : (isUnlocked ? "Wear" : "Locked"),
                       style: TextStyle(
                         color: isUnlocked ? Colors.white : Colors.black38,
                         fontSize: 11,
