@@ -17,6 +17,7 @@ import '../widgets/dragon_tiger_sheet.dart';
 import '../widgets/teen_patti_dialog.dart';
 import '../widgets/lucky_wheel_dialog.dart';
 import 'messages_screen.dart';
+import 'vip_screen.dart';
 import '../main.dart';
 
 class RoomChatMessage {
@@ -109,10 +110,12 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen>
   String _roomHostUid = "";
   String _roomAnnouncement = "";
   String _equippedFrame = "default";
+  int _myVipLevel = 0;
   String _myDisplayName = "";
   String _myAvatarUrl = "";
 
   final List<String> _seatFrames = List.filled(30, 'default');
+  final List<int> _seatVipLevels = List.filled(30, 0);
   final List<String> _seatAvatars = List.filled(30, '');
   final Map<String, ImageProvider> _avatarCache = {};
 
@@ -674,10 +677,24 @@ void _initWalletAndProfileSync() {
             _myAvatarUrl = profileAvatar;
           }
           final frame = (data['equippedFrame'] ?? 'default').toString();
+          final int rawVip = (data['vipLevel'] as num?)?.toInt() ?? 0;
+          final int activeFrameLvl =
+              (data['activeVipFrameLevel'] as num?)?.toInt() ?? rawVip;
+          final Timestamp? vipExp = data['vipExpiresAt'] as Timestamp?;
+          bool vipActive = false;
+          if (rawVip > 0) {
+            if (vipExp == null || vipExp.toDate().isAfter(DateTime.now())) {
+              vipActive = true;
+            }
+          }
+          final int effectiveVip = vipActive ? activeFrameLvl : 0;
+
           _equippedFrame = frame;
+          _myVipLevel = effectiveVip;
           if (_mySeatIndex != null) {
             _seats[_mySeatIndex!] = _effectiveUserName;
             _seatFrames[_mySeatIndex!] = frame;
+            _seatVipLevels[_mySeatIndex!] = effectiveVip;
             if (_myAvatarUrl.isNotEmpty) {
               _seatAvatars[_mySeatIndex!] = _myAvatarUrl;
             }
@@ -1715,6 +1732,10 @@ context: context,
             final int userLevel = (userData['level'] as num?)?.toInt() ??
                 ((wealthExp ~/ 1000) + 1);
             final int vipLevel = (userData['vipLevel'] as num?)?.toInt() ?? 0;
+            final int frameLevel =
+                (userData['activeVipFrameLevel'] as num?)?.toInt() ?? vipLevel;
+            final bool isAgency = userData['isAgent'] == true ||
+                (userData['agencyId'] ?? '').toString().trim().isNotEmpty;
             final String flag = (userData['flag'] ?? '🇪🇹').toString();
             final int dbNumId =
                 (userData['numericId'] as num?)?.toInt() ?? occupierNumId;
@@ -1838,6 +1859,25 @@ context: context,
                                 ),
                               ),
                             ),
+                            if (isAgency) ...[
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 2.5),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF2563EB),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: const Text(
+                                  "AGENCY",
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ],
                         ),
                         const SizedBox(height: 8),
@@ -2118,7 +2158,60 @@ shape: RoundedRectangleBorder(
                               ),
                             ),
                             if (!isMe && occupierUid.isNotEmpty) ...[
-                              const SizedBox(width: 8),
+                              const SizedBox(width: 6),
+                              SizedBox(
+                                height: 46,
+                                child: OutlinedButton(
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: kMintLive,
+                                    side: const BorderSide(
+                                        color: kMintLive, width: 1.2),
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 10),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(24),
+                                    ),
+                                  ),
+                                  onPressed: () async {
+                                    await FirebaseFirestore.instance
+                                        .collection('users')
+                                        .doc(occupierUid)
+                                        .set({
+                                      'followedCount':
+                                          FieldValue.increment(1),
+                                    }, SetOptions(merge: true)).catchError(
+                                            (_) {});
+                                    if (!_resolvedUid.startsWith('guest_')) {
+                                      await FirebaseFirestore.instance
+                                          .collection('users')
+                                          .doc(_resolvedUid)
+                                          .set({
+                                        'followingCount':
+                                            FieldValue.increment(1),
+                                      }, SetOptions(merge: true)).catchError(
+                                              (_) {});
+                                    }
+                                    if (mounted) {
+                                      ScaffoldMessenger.of(this.context)
+                                          .showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                              "Followed $resolvedProfileName!"),
+                                          duration: const Duration(seconds: 1),
+                                        ),
+                                      );
+                                    }
+                                  },
+                                  child: const Text(
+                                    "+ Follow",
+                                    style: TextStyle(
+                                      fontSize: 11.5,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 6),
                               SizedBox(
                                 height: 46,
                                 child: ElevatedButton.icon(
@@ -2126,7 +2219,7 @@ shape: RoundedRectangleBorder(
                                     backgroundColor: const Color(0xFF1BB3C8),
                                     foregroundColor: Colors.white,
                                     padding: const EdgeInsets.symmetric(
-                                        horizontal: 14),
+                                        horizontal: 12),
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(24),
                                     ),
@@ -2136,10 +2229,9 @@ shape: RoundedRectangleBorder(
                                   label: const Text(
                                     "Chat",
                                     style: TextStyle(
-                                      fontSize: 12.5,
+                                      fontSize: 12,
                                       fontWeight: FontWeight.w800,
-
-),
+                                    ),
                                   ),
                                   onPressed: () {
                                     Navigator.pop(ctx);
@@ -2157,7 +2249,7 @@ shape: RoundedRectangleBorder(
                                   },
                                 ),
                               ),
-                            ],
+                            ],                            ],
                             const SizedBox(width: 8),
                             Expanded(
                               child: SizedBox(
@@ -2195,38 +2287,55 @@ shape: RoundedRectangleBorder(
                   ),
                   Positioned(
                     top: -40,
-                    child: Container(
-                      width: 82,
-                      height: 82,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: const LinearGradient(
-                          colors: [kGoldBlackTop, kGoldBlackBottom],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                        border: Border.all(color: kGoldBright, width: 3.0),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.45),
-                            blurRadius: 10,
-                            offset: const Offset(0, 4),
+                    child: frameLevel > 0
+                        ? VipAvatarFrame(
+                            vipLevel: frameLevel,
+                            size: 82,
+                            showBadge: true,
+                            child: CircleAvatar(
+                              backgroundColor: kGoldBlackBottom,
+                              backgroundImage: profileAvatarProvider,
+                              child: profileAvatarProvider == null
+                                  ? const Icon(
+                                      Icons.person,
+                                      color: kGoldBright,
+                                      size: 40,
+                                    )
+                                  : null,
+                            ),
+                          )
+                        : Container(
+                            width: 82,
+                            height: 82,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              gradient: const LinearGradient(
+                                colors: [kGoldBlackTop, kGoldBlackBottom],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                              border:
+                                  Border.all(color: kGoldBright, width: 3.0),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.45),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: CircleAvatar(
+                              backgroundColor: Colors.transparent,
+                              backgroundImage: profileAvatarProvider,
+                              child: profileAvatarProvider == null
+                                  ? const Icon(
+                                      Icons.person,
+                                      color: kGoldBright,
+                                      size: 44,
+                                    )
+                                  : null,
+                            ),
                           ),
-                        ],
-                      ),
-                      child: CircleAvatar(
-                        backgroundColor: Colors.transparent,
-                        backgroundImage: profileAvatarProvider,
-                        child: profileAvatarProvider == null
-
-? const Icon(
-                                Icons.person,
-                                color: kGoldBright,
-                                size: 44,
-                              )
-                            : null,
-                      ),
-                    ),
                   ),
                 ],
               ),
@@ -3041,89 +3150,117 @@ Positioned(
                     ),
                   ),
                 ),
-              Container(
-                key: _seatKeys[index],
-                width: seatDimension,
-                height: seatDimension,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: LinearGradient(
-                    colors: isOccupied
-                        ? const [Color(0xFF2D2216), Color(0xFF120D08)]
-                        : (isHostSeat
-                            ? [
-                                const Color(0xFF4A330D),
-                                const Color(0xFF1E1405),
-                              ]
-                            : (isCrownSeat
-                                ? [
-                                    const Color(0xFF3A2A10).withOpacity(0.75),
-                                    const Color(0xFF1A1308).withOpacity(0.85),
-                                  ]
-                                : [
-                                    Colors.white.withOpacity(0.11),
-                                    Colors.black.withOpacity(0.32),
-                                  ])),
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  border: Border.all(
-                    color: frameColor,
-                    width: isSpeaking
-                        ? 2.6
-                        : (isHostSeat
-                            ? 2.2
-                            : (hasCustomFrame
-                                ? 2.4
-                                : (isCrownSeat
-                                    ? 1.8
-                                    : (isOccupied ? 1.9 : 1.2)))),
-                  ),
-                  boxShadow: [
-                    if (showGlow)
-                      BoxShadow(
-                        color: frameColor.withOpacity(0.5),
-                        blurRadius: 9,
-                        spreadRadius: 1,
-                      )
-                    else
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.35),
-                        blurRadius: 5,
-                        offset: const Offset(0, 2),
-                      ),
-                  ],
+              Builder(
+                builder: (context) {
+                  final int seatVip =
+                      (_mySeatIndex == index && _myVipLevel > 0)
+                          ? _myVipLevel
+                          : _seatVipLevels[index];
+                  final Widget innerSeatChild = seatAvatarImg != null
+                      ? ClipOval(
+                          child: Image(
+                            image: seatAvatarImg,
+                            width: seatDimension,
+                            height: seatDimension,
+                            fit: BoxFit.cover,
+                            gaplessPlayback: true,
+                          ),
+                        )
+                      : Center(
+                          child: Icon(
+                            isOccupied
+                                ? Icons.person
+                                : (isHostSeat
+                                    ? Icons.lock_person_rounded
+                                    : (_allMicsClosed
+                                        ? Icons.lock_outline
+                                        : Icons.chair_rounded)),
+                            color: isOccupied
+                                ? frameColor
+                                : (isHostSeat
+                                    ? kGoldBright
+                                    : (isCrownSeat
+                                        ? kGoldBright
+                                        : kGoldBright.withOpacity(0.72))),
+                            size: seatDimension * 0.45,
+                          ),
+                        );
 
-),
-                child: seatAvatarImg != null
-                    ? ClipOval(
-                        child: Image(
-                          image: seatAvatarImg,
-                          width: seatDimension,
-                          height: seatDimension,
-                          fit: BoxFit.cover,
-                          gaplessPlayback: true,
-                        ),
-                      )
-                    : Center(
-                        child: Icon(
-                          isOccupied
-                              ? Icons.person
-                              : (isHostSeat
-                                  ? Icons.lock_person_rounded
-                                  : (_allMicsClosed
-                                      ? Icons.lock_outline
-                                      : Icons.chair_rounded)),
-                          color: isOccupied
-                              ? frameColor
-                              : (isHostSeat
-                                  ? kGoldBright
-                                  : (isCrownSeat
-                                      ? kGoldBright
-                                      : kGoldBright.withOpacity(0.72))),
-                          size: seatDimension * 0.45,
+                  if (isOccupied && seatVip > 0) {
+                    return SizedBox(
+                      key: _seatKeys[index],
+                      width: seatDimension,
+                      height: seatDimension,
+                      child: VipAvatarFrame(
+                        vipLevel: seatVip,
+                        size: seatDimension,
+                        showBadge: false,
+                        child: Container(
+                          color: const Color(0xFF120D08),
+                          child: innerSeatChild,
                         ),
                       ),
+                    );
+                  }
+
+                  return Container(
+                    key: _seatKeys[index],
+                    width: seatDimension,
+                    height: seatDimension,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: LinearGradient(
+                        colors: isOccupied
+                            ? const [Color(0xFF2D2216), Color(0xFF120D08)]
+                            : (isHostSeat
+                                ? [
+                                    const Color(0xFF4A330D),
+                                    const Color(0xFF1E1405),
+                                  ]
+                                : (isCrownSeat
+                                    ? [
+                                        const Color(0xFF3A2A10)
+                                            .withOpacity(0.75),
+                                        const Color(0xFF1A1308)
+                                            .withOpacity(0.85),
+                                      ]
+                                    : [
+                                        Colors.white.withOpacity(0.11),
+                                        Colors.black.withOpacity(0.32),
+                                      ])),
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      border: Border.all(
+                        color: frameColor,
+                        width: isSpeaking
+                            ? 2.6
+                            : (isHostSeat
+                                ? 2.2
+                                : (hasCustomFrame
+                                    ? 2.4
+                                    : (isCrownSeat
+                                        ? 1.8
+                                        : (isOccupied ? 1.9 : 1.2)))),
+                      ),
+                      boxShadow: [
+                        if (showGlow)
+                          BoxShadow(
+                            color: frameColor.withOpacity(0.5),
+                            blurRadius: 9,
+                            spreadRadius: 1,
+                          )
+                        else
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.35),
+                            blurRadius: 5,
+                            offset: const Offset(0, 2),
+                          ),
+                      ],
+                    ),
+                    child: innerSeatChild,
+                  );
+                },
               ),
               if (isOccupied)
                 Positioned(
