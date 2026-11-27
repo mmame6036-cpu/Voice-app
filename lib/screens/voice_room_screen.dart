@@ -878,6 +878,7 @@ if (remCount == 1) {
           'numericId': _myAgoraUid > 0 ? _myAgoraUid : widget.userNumericId,
           'isMuted': _isMuted,
           'frame': _equippedFrame,
+          'vipLevel': _myVipLevel,
           'updatedAt': DateTime.now().millisecondsSinceEpoch,
         };
         if (_myAvatarUrl.isNotEmpty && _myAvatarUrl.length <= 350000) {
@@ -1000,6 +1001,7 @@ if (snapshot.exists && snapshot.data() != null) {
               final muted = entry['isMuted'] == true;
               final numId = (entry['numericId'] as num?)?.toInt() ?? 0;
               final frame = (entry['frame'] ?? 'default').toString();
+              final int entryVip = (entry['vipLevel'] as num?)?.toInt() ?? 0;
               final avatar = (entry['avatar'] ?? '').toString();
               _seats[i] = uid == _resolvedUid ? _effectiveUserName : name;
 
@@ -1007,6 +1009,8 @@ _seatUids[i] = uid;
               _seatNumericIds[i] = numId;
               _seatMutes[i] = muted;
               _seatFrames[i] = frame;
+              _seatVipLevels[i] =
+                  uid == _resolvedUid ? _myVipLevel : entryVip;
               _seatGifts[i] = max(dbGifts, _seatGifts[i]);
               if (uid == _resolvedUid && _myAvatarUrl.isNotEmpty) {
                 _seatAvatars[i] = _myAvatarUrl;
@@ -1028,6 +1032,7 @@ _seatUids[i] = uid;
                 _seatGifts[i] = dbGifts;
                 _seatMutes[i] = false;
                 _seatFrames[i] = 'default';
+                _seatVipLevels[i] = 0;
                 _seatAvatars[i] = '';
                 _speakingSeatIndices.remove(i);
               }
@@ -1329,6 +1334,7 @@ final String cleanChannelId = widget.roomId.trim();
                 'name': uName,
                 'numericId': activeNumId,
                 'isMuted': mute,
+                'vipLevel': RoomSessionManager.instance.isMuted ? 0 : 6,
                 'updatedAt': DateTime.now().millisecondsSinceEpoch,
               }
             }
@@ -2249,7 +2255,7 @@ shape: RoundedRectangleBorder(
                                   },
                                 ),
                               ),
-                            ],                         
+                            ],
                             const SizedBox(width: 8),
                             Expanded(
                               child: SizedBox(
@@ -2395,6 +2401,7 @@ shape: RoundedRectangleBorder(
       _seatUids[index] = _resolvedUid;
       _seatNumericIds[index] = activeNumId;
       _seatFrames[index] = _equippedFrame;
+      _seatVipLevels[index] = _myVipLevel;
       _seatAvatars[index] = _myAvatarUrl;
       _mySeatIndex = index;
       _isMuted = shouldMuteOnJoin;
@@ -2412,6 +2419,7 @@ shape: RoundedRectangleBorder(
       'numericId': activeNumId,
       'isMuted': shouldMuteOnJoin,
       'frame': _equippedFrame,
+      'vipLevel': _myVipLevel,
       'updatedAt': DateTime.now().millisecondsSinceEpoch,
     };
     if (_myAvatarUrl.isNotEmpty && _myAvatarUrl.length <= 350000) {
@@ -2469,6 +2477,7 @@ if (_mySeatIndex != null) {
         'numericId': _myAgoraUid > 0 ? _myAgoraUid : widget.userNumericId,
         'isMuted': _isMuted,
         'frame': _equippedFrame,
+        'vipLevel': _myVipLevel,
         'updatedAt': DateTime.now().millisecondsSinceEpoch,
       };
       if (_myAvatarUrl.isNotEmpty && _myAvatarUrl.length <= 350000) {
@@ -3187,10 +3196,8 @@ Positioned(
                         );
 
                   if (isOccupied && seatVip > 0) {
-                    return SizedBox(
+                    return KeyedSubtree(
                       key: _seatKeys[index],
-                      width: seatDimension,
-                      height: seatDimension,
                       child: VipAvatarFrame(
                         vipLevel: seatVip,
                         size: seatDimension,
