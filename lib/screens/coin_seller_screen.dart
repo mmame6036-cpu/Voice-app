@@ -1,10 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:http/http.dart' as http;
+import 'package:image_picker/image_picker.dart';
+import 'vip_screen.dart';
 
 bool _gt(num a, num b) {
   return a.compareTo(b).sign == 1;
@@ -117,6 +120,27 @@ class _CoinSellerScreenState extends State with SingleTickerProviderStateMixin {
   void _copyToClipboard(String text) {
     Clipboard.setData(ClipboardData(text: text));
     _showToast("Copied: $text");
+  }
+
+  ImageProvider? _resolveAvatarProvider(String? avatarUrl) {
+    if (avatarUrl == null) return null;
+    final String clean = avatarUrl.trim();
+    if (clean.isEmpty) return null;
+    if (clean.startsWith('data:image')) {
+      try {
+        final int commaIdx = clean.indexOf(',');
+        if (commaIdx != -1) {
+          final Uint8List bytes = base64Decode(clean.substring(commaIdx + 1));
+          return MemoryImage(bytes);
+        }
+      } catch (_) {
+        return null;
+      }
+    }
+    if (clean.startsWith('http')) {
+      return NetworkImage(clean);
+    }
+    return null;
   }
 
   void _showToast(String message) {
@@ -1066,6 +1090,26 @@ final String uName = _readStr(userData, 'name');
 
           final int coins = (userData['coins'] as num?)?.toInt() ?? 0;
           final int points = (userData['points'] as num?)?.toInt() ?? 0;
+          final String avatarStr =
+              _readStr(userData, 'avatarUrl').isNotEmpty
+                  ? _readStr(userData, 'avatarUrl')
+                  : _readStr(userData, 'photoURL');
+          final ImageProvider? sellerAvatarImg =
+              _resolveAvatarProvider(avatarStr);
+          final int rawVipLvl = (userData['vipLevel'] as num?)?.toInt() ?? 0;
+          final int rawFrameLvl =
+              (userData['activeVipFrameLevel'] as num?)?.toInt() ?? rawVipLvl;
+          final dynamic vipExpRaw = userData['vipExpiresAt'];
+          bool vipIsActive = false;
+          if (rawVipLvl > 0) {
+            if (vipExpRaw == null) {
+              vipIsActive = true;
+            } else if (vipExpRaw is Timestamp &&
+                vipExpRaw.toDate().isAfter(DateTime.now())) {
+              vipIsActive = true;
+            }
+          }
+          final int activeSellerVipFrame = vipIsActive ? rawFrameLvl : 0;
           final int totalCoinsSold =
               (userData['totalCoinsSold'] as num?)?.toInt() ?? 0;
           final int maxSingleRechargeUsd =
@@ -1109,17 +1153,42 @@ final String uName = _readStr(userData, 'name');
                   children: [
                     Row(
                       children: [
-                        Container(
-                          width: 54,
-                          height: 54,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF1F2937),
-                            shape: BoxShape.circle,
-                            border: Border.all(color: accentGold, width: 2),
-                          ),
-                          child: const Icon(Icons.storefront,
-                              color: accentGold, size: 26),
-                        ),
+                        activeSellerVipFrame > 0
+                            ? VipAvatarFrame(
+                                vipLevel: activeSellerVipFrame,
+                                size: 54,
+                                showBadge: false,
+                                child: CircleAvatar(
+                                  backgroundColor: const Color(0xFF1F2937),
+                                  backgroundImage: sellerAvatarImg,
+                                  child: sellerAvatarImg == null
+                                      ? const Icon(Icons.storefront,
+                                          color: accentGold, size: 24)
+                                      : null,
+                                ),
+                              )
+                            : Container(
+                                width: 54,
+                                height: 54,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF1F2937),
+                                  shape: BoxShape.circle,
+                                  border:
+                                      Border.all(color: accentGold, width: 2),
+                                ),
+                                child: sellerAvatarImg != null
+                                    ? ClipOval(
+                                        child: Image(
+                                          image: sellerAvatarImg,
+                                          width: 50,
+                                          height: 50,
+                                          fit: BoxFit.cover,
+                                          gaplessPlayback: true,
+                                        ),
+                                      )
+                                    : const Icon(Icons.storefront,
+                                        color: accentGold, size: 26),
+                              ),
                         const SizedBox(width: 12),
                         Expanded(
                           child: Column(
@@ -2233,9 +2302,16 @@ class _BinanceCheckoutScreenState extends State with WidgetsBindingObserver {
     return widget as _BinanceCheckoutScreen;
   }
 
+  final TextEditingController _txIdController = TextEditingController();
+  final ImagePicker _imagePicker = ImagePicker();
+
   bool _awaitingBinanceReturn = false;
   bool _isCheckingVerification = false;
+  bool _isSubmittingProof = false;
+  bool _proofSubmittedToDashboard = false;
   bool _orderCompleted = false;
+  String _screenshotBase64 = "";
+  String _screenshotName = "";
   StreamSubscription? _orderDocSub;
 
   @override
@@ -2249,6 +2325,7 @@ class _BinanceCheckoutScreenState extends State with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _orderDocSub?.cancel();
+    _txIdController.dispose();
     super.dispose();
   }
 
@@ -2265,6 +2342,12 @@ class _BinanceCheckoutScreenState extends State with WidgetsBindingObserver {
 
       final data = doc.data()!;
       final String status = (data['status'] ?? '').toString().toUpperCase();
+      if (status == 'PROOF_SUBMITTED' && !_proofSubmittedToDashboard) {
+        setState(() {
+          _proofSubmittedToDashboard = true;
+        });
+      }
+
       bool isPaid = false;
       if (status == 'VERIFIED_SUCCESS') isPaid = true;
       if (status == 'PAID') isPaid = true;
@@ -2303,12 +2386,138 @@ class _BinanceCheckoutScreenState extends State with WidgetsBindingObserver {
         backgroundColor: const Color(0xFF1F2937),
         duration: const Duration(seconds: 4),
         content: Text(
-          "Binance Pay ID (${_w.binancePayId}) copied! Open Binance app to send ${_w.priceLabel} USDT, then return here.",
+          "Binance Pay ID (${_w.binancePayId}) copied! Open Binance app to send ${_w.priceLabel} USDT, then submit your TxID or screenshot below.",
           style:
               const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
         ),
       ),
     );
+  }
+
+  Future _pickPaymentScreenshot() async {
+    try {
+      final XFile? picked = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 900,
+        maxHeight: 900,
+        imageQuality: 72,
+      );
+      if (picked == null) return;
+      final Uint8List bytes = await picked.readAsBytes();
+      if (_gt(bytes.length, 850000)) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("Image is too large. Please pick a smaller screenshot."),
+            ),
+          );
+        }
+        return;
+      }
+      final String encoded = "data:image/jpeg;base64,${base64Encode(bytes)}";
+      if (mounted) {
+        setState(() {
+          _screenshotBase64 = encoded;
+          _screenshotName = picked.name;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Could not select screenshot: $e")),
+        );
+      }
+    }
+  }
+
+  Future _submitProofToDashboard() async {
+    if (_isSubmittingProof) return;
+    final String txId = _txIdController.text.trim();
+    if (txId.isEmpty && _screenshotBase64.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: Color(0xFFE11D48),
+          content: Text(
+            "Please enter your Binance Order/TxID or upload the payment screenshot first.",
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+          ),
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _isSubmittingProof = true;
+    });
+
+    try {
+      final db = FirebaseFirestore.instance;
+      final String effectiveRef = txId.isNotEmpty ? txId : _w.orderId;
+
+      final Map<String, dynamic> payload = {
+        'orderRef': _d(_w.orderId),
+        'orderId': _d(_w.orderId),
+        'uid': _d(_w.userUid),
+        'userUid': _d(_w.userUid),
+        'sellerNumericId': _d(_w.userNumericId),
+        'userNumericId': _d(_w.userNumericId),
+        'paymentMethod': _d('Binance Pay (USDT)'),
+        'currency': _d('USDT'),
+        'binancePayId': _d(_w.binancePayId),
+        'binanceTxId': _d(effectiveRef),
+        'transactionId': _d(effectiveRef),
+        'proofScreenshot': _d(_screenshotBase64),
+        'screenshotUrl': _d(_screenshotBase64),
+        'coins': _d(_w.coins),
+        'usdAmount': _d(_w.usdAmount),
+        'amount': _d(_w.usdAmount),
+        'credited': _d(false),
+        'status': _d('PROOF_SUBMITTED'),
+        'proofSubmittedAt': _d(FieldValue.serverTimestamp()),
+        'timestamp': _d(FieldValue.serverTimestamp()),
+      };
+
+      final batch = db.batch();
+      batch.set(
+        db.collection('coin_recharges').doc(_w.orderId),
+        payload,
+        SetOptions(merge: true),
+      );
+      batch.set(
+        db.collection('recharge_requests').doc(_w.orderId),
+        payload,
+        SetOptions(merge: true),
+      );
+      await batch.commit();
+
+      if (!mounted) return;
+      setState(() {
+        _proofSubmittedToDashboard = true;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: Color(0xFF14B8A6),
+          duration: Duration(seconds: 4),
+          content: Text(
+            "Payment proof sent to Admin Dashboard! Coins will be added once verified.",
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          ),
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Failed to send proof: $e")),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSubmittingProof = false;
+        });
+      }
+    }
   }
 
   Future _verifyWithServerAndFirestore() async {
@@ -2320,15 +2529,17 @@ class _BinanceCheckoutScreenState extends State with WidgetsBindingObserver {
 
     bool isVerifiedPaid = false;
     bool serverCredited = false;
+    final String enteredTx = _txIdController.text.trim();
+    final String verifyId = enteredTx.isNotEmpty ? enteredTx : _w.orderId;
 
-try {
+    try {
       final response = await http
           .post(
             Uri.parse("${_w.serverUrl}/api/verify-payment"),
             headers: {"Content-Type": "application/json"},
             body: jsonEncode({
               "orderRef": _w.orderId,
-              "txnId": _w.orderId,
+              "txnId": verifyId,
               "userUid": _w.userUid,
               "targetNumericId": int.tryParse(_w.userNumericId) ?? 0,
               "coins": _w.coins,
@@ -2371,11 +2582,14 @@ try {
 
     if (!isVerifiedPaid) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          backgroundColor: Color(0xFF374151),
+        SnackBar(
+          backgroundColor: const Color(0xFF374151),
           content: Text(
-            "Payment not received yet. Complete your USDT payment in Binance first.",
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+            _proofSubmittedToDashboard
+                ? "Proof already sent to Admin Dashboard. Waiting for approval..."
+                : "Not auto-confirmed yet. Enter TxID or upload screenshot and tap 'Send Proof to Dashboard'.",
+            style: const TextStyle(
+                color: Colors.white, fontWeight: FontWeight.w600),
           ),
         ),
       );
@@ -2392,6 +2606,7 @@ try {
     try {
       final db = FirebaseFirestore.instance;
       final orderRef = db.collection('coin_recharges').doc(_w.orderId);
+      final reqRef = db.collection('recharge_requests').doc(_w.orderId);
       final userRef = db.collection('users').doc(_w.userUid);
 
       await db.runTransaction((tx) async {
@@ -2401,6 +2616,16 @@ try {
 
         tx.set(
           orderRef,
+          {
+            'status': _d('VERIFIED_SUCCESS'),
+            'credited': _d(true),
+            'verifiedAt': _d(FieldValue.serverTimestamp()),
+          },
+          SetOptions(merge: true),
+        );
+
+        tx.set(
+          reqRef,
           {
             'status': _d('VERIFIED_SUCCESS'),
             'credited': _d(true),
@@ -2441,8 +2666,7 @@ try {
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           title: const Row(
             children: [
-
-Icon(Icons.check_circle_rounded,
+              Icon(Icons.check_circle_rounded,
                   color: Color(0xFF14B8A6), size: 26),
               SizedBox(width: 8),
               Text(
@@ -2532,13 +2756,14 @@ Icon(Icons.check_circle_rounded,
         ),
         centerTitle: true,
       ),
-      body: Padding(
+      body: SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(18),
@@ -2547,19 +2772,18 @@ Icon(Icons.check_circle_rounded,
               child: Column(
                 children: [
                   const CircleAvatar(
-                    radius: 26,
+                    radius: 24,
                     backgroundColor: Color(0xFFF3BA2F),
                     child: Icon(Icons.currency_bitcoin,
-                        color: Colors.white, size: 32),
+                        color: Colors.white, size: 30),
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 8),
                   const Text(
                     "Binance",
                     style: TextStyle(
                       color: Color(0xFF1A1A1A),
                       fontSize: 17,
-
-fontWeight: FontWeight.bold,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -2571,11 +2795,11 @@ fontWeight: FontWeight.bold,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
-                  const SizedBox(height: 18),
+                  const SizedBox(height: 14),
                   Container(
-                    width: 210,
-                    height: 210,
-                    padding: const EdgeInsets.all(16),
+                    width: 190,
+                    height: 180,
+                    padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
                       color: const Color(0xFFFAFAFA),
                       borderRadius: BorderRadius.circular(16),
@@ -2586,12 +2810,12 @@ fontWeight: FontWeight.bold,
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         const Icon(Icons.qr_code_2_rounded,
-                            size: 96, color: Color(0xFF1F2937)),
-                        const SizedBox(height: 8),
+                            size: 84, color: Color(0xFF1F2937)),
+                        const SizedBox(height: 6),
                         const Text(
                           "Binance Pay ID",
-                          style: TextStyle(
-                              color: Colors.black54, fontSize: 11),
+                          style:
+                              TextStyle(color: Colors.black54, fontSize: 11),
                         ),
                         const SizedBox(height: 2),
                         GestureDetector(
@@ -2623,7 +2847,7 @@ fontWeight: FontWeight.bold,
                       ],
                     ),
                   ),
-                  const SizedBox(height: 22),
+                  const SizedBox(height: 16),
                   const Text(
                     "Order ID",
                     style: TextStyle(color: Colors.black54, fontSize: 12),
@@ -2644,9 +2868,8 @@ fontWeight: FontWeight.bold,
                             _w.orderId,
                             style: const TextStyle(
                               color: Color(0xFF1A1A1A),
-                              fontSize: 13.5,
-
-fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
                             ),
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -2660,9 +2883,9 @@ fontWeight: FontWeight.bold,
                 ],
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 10),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(14),
@@ -2686,41 +2909,196 @@ fontWeight: FontWeight.bold,
                 ],
               ),
             ),
-            const Spacer(),
-            if (_awaitingBinanceReturn) ...[
-              SizedBox(
-                width: double.infinity,
-                height: 46,
-                child: OutlinedButton(
-                  style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: Color(0xFF14B8A6), width: 1.5),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(24)),
-                  ),
-                  onPressed: _isCheckingVerification
-                      ? null
-                      : () {
-                          _verifyWithServerAndFirestore();
-                        },
-                  child: _isCheckingVerification
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(
-                              strokeWidth: 2, color: Color(0xFF14B8A6)),
-                        )
-                      : const Text(
-                          "Verify Payment Status",
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                  color: _proofSubmittedToDashboard
+                      ? const Color(0xFF14B8A6)
+                      : const Color(0xFFE5E7EB),
+                  width: _proofSubmittedToDashboard ? 1.5 : 1.0,
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.receipt_long_rounded,
+                          color: Color(0xFF14B8A6), size: 20),
+                      const SizedBox(width: 8),
+                      const Expanded(
+                        child: Text(
+                          "Submit Payment Proof to Dashboard",
                           style: TextStyle(
-                            color: Color(0xFF14B8A6),
+                            color: Color(0xFF1A1A1A),
                             fontSize: 14,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
-                ),
+                      ),
+                      if (_proofSubmittedToDashboard)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFE6FFFA),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Text(
+                            "Sent",
+                            style: TextStyle(
+                              color: Color(0xFF14B8A6),
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  const Text(
+                    "After sending USDT in Binance, enter your Binance Order/TxID or upload your payment screenshot below so Admin can approve your coins:",
+                    style: TextStyle(
+                        color: Colors.black54, fontSize: 11.5, height: 1.35),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _txIdController,
+                    style: const TextStyle(
+                        color: Color(0xFF1A1A1A),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600),
+                    decoration: InputDecoration(
+                      labelText: "Binance Order ID / TxID",
+                      hintText: "Paste Binance payment Order ID or TxID",
+                      hintStyle:
+                          const TextStyle(color: Colors.black38, fontSize: 12),
+                      filled: true,
+                      fillColor: const Color(0xFFF5F7F9),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  GestureDetector(
+                    onTap: _pickPaymentScreenshot,
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF5F7F9),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: _screenshotBase64.isNotEmpty
+                              ? const Color(0xFF14B8A6)
+                              : const Color(0xFFD1D5DB),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            _screenshotBase64.isNotEmpty
+                                ? Icons.check_circle_rounded
+                                : Icons.add_photo_alternate_rounded,
+                            color: const Color(0xFF14B8A6),
+                            size: 22,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              _screenshotBase64.isNotEmpty
+                                  ? "Screenshot Selected: $_screenshotName"
+                                  : "Upload Payment Screenshot (Gallery)",
+                              style: TextStyle(
+                                color: _screenshotBase64.isNotEmpty
+                                    ? const Color(0xFF14B8A6)
+                                    : const Color(0xFF1A1A1A),
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w700,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 44,
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF1F2937),
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14)),
+                      ),
+                      onPressed:
+                          _isSubmittingProof ? null : _submitProofToDashboard,
+                      icon: _isSubmittingProof
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2, color: Colors.white),
+                            )
+                          : const Icon(Icons.send_rounded, size: 17),
+                      label: Text(
+                        _proofSubmittedToDashboard
+                            ? "Update Proof on Dashboard"
+                            : "Send Proof to Admin Dashboard",
+                        style: const TextStyle(
+                            fontSize: 13.5, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 10),
-            ],
+            ),
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              height: 46,
+              child: OutlinedButton(
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Color(0xFF14B8A6), width: 1.5),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(24)),
+                ),
+                onPressed: _isCheckingVerification
+                    ? null
+                    : () {
+                        _verifyWithServerAndFirestore();
+                      },
+                child: _isCheckingVerification
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Color(0xFF14B8A6)),
+                      )
+                    : const Text(
+                        "Verify Payment Status",
+                        style: TextStyle(
+                          color: Color(0xFF14B8A6),
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+              ),
+            ),
+            const SizedBox(height: 10),
             SizedBox(
               width: double.infinity,
               height: 50,
@@ -2739,7 +3117,7 @@ fontWeight: FontWeight.bold,
                 ),
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 18),
           ],
         ),
       ),
