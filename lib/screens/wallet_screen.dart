@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:http/http.dart' as http;
+import 'package:image_picker/image_picker.dart';
 
 class WalletScreen extends StatefulWidget {
   final int currentCoins;
@@ -30,6 +32,7 @@ class _WalletScreenState extends State<WalletScreen> {
   int _todayPoints = 0;
 
   int _selectedPackageIdx = 0;
+  int _selectedPayMethod = 0; // 0 = Binance Pay, 1 = USDT (TRC20)
   String _selectedCountry = "All country";
   late TextEditingController _userIdController;
   bool _isProcessingPayment = false;
@@ -382,114 +385,350 @@ throw Exception(errMsg);
       paymentTarget = checkoutUrl;
     }
 
+    final TextEditingController txIdCtrl = TextEditingController();
+    final ImagePicker picker = ImagePicker();
+    String screenshotBase64 = "";
+    String screenshotName = "";
+    bool isSubmittingProof = false;
+    bool proofSent = false;
+
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: kCardWhite,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-          side: const BorderSide(color: kTealAccent, width: 1.4),
-        ),
-        title: const Text(
-          "Complete Binance Payment",
-          style: TextStyle(
-              color: kTextDark, fontWeight: FontWeight.bold, fontSize: 17),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              "Send exact $priceStr USDT for 🪙 $coinsToAdd Coins.",
-              style: const TextStyle(color: kTextMuted, fontSize: 13),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              "Order Ref: $orderRef",
-              style: const TextStyle(
-                  color: kTealAccent,
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.bold),
-            ),
-            if (paymentTarget.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: kPageBg,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: Colors.black12),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            "Binance Pay ID:",
-                            style: TextStyle(color: kTextMuted, fontSize: 10),
-                          ),
-                          Text(
-                            paymentTarget,
-                            style: const TextStyle(
-                                color: kTextDark,
-                                fontSize: 14,
-                                fontWeight: FontWeight.bold),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.copy,
-                          color: kTealAccent, size: 18),
-                      onPressed: () {
-                        Clipboard.setData(ClipboardData(text: paymentTarget));
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text("Copied to clipboard!")),
-                        );
-                      },
-                    ),
-
-],
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDlgState) => AlertDialog(
+          backgroundColor: kCardWhite,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+            side: const BorderSide(color: kTealAccent, width: 1.4),
+          ),
+          title: Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  "Complete Binance Payment",
+                  style: TextStyle(
+                      color: kTextDark,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16.5),
                 ),
               ),
+              if (proofSent)
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE6FFFA),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Text(
+                    "Sent",
+                    style: TextStyle(
+                        color: kTealAccent,
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold),
+                  ),
+                ),
             ],
-            const SizedBox(height: 10),
-            const Text(
-              "Order sent to Admin Dashboard. After sending USDT in Binance app, tap 'Verify Payment' below.",
-              style: TextStyle(color: kTextMuted, fontSize: 11.5),
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  "Send exact $priceStr USDT for 🪙 $coinsToAdd Coins.",
+                  style: const TextStyle(color: kTextMuted, fontSize: 13),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  "Order Ref: $orderRef",
+                  style: const TextStyle(
+                      color: kTealAccent,
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.bold),
+                ),
+                if (paymentTarget.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: kPageBg,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.black12),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _selectedPayMethod == 1
+                                    ? "USDT (TRC20) / Binance Pay ID:"
+                                    : "Binance Pay ID:",
+                                style: const TextStyle(
+                                    color: kTextMuted, fontSize: 10),
+                              ),
+                              Text(
+                                paymentTarget,
+                                style: const TextStyle(
+                                    color: kTextDark,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.bold),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.copy,
+                              color: kTealAccent, size: 18),
+                          onPressed: () {
+                            Clipboard.setData(
+                                ClipboardData(text: paymentTarget));
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                  content: Text("Copied to clipboard!")),
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 12),
+                const Text(
+                  "Submit Payment Proof to Dashboard",
+                  style: TextStyle(
+                      color: kTextDark,
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: txIdCtrl,
+                  style: const TextStyle(color: kTextDark, fontSize: 12.5),
+                  decoration: InputDecoration(
+                    hintText: "Enter Binance Order ID / TxID",
+                    hintStyle:
+                        const TextStyle(color: kTextMuted, fontSize: 11.5),
+                    filled: true,
+                    fillColor: kPageBg,
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 10),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                GestureDetector(
+                  onTap: () async {
+                    try {
+                      final XFile? picked = await picker.pickImage(
+                        source: ImageSource.gallery,
+                        maxWidth: 900,
+                        maxHeight: 900,
+                        imageQuality: 72,
+                      );
+                      if (picked == null) return;
+                      final Uint8List bytes = await picked.readAsBytes();
+                      if (bytes.length > 850000) {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                                content: Text(
+                                    "Image too large. Pick a smaller screenshot.")),
+                          );
+                        }
+                        return;
+                      }
+                      setDlgState(() {
+                        screenshotBase64 =
+                            "data:image/jpeg;base64,${base64Encode(bytes)}";
+                        screenshotName = picked.name;
+                      });
+                    } catch (_) {}
+                  },
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: kPageBg,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: screenshotBase64.isNotEmpty
+                            ? kTealAccent
+                            : Colors.black12,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          screenshotBase64.isNotEmpty
+                              ? Icons.check_circle
+                              : Icons.add_photo_alternate_outlined,
+                          color: kTealAccent,
+                          size: 19,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            screenshotBase64.isNotEmpty
+                                ? "Screenshot: $screenshotName"
+                                : "Upload Payment Screenshot",
+                            style: TextStyle(
+                              color: screenshotBase64.isNotEmpty
+                                  ? kTealAccent
+                                  : kTextDark,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  height: 38,
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: kTextDark,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                    ),
+                    onPressed: isSubmittingProof
+                        ? null
+                        : () async {
+                            final String tx = txIdCtrl.text.trim();
+                            if (tx.isEmpty && screenshotBase64.isEmpty) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  backgroundColor: Colors.redAccent,
+                                  content: Text(
+                                      "Enter TxID or upload payment screenshot first."),
+                                ),
+                              );
+                              return;
+                            }
+                            setDlgState(() => isSubmittingProof = true);
+                            try {
+                              final db = FirebaseFirestore.instance;
+                              final String refUsed =
+                                  tx.isNotEmpty ? tx : orderRef;
+                              final Map<String, dynamic> proofPayload = {
+                                'orderRef': orderRef,
+                                'orderId': orderRef,
+                                'uid': widget.userUid,
+                                'userUid': widget.userUid,
+                                'userNumericId': widget.userNumericId,
+                                'targetNumericId': targetNumericId,
+                                'numericId': targetNumericId,
+                                'coins': coinsToAdd,
+                                'amount': priceStr,
+                                'usdAmount': int.tryParse(priceStr
+                                        .replaceAll(RegExp(r'[^0-9]'), '')) ??
+                                    0,
+                                'paymentMethod': _selectedPayMethod == 1
+                                    ? 'USDT (TRC20)'
+                                    : 'Binance Pay (USDT)',
+                                'binanceTxId': refUsed,
+                                'transactionId': refUsed,
+                                'proofScreenshot': screenshotBase64,
+                                'screenshotUrl': screenshotBase64,
+                                'status': 'PROOF_SUBMITTED',
+                                'credited': false,
+                                'proofSubmittedAt':
+                                    FieldValue.serverTimestamp(),
+                                'timestamp': FieldValue.serverTimestamp(),
+                              };
+
+                              final batch = db.batch();
+                              batch.set(
+                                  db
+                                      .collection('recharge_orders')
+                                      .doc(orderRef),
+                                  proofPayload,
+                                  SetOptions(merge: true));
+                              batch.set(
+                                  db
+                                      .collection('recharge_requests')
+                                      .doc(orderRef),
+                                  proofPayload,
+                                  SetOptions(merge: true));
+                              await batch.commit();
+
+                              setDlgState(() {
+                                isSubmittingProof = false;
+                                proofSent = true;
+                              });
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    backgroundColor: kTealAccent,
+                                    content: Text(
+                                      "Proof sent to Admin Dashboard!",
+                                      style: TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold),
+                                    ),
+                                  ),
+                                );
+                              }
+                            } catch (e) {
+                              setDlgState(() => isSubmittingProof = false);
+                            }
+                          },
+                    icon: const Icon(Icons.send_rounded, size: 15),
+                    label: Text(
+                      proofSent
+                          ? "Update Proof on Dashboard"
+                          : "Send Proof to Dashboard",
+                      style: const TextStyle(
+                          fontSize: 12, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text("Close", style: TextStyle(color: kTextMuted)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: kTealAccent,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () async {
+                Navigator.pop(ctx);
+                await _verifyPendingBinanceOrder(
+                  orderRef: orderRef,
+                  coinsToAdd: coinsToAdd,
+                  priceStr: priceStr,
+                  targetNumericId: targetNumericId,
+                );
+              },
+              child: const Text(
+                "Verify Payment",
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text("Close", style: TextStyle(color: kTextMuted)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: kTealAccent,
-              foregroundColor: Colors.white,
-            ),
-            onPressed: () async {
-              Navigator.pop(ctx);
-              await _verifyPendingBinanceOrder(
-                orderRef: orderRef,
-                coinsToAdd: coinsToAdd,
-                priceStr: priceStr,
-                targetNumericId: targetNumericId,
-              );
-            },
-            child: const Text(
-              "Verify Payment",
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -1123,85 +1362,101 @@ fontSize: 14,
           Row(
             children: [
               Expanded(
-                child: Container(
-                  height: 52,
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  decoration: BoxDecoration(
-                    color: kCardWhite,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: kTealAccent, width: 1.6),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 28,
-                        height: 28,
-                        decoration: const BoxDecoration(
-                          color: kGoldCoin,
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(Icons.currency_bitcoin,
-                            color: Colors.black, size: 18),
+                child: GestureDetector(
+                  onTap: () => setState(() => _selectedPayMethod = 0),
+                  child: Container(
+                    height: 52,
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(
+                      color: kCardWhite,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: _selectedPayMethod == 0
+                            ? kTealAccent
+                            : Colors.black12,
+                        width: _selectedPayMethod == 0 ? 1.6 : 1.0,
                       ),
-                      const SizedBox(width: 10),
-                      const Expanded(
-                        child: Text(
-                          "Binance Pay",
-                          style: TextStyle(
-                            color: kTextDark,
-                            fontSize: 13.5,
-                            fontWeight: FontWeight.w600,
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 28,
+                          height: 28,
+                          decoration: const BoxDecoration(
+                            color: kGoldCoin,
+                            shape: BoxShape.circle,
                           ),
-                          overflow: TextOverflow.ellipsis,
+                          child: const Icon(Icons.currency_bitcoin,
+                              color: Colors.black, size: 18),
                         ),
-                      ),
-                    ],
+                        const SizedBox(width: 10),
+                        const Expanded(
+                          child: Text(
+                            "Binance Pay",
+                            style: TextStyle(
+                              color: kTextDark,
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: Container(
-                  height: 52,
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  decoration: BoxDecoration(
-                    color: kCardWhite,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.black12, width: 1.0),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 28,
-                        height: 28,
-                        decoration: const BoxDecoration(
-                          color: Color(0xFF26A17B),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Center(
-                          child: Text(
-                            "₮",
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 15,
-                              fontWeight: FontWeight.w900,
+                child: GestureDetector(
+                  onTap: () => setState(() => _selectedPayMethod = 1),
+                  child: Container(
+                    height: 52,
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(
+                      color: kCardWhite,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: _selectedPayMethod == 1
+                            ? kTealAccent
+                            : Colors.black12,
+                        width: _selectedPayMethod == 1 ? 1.6 : 1.0,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 28,
+                          height: 28,
+                          decoration: const BoxDecoration(
+                            color: Color(0xFF26A17B),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Center(
+                            child: Text(
+                              "₮",
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 15,
+                                fontWeight: FontWeight.w900,
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 10),
-                      const Expanded(
-                        child: Text(
-                          "USDT",
-                          style: TextStyle(
-                            color: kTextDark,
-                            fontSize: 13.5,
-                            fontWeight: FontWeight.w600,
+                        const SizedBox(width: 10),
+                        const Expanded(
+                          child: Text(
+                            "USDT",
+                            style: TextStyle(
+                              color: kTextDark,
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            overflow: TextOverflow.ellipsis,
                           ),
-                          overflow: TextOverflow.ellipsis,
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -1583,6 +1838,99 @@ crossAxisCount: 3,
                             color: ptsColor,
                             fontWeight: FontWeight.bold,
                             fontSize: 13,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              );
+            },
+          ),
+          const SizedBox(height: 22),
+          const Text(
+            "Withdrawal Requests Status",
+            style: TextStyle(
+                fontSize: 14, fontWeight: FontWeight.w700, color: kTextDark),
+          ),
+          const SizedBox(height: 8),
+          StreamBuilder(
+            stream: FirebaseFirestore.instance
+                .collection('withdraw_requests')
+                .where('userUid', isEqualTo: widget.userUid)
+                .limit(15)
+                .snapshots(),
+            builder: (context, snapshot) {
+              if (!snapshot.hasData || snapshot.data == null) {
+                return const SizedBox.shrink();
+              }
+              final QuerySnapshot qSnap = snapshot.data as QuerySnapshot;
+              if (qSnap.docs.isEmpty) {
+                return Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: kCardWhite,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Center(
+                    child: Text(
+                      "No withdrawal requests yet.",
+                      style: TextStyle(color: kTextMuted, fontSize: 12),
+                    ),
+                  ),
+                );
+              }
+              return ListView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: qSnap.docs.length,
+                itemBuilder: (context, idx) {
+                  final raw = qSnap.docs[idx].data();
+                  final Map d = raw is Map ? raw : {};
+                  final String method = (d['method'] ?? 'Payout').toString();
+                  final double usd =
+                      (d['usdAmount'] as num?)?.toDouble() ?? 0.0;
+                  final String status =
+                      (d['status'] ?? 'PENDING').toString().toUpperCase();
+                  Color stColor = Colors.orange;
+                  if (status == 'PAID' || status == 'APPROVED') {
+                    stColor = kTealAccent;
+                  } else if (status == 'REJECTED') {
+                    stColor = Colors.redAccent;
+                  }
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: kCardWhite,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          "$method (\$${usd.toStringAsFixed(2)})",
+                          style: const TextStyle(
+                              color: kTextDark,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: stColor.withOpacity(0.14),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            status,
+                            style: TextStyle(
+                              color: stColor,
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
                       ],
