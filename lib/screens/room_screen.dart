@@ -1066,94 +1066,424 @@ class _RoomScreenState extends State<RoomScreen>
   }
 
   void _openSeatUserAction(int index, String user) {
-    final isMuted = _mutedSeats.contains(index);
-    IconData micIcon = Icons.mic_off;
-    String micLabel = "Mute User";
-    if (isMuted) {
-      micIcon = Icons.mic;
-      micLabel = "Unmute User";
-    }
+    final String? targetUid =
+        (index < _seatUids.length) ? _seatUids[index] : null;
+    final int seatGiftCoins =
+        (index < _seatGiftsCount.length) ? _seatGiftsCount[index] : 0;
+    final bool isMuted = _mutedSeats.contains(index);
+    bool isFollowing = false;
 
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => Container(
-        padding: const EdgeInsets.all(18),
-        decoration: const BoxDecoration(
-          color: bgColor,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Center(
-              child: Container(
-                  width: 44,
-                  height: 4,
-                  decoration: BoxDecoration(
-                      color: Colors.black26,
-                      borderRadius: BorderRadius.circular(2))),
-            ),
-            const SizedBox(height: 12),
-            Text(user,
-                style: const TextStyle(
-                    color: primaryBrown,
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold)),
-            const SizedBox(height: 14),
-            Container(
-              decoration: BoxDecoration(
-                  color: cardBg,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: borderColor)),
-              child: Column(
-                children: [
-                  ListTile(
-                    leading: Icon(micIcon, color: primaryBrown),
-                    title: Text(micLabel,
-                        style: const TextStyle(
-                            color: primaryBrown, fontWeight: FontWeight.w600)),
-                    onTap: () {
-                      setState(() {
-                        if (isMuted) {
-                          _mutedSeats.remove(index);
-                        } else {
-                          _mutedSeats.add(index);
-                        }
-                      });
-                      Navigator.pop(context);
-                    },
-                  ),
-                  const Divider(height: 1, color: borderColor),
-                  ListTile(
-                    leading: const Icon(Icons.exit_to_app,
-                        color: Colors.redAccent),
-                    title: const Text("Kick from Seat",
-                        style: TextStyle(
-                            color: Colors.redAccent,
-                            fontWeight: FontWeight.w600)),
-                    onTap: () async {
-                      setState(() {
-                        _seats[index] = null;
-                        _seatUids[index] = null;
-                      });
-                      Navigator.pop(context);
+      builder: (sheetCtx) {
+        return StatefulBuilder(
+          builder: (ctx, setSheetState) {
+            return FutureBuilder<DocumentSnapshot?>(
+              future: (targetUid != null && targetUid.isNotEmpty)
+                  ? FirebaseFirestore.instance
+                      .collection('users')
+                      .doc(targetUid)
+                      .get()
+                  : Future.value(null),
+              builder: (context, snap) {
+                Map<String, dynamic> uData = {};
+                if (snap.hasData &&
+                    snap.data != null &&
+                    snap.data!.exists &&
+                    snap.data!.data() is Map<String, dynamic>) {
+                  uData = snap.data!.data() as Map<String, dynamic>;
+                }
 
-                      await FirebaseFirestore.instance
-                          .collection('rooms')
-                          .doc(channelName)
-                          .set(<String, dynamic>{
-                        'seats': _seats,
-                        'seatUids': _seatUids,
-                      }, SetOptions(merge: true));
-                    },
+                final String displayName =
+                    (uData['name'] ?? uData['nickname'] ?? user).toString();
+                final String numId =
+                    (uData['numericId'] ?? '100083').toString();
+                final String country =
+                    (uData['country'] ?? 'Ethiopia').toString();
+                final int wealthLvl =
+                    (uData['wealthLevel'] as num?)?.toInt() ?? 1;
+                final int charmLvl =
+                    (uData['charmLevel'] as num?)?.toInt() ?? 1;
+                final int vipLvl = (uData['vipLevel'] as num?)?.toInt() ?? 0;
+                final int frameLvl =
+                    (uData['activeVipFrameLevel'] as num?)?.toInt() ?? vipLvl;
+                final bool isAgency = uData['isAgent'] == true ||
+                    (uData['agencyId'] ?? '').toString().isNotEmpty;
+                final int friendsCnt =
+                    (uData['friendsCount'] as num?)?.toInt() ?? 0;
+                final int followingCnt =
+                    (uData['followingCount'] as num?)?.toInt() ?? 0;
+                final int followersCnt =
+                    (uData['followedCount'] as num?)?.toInt() ?? 0;
+                final String avatarStr =
+                    (uData['avatarUrl'] ?? uData['photoURL'] ?? '').toString();
+
+                ImageProvider? avatarProv;
+                if (avatarStr.startsWith('http')) {
+                  avatarProv = NetworkImage(avatarStr);
+                }
+
+                return Container(
+                  padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    borderRadius:
+                        BorderRadius.vertical(top: Radius.circular(26)),
                   ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 42,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: Colors.black12,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      frameLvl > 0
+                          ? VipAvatarFrame(
+                              vipLevel: frameLvl,
+                              size: 74,
+                              showBadge: true,
+                              child: CircleAvatar(
+                                backgroundColor: bgColor,
+                                backgroundImage: avatarProv,
+                                child: avatarProv == null
+                                    ? const Icon(Icons.person,
+                                        color: primaryBrown, size: 36)
+                                    : null,
+                              ),
+                            )
+                          : CircleAvatar(
+                              radius: 36,
+                              backgroundColor: bgColor,
+                              backgroundImage: avatarProv,
+                              child: avatarProv == null
+                                  ? const Icon(Icons.person,
+                                      color: primaryBrown, size: 36)
+                                  : null,
+                            ),
+                      const SizedBox(height: 10),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            displayName,
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w900,
+                              color: primaryBrown,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFEC4899),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Text(
+                              "Lv.$charmLvl",
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            "ID: $numId",
+                            style: const TextStyle(
+                              fontSize: 12.5,
+                              color: Colors.black54,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          const Text("|",
+                              style: TextStyle(color: Colors.black26)),
+                          const SizedBox(width: 8),
+                          Text(
+                            country,
+                            style: const TextStyle(
+                              fontSize: 12.5,
+                              color: primaryBrown,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (isAgency || vipLvl > 0) ...[
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 6,
+                          children: [
+                            if (isAgency)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF2563EB),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: const Text(
+                                  "AGENCY",
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF14B8A6),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                "Wealth Lv.$wealthLvl",
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                      const SizedBox(height: 16),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          Column(
+                            children: [
+                              Text("$friendsCnt",
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w900,
+                                      fontSize: 15,
+                                      color: primaryBrown)),
+                              const Text("Friends",
+                                  style: TextStyle(
+                                      fontSize: 11.5, color: Colors.black54)),
+                            ],
+                          ),
+                          Column(
+                            children: [
+                              Text("$followingCnt",
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w900,
+                                      fontSize: 15,
+                                      color: primaryBrown)),
+                              const Text("Following",
+                                  style: TextStyle(
+                                      fontSize: 11.5, color: Colors.black54)),
+                            ],
+                          ),
+                          Column(
+                            children: [
+                              Text("$followersCnt",
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w900,
+                                      fontSize: 15,
+                                      color: primaryBrown)),
+                              const Text("Followers",
+                                  style: TextStyle(
+                                      fontSize: 11.5, color: Colors.black54)),
+                            ],
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFF8EE),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: borderColor),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              "Badge",
+                              style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                  color: primaryBrown),
+                            ),
+                            Text(
+                              vipLvl > 0
+                                  ? "VIP$vipLvl • Achievement • 1"
+                                  : "Achievement • 0",
+                              style: const TextStyle(
+                                  fontSize: 11.5, color: Colors.black54),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF5F0FF),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: borderColor),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  "Gift Wall",
+                                  style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 13,
+                                      color: primaryBrown),
+                                ),
+                                Text(
+                                  "Received Gifts: $seatGiftCoins",
+                                  style: const TextStyle(
+                                      fontSize: 11, color: Colors.black54),
+                                ),
+                              ],
+                            ),
+                            const Icon(Icons.card_giftcard,
+                                color: Color(0xFF9333EA)),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: primaryBrown,
+                                side: const BorderSide(color: borderColor),
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 11),
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(14)),
+                              ),
+                              onPressed: () async {
+                                setSheetState(() {
+                                  isFollowing = !isFollowing;
+                                });
+                                if (_currentUser != null &&
+                                    targetUid != null &&
+                                    targetUid.isNotEmpty) {
+                                  await FirebaseFirestore.instance
+                                      .collection('users')
+                                      .doc(targetUid)
+                                      .set({
+                                    'followedCount': FieldValue.increment(
+                                        isFollowing ? 1 : -1),
+                                  }, SetOptions(merge: true));
+                                  await FirebaseFirestore.instance
+                                      .collection('users')
+                                      .doc(_currentUser!.uid)
+                                      .set({
+                                    'followingCount': FieldValue.increment(
+                                        isFollowing ? 1 : -1),
+                                  }, SetOptions(merge: true));
+                                }
+                              },
+                              icon: Icon(
+                                  isFollowing ? Icons.check : Icons.add,
+                                  size: 18),
+                              label: Text(
+                                  isFollowing ? "Following" : "Follow",
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.bold)),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: accentGold,
+                                foregroundColor: Colors.white,
+                                elevation: 0,
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 11),
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(14)),
+                              ),
+                              onPressed: () {
+                                Navigator.pop(sheetCtx);
+                                _openGiftSheet();
+                              },
+                              icon: const Icon(Icons.card_giftcard, size: 18),
+                              label: const Text("Send Gift",
+                                  style:
+                                      TextStyle(fontWeight: FontWeight.bold)),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF14B8A6),
+                                foregroundColor: Colors.white,
+                                elevation: 0,
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 11),
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(14)),
+                              ),
+                              onPressed: () async {
+                                Navigator.pop(sheetCtx);
+                                await FirebaseFirestore.instance
+                                    .collection('rooms')
+                                    .doc(channelName)
+                                    .collection('chats')
+                                    .add(<String, dynamic>{
+                                  'sender': _myDisplayName,
+                                  'text': "@$displayName 👋",
+                                  'timestamp': FieldValue.serverTimestamp(),
+                                });
+                              },
+                              icon: const Icon(Icons.chat_bubble_outline,
+                                  size: 17),
+                              label: const Text("Chat",
+                                  style:
+                                      TextStyle(fontWeight: FontWeight.bold)),
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (isMuted) ...[
+                        const SizedBox(height: 8),
+                        const Text("User mic is muted",
+                            style: TextStyle(
+                                fontSize: 11, color: Colors.redAccent)),
+                      ],
+                    ],
+                  ),
+                );
+              },
+            );
+          },
+        );
+      },
     );
   }
 
