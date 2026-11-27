@@ -532,9 +532,10 @@ class _ProfileScreenState extends State {
               final int rawWealthLvl =
                   (userData['wealthLevel'] as num?)?.toInt() ?? 0;
               final int computedWealthLvl =
-                  wealthExp > 0 ? ((wealthExp ~/ 5000) + 1).clamp(1, 99) : 0;
-              final int wealthLevel =
-                  computedWealthLvl > rawWealthLvl ? computedWealthLvl : rawWealthLvl;
+                  wealthExp > 0 ? ((wealthExp ~/ 250000) + 1).clamp(1, 99) : 0;
+              final int wealthLevel = rawWealthLvl > 0
+                  ? rawWealthLvl.clamp(1, 99)
+                  : computedWealthLvl;
 
               int charmExp = (userData['charmExp'] as num?)?.toInt() ?? 0;
               final int recPts =
@@ -543,9 +544,10 @@ class _ProfileScreenState extends State {
               final int rawCharmLvl =
                   (userData['charmLevel'] as num?)?.toInt() ?? 0;
               final int computedCharmLvl =
-                  charmExp > 0 ? ((charmExp ~/ 5000) + 1).clamp(1, 99) : 0;
-              final int charmLevel =
-                  computedCharmLvl > rawCharmLvl ? computedCharmLvl : rawCharmLvl;
+                  charmExp > 0 ? ((charmExp ~/ 100000) + 1).clamp(1, 99) : 0;
+              final int charmLevel = rawCharmLvl > 0
+                  ? rawCharmLvl.clamp(1, 99)
+                  : computedCharmLvl;
               final int chatLevel =
                   (userData['chatLevel'] as num?)?.toInt() ?? 0;
               final int vipLevel =
