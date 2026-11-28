@@ -232,8 +232,86 @@ if (match != null) {
     );
   }
 
+  Future<void> _sendAgencyFormToAgentMessages({
+    required String targetAgencyId,
+    required String targetAgencyName,
+    required String ownerUid,
+    required String formType, // 'agency_join_form' or 'sub_agency_form'
+    required String requestId,
+    required String applicantUid,
+    required int applicantNumericId,
+    required String applicantName,
+    required String phone,
+    required String country,
+    String subAgencyId = '',
+    String subAgencyName = '',
+    bool isSubAgentInvite = false,
+  }) async {
+    final db = FirebaseFirestore.instance;
+    final applicantSnap = await db.collection('users').doc(applicantUid).get();
+    final appData = applicantSnap.data() ?? {};
+    final String appAvatar =
+        (appData['avatarUrl'] ?? appData['photoURL'] ?? '').toString();
+
+    final ownerSnap = await db.collection('users').doc(ownerUid).get();
+    final ownerData = ownerSnap.data() ?? {};
+    final String ownerName =
+        (ownerData['name'] ?? ownerData['nickname'] ?? targetAgencyName)
+            .toString();
+    final String ownerAvatar =
+        (ownerData['avatarUrl'] ?? ownerData['photoURL'] ?? '').toString();
+
+    final ids = [applicantUid, ownerUid]..sort();
+    final String chatId = "${ids[0]}_${ids[1]}";
+    final String summaryText = formType == 'sub_agency_form'
+        ? "🏢 Sub-Agency Request: $subAgencyName ($applicantName • ID: $applicantNumericId)"
+        : "📋 Host Join Form: $applicantName (ID: $applicantNumericId) → $targetAgencyName";
+
+    final chatRef = db.collection('direct_chats').doc(chatId);
+    await chatRef.collection('messages').add({
+      'senderUid': applicantUid,
+      'type': formType,
+      'requestId': requestId,
+      'agencyId': targetAgencyId,
+      'agencyName': targetAgencyName,
+      'subAgencyId': subAgencyId,
+      'subAgencyName': subAgencyName,
+      'isSubAgentInvite': isSubAgentInvite,
+      'ownerUid': ownerUid,
+      'applicantUid': applicantUid,
+      'applicantNumericId': applicantNumericId,
+      'applicantName': applicantName,
+      'phone': phone,
+      'country': country,
+      'formStatus': 'PENDING',
+      'text': summaryText,
+      'timestamp': FieldValue.serverTimestamp(),
+    });
+
+    await chatRef.set({
+      'participants': [applicantUid, ownerUid],
+      'participantNames': {
+        applicantUid: applicantName,
+        ownerUid: ownerName,
+      },
+      'participantAvatars': {
+        applicantUid: appAvatar,
+        ownerUid: ownerAvatar,
+      },
+      'lastMessage': summaryText,
+      'updatedAt': FieldValue.serverTimestamp(),
+      'unreadCounts': {
+        ownerUid: FieldValue.increment(1),
+        applicantUid: 0,
+      },
+    }, SetOptions(merge: true));
+  }
+
   void _showJoinAgencyDialog({required int myNumericId}) {
     _joinAgencyIdController.clear();
+    final fullNameCtrl = TextEditingController();
+    final phoneCtrl = TextEditingController();
+    String selectedJoinCountry = "Ethiopia 🇪🇹";
     bool isJoining = false;
 
     showDialog(
@@ -245,31 +323,85 @@ if (match != null) {
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(20)),
               title: const Text(
-                "Join via Link or Agency ID",
+                "Join Agency Form",
                 style:
                     TextStyle(fontWeight: FontWeight.bold, color: kTextDark),
               ),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    "Paste the Host/Agent Invite Link or enter the Agency ID:",
-                    style: TextStyle(fontSize: 13, color: kTextMuted),
-
-),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _joinAgencyIdController,
-                    decoration: InputDecoration(
-                      hintText: "Paste invite link or ID (e.g. 100083)",
-                      hintStyle: const TextStyle(fontSize: 12),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      "Enter Agent ID / Invite Link and your details. The Agent will receive your form in Messages with Agree / Reject buttons:",
+                      style: TextStyle(fontSize: 12.5, color: kTextMuted),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _joinAgencyIdController,
+                      decoration: InputDecoration(
+                        labelText: "Agent / Agency ID or Link *",
+                        hintText: "e.g. 100083",
+                        hintStyle: const TextStyle(fontSize: 12),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: fullNameCtrl,
+                      decoration: InputDecoration(
+                        labelText: "Your Full Name *",
+                        hintText: "Enter your full name",
+                        hintStyle: const TextStyle(fontSize: 12),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: phoneCtrl,
+                      keyboardType: TextInputType.phone,
+                      decoration: InputDecoration(
+                        labelText: "Phone / WhatsApp / Telegram *",
+                        hintText: "e.g. +251911223344",
+                        hintStyle: const TextStyle(fontSize: 12),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.black38),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: selectedJoinCountry,
+                          isExpanded: true,
+                          items: _countries.map((c) {
+                            return DropdownMenuItem<String>(
+                              value: c,
+                              child: Text(c, style: const TextStyle(fontSize: 13)),
+                            );
+                          }).toList(),
+                          onChanged: (val) {
+                            if (val != null) {
+                              setDialogState(() {
+                                selectedJoinCountry = val;
+                              });
+                            }
+                          },
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
               actions: [
                 TextButton(
@@ -296,15 +428,32 @@ if (match != null) {
                               (parsed['agencyId'] ?? '').toString();
                           final bool isSubAgentLink =
                               parsed['isSubAgent'] == true;
+                          final String fullName = fullNameCtrl.text.trim();
+                          final String phone = phoneCtrl.text.trim();
 
-                          if (enteredAgencyId.isEmpty) return;
+                          if (enteredAgencyId.isEmpty) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                  content: Text("Please enter Agent ID.")),
+                            );
+                            return;
+                          }
+                          if (fullName.isEmpty || phone.isEmpty) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                  content: Text(
+                                      "Please enter your Full Name and Phone.")),
+                            );
+                            return;
+                          }
                           if (_currentUser == null) return;
 
                           setDialogState(() {
                             isJoining = true;
                           });
                           try {
-                            final agencyDoc = await FirebaseFirestore.instance
+                            final db = FirebaseFirestore.instance;
+                            final agencyDoc = await db
                                 .collection('agencies')
                                 .doc(enteredAgencyId)
                                 .get();
@@ -323,7 +472,24 @@ if (match != null) {
                             }
 
                             final aData = agencyDoc.data() ?? {};
-                            if (aData['ownerUid'] == _currentUser!.uid) {
+                            String ownerUid =
+                                (aData['ownerUid'] ?? '').toString().trim();
+                            final int ownerNumId =
+                                (aData['ownerNumericId'] as num?)?.toInt() ??
+                                    (int.tryParse(enteredAgencyId) ?? 0);
+
+                            if (ownerUid.isEmpty && ownerNumId > 0) {
+                              final uQ = await db
+                                  .collection('users')
+                                  .where('numericId', isEqualTo: ownerNumId)
+                                  .limit(1)
+                                  .get();
+                              if (uQ.docs.isNotEmpty) {
+                                ownerUid = uQ.docs.first.id;
+                              }
+                            }
+
+                            if (ownerUid == _currentUser!.uid) {
                               if (mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
@@ -335,77 +501,79 @@ if (match != null) {
                               return;
                             }
 
-                            final String agencyName =
-                                (aData['name'] ?? 'Agency').toString();
-
-                            final batch = FirebaseFirestore.instance.batch();
-
-                            final userRef = FirebaseFirestore.instance
-                                .collection('users')
-                                .doc(_currentUser!.uid);
-                            final hostRef = FirebaseFirestore.instance
-                                .collection('hosts')
-                                .doc(_currentUser!.uid);
-
-batch.set(
-                              userRef,
-                              {
-                                'agencyId': _d(enteredAgencyId),
-                                'agencyName': _d(agencyName),
-                                'isHost': _d(true),
-                                'allowCreateAgency': _d(isSubAgentLink),
-                                'joinedAgencyAt':
-                                    _d(FieldValue.serverTimestamp()),
-                              },
-                              SetOptions(merge: true),
-                            );
-
-                            batch.set(
-                              hostRef,
-                              {
-                                'agencyId': _d(enteredAgencyId),
-                                'agencyName': _d(agencyName),
-                                'status': _d('active'),
-                                'updatedAt': _d(FieldValue.serverTimestamp()),
-                              },
-                              SetOptions(merge: true),
-                            );
-
-                            batch.update(agencyDoc.reference, {
-                              'totalHosts': _d(FieldValue.increment(1)),
-                            });
-
-                            await batch.commit();
-
-                            if (ctx.mounted) Navigator.pop(ctx);
-                            if (mounted) {
-                              if (isSubAgentLink) {
+                            if (ownerUid.isEmpty) {
+                              if (mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
+                                  const SnackBar(
                                     content: Text(
-                                        "Joined under $agencyName! Complete your Sub-Agency form for their approval."),
-                                    backgroundColor: kCyanBlue,
-                                  ),
-                                );
-                                _openCreateAgencyForm(
-                                  myNumericId: myNumericId,
-                                  joinedAgencyId: enteredAgencyId,
-                                  joinedAgencyName: agencyName,
-                                );
-                              } else {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                        "Successfully joined $agencyName as Host!"),
-                                    backgroundColor: kTealGreen,
+                                        "Agent owner account not linked yet."),
+                                    backgroundColor: Colors.redAccent,
                                   ),
                                 );
                               }
+                              return;
+                            }
+
+                            final String agencyName =
+                                (aData['name'] ?? 'Agency').toString();
+
+                            final uSnap = await db
+                                .collection('users')
+                                .doc(_currentUser!.uid)
+                                .get();
+                            final int resolvedAppNumId = myNumericId != 0
+                                ? myNumericId
+                                : ((uSnap.data()?['numericId'] as num?)
+                                        ?.toInt() ??
+                                    0);
+
+                            final reqRef =
+                                db.collection('agency_join_requests').doc();
+
+                            await reqRef.set({
+                              'requestId': _d(reqRef.id),
+                              'agencyId': _d(enteredAgencyId),
+                              'agencyName': _d(agencyName),
+                              'ownerUid': _d(ownerUid),
+                              'ownerNumericId': _d(ownerNumId),
+                              'applicantUid': _d(_currentUser!.uid),
+                              'applicantNumericId': _d(resolvedAppNumId),
+                              'applicantName': _d(fullName),
+                              'phone': _d(phone),
+                              'country': _d(selectedJoinCountry),
+                              'isSubAgentInvite': _d(isSubAgentLink),
+                              'status': _d('PENDING'),
+                              'createdAt': _d(FieldValue.serverTimestamp()),
+                            });
+
+                            await _sendAgencyFormToAgentMessages(
+                              targetAgencyId: enteredAgencyId,
+                              targetAgencyName: agencyName,
+                              ownerUid: ownerUid,
+                              formType: 'agency_join_form',
+                              requestId: reqRef.id,
+                              applicantUid: _currentUser!.uid,
+                              applicantNumericId: resolvedAppNumId,
+                              applicantName: fullName,
+                              phone: phone,
+                              country: selectedJoinCountry,
+                              isSubAgentInvite: isSubAgentLink,
+                            );
+
+                            if (ctx.mounted) Navigator.pop(ctx);
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                      "Form sent to $agencyName! The Agent will receive Agree / Reject in Messages."),
+                                  backgroundColor: kTealGreen,
+                                ),
+                              );
                             }
                           } catch (e) {
                             if (mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text("Failed to join: $e")),
+                                SnackBar(content: Text("Failed to send: $e")),
                               );
                             }
                           } finally {
@@ -426,7 +594,7 @@ batch.set(
                           ),
                         )
                       : const Text(
-                          "Confirm Join",
+                          "Send Form",
                           style: TextStyle(fontWeight: FontWeight.bold),
                         ),
                 ),
@@ -746,6 +914,54 @@ batch.set(
                                   }
 
                                   await batch.commit();
+
+                                  if (isUnderParentAgent) {
+                                    final parentDoc = await FirebaseFirestore
+                                        .instance
+                                        .collection('agencies')
+                                        .doc(joinedAgencyId)
+                                        .get();
+                                    final pData = parentDoc.data() ?? {};
+                                    String parentOwnerUid =
+                                        (pData['ownerUid'] ?? '')
+                                            .toString()
+                                            .trim();
+                                    if (parentOwnerUid.isEmpty) {
+                                      final int pNum =
+                                          (pData['ownerNumericId'] as num?)
+                                                  ?.toInt() ??
+                                              (int.tryParse(joinedAgencyId) ??
+                                                  0);
+                                      if (pNum > 0) {
+                                        final pq = await FirebaseFirestore
+                                            .instance
+                                            .collection('users')
+                                            .where('numericId',
+                                                isEqualTo: pNum)
+                                            .limit(1)
+                                            .get();
+                                        if (pq.docs.isNotEmpty) {
+                                          parentOwnerUid = pq.docs.first.id;
+                                        }
+                                      }
+                                    }
+                                    if (parentOwnerUid.isNotEmpty) {
+                                      await _sendAgencyFormToAgentMessages(
+                                        targetAgencyId: joinedAgencyId,
+                                        targetAgencyName: joinedAgencyName,
+                                        ownerUid: parentOwnerUid,
+                                        formType: 'sub_agency_form',
+                                        requestId: newAgencyId,
+                                        applicantUid: _currentUser!.uid,
+                                        applicantNumericId: resolvedNumId,
+                                        applicantName: applicantName,
+                                        phone: phone,
+                                        country: _selectedCountry,
+                                        subAgencyId: newAgencyId,
+                                        subAgencyName: name,
+                                      );
+                                    }
+                                  }
 
                                   if (ctx.mounted) Navigator.pop(ctx);
                                   if (mounted) {
