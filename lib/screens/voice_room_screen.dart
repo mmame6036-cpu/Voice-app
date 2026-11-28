@@ -1011,17 +1011,58 @@ if (snapshot.exists && snapshot.data() != null) {
           }
         }
 
-        // 24/7 Persistent Seats: No time or second expiration limit.
+        // 24/7 Persistent Seats: No time expiration, and enforce 1 seat per user (auto-clean duplicates)
+        final Map<String, dynamic> duplicateCleanup = {};
+        final Map<String, String> bestKeyForUid = {};
+        final Map<String, int> bestTsForUid = {};
+
         if (data['activeSeats'] is Map) {
           final raw = data['activeSeats'] as Map;
           raw.forEach((key, value) {
             if (value is Map) {
+              final String kStr = key.toString();
               final String uid = (value['uid'] ?? '').toString();
+              final int upd = (value['updatedAt'] as num?)?.toInt() ?? 0;
               if (uid.isNotEmpty) {
-                activeMap[key.toString()] = value;
+                // If this is my own UID and I explicitly chose _mySeatIndex, prioritize _mySeatIndex
+                if (uid == _resolvedUid &&
+                    _userExplicitlySeated &&
+                    _mySeatIndex != null) {
+                  if (kStr == '${_mySeatIndex!}') {
+                    bestKeyForUid[uid] = kStr;
+                    bestTsForUid[uid] = upd + 999999999;
+                  } else if (!bestKeyForUid.containsKey(uid)) {
+                    bestKeyForUid[uid] = kStr;
+                    bestTsForUid[uid] = upd;
+                  }
+                } else {
+                  final int prevTs = bestTsForUid[uid] ?? -1;
+                  if (upd >= prevTs) {
+                    bestKeyForUid[uid] = kStr;
+                    bestTsForUid[uid] = upd;
+                  }
+                }
               }
             }
           });
+
+          raw.forEach((key, value) {
+            if (value is Map) {
+              final String kStr = key.toString();
+              final String uid = (value['uid'] ?? '').toString();
+              if (uid.isNotEmpty) {
+                if (bestKeyForUid[uid] == kStr) {
+                  activeMap[kStr] = value;
+                } else {
+                  duplicateCleanup['activeSeats.$kStr'] = FieldValue.delete();
+                }
+              }
+            }
+          });
+        }
+
+        if (duplicateCleanup.isNotEmpty) {
+          roomRef.update(duplicateCleanup).catchError((_) {});
         }
 
         if (!mounted) return;
@@ -1518,10 +1559,10 @@ Offset startPos =
     _setScreenWakeLock(false);
     _stopMicMinutesTracking();
 
-    roomRef.set({
-      'activeSeats': {'$index': FieldValue.delete()},
-      'seatGifts': {'$index': 0},
-    }, SetOptions(merge: true)).catchError((_) {});
+    roomRef.update({
+      'activeSeats.$index': FieldValue.delete(),
+      'seatGifts.$index': 0,
+    }).catchError((_) {});
 
     await _agoraService.switchRole(isSpeaker: false);
   }
@@ -2511,16 +2552,31 @@ shape: RoundedRectangleBorder(
         _myAgoraUid > 0 ? _myAgoraUid : widget.userNumericId;
     final bool shouldMuteOnJoin = _allMicsClosed && !_isAdminUser;
 
+    // Collect every seat index previously occupied by this user so zero duplicates remain
+    final Set<int> oldSeatsToClear = {};
+    if (oldIndex != null && oldIndex != index) {
+      oldSeatsToClear.add(oldIndex);
+    }
+    for (int i = 0; i < 30; i++) {
+      if (i != index && _seatUids[i] == _resolvedUid) {
+        oldSeatsToClear.add(i);
+      }
+    }
+
     setState(() {
-      if (oldIndex != null && oldIndex != index) {
-        _seatGifts[index] = _seatGifts[oldIndex];
-        _seatGifts[oldIndex] = 0;
-        _seats[oldIndex] = null;
-        _seatUids[oldIndex] = null;
-        _seatNumericIds[oldIndex] = 0;
-        _seatMutes[oldIndex] = false;
-        _seatAvatars[oldIndex] = '';
-        _speakingSeatIndices.remove(oldIndex);
+      int carriedGifts = 0;
+      for (final oldIdx in oldSeatsToClear) {
+        carriedGifts += _seatGifts[oldIdx];
+        _seatGifts[oldIdx] = 0;
+        _seats[oldIdx] = null;
+        _seatUids[oldIdx] = null;
+        _seatNumericIds[oldIdx] = 0;
+        _seatMutes[oldIdx] = false;
+        _seatAvatars[oldIdx] = '';
+        _speakingSeatIndices.remove(oldIdx);
+      }
+      if (carriedGifts > 0) {
+        _seatGifts[index] = carriedGifts;
       }
       _seats[index] = _effectiveUserName;
       _seatUids[index] = _resolvedUid;
@@ -2540,23 +2596,22 @@ shape: RoundedRectangleBorder(
     }
 
     final Map<String, dynamic> seatData = _buildMySeatPayload();
-
-    final Map<String, dynamic> seatUpdates = {
-      '$index': seatData,
+    final Map<String, dynamic> dotUpdates = {
+      'activeSeats.$index': seatData,
     };
-    final Map<String, dynamic> giftMoves = {};
-    if (oldIndex != null && oldIndex != index) {
-      seatUpdates['$oldIndex'] = FieldValue.delete();
-      giftMoves['$index'] = _seatGifts[index];
-      giftMoves['$oldIndex'] = 0;
+    for (final oldIdx in oldSeatsToClear) {
+      dotUpdates['activeSeats.$oldIdx'] = FieldValue.delete();
+      dotUpdates['seatGifts.$oldIdx'] = 0;
+    }
+    if (oldSeatsToClear.isNotEmpty) {
+      dotUpdates['seatGifts.$index'] = _seatGifts[index];
     }
 
-    final Map<String, dynamic> roomPayload = {'activeSeats': seatUpdates};
-    if (giftMoves.isNotEmpty) {
-      roomPayload['seatGifts'] = giftMoves;
-    }
-
-    roomRef.set(roomPayload, SetOptions(merge: true)).catchError((_) {});
+    roomRef.update(dotUpdates).catchError((_) async {
+      await roomRef.set({
+        'activeSeats': {'$index': seatData}
+      }, SetOptions(merge: true)).catchError((_) {});
+    });
 
     await _agoraService.switchRole(isSpeaker: true);
     await _agoraService.setMicrophoneMute(shouldMuteOnJoin);
