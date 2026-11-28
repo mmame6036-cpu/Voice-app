@@ -58,7 +58,7 @@ class AgoraService extends ChangeNotifier {
 
     for (int attempt = 0; attempt < 2; attempt++) {
       try {
-        final response = await http.get(uri).timeout(const Duration(seconds: 45));
+        final response = await http.get(uri).timeout(const Duration(seconds: 8));
         if (response.statusCode == 200) {
           final decoded = jsonDecode(response.body);
           if (decoded is Map) {
@@ -114,6 +114,32 @@ class AgoraService extends ChangeNotifier {
           int speakerNumber,
         ) {
           onVolumeChangedCallback?.call(speakers.cast<AudioVolumeInfo>());
+        },
+        onConnectionLost: (RtcConnection connection) async {
+          _isChannelJoined = false;
+          _isInRoom = false;
+          _isMinimized = false;
+          _reportError("Network lost: disconnected from voice channel.");
+          notifyListeners();
+          try {
+            await _engine?.leaveChannel();
+          } catch (_) {}
+        },
+        onConnectionStateChanged: (
+          RtcConnection connection,
+          ConnectionStateType state,
+          ConnectionChangedReasonType reason,
+        ) async {
+          if (state == ConnectionStateType.connectionStateDisconnected ||
+              state == ConnectionStateType.connectionStateFailed) {
+            _isChannelJoined = false;
+            _isInRoom = false;
+            _isMinimized = false;
+            notifyListeners();
+            try {
+              await _engine?.leaveChannel();
+            } catch (_) {}
+          }
         },
         onError: (ErrorCodeType err, String msg) {
           _reportError("Agora error $err: $msg");
