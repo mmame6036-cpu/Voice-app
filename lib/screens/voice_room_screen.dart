@@ -14,6 +14,7 @@ import '../widgets/gift_dialog.dart';
 import '../widgets/fullscreen_gift_animator.dart';
 import '../widgets/room_tools_sheet.dart';
 import '../widgets/dragon_tiger_sheet.dart';
+import '../widgets/royal_battle_sheet.dart';
 import '../widgets/teen_patti_dialog.dart';
 import '../widgets/lucky_wheel_dialog.dart';
 import 'messages_screen.dart';
@@ -1541,6 +1542,62 @@ userNumericId: activeNumId,
                         ),
                       ),
                       Text("🐅", style: TextStyle(fontSize: 32)),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              GestureDetector(
+                onTap: () {
+                  Navigator.pop(ctx);
+                  RoyalBattleSheet.show(
+                    context,
+                    roomId: widget.roomId,
+                    userName: _effectiveUserName,
+                    userUid: _resolvedUid,
+                    userNumericId: activeNumId,
+                  );
+                },
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF1E3A8A), Color(0xFF991B1B)],
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
+                    ),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: kGoldBright, width: 1.5),
+                  ),
+                  child: const Row(
+                    children: [
+                      Text("🤴", style: TextStyle(fontSize: 30)),
+                      SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              "Royal Battle",
+                              style: TextStyle(
+                                color: kGoldBright,
+                                fontWeight: FontWeight.w900,
+                                fontSize: 16,
+                              ),
+                            ),
+                            SizedBox(height: 2),
+                            Text(
+                              "BLUE vs RED • 3-Card Battle • Up to 100X",
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 11.5,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Text("👸", style: TextStyle(fontSize: 30)),
                     ],
                   ),
                 ),
