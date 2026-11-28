@@ -114,7 +114,7 @@ class _TeenPattiDialogState extends State with TickerProviderStateMixin {
   final User? _user = FirebaseAuth.instance.currentUser;
   final Random _rng = Random();
 
-  static const List _chipValues = [1000, 10000, 30000, 50000];
+  static const List _chipValues = [100, 1000, 5000, 10000];
   static const List _spotTitles = ["Kebab", "Matcha", "Cake"];
   static const List _spotEmojis = ["🍢", "🍵", "🍰"];
 
@@ -262,7 +262,7 @@ class _TeenPattiDialogState extends State with TickerProviderStateMixin {
   }
 
   void _simulateRoomBets() {
-    final samples = [1000, 1000, 10000, 30000];
+    final samples = [100, 1000, 5000, 10000];
     for (int spot = 0; _lt(spot, 3); spot++) {
       if (_rng.nextBool()) {
         final int addAmt = (samples[_rng.nextInt(samples.length)] as num).toInt();
@@ -582,9 +582,9 @@ setState(() {
   }
 
   Color _chipColor(int val) {
-    if (_gte(val, 50000)) return const Color(0xFFDB2777);
-    if (_gte(val, 30000)) return const Color(0xFF7C3AED);
-    if (_gte(val, 10000)) return const Color(0xFF2563EB);
+    if (_gte(val, 10000)) return const Color(0xFFDB2777);
+    if (_gte(val, 5000)) return const Color(0xFF7C3AED);
+    if (_gte(val, 1000)) return const Color(0xFF2563EB);
     return const Color(0xFF16A34A);
   }
 
@@ -604,7 +604,7 @@ setState(() {
                 color: Color(0xFF4A2511), fontWeight: FontWeight.w900),
           ),
           content: const Text(
-            "1. Choose a chip (1K, 10K, 30K, 50K) and tap any of the 3 spots during the 15s Guessing Stage.\n\n"
+            "1. Choose a chip (100, 1K, 5K, 10K) and tap any of the 3 spots during the 15s Guessing Stage.\n\n"
             "2. Each spot receives 3 cards. Highest TeenPatti hand wins (2.9x Payout):\n"
             "   • Trail (Three of a Kind)\n"
             "   • Pure Sequence (Straight Flush)\n"
@@ -988,7 +988,7 @@ fontWeight: FontWeight.w900,
                         ),
                         const SizedBox(width: 6),
 
-// 4 Selectable Casino Chips (1K, 10K, 30K, 50K)
+// 4 Selectable Casino Chips (100, 1K, 5K, 10K)
                         Expanded(
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -1090,6 +1090,60 @@ decoration: BoxDecoration(
                   ),
                 ],
               ),
+
+              // Reveal Winner Summary Banner
+              if (_phase == "REVEAL" && _winnerSpot >= 0)
+                Positioned(
+                  top: 120,
+                  left: 24,
+                  right: 24,
+                  child: IgnorePointer(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 10),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF5C2D0C), Color(0xFF2B1404)],
+                        ),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                            color: const Color(0xFFFACC15), width: 1.8),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.55),
+                            blurRadius: 12,
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            "🏆 ${_spotTitles[_winnerSpot]} Wins (${(_spotEvals[_winnerSpot] as _TpHandEval?)?.label ?? ''})!",
+                            style: const TextStyle(
+                              color: Color(0xFFFEF08A),
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            _gt(_lastWinAmount, 0)
+                                ? "Your Prize: +$_lastWinAmount Coins 🎉"
+                                : "Next round starting soon...",
+                            style: TextStyle(
+                              color: _gt(_lastWinAmount, 0)
+                                  ? const Color(0xFF4ADE80)
+                                  : Colors.white70,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
 
               // Flying Casino Chips Overlay
               ..._flyingChips.map((rawFly) {
