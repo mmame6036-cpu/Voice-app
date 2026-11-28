@@ -139,6 +139,9 @@ Map<String, dynamic>? _activeRedPacket;
   bool _isClaimingPacket = false;
 
   int? _mySeatIndex;
+  bool _userExplicitlySeated = false;
+  int _lastAdminRemovalTs = 0;
+  final Set<String> _fetchingAvatarUids = {};
   int _totalSeats = 30;
   late List<String?> _seats;
   late List<String?> _seatUids;
@@ -336,6 +339,7 @@ String _toGiftImageAsset(String path) {
       _agoraService = mgr.activeEngine as AgoraService;
       _isMuted = mgr.isMuted;
       _mySeatIndex = mgr.seatedIndex;
+      _userExplicitlySeated = mgr.seatedIndex != null;
       _isConnecting = false;
       _resumedFromMinimize = true;
       mgr.clearSessionOnly();
@@ -864,6 +868,48 @@ if (remCount == 1) {
     } catch (_) {}
   }
 
+  void _ensureSeatAvatarLoaded(int seatIdx, String uid) {
+    if (uid.isEmpty || uid.startsWith('guest_')) return;
+    if (_seatAvatars[seatIdx].isNotEmpty) return;
+    if (_fetchingAvatarUids.contains(uid)) return;
+    _fetchingAvatarUids.add(uid);
+    FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .get()
+        .then((snap) {
+      if (!mounted || !snap.exists || snap.data() == null) return;
+      final d = snap.data()!;
+      final String av =
+          (d['avatarUrl'] ?? d['photoURL'] ?? '').toString().trim();
+      final int vip = (d['vipLevel'] as num?)?.toInt() ?? 0;
+      setState(() {
+        for (int i = 0; i < 30; i++) {
+          if (_seatUids[i] == uid) {
+            if (av.isNotEmpty) _seatAvatars[i] = av;
+            if (vip > 0 && _seatVipLevels[i] == 0) _seatVipLevels[i] = vip;
+          }
+        }
+      });
+    }).catchError((_) {});
+  }
+
+  Map<String, dynamic> _buildMySeatPayload() {
+    final Map<String, dynamic> seatPayload = {
+      'uid': _resolvedUid,
+      'name': _effectiveUserName,
+      'numericId': _myAgoraUid > 0 ? _myAgoraUid : widget.userNumericId,
+      'isMuted': _isMuted,
+      'frame': _equippedFrame,
+      'vipLevel': _myVipLevel,
+      'updatedAt': DateTime.now().millisecondsSinceEpoch,
+    };
+    if (_myAvatarUrl.isNotEmpty && _myAvatarUrl.startsWith('http')) {
+      seatPayload['avatar'] = _myAvatarUrl;
+    }
+    return seatPayload;
+  }
+
   void _startSeatHeartbeat() {
     _heartbeatTimer?.cancel();
     _heartbeatTimer = Timer.periodic(const Duration(seconds: 10), (_) {
@@ -873,23 +919,11 @@ if (remCount == 1) {
 
       if (_mySeatIndex != null) {
         final idx = _mySeatIndex!;
-        final Map<String, dynamic> seatPayload = {
-          'uid': _resolvedUid,
-          'name': _effectiveUserName,
-          'numericId': _myAgoraUid > 0 ? _myAgoraUid : widget.userNumericId,
-          'isMuted': _isMuted,
-          'frame': _equippedFrame,
-          'vipLevel': _myVipLevel,
-          'updatedAt': DateTime.now().millisecondsSinceEpoch,
-        };
-        if (_myAvatarUrl.isNotEmpty && _myAvatarUrl.length <= 350000) {
-          seatPayload['avatar'] = _myAvatarUrl;
-        }
         FirebaseFirestore.instance
             .collection('rooms')
             .doc(widget.roomId)
             .set({
-          'activeSeats': {'$idx': seatPayload}
+          'activeSeats': {'$idx': _buildMySeatPayload()}
         }, SetOptions(merge: true)).catchError((_) {});
       }
     });
@@ -903,9 +937,7 @@ if (remCount == 1) {
       if (!mounted) return;
       if (_hasCleanedUp) return;
 
-      final nowMs = DateTime.now().millisecondsSinceEpoch;
       final Map<String, dynamic> activeMap = {};
-      final Map<String, dynamic> staleCleanup = {};
 
 if (snapshot.exists && snapshot.data() != null) {
         final data = snapshot.data()!;
@@ -953,25 +985,43 @@ if (snapshot.exists && snapshot.data() != null) {
 
         await _syncMusicPlayback(music);
 
+        if (data['lastSeatRemoval'] is Map) {
+          final rem = data['lastSeatRemoval'] as Map;
+          final String remUid = (rem['uid'] ?? '').toString();
+          final int remTs = (rem['ts'] as num?)?.toInt() ?? 0;
+          if (remUid == _resolvedUid &&
+              remTs > _lastAdminRemovalTs &&
+              remTs >= _sessionStartMs) {
+            _lastAdminRemovalTs = remTs;
+            _userExplicitlySeated = false;
+            if (_mySeatIndex != null) {
+              final int kickedIdx = _mySeatIndex!;
+              _mySeatIndex = null;
+              _isMuted = true;
+              _seats[kickedIdx] = null;
+              _seatUids[kickedIdx] = null;
+              _seatNumericIds[kickedIdx] = 0;
+              _seatMutes[kickedIdx] = false;
+              _seatAvatars[kickedIdx] = '';
+              _speakingSeatIndices.remove(kickedIdx);
+              _setScreenWakeLock(false);
+              _stopMicMinutesTracking();
+              _agoraService.switchRole(isSpeaker: false);
+            }
+          }
+        }
+
+        // 24/7 Persistent Seats: No time or second expiration limit.
         if (data['activeSeats'] is Map) {
           final raw = data['activeSeats'] as Map;
           raw.forEach((key, value) {
             if (value is Map) {
-              final int updatedAt = (value['updatedAt'] as num?)?.toInt() ?? 0;
               final String uid = (value['uid'] ?? '').toString();
-              if (uid.isNotEmpty && (nowMs - updatedAt) < 25000) {
+              if (uid.isNotEmpty) {
                 activeMap[key.toString()] = value;
-              } else {
-                staleCleanup[key.toString()] = FieldValue.delete();
               }
             }
           });
-        }
-
-        if (staleCleanup.isNotEmpty) {
-          roomRef
-              .set({'activeSeats': staleCleanup}, SetOptions(merge: true))
-              .catchError((_) {});
         }
 
         if (!mounted) return;
@@ -1017,14 +1067,22 @@ _seatUids[i] = uid;
                 _seatAvatars[i] = _myAvatarUrl;
               } else if (avatar.isNotEmpty) {
                 _seatAvatars[i] = avatar;
+              } else {
+                _ensureSeatAvatarLoaded(i, uid);
               }
               if (uid == _resolvedUid) {
                 foundMySeat = i;
                 _isMuted = muted;
               }
             } else {
-              if (_mySeatIndex == i && _seatUids[i] == _resolvedUid) {
+              if (_userExplicitlySeated && _mySeatIndex == i) {
                 foundMySeat = i;
+                _seats[i] = _effectiveUserName;
+                _seatUids[i] = _resolvedUid;
+                _seatMutes[i] = _isMuted;
+                _seatFrames[i] = _equippedFrame;
+                _seatVipLevels[i] = _myVipLevel;
+                if (_myAvatarUrl.isNotEmpty) _seatAvatars[i] = _myAvatarUrl;
                 _seatGifts[i] = max(dbGifts, _seatGifts[i]);
               } else {
                 _seats[i] = null;
@@ -1040,6 +1098,9 @@ _seatUids[i] = uid;
             }
           }
           _mySeatIndex = foundMySeat;
+          if (_mySeatIndex != null) {
+            _userExplicitlySeated = true;
+          }
 
           if (_allMicsClosed &&
               !_isAdminUser &&
@@ -1448,6 +1509,7 @@ Offset startPos =
       _seatAvatars[index] = '';
       _speakingSeatIndices.remove(index);
       if (_mySeatIndex == index) {
+        _userExplicitlySeated = false;
         _mySeatIndex = null;
         _isMuted = true;
       }
@@ -2161,6 +2223,12 @@ shape: RoundedRectangleBorder(
                                       'seatGifts': {
                                         '$seatIndex': 0,
                                       },
+                                      'lastSeatRemoval': {
+                                        'uid': occupierUid,
+                                        'seatIndex': seatIndex,
+                                        'ts': DateTime.now()
+                                            .millisecondsSinceEpoch,
+                                      },
                                     }, SetOptions(merge: true)).catchError(
                                             (_) {});
                                   },
@@ -2460,6 +2528,7 @@ shape: RoundedRectangleBorder(
       _seatFrames[index] = _equippedFrame;
       _seatVipLevels[index] = _myVipLevel;
       _seatAvatars[index] = _myAvatarUrl;
+      _userExplicitlySeated = true;
       _mySeatIndex = index;
       _isMuted = shouldMuteOnJoin;
       _seatMutes[index] = shouldMuteOnJoin;
@@ -2470,18 +2539,7 @@ shape: RoundedRectangleBorder(
       _startMicMinutesTracking();
     }
 
-    final Map<String, dynamic> seatData = {
-      'uid': _resolvedUid,
-      'name': _effectiveUserName,
-      'numericId': activeNumId,
-      'isMuted': shouldMuteOnJoin,
-      'frame': _equippedFrame,
-      'vipLevel': _myVipLevel,
-      'updatedAt': DateTime.now().millisecondsSinceEpoch,
-    };
-    if (_myAvatarUrl.isNotEmpty && _myAvatarUrl.length <= 350000) {
-      seatData['avatar'] = _myAvatarUrl;
-    }
+    final Map<String, dynamic> seatData = _buildMySeatPayload();
 
     final Map<String, dynamic> seatUpdates = {
       '$index': seatData,
@@ -2528,23 +2586,11 @@ shape: RoundedRectangleBorder(
 
 if (_mySeatIndex != null) {
       final idx = _mySeatIndex!;
-      final Map<String, dynamic> seatPayload = {
-        'uid': _resolvedUid,
-        'name': _effectiveUserName,
-        'numericId': _myAgoraUid > 0 ? _myAgoraUid : widget.userNumericId,
-        'isMuted': _isMuted,
-        'frame': _equippedFrame,
-        'vipLevel': _myVipLevel,
-        'updatedAt': DateTime.now().millisecondsSinceEpoch,
-      };
-      if (_myAvatarUrl.isNotEmpty && _myAvatarUrl.length <= 350000) {
-        seatPayload['avatar'] = _myAvatarUrl;
-      }
       FirebaseFirestore.instance
           .collection('rooms')
           .doc(widget.roomId)
           .set({
-        'activeSeats': {'$idx': seatPayload}
+        'activeSeats': {'$idx': _buildMySeatPayload()}
       }, SetOptions(merge: true)).catchError((_) {});
     }
 
