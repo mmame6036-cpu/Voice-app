@@ -6,7 +6,7 @@ const { RtcTokenBuilder, RtcRole } = require('agora-token');
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '5mb' }));
 
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -233,14 +233,6 @@ setInterval(() => {
     .catch((err) => console.log('Keep-alive ping failed: ' + err.message));
 }, 600000);
 
-let PORT = 3000;
-if (process.env.PORT) {
-  PORT = process.env.PORT;
-}
-
-server.listen(PORT, () => {
-  console.log('Agora and Socket Server listening on port ' + PORT);
-});
 // ============================================================================
 // 7. CoinSeller Checkout + Admin Dashboard Endpoints (Firebase Firestore)
 // ============================================================================
@@ -269,7 +261,7 @@ try {
   console.log('Firebase Admin optional init note: ' + fbErr.message);
 }
 
-// Create order from CoinSellerScreen
+// Create order from WalletScreen / CoinSellerScreen
 app.post('/api/create-order', async (req, res) => {
   try {
     const body = req.body || {};
@@ -310,6 +302,8 @@ app.post('/api/create-order', async (req, res) => {
 
     return res.status(200).json({
       success: true,
+      status: 'PENDING',
+      verified: false,
       orderRef,
       binancePayId,
       checkoutUrl: ''
@@ -319,7 +313,7 @@ app.post('/api/create-order', async (req, res) => {
   }
 });
 
-// Verify payment status from CoinSellerScreen
+// Verify payment status from WalletScreen / CoinSellerScreen
 app.post('/api/verify-payment', async (req, res) => {
   try {
     const body = req.body || {};
@@ -370,9 +364,10 @@ app.get('/api/admin/overview', async (req, res) => {
       });
     }
 
-    const [usersSnap, agenciesSnap, sellerRechargesSnap, userRechargesSnap, reqsSnap, wdrSnap] = await Promise.all([
+    const [usersSnap, agenciesSnap, agencyReqsSnap, sellerRechargesSnap, userRechargesSnap, reqsSnap, wdrSnap] = await Promise.all([
       firestoreDb.collection('users').get(),
       firestoreDb.collection('agencies').get(),
+      firestoreDb.collection('agency_requests').get().catch(() => ({ docs: [] })),
       firestoreDb.collection('coin_recharges').get(),
       firestoreDb.collection('recharge_orders').get().catch(() => ({ docs: [] })),
       firestoreDb.collection('recharge_requests').get().catch(() => ({ docs: [] })),
@@ -401,11 +396,14 @@ app.get('/api/admin/overview', async (req, res) => {
     });
 
     const agencies = [];
+    const seenAgencyIds = new Set();
     agenciesSnap.forEach((doc) => {
       const d = doc.data() || {};
+      const aid = String(d.agencyId || doc.id);
+      seenAgencyIds.add(aid);
       agencies.push({
         id: doc.id,
-        agencyId: d.agencyId || doc.id,
+        agencyId: aid,
         name: d.name || d.agencyName || 'Agency',
         ownerName: d.ownerName || '',
         ownerNumericId: d.ownerNumericId || '',
@@ -416,6 +414,27 @@ app.get('/api/admin/overview', async (req, res) => {
         totalHosts: Number(d.totalHosts || 0) || 0,
         withdrawnCommissionPoints: Number(d.withdrawnCommissionPoints || 0) || 0
       });
+    });
+
+    agencyReqsSnap.forEach((doc) => {
+      const d = doc.data() || {};
+      const aid = String(d.agencyId || doc.id);
+      if (!seenAgencyIds.has(aid)) {
+        seenAgencyIds.add(aid);
+        agencies.push({
+          id: doc.id,
+          agencyId: aid,
+          name: d.name || d.agencyName || 'Agency Request',
+          ownerName: d.ownerName || d.applicantName || '',
+          ownerNumericId: d.ownerNumericId || d.numericId || '',
+          ownerUid: d.ownerUid || d.uid || '',
+          phone: d.phone || '',
+          country: d.country || '',
+          status: d.status || 'PENDING',
+          totalHosts: Number(d.totalHosts || 0) || 0,
+          withdrawnCommissionPoints: Number(d.withdrawnCommissionPoints || 0) || 0
+        });
+      }
     });
 
     const sellerOrders = [];
@@ -670,17 +689,33 @@ app.post('/api/admin/respond-agency', async (req, res) => {
     const { agencyId, approve } = req.body || {};
     const id = String(agencyId || '').trim();
     const agRef = firestoreDb.collection('agencies').doc(id);
+    const reqRef = firestoreDb.collection('agency_requests').doc(id);
     const snap = await agRef.get();
-    const d = snap.exists ? (snap.data() || {}) : {};
+    const reqSnap = snap.exists ? snap : await reqRef.get();
+    const d = reqSnap.exists ? (reqSnap.data() || {}) : {};
     const newStatus = approve ? 'APPROVED' : 'REJECTED';
 
-    await agRef.set({ status: newStatus }, { merge: true });
-    if (d.ownerUid) {
-      await firestoreDb.collection('users').doc(String(d.ownerUid)).set({
+    await Promise.all([
+      agRef.set({
+        agencyId: id,
+        name: d.name || d.agencyName || `Agency ${id}`,
+        ownerName: d.ownerName || d.applicantName || '',
+        ownerNumericId: d.ownerNumericId || d.numericId || '',
+        ownerUid: d.ownerUid || d.uid || '',
+        phone: d.phone || '',
+        country: d.country || '',
+        status: newStatus
+      }, { merge: true }),
+      reqRef.set({ status: newStatus }, { merge: true })
+    ]);
+
+    if (d.ownerUid || d.uid) {
+      const targetUid = String(d.ownerUid || d.uid);
+      await firestoreDb.collection('users').doc(targetUid).set({
         isAgent: Boolean(approve),
         role: approve ? 'agent' : 'user',
         agencyId: approve ? id : '',
-        agencyName: approve ? (d.name || '') : ''
+        agencyName: approve ? (d.name || d.agencyName || '') : ''
       }, { merge: true });
     }
     return res.json({ ok: true });
@@ -763,4 +798,13 @@ app.post('/api/admin/delete-user', async (req, res) => {
   } catch (e) {
     return res.status(500).json({ error: e.message });
   }
+});
+
+let PORT = 3000;
+if (process.env.PORT) {
+  PORT = process.env.PORT;
+}
+
+server.listen(PORT, () => {
+  console.log('Agora and Socket Server listening on port ' + PORT);
 });
