@@ -486,6 +486,11 @@ Padding(
   }
 
   void _showJoinAgencyDialog() {
+    final fullNameCtrl = TextEditingController();
+    final phoneCtrl = TextEditingController();
+    final countryCtrl = TextEditingController(text: "Ethiopia");
+    final noteCtrl = TextEditingController();
+
     showDialog(
       context: context,
       builder: (ctx) {
@@ -493,17 +498,31 @@ Padding(
           builder: (context, setDialogState) {
             VoidCallback? submitAction = () async {
               final inputId = _agencyInputController.text.trim();
-              if (inputId.isEmpty) return;
+              final fullName = fullNameCtrl.text.trim();
+              final phone = phoneCtrl.text.trim();
+              final country = countryCtrl.text.trim();
+              final note = noteCtrl.text.trim();
+
+              if (inputId.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("Please enter Agent / Agency ID.")),
+                );
+                return;
+              }
+              if (fullName.isEmpty || phone.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("Please fill Full Name and Phone Number.")),
+                );
+                return;
+              }
 
               setDialogState(() {
                 _isJoining = true;
               });
 
               try {
-                final agencyDoc = await FirebaseFirestore.instance
-                    .collection('agencies')
-                    .doc(inputId)
-                    .get();
+                final db = FirebaseFirestore.instance;
+                final agencyDoc = await db.collection('agencies').doc(inputId).get();
 
                 if (!agencyDoc.exists) {
                   if (mounted) {
@@ -518,34 +537,134 @@ Padding(
                 }
 
                 final agencyData = agencyDoc.data() ?? {};
-                String agencyName = inputId;
-                if (agencyData['name'] != null) {
-                  agencyName = agencyData['name'].toString();
+                final String agencyName =
+                    (agencyData['name'] ?? agencyData['agencyName'] ?? inputId)
+                        .toString();
+                String ownerUid = (agencyData['ownerUid'] ?? '').toString().trim();
+                final int ownerNumId =
+                    (agencyData['ownerNumericId'] as num?)?.toInt() ??
+                        (int.tryParse(inputId) ?? 0);
+
+                if (ownerUid.isEmpty && ownerNumId > 0) {
+                  final uQuery = await db
+                      .collection('users')
+                      .where('numericId', isEqualTo: ownerNumId)
+                      .limit(1)
+                      .get();
+                  if (uQuery.docs.isNotEmpty) {
+                    ownerUid = uQuery.docs.first.id;
+                  }
                 }
 
-                await FirebaseFirestore.instance
-                    .collection('hosts')
-                    .doc(currentUser!.uid)
-                    .set({
-                  'agencyId': _d(inputId),
-                  'agencyName': _d(agencyName),
-                  'status': _d('active'),
-                  'updatedAt': _d(FieldValue.serverTimestamp()),
+                if (ownerUid.isEmpty) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                          content: Text("Agency owner account not linked yet.")),
+                    );
+                  }
+                  setDialogState(() {
+                    _isJoining = false;
+                  });
+                  return;
+                }
+
+                final applicantSnap =
+                    await db.collection('users').doc(currentUser!.uid).get();
+                final appData = applicantSnap.data() ?? {};
+                final int appNumericId =
+                    (appData['numericId'] as num?)?.toInt() ?? 0;
+                final String appAvatar =
+                    (appData['avatarUrl'] ?? appData['photoURL'] ?? '').toString();
+
+                final ownerSnap =
+                    await db.collection('users').doc(ownerUid).get();
+                final ownerData = ownerSnap.data() ?? {};
+                final String ownerName =
+                    (ownerData['name'] ?? ownerData['nickname'] ?? agencyName)
+                        .toString();
+                final String ownerAvatar =
+                    (ownerData['avatarUrl'] ?? ownerData['photoURL'] ?? '')
+                        .toString();
+
+                final reqRef = db.collection('agency_join_requests').doc();
+                final String reqId = reqRef.id;
+
+                await reqRef.set({
+                  'requestId': reqId,
+                  'agencyId': inputId,
+                  'agencyName': agencyName,
+                  'ownerUid': ownerUid,
+                  'ownerNumericId': ownerNumId,
+                  'applicantUid': currentUser!.uid,
+                  'applicantNumericId': appNumericId,
+                  'applicantName': fullName,
+                  'applicantAvatar': appAvatar,
+                  'phone': phone,
+                  'country': country,
+                  'note': note,
+                  'status': 'PENDING',
+                  'createdAt': FieldValue.serverTimestamp(),
+                });
+
+                // Send interactive Agree / Reject form message directly into Agent's Direct Chat
+                final ids = [currentUser!.uid, ownerUid]..sort();
+                final String chatId = "${ids[0]}_${ids[1]}";
+                final String summaryText =
+                    "📋 Host Application Form ($fullName • ID: $appNumericId) for $agencyName";
+
+                final chatRef = db.collection('direct_chats').doc(chatId);
+                await chatRef.collection('messages').add({
+                  'senderUid': currentUser!.uid,
+                  'type': 'agency_join_form',
+                  'requestId': reqId,
+                  'agencyId': inputId,
+                  'agencyName': agencyName,
+                  'ownerUid': ownerUid,
+                  'applicantUid': currentUser!.uid,
+                  'applicantNumericId': appNumericId,
+                  'applicantName': fullName,
+                  'phone': phone,
+                  'country': country,
+                  'note': note,
+                  'formStatus': 'PENDING',
+                  'text': summaryText,
+                  'timestamp': FieldValue.serverTimestamp(),
+                });
+
+                await chatRef.set({
+                  'participants': [currentUser!.uid, ownerUid],
+                  'participantNames': {
+                    currentUser!.uid: fullName,
+                    ownerUid: ownerName,
+                  },
+                  'participantAvatars': {
+                    currentUser!.uid: appAvatar,
+                    ownerUid: ownerAvatar,
+                  },
+                  'lastMessage': summaryText,
+                  'updatedAt': FieldValue.serverTimestamp(),
+                  'unreadCounts': {
+                    ownerUid: FieldValue.increment(1),
+                    currentUser!.uid: 0,
+                  },
                 }, SetOptions(merge: true));
 
-                await FirebaseFirestore.instance
-                    .collection('users')
-                    .doc(currentUser!.uid)
-                    .set({
-                  'agencyId': _d(inputId),
-                  'agencyName': _d(agencyName),
+                await db.collection('hosts').doc(currentUser!.uid).set({
+                  'pendingAgencyId': _d(inputId),
+                  'pendingAgencyName': _d(agencyName),
+                  'status': _d('pending'),
+                  'updatedAt': _d(FieldValue.serverTimestamp()),
                 }, SetOptions(merge: true));
 
                 if (mounted) {
                   Navigator.pop(ctx);
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                        content: Text("Successfully linked to agency!")),
+                      backgroundColor: Color(0xFF107C41),
+                      content: Text(
+                          "Application form sent to Agent! Awaiting Agree/Reject."),
+                    ),
                   );
                 }
               } catch (e) {
@@ -562,12 +681,12 @@ Padding(
             };
 
             Widget submitChild = const Text(
-              "Submit",
+              "Send Form",
               style:
                   TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
             );
 
-if (_isJoining) {
+            if (_isJoining) {
               submitAction = null;
               submitChild = const SizedBox(
                 width: 16,
@@ -577,46 +696,78 @@ if (_isJoining) {
               );
             }
 
+            InputDecoration fieldDeco(String hint) => InputDecoration(
+                  hintText: hint,
+                  hintStyle: const TextStyle(color: Colors.black38, fontSize: 12.5),
+                  filled: true,
+                  fillColor: Colors.white,
+                  isDense: true,
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(color: Color(0xFFE2D6C5)),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(color: Color(0xFFE2D6C5)),
+                  ),
+                );
+
             return AlertDialog(
               backgroundColor: const Color(0xFFFAF7F2),
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16)),
               title: const Text(
-                "Join Agency",
+                "Host Agency Application Form",
                 style: TextStyle(
                     color: Color(0xFF3E2723),
                     fontWeight: FontWeight.bold,
                     fontSize: 16),
               ),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text(
-                    "Enter the Agency ID provided by your agency manager to link your host account.",
-                    style: TextStyle(color: Colors.black54, fontSize: 12),
-                  ),
-                  const SizedBox(height: 14),
-                  TextField(
-                    controller: _agencyInputController,
-                    style: const TextStyle(color: Color(0xFF3E2723)),
-                    decoration: InputDecoration(
-                      hintText: "e.g. 100083",
-                      hintStyle: const TextStyle(color: Colors.black38),
-                      filled: true,
-                      fillColor: Colors.white,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide:
-                            const BorderSide(color: Color(0xFFE2D6C5)),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide:
-                            const BorderSide(color: Color(0xFFE2D6C5)),
-                      ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      "Fill out your details and Agent ID. The Agent will receive your form in Messages with Agree / Reject buttons.",
+                      style: TextStyle(color: Colors.black54, fontSize: 11.5),
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: _agencyInputController,
+                      style: const TextStyle(color: Color(0xFF3E2723), fontSize: 13),
+                      decoration: fieldDeco("Agent / Agency ID (e.g. 100083)"),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: fullNameCtrl,
+                      style: const TextStyle(color: Color(0xFF3E2723), fontSize: 13),
+                      decoration: fieldDeco("Your Full Name"),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: phoneCtrl,
+                      keyboardType: TextInputType.phone,
+                      style: const TextStyle(color: Color(0xFF3E2723), fontSize: 13),
+                      decoration: fieldDeco("Phone / WhatsApp / Telegram"),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: countryCtrl,
+                      style: const TextStyle(color: Color(0xFF3E2723), fontSize: 13),
+                      decoration: fieldDeco("Country (e.g. Ethiopia)"),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: noteCtrl,
+                      maxLines: 2,
+                      style: const TextStyle(color: Color(0xFF3E2723), fontSize: 13),
+                      decoration: fieldDeco("Extra Note (Optional)"),
+                    ),
+                  ],
+                ),
               ),
               actions: [
                 TextButton(
