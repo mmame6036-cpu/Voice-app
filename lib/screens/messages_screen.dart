@@ -1314,6 +1314,133 @@ final String myName = (myData['name'] ??
     }
   }
 
+  Future<void> _respondToAgencyForm({
+    required DocumentReference msgDocRef,
+    required Map data,
+    required bool agree,
+  }) async {
+    final String msgType = (data['type'] ?? 'agency_join_form').toString();
+    final String requestId = (data['requestId'] ?? '').toString();
+    final String agencyId = (data['agencyId'] ?? '').toString();
+    final String agencyName = (data['agencyName'] ?? agencyId).toString();
+    final String subAgencyId = (data['subAgencyId'] ?? requestId).toString();
+    final String subAgencyName = (data['subAgencyName'] ?? 'Sub-Agency').toString();
+    final bool isSubAgentInvite = data['isSubAgentInvite'] == true;
+    final String applicantUid = (data['applicantUid'] ?? '').toString();
+    final String applicantName = (data['applicantName'] ?? 'Host').toString();
+    final String newStatus = agree ? 'AGREED' : 'REJECTED';
+
+    try {
+      final db = FirebaseFirestore.instance;
+      await msgDocRef.set({'formStatus': newStatus}, SetOptions(merge: true));
+
+      if (msgType == 'sub_agency_form') {
+        if (subAgencyId.isNotEmpty) {
+          await db.collection('agencies').doc(subAgencyId).set({
+            'status': agree ? 'APPROVED' : 'REJECTED',
+            if (agree) 'approvedAt': FieldValue.serverTimestamp(),
+            if (!agree) 'rejectedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
+        }
+        if (applicantUid.isNotEmpty) {
+          await db.collection('users').doc(applicantUid).set({
+            'isAgent': agree,
+            'role': agree ? 'agent' : 'user',
+            'allowCreateAgency': agree,
+          }, SetOptions(merge: true));
+        }
+      } else {
+        if (requestId.isNotEmpty) {
+          await db.collection('agency_join_requests').doc(requestId).set({
+            'status': newStatus,
+            'respondedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
+        }
+
+        if (agree && applicantUid.isNotEmpty && agencyId.isNotEmpty) {
+          await db.collection('users').doc(applicantUid).set({
+            'agencyId': agencyId,
+            'agencyName': agencyName,
+            'isHost': true,
+            if (isSubAgentInvite) 'allowCreateAgency': true,
+            'joinedAgencyAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
+
+          await db.collection('hosts').doc(applicantUid).set({
+            'agencyId': agencyId,
+            'agencyName': agencyName,
+            'pendingAgencyId': FieldValue.delete(),
+            'pendingAgencyName': FieldValue.delete(),
+            'status': 'active',
+            'updatedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
+
+          await db.collection('agencies').doc(agencyId).set({
+            'totalHosts': FieldValue.increment(1),
+          }, SetOptions(merge: true));
+        } else if (!agree && applicantUid.isNotEmpty) {
+          await db.collection('hosts').doc(applicantUid).set({
+            'pendingAgencyId': FieldValue.delete(),
+            'pendingAgencyName': FieldValue.delete(),
+            'status': 'rejected',
+            'updatedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
+        }
+      }
+
+      final String replyText = agree
+          ? "✅ Agreed! $applicantName has been approved to join $agencyName."
+          : "❌ Rejected: Host application for $agencyName was declined.";
+
+      final chatRef = db.collection('direct_chats').doc(_chatId);
+      await chatRef.collection('messages').add({
+        'senderUid': widget.myUid,
+        'text': replyText,
+        'timestamp': FieldValue.serverTimestamp(),
+      });
+      await chatRef.set({
+        'lastMessage': replyText,
+        'updatedAt': FieldValue.serverTimestamp(),
+        if (applicantUid.isNotEmpty)
+          'unreadCounts': {applicantUid: FieldValue.increment(1)},
+      }, SetOptions(merge: true));
+
+      if (applicantUid.isNotEmpty) {
+        await db
+            .collection('users')
+            .doc(applicantUid)
+            .collection('system_messages')
+            .add({
+          'title': agree
+              ? 'Agency Application Approved!'
+              : 'Agency Application Rejected',
+          'subtitle': replyText,
+          'body': replyText,
+          'unread': true,
+          'timestamp': FieldValue.serverTimestamp(),
+        });
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor:
+                agree ? const Color(0xFF107C41) : Colors.redAccent,
+            content: Text(agree
+                ? "Approved $applicantName!"
+                : "Rejected $applicantName's request."),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Action failed: $e")),
+        );
+      }
+    }
+  }
+
   Future _joinInvitedRoom(String roomId, String roomTitle) async {
     try {
       final user = FirebaseAuth.instance.currentUser;
@@ -1417,13 +1544,200 @@ final String myName = (myData['name'] ??
                   padding: const EdgeInsets.all(14),
                   itemCount: docs.length,
                   itemBuilder: (context, index) {
+                    final docRef = docs[index].reference;
                     final raw = docs[index].data();
                     final Map data = raw is Map ? raw : {};
                     final bool isMe = data['senderUid'] == widget.myUid;
+                    final String msgType = (data['type'] ?? '').toString();
                     final String text = (data['text'] ?? '').toString();
                     final String roomId = (data['roomId'] ?? '').toString();
                     final String roomTitle =
                         (data['roomTitle'] ?? 'Party Lounge').toString();
+
+                    if (msgType == 'agency_join_form' || msgType == 'sub_agency_form') {
+                      final String appName =
+                          (data['applicantName'] ?? 'Applicant').toString();
+                      final String appNumId =
+                          (data['applicantNumericId'] ?? '-').toString();
+                      final String phone = (data['phone'] ?? '-').toString();
+                      final String country =
+                          (data['country'] ?? '-').toString();
+                      final String note = (data['note'] ?? '').toString();
+                      final String agName =
+                          (data['agencyName'] ?? 'Agency').toString();
+                      final String agId =
+                          (data['agencyId'] ?? '').toString();
+                      final String ownerUid =
+                          (data['ownerUid'] ?? '').toString();
+                      final String formStatus =
+                          (data['formStatus'] ?? 'PENDING')
+                              .toString()
+                              .toUpperCase();
+                      final bool canAct =
+                          formStatus == 'PENDING' && ownerUid == widget.myUid;
+
+                      return Align(
+                        alignment: isMe
+                            ? Alignment.centerRight
+                            : Alignment.centerLeft,
+                        child: Container(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          padding: const EdgeInsets.all(14),
+                          constraints: BoxConstraints(
+                            maxWidth: MediaQuery.of(context).size.width * 0.84,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFFFBF4),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                                color: const Color(0xFFD49B42), width: 1.5),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.06),
+                                blurRadius: 8,
+                                offset: const Offset(0, 3),
+                              ),
+                            ],
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  const Icon(Icons.assignment_ind_rounded,
+                                      color: Color(0xFFB45309), size: 20),
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: Text(
+                                      msgType == 'sub_agency_form'
+                                          ? "Sub-Agency Request • ${data['subAgencyName'] ?? ''}"
+                                          : "Host Join Request • $agName ($agId)",
+                                      style: const TextStyle(
+                                        color: Color(0xFF3E2723),
+                                        fontWeight: FontWeight.w900,
+                                        fontSize: 13.5,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const Divider(
+                                  height: 14, color: Color(0xFFE2D6C5)),
+                              Text("• Name: $appName (ID: $appNumId)",
+                                  style: const TextStyle(
+                                      fontSize: 12.5,
+                                      color: Colors.black87,
+                                      fontWeight: FontWeight.w600)),
+                              const SizedBox(height: 3),
+                              Text("• Phone/Contact: $phone",
+                                  style: const TextStyle(
+                                      fontSize: 12.5, color: Colors.black87)),
+                              const SizedBox(height: 3),
+                              Text("• Country: $country",
+                                  style: const TextStyle(
+                                      fontSize: 12.5, color: Colors.black87)),
+                              if (note.isNotEmpty) ...[
+                                const SizedBox(height: 3),
+                                Text("• Note: $note",
+                                    style: const TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.black54)),
+                              ],
+                              const SizedBox(height: 12),
+                              if (canAct)
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: ElevatedButton(
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor:
+                                              const Color(0xFF107C41),
+                                          foregroundColor: Colors.white,
+                                          padding: const EdgeInsets.symmetric(
+                                              vertical: 9),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(10),
+                                          ),
+                                        ),
+                                        onPressed: () => _respondToAgencyForm(
+                                          msgDocRef: docRef,
+                                          data: data,
+                                          agree: true,
+                                        ),
+                                        child: const Text(
+                                          "Agree",
+                                          style: TextStyle(
+                                              fontWeight: FontWeight.w900,
+                                              fontSize: 13),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: ElevatedButton(
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor:
+                                              const Color(0xFFD32F2F),
+                                          foregroundColor: Colors.white,
+                                          padding: const EdgeInsets.symmetric(
+                                              vertical: 9),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(10),
+                                          ),
+                                        ),
+                                        onPressed: () => _respondToAgencyForm(
+                                          msgDocRef: docRef,
+                                          data: data,
+                                          agree: false,
+                                        ),
+                                        child: const Text(
+                                          "Reject",
+                                          style: TextStyle(
+                                              fontWeight: FontWeight.w900,
+                                              fontSize: 13),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                )
+                              else
+                                Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.symmetric(
+                                      vertical: 7, horizontal: 10),
+                                  decoration: BoxDecoration(
+                                    color: formStatus == 'AGREED'
+                                        ? const Color(0xFFE8F5E9)
+                                        : (formStatus == 'REJECTED'
+                                            ? const Color(0xFFFEE2E2)
+                                            : const Color(0xFFFEF3C7)),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    formStatus == 'AGREED'
+                                        ? "✅ Status: Agreed & Linked"
+                                        : (formStatus == 'REJECTED'
+                                            ? "❌ Status: Rejected"
+                                            : "⏳ Status: Pending Agent Approval"),
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w800,
+                                      color: formStatus == 'AGREED'
+                                          ? const Color(0xFF107C41)
+                                          : (formStatus == 'REJECTED'
+                                              ? const Color(0xFFB91C1C)
+                                              : const Color(0xFFB45309)),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }
 
                     return Align(
                       alignment:
