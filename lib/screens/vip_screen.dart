@@ -527,8 +527,10 @@ class VipScreen extends StatefulWidget {
 class _VipScreenState extends State<VipScreen> {
   final User? _user = FirebaseAuth.instance.currentUser;
   int _selectedIndex = 0;
+  bool _didInitTab = false;
   bool _isPurchasing = false;
   bool _isClaiming = false;
+  bool _isEquippingFrame = false;
 
   String _getEatCycleKey() {
     final shifted = DateTime.now()
@@ -664,6 +666,11 @@ try {
         if (!snap.exists) return;
 
         final data = snap.data() ?? <String, dynamic>{};
+        final int dbVip = (data['vipLevel'] as num?)?.toInt() ?? 0;
+        final Timestamp? dbExp = data['vipExpiresAt'] as Timestamp?;
+        final bool dbActive =
+            dbVip == spec.level && dbExp != null && dbExp.toDate().isAfter(DateTime.now());
+        if (!dbActive) return;
         if (data[claimField] == true) return;
 
         tx.set(
@@ -688,6 +695,30 @@ try {
     } catch (_) {
     } finally {
       if (mounted) setState(() => _isClaiming = false);
+    }
+  }
+
+  Future<void> _equipVipFrame(VipLevelSpec spec) async {
+    final user = _user;
+    if (user == null || _isEquippingFrame) return;
+    setState(() => _isEquippingFrame = true);
+    try {
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+        'activeVipFrameLevel': spec.level,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("${spec.name} frame equipped!"),
+            backgroundColor: const Color(0xFF107C41),
+            duration: const Duration(seconds: 1),
+          ),
+        );
+      }
+    } catch (_) {
+    } finally {
+      if (mounted) setState(() => _isEquippingFrame = false);
     }
   }
 
@@ -782,9 +813,25 @@ try {
                 : {};
 
 final int currentCoins = (userData['coins'] as num?)?.toInt() ?? 0;
-        final int activeVipLevel =
+        final int rawVipLevel =
             (userData['vipLevel'] as num?)?.toInt() ?? 0;
         final Timestamp? vipExpiresAt = userData['vipExpiresAt'] as Timestamp?;
+        final bool hasValidVip = rawVipLevel > 0 &&
+            vipExpiresAt != null &&
+            vipExpiresAt.toDate().isAfter(DateTime.now());
+        final int activeVipLevel = hasValidVip ? rawVipLevel : 0;
+        final int activeFrameLevel =
+            (userData['activeVipFrameLevel'] as num?)?.toInt() ??
+                activeVipLevel;
+
+        if (!_didInitTab && snapshot.hasData) {
+          _didInitTab = true;
+          if (activeVipLevel > 0) {
+            _selectedIndex =
+                (activeVipLevel - 1).clamp(0, kVipClubLevels.length - 1);
+          }
+        }
+
         final String displayName =
             (userData['name'] ?? userData['nickname'] ?? 'VIP Member')
                 .toString();
@@ -792,9 +839,10 @@ final int currentCoins = (userData['coins'] as num?)?.toInt() ?? 0;
             (userData['avatarUrl'] ?? userData['photoURL'] ?? '').toString();
 
         final VipLevelSpec spec = kVipClubLevels[_selectedIndex];
-        final bool isThisLevelActive = activeVipLevel >= spec.level &&
-            vipExpiresAt != null &&
-            vipExpiresAt.toDate().isAfter(DateTime.now());
+        final bool isExactCurrentTier =
+            hasValidVip && activeVipLevel == spec.level;
+        final bool isLowerIncludedTier =
+            hasValidVip && spec.level < activeVipLevel;
 
         final String cycleKey = _getEatCycleKey();
         final bool dailyClaimed =
@@ -802,12 +850,16 @@ final int currentCoins = (userData['coins'] as num?)?.toInt() ?? 0;
 
         String statusSubtext = "${spec.name} Not Activated";
         String cardBottomNote = "You have not purchased ${spec.name} yet";
-        if (isThisLevelActive) {
+        if (isExactCurrentTier) {
           final int daysLeft =
               vipExpiresAt.toDate().difference(DateTime.now()).inDays + 1;
           statusSubtext = "${spec.name} Active ($daysLeft days left)";
           cardBottomNote =
               "You have unlocked ${spec.name} privileges & animated frame";
+        } else if (isLowerIncludedTier) {
+          statusSubtext = "Included in VIP$activeVipLevel";
+          cardBottomNote =
+              "Unlocked automatically with your active VIP$activeVipLevel membership";
         }
 
         final String prevLabel = _selectedIndex > 0
@@ -1243,30 +1295,86 @@ color: Color(0xFFE7D7BE),
                           ),
                         ],
                       ),
-                      if (isThisLevelActive && !dailyClaimed)
-                        GestureDetector(
-                          onTap: _isClaiming
-                              ? null
-                              : () => _claimDailyVipCoins(
-                                    spec: spec,
-                                    cycleKey: cycleKey,
+                      if (isExactCurrentTier)
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (!dailyClaimed)
+                              GestureDetector(
+                                onTap: _isClaiming
+                                    ? null
+                                    : () => _claimDailyVipCoins(
+                                          spec: spec,
+                                          cycleKey: cycleKey,
+                                        ),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 20, vertical: 13),
+                                  decoration: BoxDecoration(
+                                    gradient: const LinearGradient(
+                                      colors: [
+                                        Color(0xFF22C55E),
+                                        Color(0xFF15803D)
+                                      ],
+                                    ),
+                                    borderRadius: BorderRadius.circular(26),
                                   ),
+                                  child: const Text(
+                                    "Claim Daily",
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 14.5,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              )
+                            else
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 18, vertical: 13),
+                                decoration: BoxDecoration(
+                                  color: Colors.white12,
+                                  borderRadius: BorderRadius.circular(26),
+                                  border: Border.all(color: Colors.white24),
+                                ),
+                                child: const Text(
+                                  "Claimed Today",
+                                  style: TextStyle(
+                                    color: Colors.white70,
+                                    fontSize: 13.5,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        )
+                      else if (isLowerIncludedTier)
+                        GestureDetector(
+                          onTap: activeFrameLevel == spec.level
+                              ? null
+                              : () => _equipVipFrame(spec),
                           child: Container(
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 24, vertical: 13),
+                                horizontal: 22, vertical: 13),
                             decoration: BoxDecoration(
-                              gradient: const LinearGradient(
-                                colors: [Color(0xFF22C55E), Color(0xFF15803D)],
-                              ),
+                              color: activeFrameLevel == spec.level
+                                  ? Colors.white12
+                                  : const Color(0xFF2E2822),
                               borderRadius: BorderRadius.circular(26),
+                              border: Border.all(
+                                color: const Color(0xFFE4B86B),
+                                width: 1.2,
+                              ),
                             ),
-                            child: const Text(
-
-"Claim Daily",
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 15,
-                                fontWeight: FontWeight.bold,
+                            child: Text(
+                              activeFrameLevel == spec.level
+                                  ? "Frame Equipped"
+                                  : "Use Frame",
+                              style: const TextStyle(
+                                color: Color(0xFFFBE3B5),
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w800,
                               ),
                             ),
                           ),
@@ -1283,7 +1391,7 @@ color: Color(0xFFE7D7BE),
                                   ),
                           child: Container(
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 32, vertical: 13),
+                                horizontal: 30, vertical: 13),
                             decoration: BoxDecoration(
                               gradient: const LinearGradient(
                                 colors: [Color(0xFFFBE3B5), Color(0xFFE4B86B)],
@@ -1300,7 +1408,7 @@ color: Color(0xFFE7D7BE),
                                     ),
                                   )
                                 : Text(
-                                    isThisLevelActive ? "Renew" : "Purchase",
+                                    hasValidVip ? "Upgrade" : "Purchase",
                                     style: const TextStyle(
                                       color: Color(0xFF3E2723),
                                       fontSize: 15.5,
